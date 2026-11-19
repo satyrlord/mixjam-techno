@@ -7,6 +7,9 @@
 - [Tools](#tools)
 - [Measurement limits](#measurement-limits)
 - [Standing notes](#standing-notes)
+- [Level history](#level-history)
+- [Reference test](#reference-test)
+- [Audibility bar](#audibility-bar)
 - [Finding kinds](#finding-kinds)
 - [Finding format](#finding-format)
 - [Control ranges](#control-ranges)
@@ -27,7 +30,10 @@ The evidence package of a pass is a set of paths:
 | Audibility table | `OUT/audible.txt` from `render.py` |
 | Composer script | the script, if one built the song |
 | Standing notes | `standing-notes.md` in the song's folder, when present (see [Standing notes](#standing-notes)) |
+| Level history | `level-history.md` in the song's folder, when present (see [Level history](#level-history)) |
+| Approved version | the master render of the last version that the owner approved by ear, when there is one. A pass that the owner did not hear is not approved. |
 | Artist profile | the file at `ARTIST_PROFILE`, when available |
+| Reference sheet | the file that the artist profile names as the reference sheet for review roles, when present (see [Reference test](#reference-test)) |
 | Reference studies | the files that the artist profile names, when available |
 | Reference profile | `REFERENCE_PROFILE`, or `reference.json` beside the artist profile, when available. Mastering measurements against a reference need it. |
 | Review folder and output path | where the role writes its output |
@@ -43,7 +49,7 @@ read an item in its "Never" column.
 | Mix critic | from round 2, the round log | the critiques of the current round; a rating |
 | Rhythm critic | the composer script, with the drum map and the lists of glitches and ratchets; the owner's earlier notes on drums and glitches, or the file that holds them; from round 2, the round log | the critiques of the current round; a rating |
 | Devil's advocate | the critiques of the current round; the round log or the handoff; the owner verdicts file (`SAMPLE_OWNER_VERDICTS` in `tools/song/README.md`) | a rating or a score |
-| Blind rater | nothing more; each text item of its package is a screened extract (see below) | the round log; a critique; an earlier rating; a rating target |
+| Blind rater | nothing more; each text item of its package is a screened extract (see below). It gets the reference sheet and the level history when they hold no score. | the round log; a critique; an earlier rating; a rating target; the approved version |
 | Mastering engineer | the premaster; the current board, as a JSON file or as the `master` object of the song; the loudness target, if the caller sets one; a decisions-only extract, if earlier board decisions are necessary | a critique; a rating; the round log |
 
 A critic that reads the round log does not undo an accepted fix. It does not
@@ -102,6 +108,17 @@ State each limit that applies in the brief or in the report.
   effect is nonlinear.
 - The meter of `audible.txt` reads narrow high sounds and parts that a delay
   carries as quieter than they sound. The owner's ear decides what is audible.
+  "% heard" measures masking. A low value alone is not a fault. A hand-made
+  mix of a reference album can have half of its lanes under 10% heard.
+- Mastering changes the tone balance. For example, a master can have about
+  3 dB more low end against the rest than its premaster. Compare a premaster,
+  a lane sum, or a pass without a board only with a premaster target. If a
+  profile gives a target measured on masters, apply it to a master only.
+- Without a song file, a bar grid from the tempo alone can sit a fraction of
+  a bar off the real bar lines. Before you place an event inside a bar, or
+  call it early or late against a section change, find the real bar lines
+  from the step times of clear entries, such as a beat or a hat layer that
+  comes in.
 - `measure.py` cannot measure a catalog-only source. It marks that check as
   unavailable.
 - Without metadata, the gate cannot check phrase cuts by tonal role.
@@ -141,6 +158,72 @@ shows a mechanical fault in a noted area, such as a click, a clip, or a phase
 loss, it reports the fault under the heading "Conflicts with standing notes",
 with the note's number. These do not count toward the finding limit.
 
+## Level history
+
+A reviewer that sees one pass does not know why a level is where it is. The
+level history stops the same control from moving back and forth over the
+rounds. The main agent keeps it in `level-history.md` in the song's folder:
+
+```markdown
+# Level history: SONG TITLE
+
+| Control | Passes and values | Who moved it, and why | Owner's ear |
+| --- | --- | --- | --- |
+| track 12 fader (String Pad A) | pass 3 -4, pass 5 -7, pass 6 -10, pass 7 -7, pass 8 -4 dB | critics: masking; then the repairs went back | pass 8: -4 dB is right |
+```
+
+- Add a row when a control moves in two directions over the passes, or when
+  the owner settles a value by ear.
+- Do not put a score, a rating, or a critique in the file.
+
+A role does not propose to move a control in the history in a direction that
+the history already tried. The exception is new evidence that names the
+earlier move and says why the result is now different.
+
+## Reference test
+
+The artist profile can name a reference sheet: a short extract of the
+reference album, with each habit of the profile against what the album's own
+tracks do. Read it before you judge the song.
+
+Before you write a finding, a deduction, or a proposal that rests on a
+number, a median, a range, or a habit, ask: "Does the same sentence fault a
+track of the reference album?"
+
+1. If yes, it is a trait of the artist. Do not list it as a fault. Do not
+   reduce a score for it. Do not propose a change for it.
+2. If the song uses the trait in a way that the owner possibly does not
+   intend, put one line under "Judgements that need ears". Give the
+   measurement, not a fix.
+3. A rule that the profile marks as the owner's decision stands. Standing
+   notes stand. The test is for habits and medians, not for the owner's
+   decisions.
+
+If there is no reference sheet, apply the test to the reference studies.
+
+## Audibility bar
+
+A fix that nobody can hear wastes a round and can harm the song. Apply this
+bar to each finding whose fix changes a level, an EQ, a width, a send, a
+drive, or a fade:
+
+1. Render the pass with the fix: `render.py SONG_WITH_FIX OUT --no-master
+   --cache DIR`.
+2. In the bars of the fix, subtract the premaster of the pass from the
+   premaster with the fix.
+3. Measure the difference signal against the premaster of the pass in
+   1/3-octave bands. Write the band with the largest value and that value in
+   dB in the "Evidence" line.
+4. If the difference is 20 dB or more under the premaster in every band, the
+   fix is under the bar. Move it to the list "Measured only" with its value.
+
+A finding under the bar does not count toward the finding limit and does not
+go on an A/B page. The owner can still request it. A mechanical fault, such
+as a click, a clip, or a cut phrase, is not under the bar because of its size.
+
+The blind rater does not render. The main agent applies the bar to the
+rater's items before the merged list.
+
 ## Finding kinds
 
 Each finding has one kind. The kind decides who chooses.
@@ -155,6 +238,10 @@ A measured fix that changes how a part sounds, such as another chord file, is
 still correctness, but it is a row on the version's A/B page, so the owner can
 reject it by ear. When you are not sure of the kind, use the kind that gives
 the owner the choice.
+
+A distance from a median, a range, or a habit of the reference album is never
+correctness. Apply the [reference test](#reference-test) first. If the
+finding remains, it is taste.
 
 ## Finding format
 
@@ -174,8 +261,29 @@ gain dB, fades in beats, clip pitch in cents, automation points
 remove. Each value is inside its control range.
 ```
 
+Start the output with a comparison against the approved version, when the
+brief gives one:
+
+1. Say what changed between the approved version and this pass, and whether
+   each change is better, worse, or the same, with its measurement.
+2. For each finding, say whether the approved version has the same trait. If
+   it has the trait and the owner approved that version, the trait is not a
+   finding. A mechanical fault is the exception.
+
+"Change nothing" is a valid result. Zero findings is a valid output. Do not
+fill the finding limit.
+
 After the findings, write a list "Keep" with at most 5 things that work and
-must not be undone, each with its bars and tracks. Give no score.
+must not be undone, each with its bars and tracks. Then write these lists,
+when they have items. They do not count toward the finding limit:
+
+- "Measured only": the fixes under the [audibility bar](#audibility-bar), each
+  with its measured value.
+- "Judgements that need ears": the traits from the
+  [reference test](#reference-test) and the questions that only the owner's
+  ear can answer.
+
+Give no score.
 
 ## Control ranges
 
@@ -261,7 +369,7 @@ At a milestone, the main agent merges the outputs of all roles into one list,
 ```markdown
 # Round N merged list (pass N)
 
-Score X.X for pass N (blind rater).
+Score X.X for pass N (blind rater, for information only).
 
 ## Applied without asking (correctness)
 1. Short title. Bars, tracks. The change, and the measurement before and after. (sources: M2, R4)
@@ -276,8 +384,18 @@ Score X.X for pass N (blind rater).
 - M5 goes against note 3 (the hole at 65-68). Dropped.
 - R2 repeats round 4's rejected C6, with no new evidence. Dropped.
 - M6 measures a click in note 4's approved cut. Pending the owner's decision.
+- C4 moves track 12 down again; the level history tried that in passes 5-6. Dropped.
+
+## Measured only
+- M7 (lane width 80 %): difference 26 dB under the premaster. Not on the A/B page.
 ```
 
+- Apply the [audibility bar](#audibility-bar) to each rater item and to each
+  critic finding that does not state its value. Move each item under the bar
+  to "Measured only".
+- Move each finding that fails the [reference test](#reference-test), that
+  goes against the [level history](#level-history), or that the approved
+  version already has to "Conflicts", with its reason.
 - Merge the findings that name the same fault at the same bars into one item,
   and name all its sources. The sources are C (composition), M (mix), H
   (rhythm), D (Devil's advocate) and R (the rater's items), with their numbers.
@@ -335,11 +453,11 @@ Use these targets when there is no artist profile. Where a configured
 reference profile gives a target, use that target.
 
 - Gate: 0 mechanical problems, and the premaster peaks under -0.3 dBFS. A drowned
-  lane in `audible.txt` is a critic finding, not a gate failure.
+  lane in `audible.txt` is a question for the owner's ear, not a gate failure.
 - Master: peak -1 dBFS; loud sections near -12 to -9 dB RMS (mono sum); crest
   in loud blocks 8-12 dB; breakdowns at least 6 dB under the loud sections.
 - Low end: mono below 120 Hz. The kick and the bass do not mask each other.
 - Width: L/R correlation 0.75-0.95 in loud sections.
 - Arrangement: each section has a job, and transitions are prepared. No sound
   stops dead, and no lane is inaudible.
-- Target score 8, at most 5 rounds.
+- At most 5 rounds.

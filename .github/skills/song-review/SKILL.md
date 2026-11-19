@@ -56,9 +56,16 @@ Role rules. If you are a role, obey all of these:
 - When you name a lane, also give its track number and the names of its
   sounds, for example "track 22 (Starshine Seq A 1, A 7)". The owner sees track
   numbers and sound names, not the lane names in `.meta.json`.
+- Read the reference sheet first, if your brief names one. Apply the
+  [reference test](REFERENCE.md#reference-test) before each finding, deduction,
+  or proposal.
 - Read the song's [standing notes](REFERENCE.md#standing-notes), if your brief
   names them. Do not challenge a settled judgement. Report mechanical faults
   in a noted area under "Conflicts with standing notes", with the note number.
+- Read the song's [level history](REFERENCE.md#level-history), if your brief
+  names it. Do not move a control in a direction that it already tried.
+- If you are a critic, apply the [audibility bar](REFERENCE.md#audibility-bar)
+  to each fix that changes a level, an EQ, a width, a send, a drive, or a fade.
 - Give each finding its [kind](REFERENCE.md#finding-kinds): correctness, taste,
   or identity.
 - Write your output to the output path in your brief. Return it as your final
@@ -96,7 +103,7 @@ blocker.
 2. Read the artist profile at the path that `ARTIST_PROFILE` sets. An
    environment variable overrides `.env.local`.
    Completion criterion: You know the style, the rules, the targets, the
-   target score, and the maximum number of rounds.
+   reference sheet, and the maximum number of rounds.
 3. If there is no artist profile, use the
    [generic targets](REFERENCE.md#generic-targets). Use a reference-profile
    target where a configured reference profile gives one.
@@ -123,6 +130,18 @@ blocker.
    round log or the handoff.
    Completion criterion: Each brief names the standing notes file, or the song
    has no owner judgements yet.
+8. Find the song's [level history](REFERENCE.md#level-history). If a control
+   moved in two directions over the passes and there is no file, make it from
+   the round log or the handoff.
+   Completion criterion: Each brief names the level history file, or no
+   control moved back.
+9. Find the last version that the owner approved by ear, and its master
+   render.
+   Completion criterion: Each critic brief names that render, or the song has
+   no approved version yet.
+10. Find the reference sheet that the artist profile names.
+    Completion criterion: Each brief names the reference sheet, or the profile
+    names none.
 
 Obey the applicable creative, review, and delivery rules of the artist
 profile. They outrank a critic finding and the generic targets. The current
@@ -201,9 +220,11 @@ launch a critic for one small change.
    Evaluation needs only the requested primary roles.
    Steps 3 and 5 add rhythm and Devil's advocate reviews when requested.
    Write a brief for each selected role. Give it its role,
-   its inputs from [Role inputs](REFERENCE.md#role-inputs), the standing
-   notes, the review folder, and the output path from
-   [Round log](REFERENCE.md#round-log). Tell it to keep each proposed setting
+   its inputs from [Role inputs](REFERENCE.md#role-inputs), the reference
+   sheet, the standing notes, the level history, the approved version (not to
+   the rater), the review folder, and the output path from
+   [Round log](REFERENCE.md#round-log). Say that "change nothing" is a valid
+   result. Tell it to keep each proposed setting
    inside the [control ranges](REFERENCE.md#control-ranges).
    Completion criterion: Each brief names each path that its row of the role
    inputs table needs, the source of each target, and the control ranges.
@@ -221,7 +242,8 @@ launch a critic for one small change.
 4. Check each critique against its role file.
    Completion criterion: Each composition and mix critique has at most 8
    findings with a kind, bars, tracks, evidence, a fix, and a severity, at most
-   5 things to keep, and no score. The rhythm critique has each part that
+   5 things to keep, and no score. Each level, EQ, width, send, drive, or fade
+   fix states its measured size from the audibility bar. The rhythm critique has each part that
    `RHYTHM-CRITIC.md` lists. Each proposed setting of each role is inside its
    [control range](REFERENCE.md#control-ranges), or the merged list names the
    limit.
@@ -261,16 +283,18 @@ follow this skill in the named role.
 ## 6. Apply the stop rules
 
 Apply these rules in the Improvement loop before you change the reviewed pass.
+The rater's score is information for the owner. It does not start or stop a
+round.
 
-1. Stop when the score reaches the target score.
+1. Stop when the merged list has no correctness item over the audibility bar,
+   and the owner selects no taste item or audition.
 2. Stop after the maximum number of rounds.
-3. Stop when the score does not rise for 2 rounds.
-4. Stop when the owner's notes say that the song is done, or change its
+3. Stop when the owner's notes say that the song is done, or change its
    direction.
-5. If a stop rule applies, keep the reviewed pass. Skip step 7.
+4. If a stop rule applies, keep the reviewed pass. Skip step 7.
    Continue at step 8 only if the user asked for a master. Otherwise, continue
    at step 9.
-6. If no stop rule applies, continue at step 7.
+5. If no stop rule applies, continue at step 7.
 
 Completion criterion: The round log names the reviewed pass and its stop
 decision.

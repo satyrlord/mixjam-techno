@@ -33,8 +33,14 @@ Anchors:
 - 7 is competent, with clear weaknesses.
 - 5 is a rough demo.
 
-When an artist profile exists, apply its style and rules. A broken rule
-reduces its part score.
+When an artist profile exists, apply its style and rules. A broken rule that
+the profile marks as the owner's decision reduces its part score. Apply the
+[reference test](REFERENCE.md#reference-test) to each other rule, habit,
+median, and range. A point that the reference album's own tracks also show
+costs no points. A low "% heard" in `audible.txt` costs no points by itself.
+
+Your score is information for the owner. It does not start or stop a repair
+round. Score the music, not the distance from the profile's numbers.
 
 Check the measurements for sub and low-mid build-up, possible harshness,
 out-of-tune layers, abrupt fades, clicks, masked lines, and mono problems.
@@ -83,4 +89,7 @@ Evidence read: the files.
 ```
 
 List at most 12 items under "Possibly missed by ear", most important first.
-They are the faults that a listener can miss and a measurement shows.
+They are the faults that a listener can miss and a measurement shows. Zero
+items is a valid list. Use the kind correctness only as
+[Finding kinds](REFERENCE.md#finding-kinds) defines it. A trait from the
+reference test goes under "Judgements that need ears", without a fix.

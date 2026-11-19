@@ -28,7 +28,13 @@ Read your inputs in [Role inputs](REFERENCE.md#role-inputs).
 
 Use the tools to check a claim: `midichords.py` and `fit.py` for harmony,
 `barnotes.py` for the notes that a WAV plays after varispeed and pitch, and
-`OUT/audible.txt` for drowned lines.
+`OUT/audible.txt` for lines that are possibly masked. A low "% heard" alone
+is not a finding.
+
+The profile's form habits (section lengths, drumless starts and ends,
+breakdown lengths, a change every few bars) are habits. Apply the
+[reference test](REFERENCE.md#reference-test) to each of them. Repetition
+alone is not a fault.
 
 ## Output
 

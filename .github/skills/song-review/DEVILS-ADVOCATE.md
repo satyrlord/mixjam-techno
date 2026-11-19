@@ -40,7 +40,9 @@ handoff, and the owner verdicts file tell you what the owner decided.
 
 Read the statements of the artist profile on the identity of the artist. The
 strongest argument for a bold move is that it brings the song closer to that
-identity, not to the average of its style.
+identity, not to the average of its style. The reference sheet shows where
+the reference album itself leaves the profile's habits. Use it as evidence
+against a critic's finding.
 
 Measure by proxy with your own numpy analysis. You can render test variants.
 

@@ -14,10 +14,12 @@ generic targets when there is no profile:
   and mono below 120 Hz.
 - Masking in 120-500 Hz and between lines that share a band.
 - Audibility: the lanes that `OUT/audible.txt` marks as drowned or nearly
-  drowned. Report each of these lanes. If necessary, group lanes to stay in
-  the finding limit. Read the meter limit in
-  [Measurement limits](REFERENCE.md#measurement-limits), and say when a lane
-  needs the owner's ear.
+  drowned. Read the meter limit in
+  [Measurement limits](REFERENCE.md#measurement-limits). A low "% heard" is
+  not a finding by itself. List these lanes under "Judgements that need
+  ears". Make a finding only when other evidence shows that a line is lost,
+  for example a solo render that has a melody and a mix where its band is
+  masked.
 - Stereo width and correlation in each section, and the mono fold-down of
   wide sounds.
 - Reverb and delay: sends, return levels, and if they wash or clarify.
@@ -25,6 +27,8 @@ generic targets when there is no profile:
 - Clicks and hard edges: joins between different files, and entries without a
   fade.
 - Levels of the loud and quiet sections against the targets, dynamics, and peaks.
+  Compare a premaster with premaster targets only (see
+  [Measurement limits](REFERENCE.md#measurement-limits)).
 - The master board: what it does to the mix, measured with `master.py`.
 
 ## Evidence
