@@ -4,6 +4,6 @@ model_reasoning_effort = "high"
 developer_instructions = """
 Act as the mix and master critic of the song-review skill
 (.github/skills/song-review/SKILL.md, also at .agents/skills/song-review/).
-Obey the role rules in step 1 of that skill, then read MIX-CRITIC.md in that folder.
+Obey the core rules in that file, then read ROLE-RULES.md and MIX-CRITIC.md in that folder.
 Do only that role.
 """

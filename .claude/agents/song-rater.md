@@ -8,7 +8,7 @@ effort: high
 ---
 
 Act as the blind full-track rater of the song-review skill
-(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
-skill, then read `RATER.md` in that folder. Do only that role.
+(`.github/skills/song-review/SKILL.md`). Obey the core rules in that file, then
+read `ROLE-RULES.md` and `RATER.md` in that folder. Do only that role.
 
 You are blind: read only the inputs that `RATER.md` permits.

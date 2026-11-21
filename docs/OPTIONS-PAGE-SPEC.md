@@ -2,9 +2,9 @@
 
 Status: implemented. The owner accepted the recommended baseline in
 [Open decisions](#open-decisions). The options do not change the song format.
-[OPTIONS-VERIFICATION.md](OPTIONS-VERIFICATION.md) records the verification
-results and the manual checks that are not done. This status does not
-establish release readiness or a supported hardware limit.
+[OPTIONS-VERIFICATION.md](OPTIONS-VERIFICATION.md) gives the verification
+procedure and the manual checks that are open. This status does not establish
+release readiness or a supported hardware limit.
 
 ## Purpose and boundaries
 
@@ -16,8 +16,8 @@ computer.
 Options is a native window with three pages: Audio, Workspace, and Files. It
 uses the shared Utility shell and controls in the current theme. Library
 management is in the separate Sample libraries tool window, which the Files
-page opens.
-It is not a web page, a replacement for the Mixer, or a new song editor.
+page opens. Options is not a web page, a replacement for the Mixer, or a new
+song editor.
 
 In scope: the controls in [Options pages](options-spec/pages.md), preference
 persistence, safe application of changes, synchronization with existing
@@ -43,12 +43,12 @@ Options use their own schema, separate from the song format.
 | Playback work | `PlaybackSource` in `src/audio/source.rs` renders 256-frame blocks. This is not the callback size of the audio device. |
 | Output buffering | `src/audio/output.rs` requests the selected output buffer from CPAL, bounded by the limits that the device reports, with a system-default fallback. The request and the callback interval are separate values. |
 | Preferences | `src/options.rs` defines `AppOptions` and its file. `Session` validates, applies, and persists the active values. Its options operations are in `src/application/settings.rs`. |
-| Native controls | `src/ui/options.rs` owns the window and its draft. `src/ui/dialog.rs` owns the window shells, and `src/ui/controls.rs` owns the shared controls. The application API of the frontend is `Session`. |
+| Native controls | `src/ui/options.rs` owns the window. `src/ui/options/draft.rs` owns the draft, `src/ui/options/pages.rs` the pages, and `src/ui/options/labels.rs` the labels. `src/ui/dialog.rs` owns the window shells, and `src/ui/controls.rs` owns the shared controls. The application API of the frontend is `Session`. |
 
 Oversampling costs CPU and adds a signal delay. The application compensates
 that delay. Off decreases CPU work. The page must not promise lower device
-latency. [Options verification](OPTIONS-VERIFICATION.md) holds the
-measurements of the buffer targets and the CPU cost.
+latency. [Options verification](OPTIONS-VERIFICATION.md) gives the procedure to
+measure the buffer targets and the CPU cost.
 
 ## Options
 
@@ -78,11 +78,18 @@ Do not enable a new quality control before its processor tests and its
 export-isolation tests pass. When a behavior changes, update the product,
 architecture, design, user-guide, agent-control, and development contracts.
 
-Run the current commands in [DEVELOPMENT.md](DEVELOPMENT.md): both Cargo
-feature sets, Clippy with warnings denied, both format checks, the Python
-tests, the release build, the applicable asset checks, and the native
-captures. Follow [ARCHITECTURE.md](ARCHITECTURE.md), [DESIGN.md](DESIGN.md),
-and [AGENT-CONTROL.md](AGENT-CONTROL.md). Keep the public raster-asset rule.
+Run the current commands in [DEVELOPMENT.md](DEVELOPMENT.md):
+
+- Both Cargo feature sets.
+- Clippy with warnings denied.
+- Both format checks.
+- The Python tests.
+- The release build.
+- The applicable asset checks.
+- The native captures.
+
+Follow [ARCHITECTURE.md](ARCHITECTURE.md), [DESIGN.md](DESIGN.md), and
+[AGENT-CONTROL.md](AGENT-CONTROL.md). Keep the public raster-asset rule.
 
 For each quality combination, test the preparation and the active processing
 of these cases:
@@ -94,8 +101,8 @@ of these cases:
 - Stem summation.
 - A preference change while an old job completes.
 
-Make sure that a sample-rate conversion by the device cannot change the
-selected internal quality or the musical timing. Run the saved full-quality
+Verify that a sample-rate conversion by the device cannot change the selected
+internal quality or the musical timing. Run the saved full-quality
 artifact fixtures with different preference files, and compare the output
 samples and the duration.
 
@@ -106,8 +113,9 @@ Measure an optimized release with the callback harness in
   master-heavy case, and a 64-track stress case.
 - Measure starts, seeks, replacements, and continuous playback after all
   relevant lanes have played.
-- Report the CPU and OS, the device or callback model, the output rate, the
-  workload, the duration, the mean, p99, maximum, and missed deadlines.
+- Report the CPU, the OS, and the device or callback model.
+- Report the output rate, the workload, the duration, the mean, p99, maximum,
+  and missed deadlines.
 - Do the measurement again on a quiet machine to separate sustained overload
   from single scheduling spikes.
 

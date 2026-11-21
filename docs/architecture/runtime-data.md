@@ -1,33 +1,38 @@
 # Runtime data folders and Album Review
 
-Some application data is beside the executable, and the application reads it
-at run time. It is not compiled in. `src/runtime_data.rs` finds such a folder,
-`assets/<name>`, in the folder of the executable or in up to four folders
-above it. That is the repository root for a build in `target/release` or
+Some application data is beside the executable, and the application reads it at
+run time. The build does not compile it in. `src/runtime_data.rs` finds such a
+folder, `assets/<name>`, in the folder of the executable or in up to four
+folders above it. That is the repository root for a build in `target/release` or
 `target/debug/deps`, or the installation folder.
 
 `src/catalog/releases.rs` reads the sample identity catalogs,
 `assets/catalog/*.json`. Each file (format 3) describes one release of one
-original product: the product, a release name, the size and hash of each
-original source file, a fingerprint of those files, and the identity of each
-sample. A catalog holds no original names or paths. The name of a sound is its
+original product. It holds these items:
+
+- The product and a release name.
+- The size and hash of each original source file.
+- A fingerprint of those files.
+- The identity of each sample.
+
+A catalog holds no original names or paths. The name of a sound is its
 `label_key`, a one-way digest that still matches a WAV named after the sound.
 
 `catalog::catalogs()` reads the folder on first use. `catalog::refresh()` reads
-it again when a JSON file was added, changed, or removed. `Session` calls it
-before each sample folder scan. Before the window opens a song,
-`Session::refresh_catalogs` calls it. If the folder changed, the session scans
-the sample folders again and opens the song after the scan.
+it again when a JSON file changes, or when the folder gains or loses one.
+`Session` calls it before each sample folder scan. Before the window opens a
+song, `Session::refresh_catalogs` calls it. If the folder changed, the session
+scans the sample folders again and opens the song after the scan.
 
 Each scan uses one catalog reading for the native identities and for the
 authenticated source tempos. A change during a scan starts the scan again, with
 its current folders and fallback tempo. A cancellation or a failure keeps the
-new scan pending. A deferred open protects the edits that come after the open
-was queued. It accepts the unsaved changes that the user already accepted for
-replacement. A Playback quality Apply does not cancel it, and a scan that starts
-again for a catalog change keeps it. If that scan cannot start, the error names
-the song. Each reading stays valid for the remainder of the process. Thus
-identities that the catalog gave out never dangle.
+new scan pending. A deferred open protects the edits that the user makes after
+the open enters the queue. It accepts the unsaved changes that the user already
+accepted for replacement. A Playback quality Apply does not cancel it, and a
+scan that starts again for a catalog change keeps it. If that scan cannot start,
+the error names the song. Each reading stays valid for the remainder of the
+process. Thus identities that the catalog gave out never dangle.
 
 Releases of one product merge into one identity list when they agree on audio
 and timing for each native ID that they share. The loader keeps alternative
@@ -39,8 +44,8 @@ and `Catalogs::problems` lists them, which startup reports:
 - A second copy of a loaded release.
 
 `project_io::open_song` adds a source notice for each product whose catalogs
-do not have some native IDs of a `.mix` song, unless an original installation
-serves that product. The repository holds the generated catalogs in
+do not have some native IDs of a `.mix` song. It adds no notice if an original
+installation serves that product. The repository holds the generated catalogs in
 `assets/catalog`. A build or installation without them cannot identify native
 WAVs from those catalogs, and it keeps unresolved sources as placeholders.
 
@@ -57,17 +62,20 @@ WAVs from those catalogs, and it keeps unresolved sources as placeholders.
   file did not load.
 - `Query` and `Shelf::tracks` answer the agent filters (artist, tag, energy,
   kind).
-- `album_review/collection.rs` owns the rules of the grid: accent-insensitive
-  search with `deunicode`, artist union, genre intersection with spelling
-  variants joined, the genre counts, and the five sorts with their tie-breaks.
+- `album_review/collection.rs` owns the rules of the grid:
+  - Accent-insensitive search with `deunicode`.
+  - Artist union.
+  - Genre intersection, with spelling variants joined.
+  - The genre counts.
+  - The five sorts with their tie-breaks.
 - `album_review/covers.rs` owns the cover cache in the data folder
   (`album-review/covers/<id>.<ext>`).
 
-The cover cache has a 256 MB target. It removes the covers that were viewed
-least recently first, and keeps the view time as the modification time of the
-file. The trim is best effort: a file that cannot be removed stays until a
-later store can remove it, and a newly stored cover stays usable. In the GUI
-build, `album_review/covers.rs` also owns the download:
+The cover cache has a 256 MB target. It removes the least recently viewed
+covers first, and keeps the view time as the modification time of the file.
+The trim is best effort. If the cache cannot remove a file, the file stays
+until a later store can remove it. A newly stored cover stays usable. In the
+GUI build, `album_review/covers.rs` also owns the download:
 
 - `ureq` with rustls, http and https only.
 - A 20-second timeout and a maximum of 20 MB.

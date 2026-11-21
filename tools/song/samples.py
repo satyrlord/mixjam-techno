@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
-from harmony import NOTES  # noqa: E402
+from harmony import NOTES, parse_key as harmony_parse_key  # noqa: E402
 
 DEFAULT_INDEX = 'local-data/samples/index.tsv'
 COLUMNS = ['root', 'path', 'type', 'bytes', 'mtime', 'channels', 'rate', 'bits', 'seconds', 'bpm', 'bpm_from',
@@ -92,8 +92,16 @@ def key_name(letter, accidental, quality):
 
 def parse_key(text):
     """A key typed by a person (Am, A min, F#m, Gb, a minor) in the index's spelling, or None."""
-    match = re.fullmatch(r'\s*' + _KEY + r'\s*(min(?:or)?|maj(?:or)?|m)?\s*', text[:1].upper() + text[1:], re.I)
-    return key_name(*match.groups()) if match else None
+    normalized = text.strip().replace('♯', '#').replace('♭', 'b')
+    match = re.fullmatch(r'([A-Ga-g][#b]?)\s*(min(?:or)?|maj(?:or)?|m)?', normalized, re.I)
+    if not match:
+        return None
+    note, quality = match.groups()
+    try:
+        tonic, mode = harmony_parse_key(f'{note} {(quality or "").lower()}'.strip())
+    except ValueError:
+        return None
+    return NOTES[tonic] + ('m' if mode == 'minor' else '')
 
 
 def parse_name(text):

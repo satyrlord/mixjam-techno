@@ -28,11 +28,9 @@ fn clip_fades_shape_the_clip_and_the_fade_out_ends_with_its_sound() {
     )]);
     let at = |project: &Project, frame: u64| {
         let mut out = [0.0; 2];
-        Frames::read(
-            &mix_with_samples(project, &samples).unwrap(),
-            frame,
-            &mut out,
-        );
+        mix_with_samples(project, &samples)
+            .unwrap()
+            .read(frame, &mut out);
         out[0]
     };
     // A quarter note is 18,900 frames.
@@ -124,20 +122,16 @@ fn mixer_attenuation_and_polarity_are_independent_of_pan_and_routing() {
         project.tracks[0].gain = amplitude;
         project.tracks[0].polarity_inverted = false;
         let mut normal = [0.0; 4];
-        Frames::read(
-            &mix_with_samples(&project, &samples).unwrap(),
-            0,
-            &mut normal,
-        );
+        mix_with_samples(&project, &samples)
+            .unwrap()
+            .read(0, &mut normal);
         assert!((normal[0] - 0.125 * 0.5 * amplitude * 0.75).abs() < 1e-7);
         assert!((normal[1] - -0.25 * 0.5 * amplitude).abs() < 1e-7);
         project.tracks[0].polarity_inverted = true;
         let mut reversed = [0.0; 4];
-        Frames::read(
-            &mix_with_samples(&project, &samples).unwrap(),
-            0,
-            &mut reversed,
-        );
+        mix_with_samples(&project, &samples)
+            .unwrap()
+            .read(0, &mut reversed);
         for (normal, reversed) in normal.into_iter().zip(reversed) {
             assert_eq!(reversed, -normal);
         }
@@ -145,11 +139,9 @@ fn mixer_attenuation_and_polarity_are_independent_of_pan_and_routing() {
     project.tracks[0].gain = 1.0;
     project.tracks[0].right_enabled = false;
     let mut routed = [0.0; 4];
-    Frames::read(
-        &mix_with_samples(&project, &samples).unwrap(),
-        0,
-        &mut routed,
-    );
+    mix_with_samples(&project, &samples)
+        .unwrap()
+        .read(0, &mut routed);
     assert!(routed[0] < 0.0);
     assert_eq!([routed[1], routed[3]], [0.0, 0.0]);
 }

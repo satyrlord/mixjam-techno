@@ -186,40 +186,28 @@ fn d3_wave_labels_allow_empty_and_ansi_text_but_require_complete_metadata() {
     text_block(&mut extension, b"\0\x01");
     text_block(&mut extension, b"caf\xe9\0\x01");
     extension.extend_from_slice(&[2, 0, 0, 1, 0, 0, 0, 0]);
-    let mut reader = Reader {
-        bytes: &extension,
-        offset: 0,
-    };
+    let mut reader = Reader::new(&extension);
     assert_eq!(
         read_wave_extension(&mut reader, 1, Product::D3)
             .unwrap()
             .path,
         r"C:\old\MIXWAVES\take.wav"
     );
-    assert_eq!(reader.offset, extension.len());
+    assert_eq!(reader.offset(), extension.len());
     for bars in [0u32, MAX_TICKS / TICKS_PER_BAR + 1, u32::MAX] {
         let mut invalid = extension.clone();
         let span = invalid.len() - 6;
         invalid[span..span + 4].copy_from_slice(&bars.to_le_bytes());
-        let mut reader = Reader {
-            bytes: &invalid,
-            offset: 0,
-        };
+        let mut reader = Reader::new(&invalid);
         assert!(read_wave_extension(&mut reader, 1, Product::D3).is_err());
     }
     for end in 0..extension.len() {
-        let mut reader = Reader {
-            bytes: &extension[..end],
-            offset: 0,
-        };
+        let mut reader = Reader::new(&extension[..end]);
         assert!(read_wave_extension(&mut reader, 1, Product::D3).is_err());
     }
     let label_start = 2 + u16::from_le_bytes(extension[..2].try_into().unwrap()) as usize;
     extension[label_start + 3] = 2;
-    let mut reader = Reader {
-        bytes: &extension,
-        offset: 0,
-    };
+    let mut reader = Reader::new(&extension);
     assert!(read_wave_extension(&mut reader, 1, Product::D3).is_err());
 }
 
@@ -238,12 +226,9 @@ fn house_wave_records_with_two_labels_keep_their_bar_span() {
         b"E:\\samples\\House\\Sphere\\SYNTHPAD011.wav\0\x01",
     );
     extension.extend_from_slice(&[10, 0, 4, 0, 0, 0, 0, 0]);
-    let mut reader = Reader {
-        bytes: &extension,
-        offset: 0,
-    };
+    let mut reader = Reader::new(&extension);
     let reference = read_wave_extension(&mut reader, 6, Product::H1).unwrap();
-    assert_eq!(reader.offset, extension.len());
+    assert_eq!(reader.offset(), extension.len());
     assert_eq!(reference.declared_ticks, Some(4 * TICKS_PER_BAR));
     assert_eq!(reference.metadata["Native label 1"], "SYNTHPAD011.wav");
     // The 12-byte extension still reads as before, not as labels.
@@ -253,12 +238,9 @@ fn house_wave_records_with_two_labels_keep_their_bar_span() {
     extended.extend_from_slice(&[2, 0, 0, 1, 4, 0, b'a', b'b', 0, 1, 0, 0]);
     let end = extended.len();
     extended.extend_from_slice(&[3, 0xff, 0xff, 0xff, 0xff, 174, 0, 0]);
-    let mut reader = Reader {
-        bytes: &extended,
-        offset: 0,
-    };
+    let mut reader = Reader::new(&extended);
     let reference = read_wave_extension(&mut reader, 1, Product::H1).unwrap();
-    assert_eq!(reader.offset, end);
+    assert_eq!(reader.offset(), end);
     assert_eq!(reference.declared_ticks, None);
 }
 
@@ -391,30 +373,49 @@ fn an_external_wave_past_64_mib_is_read_whole() {
 #[test]
 fn saved_wave_paths_require_full_identity_and_preserve_duplicate_checks() {
     let bytes = wave_fixture();
-    let same = || Wave {
-        source_path: r"C:\original\Kick.wav".into(),
-        bytes: bytes.clone().into(),
-        frames: 4,
-        sample_rate: 44100,
+    let other = b"different";
+    let mut song = Vec::new();
+    song.extend_from_slice(&bytes);
+    song.extend_from_slice(&bytes);
+    song.extend_from_slice(other);
+    let same_first = EmbeddedRecord {
+        path: r"C:\original\Kick.wav".into(),
+        range: 0..bytes.len(),
     };
-    let embedded = [same(), same()];
-    let wave = source_wave("c:/ORIGINAL/kick.wav", &embedded, &Library::empty()).unwrap();
+    let same_second = EmbeddedRecord {
+        path: r"C:\original\Kick.wav".into(),
+        range: bytes.len()..bytes.len() * 2,
+    };
+    let different = EmbeddedRecord {
+        path: "C:/original/KICK.wav".into(),
+        range: bytes.len() * 2..song.len(),
+    };
+    let wave = source_wave(
+        "c:/ORIGINAL/kick.wav",
+        &song,
+        &[same_first.clone(), same_second],
+        &Library::empty(),
+    )
+    .unwrap();
     assert_eq!(wave.bytes, bytes);
-    let different = Wave {
-        source_path: "C:/original/KICK.wav".into(),
-        bytes: b"different".to_vec().into(),
-        frames: 4,
-        sample_rate: 44100,
-    };
     assert!(
         source_wave(
             r"C:\original\Kick.wav",
-            &[same(), different],
+            &song,
+            &[same_first.clone(), different],
             &Library::empty()
         )
         .is_err()
     );
-    assert!(source_wave(r"C:\missing-user\Kick.wav", &[same()], &Library::empty()).is_err());
+    assert!(
+        source_wave(
+            r"C:\missing-user\Kick.wav",
+            &song,
+            &[same_first],
+            &Library::empty()
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -425,12 +426,12 @@ fn missing_user_wave_does_not_bind_an_unrelated_installation_basename() {
     let unrelated = installation.join("kick.wav");
     fs::write(&unrelated, wave_fixture()).unwrap();
     let missing = directory.join("missing-user/kick.wav");
-    assert!(source_wave(&missing.to_string_lossy(), &[], &Library::empty()).is_err());
+    assert!(source_wave(&missing.to_string_lossy(), &[], &[], &Library::empty()).is_err());
     // Selecting the WAV folder explicitly makes its unique filename usable
     // after the original user's absolute path has become unavailable.
     let mut library = Library::empty();
     library.import_wav_folder(&installation, 140.0).unwrap();
-    let moved = source_wave(&missing.to_string_lossy(), &[], &library).unwrap();
+    let moved = source_wave(&missing.to_string_lossy(), &[], &[], &library).unwrap();
     assert_eq!(moved.bytes, wave_fixture());
     fs::remove_file(&unrelated).unwrap();
     fs::remove_dir(&installation).unwrap();

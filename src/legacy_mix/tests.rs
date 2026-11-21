@@ -507,7 +507,11 @@ fn trimmed_wav_sources_render_the_same_audio_at_different_sample_rates() {
                 settings: Default::default(),
                 after_mixer: 0,
             },
-            Timeline { start: 0, events },
+            Timeline {
+                start: 0,
+                events,
+                embedded_waves: Vec::new(),
+            },
         )
         .unwrap();
         assert_eq!(project.clips[0].offset_frames as usize, bar_frames);
@@ -606,12 +610,13 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
             }],
         )
         .unwrap();
+    let saved_path = r"c:\legacy\MIXWAVES\time018.wav";
     let record = |file: &str, folder: &str| {
         let mut bytes = vec![1];
         bytes.extend_from_slice(&0i32.to_le_bytes());
         bytes.extend_from_slice(&10211u16.to_le_bytes());
         bytes.extend_from_slice(&[0; 10]);
-        text(&mut bytes, r"c:\legacy\MIXWAVES\time018.wav");
+        text(&mut bytes, saved_path);
         text(&mut bytes, file);
         text(&mut bytes, folder);
         bytes.extend_from_slice(&10u16.to_le_bytes());
@@ -620,7 +625,8 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
         bytes
     };
     let stretched = record("R1LA037.WAV", r"F:\samples\Rave\LOOP\-1[time]");
-    let project = load_bytes(&custom_song(&earlier_label(), &[stretched]), &library).unwrap();
+    let song = custom_song(&earlier_label(), &[stretched]);
+    let project = load_bytes(&song, &library).unwrap();
     assert!(project.missing_samples.is_empty());
     let sample = &project.imported_samples[0];
     assert_eq!(sample.name, format!("{own_name} 140 BPM"));
@@ -631,6 +637,15 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
         151_200
     );
     assert_eq!(project.clips[0].length_ticks, 512);
+
+    // The original sound is available, but it cannot substitute for corrupt
+    // audio that the song actually embeds.
+    let mut corrupt_wave = fs::read(root.join("r1la037.wav")).unwrap();
+    corrupt_wave[24..28].copy_from_slice(&0u32.to_le_bytes());
+    let mut corrupt_song = song;
+    corrupt_song.extend(wave_appendix(&[(saved_path, &corrupt_wave)]));
+    assert!(load_bytes(&corrupt_song, &library).is_err());
+
     // A plain import, or a name the library lacks, stays missing.
     for (file, folder) in [
         ("R1LA037.WAV", r"F:\samples\Rave\LOOP\"),
@@ -668,15 +683,9 @@ fn a_clip_volume_outside_the_native_range_is_refused_with_its_own_message() {
 
 #[test]
 fn reader_rejects_truncated_fields() {
-    let mut reader = Reader {
-        bytes: &[3, 0, b'A'],
-        offset: 0,
-    };
+    let mut reader = Reader::new(&[3, 0, b'A']);
     assert!(reader.string().is_err());
-    let mut reader = Reader {
-        bytes: &[1],
-        offset: 0,
-    };
+    let mut reader = Reader::new(&[1]);
     assert!(reader.u32().is_err());
 }
 

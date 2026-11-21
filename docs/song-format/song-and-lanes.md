@@ -28,7 +28,7 @@ title is its earlier file name. An imported title stays.
 
 ## Lanes
 
-`lanes` has exactly 64 entries in track order. From version 18, a lane holds
+`lanes` has exactly 64 entries in track order. From version 13, a lane holds
 these keys:
 
 - `gain`, an amplitude from 0 to 4 (1 is 0 dB)
@@ -36,9 +36,10 @@ these keys:
 - `sends`, four amounts from 0 to 1
 - `placements`
 
-Earlier versions use the fields in the [version history](version-history.md).
-A lane can also hold `automation` from version 14 and the keys on
-[Lane processing keys](lane-processing.md) from the versions listed there.
+The [version history](version-history.md) lists the fields of earlier versions.
+A lane can also hold `automation` from version 14. It can hold the keys of [Lane
+processing keys](lane-processing.md) from the versions that each key states
+there.
 
 ### `automation`
 
@@ -78,7 +79,8 @@ point. Each point value holds until the next point, with no interpolation.
 - A later point with another division in the same run keeps T. A faster
   division makes the slice shorter.
 - A point with the value that is already held changes nothing.
-- At 0, the live sound returns. The next turn on captures at its own tick.
+- At 0, the live sound returns. The next change from 0 to a division captures at
+  its own tick.
 
 The repeats run on the sound of the clips. They run before the EQ, drive,
 compressor, width, other automation, fader, pan, ducker, and sends. A repeat
@@ -98,9 +100,9 @@ same 132-frame raised-cosine ramp that crossfades the retriggers. It stays
 silent until the next retrigger.
 
 The gate also weighs the outgoing tail of a repeat in the next crossfade and
-when the lane turns off. At 100, the repeats are exactly as without a gate.
-While `repeat` is off, the gate does nothing. Versions 22 and earlier reject
-`repeatGate`, even as an empty list.
+when the `repeat` value goes to 0. At 100, the repeats are exactly as without a
+gate. While `repeat` is off, the gate does nothing. Versions 22 and earlier
+reject `repeatGate`, even as an empty list.
 
 #### `pitch`
 
@@ -123,21 +125,21 @@ The lane adds to the `pitchCents` of each placement. The pitch of the
 placement keeps its length. The pitch of the lane then changes the speed of
 that pitched sound, on top of the tempo match to the song.
 
-A placement keeps its length in the arrangement. If the lane slows a
-placement, the placement ends before its source ends. If the lane speeds it
-up, its sound ends where the source runs out, and its fade out ends there.
-Fades stay in the own time of the placement.
+A placement keeps its length in the arrangement. If the lane slows a placement,
+the placement ends before its source ends. If the lane speeds it up, its sound
+ends where the source runs out, and its fade out ends there. Fades follow the
+time of the placement, not the time of the source.
 
-The lane acts where the placements read their sources. It acts before
-`repeat`, so the repeats replay the pitched sound. It also acts before the EQ
-and everything after the EQ. Versions 23 and earlier reject `pitch`, even as
-an empty list.
+The lane acts where the placements read their sources. It acts before `repeat`,
+so the repeats replay the pitched sound. It also acts before the EQ and each
+stage after the EQ. Versions 23 and earlier reject `pitch`, even as an empty
+list.
 
 #### `compression`
 
-`compression` is how much of the lane compressor is mixed in, in percent, from
+`compression` is the share of the lane compressor in the sound, in percent, from
 0 to 100. At 0 the lane sounds as with the compressor off. At 100 it sounds as
-the compressor is set.
+the compressor settings make it.
 
 - The lane holds its first value before its first point and its last value
   after its last point. Between points, it moves in a straight line at every

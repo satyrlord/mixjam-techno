@@ -235,9 +235,9 @@ def ticks_of(frames, rate, bpm):
 class Sound:
     """A WAV with its length in ticks and whether it ends loud."""
 
-    def __init__(self, path, source_bpm, song_bpm=None):
+    def __init__(self, path, source_bpm, song_bpm=None, *, decoded=None):
         self.path = Path(path)
-        rate, data = read_wav(self.path)
+        rate, data = decoded if decoded is not None else read_wav(self.path)
         self.rate = rate
         self.frames = len(data)
         if self.frames == 0:

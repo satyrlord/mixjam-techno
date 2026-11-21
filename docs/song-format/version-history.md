@@ -15,7 +15,7 @@ earlier song writes version 26, which earlier builds cannot open.
 | 15 | Adds the lane `eq` and the master `bypass`. | Every channel EQ off and the board in use. |
 | 16 | Renames the keys of the Booster pedals in `master` and its `order`. | The same Booster settings under the new keys. |
 | 17 | Adds the lane `ducker`, the `key` of the pedals, and the `duckKey` of the effects. | Every ducker off. Every pedal and effect on its own input. |
-| 18 | Adds the second peak of the EQ (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. The `threshold` of a lane ducker is measured before the master gain. Version 17 measured it after the master gain. | The second peak flat, every compressor off, every lane at 100% width. See the note after this table for the ducker `threshold`. |
+| 18 | Adds the second peak of the EQ (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. The mix measures the key of a lane ducker before the master gain. Version 17 measured it after the master gain. | The second peak flat, every compressor off, every lane at 100% width. See the note after this table for the ducker `threshold`. |
 | 19 | Adds the `sections` of the song. | No sections. |
 | 20 | Adds the lane automation `pan`. | No pan automation. |
 | 21 | Adds the lane automation `repeat`. | No repeat automation. |
@@ -25,15 +25,18 @@ earlier song writes version 26, which earlier builds cannot open.
 | 25 | Adds the FX bus module `emberform-drive`. | No drive returns. |
 | 26 | Adds the lane automation `compression`. | The lane compressor fully in. |
 
-Each saved lane `ducker` of an earlier song, on or off, opens with its
-`threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0. The lane
-then ducks as it did, wherever that range allows. A `masterGain` of 0 leaves
-the `threshold` as it is, because the key is silent either way.
+The reader moves the `threshold` of each saved lane `ducker` of an earlier song,
+on or off, by `-20 * log10(masterGain)` dB. It then holds the result to -60..0.
+The lane then ducks as it did, wherever that range allows. A `masterGain` of 0
+leaves the `threshold` as it is, because the key is silent either way.
 
-The readers reject settings of a later version in earlier songs. Earlier
-readers accept some optional fields that are encoded as `null`. Versions 12 to
-14 also accept an explicit `"bypass": false` in `master`.
+The reader rejects settings of a later version in an earlier song. A version
+that does not hold a field reads `null` as absent for `master`, `fxBuses`,
+`sends`, `automation`, `eq`, `compressor`, `width`, `ducker`, `fades`, and
+`pitchCents`. The fields `polarityInverted`, `muted`, `solo`, `reverse`,
+`sections`, and `drive` reject `null`. Versions 12 to 14 also accept an explicit
+`"bypass": false` in `master`.
 
-Earlier plain JSON projects have a separate compatibility reader. It accepts
-both generations of Booster names. It does not weaken the versioned song rules
-in this document.
+A separate compatibility reader opens plain JSON projects. It accepts both
+generations of Booster names. It does not weaken the versioned song rules in
+this document.

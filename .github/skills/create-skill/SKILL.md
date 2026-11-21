@@ -2,7 +2,7 @@
 name: create-skill
 description: >
   Create, change, or audit a repository skill: its triggers, steps, completion
-  criteria, references, and writing. Use for a new skill, a skill change, or a skill audit.
+  criteria, references, and writing.
 ---
 
 # Create predictable skills
@@ -65,7 +65,8 @@ cause it, split the sequence.
 1. Check the folder name, frontmatter, links, and files.
    Completion criterion: `name` is the folder name in hyphen case. The frontmatter
    keys are only `name`, `description`, `license`, `allowed-tools`, and
-   `metadata`. The description has no angle brackets. Each relative link resolves.
+   `metadata`. The description has no angle brackets. Each relative link and each
+   anchor resolves.
 2. Run the Codex quick validator on each changed skill folder:
    `python <codex-home>/skills/.system/skill-creator/scripts/quick_validate.py <skill-folder>`.
    `<codex-home>` is `CODEX_HOME`, or `.codex` in the user's home folder. The

@@ -79,6 +79,7 @@ fn typed_header_preserves_tempo_and_centered_pan() {
             Timeline {
                 start: bytes.len(),
                 events: Vec::new(),
+                embedded_waves: Vec::new(),
             },
         )
         .unwrap();
@@ -171,6 +172,7 @@ fn native_mute_solo_and_utility_lane_settings_survive_import_and_json() {
             Timeline {
                 start: bytes.len(),
                 events: Vec::new(),
+                embedded_waves: Vec::new(),
             },
         )
         .unwrap();
@@ -206,6 +208,7 @@ fn saved_settings_after_the_title_survive_import_and_json() {
             Timeline {
                 start: bytes.len(),
                 events: Vec::new(),
+                embedded_waves: Vec::new(),
             },
         )
         .unwrap();

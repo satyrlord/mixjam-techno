@@ -216,16 +216,6 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.multiband = multiband(40.0);
             b.limiter = limiter(1.5);
         }),
-        preset("Hip-Hop", |b| {
-            b.tube = tube(2.0, 40.0);
-            b.trim_eq = trim_eq(25.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-12.0, 2.5, 15.0, 200.0);
-            b.maximizer = maximizer(10.0);
-            b.lift_eq = lift(1.5, 0.5);
-            b.imaging = imaging(100.0, 150.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
-        }),
     ]
 });
 
@@ -322,9 +312,11 @@ mod tests {
 
     #[test]
     fn presets_are_valid_whole_boards_on_the_knob_grid() {
-        assert_eq!(PRESETS.len(), 20);
+        assert_eq!(PRESETS.len(), 19);
         let names: Vec<_> = PRESETS.iter().map(|preset| preset.name).collect();
         assert_eq!(&names[..3], ["Subtle", "Revive", "Loud"]);
+        // The application is for techno and other electronic genres.
+        assert!(!names.contains(&"Hip-Hop"));
         for (index, preset) in PRESETS.iter().enumerate() {
             let chain = &preset.chain;
             chain.validate().unwrap();

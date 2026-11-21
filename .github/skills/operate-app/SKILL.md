@@ -10,9 +10,20 @@ description: >
 
 An application that starts with `--agent` or `--agent-port PORT` accepts
 requests. The `agent` command of the same executable sends them. `agent help`
-is the authoritative list of requests and fields. Read `docs/AGENT-CONTROL.md`
-when you need the details of the arrangement requests, the panels, the Options
-window, the Choose path modal, or the session key.
+is the authoritative list of requests and fields.
+
+Read `docs/AGENT-CONTROL.md` when your task needs one of these:
+
+- the panels
+- the Options window
+- the Choose path modal
+- the session key
+
+Read `docs/agent-control/song-editing.md` when your task needs one of these:
+
+- the Step synth board
+- an arrangement edit or an automation lane
+- the Track EQ window
 
 ## 1. Start an isolated session
 
@@ -41,10 +52,8 @@ Do not start a session on the settings of the owner unless the owner asks.
 2. Send `ui` for the controls that you can operate now. To list one window or
    modal, add `window=TITLE`. To read text and disabled controls, add `all=true`.
    Completion criterion: You have the exact name of each control that you will use.
-3. If a control is in a folded panel, click the `Sounds`, `Inspector`,
-   `Boards`, `Overview`, or `Tools` switch of the status bar to open the panel.
-   Click `Maximise the score` to restore a maximised score. Click `Mix view`
-   for the track rows of the Mix view. Then send `ui` again.
+3. If a control is in a folded panel, open the panel as the section "Controls
+   and input" of `docs/AGENT-CONTROL.md` states. Then send `ui` again.
    Completion criterion: `ui` lists the control.
 4. If `ui` does not list a control that is on screen, report it as a defect.
    Each control needs an accessible name.
@@ -66,12 +75,10 @@ Do not start a session on the settings of the owner unless the owner asks.
    `set_sections` to edit the arrangement lanes. Tracks and bars count from 1.
    Completion criterion: The reply and `state` confirm the clips, the
    selection, the transport position, the loop, or the sections.
-4. Use `automate track=N lane=LANE` to replace the volume, send, filter, pan,
-   repeat, repeat gate, pitch, or compression lane of a track. Use
+4. Use `automate track=N lane=LANE` to replace a lane of a track. Use
    `automate bus=N lane=return` to replace the return lane of an FX bus.
    Completion criterion: `state` shows the new points.
-5. Use `clip` to set the gain, trim, length, fades, pitch, and reverse of one
-   clip. A field that you leave out keeps its value.
+5. Use `clip` to change one clip. A field that you omit keeps its value.
    Completion criterion: `state` shows the new clip values.
 6. Before you open Effect Studio, Step synth, Sample editor, or Time Stretcher,
    send `select sample=`. The selected sound is the source of these tools.
@@ -83,8 +90,8 @@ Do not start a session on the settings of the owner unless the owner asks.
    Completion criterion: The reply has no modal, and the status line names the file.
 9. After an export or a folder choice, send `wait idle=true`.
    Completion criterion: `state` shows no scan and no export.
-10. Use `pointer`, `key`, `type`, and `scroll` only for a gesture that has no
-    named control, for example a drag or a context menu. Take the positions
+10. Use `pointer`, `key`, `type`, and `scroll` only if the gesture has no
+    named control. A drag and a context menu are examples. Take the positions
     from `state`.
     Completion criterion: `state` shows the result of the gesture.
 
@@ -120,5 +127,8 @@ needs sound. Playback uses the audio device.
 
 ## Completion criterion
 
-The work is complete when the requested song or window state exists, each
-action has a checked reply, and the session is closed.
+The work is complete when these conditions are true:
+
+- The requested song or window state exists.
+- Each action has a checked reply.
+- The application process has ended.

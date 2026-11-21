@@ -18,6 +18,7 @@ mod processor;
 mod reverb;
 mod settings;
 
+pub use parts::return_limiter_ceiling_dbfs;
 pub(crate) use processor::{LOOKAHEAD, TAIL_LIMIT};
 pub use processor::{Lanes, ReturnLanes, ReturnsProcessor};
 pub use settings::{

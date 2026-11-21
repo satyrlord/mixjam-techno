@@ -8,5 +8,5 @@ effort: high
 ---
 
 Act as the mix and master critic of the song-review skill
-(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
-skill, then read `MIX-CRITIC.md` in that folder. Do only that role.
+(`.github/skills/song-review/SKILL.md`). Obey the core rules in that file, then
+read `ROLE-RULES.md` and `MIX-CRITIC.md` in that folder. Do only that role.

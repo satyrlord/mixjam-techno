@@ -18,28 +18,34 @@ src/ui_icons.rs
 
 ## Session and edit history
 
-`Session` owns the editor, the catalog, the project file, the dirty state, the
-render revisions, the audio player, the microphone capture, and the pending
-recorded take. Its project and catalog accessors are read-only. It validates
-the project when it starts and after each change.
+`Session` owns these items:
+
+- The editor and the catalog.
+- The project file and the dirty state.
+- The render revisions.
+- The audio player.
+- The microphone capture and the pending recorded take.
+
+Its project and catalog accessors are read-only. It validates the project when
+it starts and after each change.
 
 Typed `EditCommand` values change the tempo, the loop regions, the clips, the
 routing, the sections, and the mixer settings. Separate operations place and
 move clips. A successful edit updates the history and, when necessary, marks
 the render for update. An accepted command that changes nothing is not an
-edit: the history, the saved state, and the render do not change. A clip
-cannot become longer than the gap to the next clip on its track.
+edit. In that case the history, the saved state, and the render do not change.
+A clip cannot become longer than the gap to the next clip on its track.
 
 The history groups edits as follows:
 
-- Changes to the tempo, or to one gain, pan, send, channel EQ dial, FX knob, or
-  clip control, that arrive within 400 ms of each other make one history
-  entry. Thus a slider drag is one undo step.
+- Changes that arrive within 400 ms of each other make one history entry.
+  This rule applies to the tempo and to one gain, pan, send, channel EQ dial,
+  FX knob, or clip control. Thus a slider drag is one undo step.
 - A pointer press starts a new entry. Thus a reset, such as Unity or Center,
-  is a step of its own. While a pointer button is held, a pause does not end
-  the entry.
-- Save ends the group. Thus undo can go back to the saved state after the
-  next edit.
+  is a step of its own. If a pointer button is down, a pause does not end the
+  entry.
+- Save ends the group. Thus undo can return to the saved state after the next
+  edit.
 - An automation point drag has explicit start and end boundaries. A pause in
   a drag does not split its undo step, and separate drags do not merge.
 - A clip handle drag keeps a frontend preview and sends one `edit_discrete`
@@ -67,16 +73,16 @@ arrangement, but they do not extend the audio render.
 `src/options.rs` owns the typed schema of the application preferences, their
 defaults, their validation, and their persistence in `options.json` under
 `project_io::data_root()`. `Session` owns the active values, their revision,
-and `apply_options`. The option values carry no display labels; the frontend
+and `apply_options`. The option values carry no display labels. The frontend
 names them.
 
 The Options frontend has four parts, so its look can change without the
 Session:
 
 - `src/ui/options/draft.rs`: `OptionsDraft`, a plain controller with no egui
-  and no Session. It takes `OptionsFacts`, plain values that the window reads
-  from the Session once per frame, and the person's `Action`s, and returns
-  `Effect`s for the window to carry out.
+  and no Session. It takes `OptionsFacts` and the person's `Action`s.
+  `OptionsFacts` are plain values that the window reads from the Session once
+  per frame. It returns `Effect`s, which the window runs.
 - `src/ui/options/pages.rs`: the Audio, Workspace, and Files pages as free
   functions over the draft's values and the facts.
 - `src/ui/options/labels.rs`: every word the window shows or names, shared
@@ -113,10 +119,10 @@ configuration. `load_library_config` and `save_library_config` take that root,
 and `Session` writes the file in its own settings root.
 
 `WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, Sounds,
-Overview, and Inspector switches and the Maximise state. It is in
-`layout.json` beside `options.json`. `Session` adopts each layout change
-immediately and saves it for the next launch. If the write fails, `Session`
-reports an error and keeps the current layout. Headless sessions do not save
+Overview, and Inspector switches and the Maximise state. It is in `layout.json`
+beside `options.json`. `Session` adopts each layout change immediately and saves
+it for the next launch. If the write fails, `Session` returns an error, and the
+new layout stays active until the session ends. Headless sessions do not save
 layouts. Layout changes do not change the Options revision, the song data, or
 the history.
 
@@ -128,6 +134,6 @@ pointer positions into requested positions and sends them to the application.
 It does not own an `Editor`, and it does not change the live project. It does
 not decode audio, write projects, or control a device directly.
 
-When a song is replaced, or when scanned folders are adopted, the held control
-gestures in Mixer, Mastering, FX returns, and the channel EQ become invalid.
-Movement from an earlier gesture cannot edit the replacement song.
+If the application replaces the song, or adopts scanned folders, the held
+control gestures in Mixer, Mastering, FX returns, and the channel EQ become
+invalid. Movement from an earlier gesture cannot edit the replacement song.

@@ -70,10 +70,10 @@ registers the WAV in Effect at the source BPM, and selects the saved sound. A
 source change clears the local feedback. The save choice, the cancellation, a
 failure, and a success update it. Reset restores `EffectsState::default`.
 
-When the user turns an optional section off, its settings are discarded. When
-the user turns it on, it uses the defaults of that section. This presentation
-does not change the algorithms or the shared `effects_controls` form that Step
-synth uses. It adds no background processing job.
+When the user turns an optional section off, the form discards its settings.
+When the user turns it on, it uses the defaults of that section. This
+presentation does not change the algorithms or the shared `effects_controls`
+form that Step synth uses. It adds no background processing job.
 
 ## Missing audio and sample conflicts
 
@@ -88,6 +88,6 @@ Duplicate file matches are in `Project.sample_conflicts`, with a stable
 default, the candidate paths, and the source IDs. Readers select the first
 candidate. `Session::resolve_sample_conflict` changes all affected placements
 in one atomic step, and updates the history and the rendering. The native
-modal shows the choices and plays them. The confirmation and the selected
-paths are saved in the project. Transactions remove conflicts that no longer
-have an effect on a clip.
+modal shows the choices and plays them. The project saves the confirmation and
+the selected paths. Transactions remove conflicts that no longer have an
+effect on a clip.

@@ -344,7 +344,7 @@ fn position_readout_keeps_its_place_in_the_top_bar_and_shows_bar_and_beat_when_w
         let size = Vec2::new(width, 900.0);
         // The top bar narrows its controls below 1240 points of content.
         let compact = width - 36.0 < 1240.0;
-        for title in ["Song", "Reality (Vocal Guide, Proposals)"] {
+        for title in ["Song", "Horizon (Vocal Guide, Proposals)"] {
             retitle(&mut app, title);
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             let readout = accessible_label(&output, "00 : 00");
@@ -375,7 +375,7 @@ fn song_name_is_never_clipped_and_every_transport_button_fits() {
     let absurd = "Absurd ".repeat(40);
     let titles = [
         "Song",
-        "Reality (Vocal Guide, Proposals)",
+        "Horizon (Vocal Guide, Proposals)",
         very_long,
         absurd.trim_end(),
     ];
@@ -427,7 +427,7 @@ fn song_name_is_never_clipped_and_every_transport_button_fits() {
                 assert!(control.right() <= right + 0.5, "{context}: {control:?}");
             }
             // Real names keep at least the 9-point floor; a short name and
-            // the owner's song keep the full 15-point size where they fit.
+            // a working title keep the full 15-point size where they fit.
             if title != absurd.trim_end() {
                 assert!(font >= 9.0, "{context}");
             }
@@ -445,7 +445,7 @@ fn song_name_has_no_tooltip_and_its_mark_does_not_move_the_transport() {
     ctx.enable_accesskit();
     ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
     let size = Vec2::new(960.0, 720.0);
-    let title = "Reality (Vocal Guide, Proposals)";
+    let title = "Horizon (Vocal Guide, Proposals)";
     retitle(&mut app, title);
     // A tooltip adds text to the frame.
     let texts = |output: &egui::FullOutput| screen(output).texts().count();

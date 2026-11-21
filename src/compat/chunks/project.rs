@@ -3,11 +3,11 @@
 //! own audio.
 
 use super::{
-    assets::{encode_float_wave, preserve_wave, queue_asset},
+    assets::{encode_float_wave, hex_digest, preserve_wave_with_digest, queue_asset, sha256_bytes},
     layout::{Header, Reference, Timeline, WaveReference},
     waves::{
-        RetainedWave, basename, d2_embedded_sources, d2_source_wave, embedded_waves,
-        normalize_saved_path, retain_wave, source_wave, stretched_copy,
+        RetainedWave, StemIndex, basename, d2_source_wave, normalize_saved_path,
+        retain_wave_with_digest, source_wave, stretched_copy,
     },
 };
 use crate::{
@@ -19,7 +19,6 @@ use crate::{
     library::Library,
     products::Product,
 };
-use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
@@ -160,23 +159,16 @@ pub(crate) fn build_project(
     } else {
         None
     };
-    let has_imports = events
-        .iter()
-        .any(|event| matches!(event.reference, Reference::Wave(_)));
-    let d2_embedded = if has_imports && product == Product::D2 {
-        d2_embedded_sources(bytes, timeline.start)?
-    } else {
-        Vec::new()
-    };
-    let embedded = if has_imports && product != Product::D2 {
-        embedded_waves(bytes)?
-    } else {
-        Vec::new()
-    };
+    let embedded = timeline.embedded_waves;
+    let (master, unusable) = settings::booster(product, &header.settings);
     let mut source_notices = header.source_notices;
-    source_notices.extend(settings::notices(product, &header.settings, kit.is_some()));
+    source_notices.extend(settings::notices(
+        product,
+        &header.settings,
+        kit.is_some(),
+        &unusable,
+    ));
     source_notices.extend(kit.as_ref().and_then(drums::effects_notice));
-    let (master, _) = settings::booster(product, &header.settings);
     let mut project = Project {
         title: if header.title.is_empty() {
             path.file_stem()
@@ -198,10 +190,12 @@ pub(crate) fn build_project(
         ..Project::default()
     };
     let mut pending_waves = Vec::new();
+    let mut pending_digests: HashMap<PathBuf, [u8; 32]> = HashMap::new();
     let mut pending_bytes = 0;
     let mut drum_cache: HashMap<drums::Pattern, (u32, u32)> = HashMap::new();
     // Each generated pattern records the song's hash. Hash the song once.
     let mut mix_hash: Option<String> = None;
+    let mut stem_index: Option<StemIndex> = None;
     let mut wave_cache = HashMap::new();
     // Events can name one path with different labels. Each path is resolved,
     // decoded, and hashed once; later references reuse that validated source.
@@ -210,6 +204,25 @@ pub(crate) fn build_project(
     let mut resolved_waves: HashMap<String, Result<RetainedWave, String>> = HashMap::new();
     // Saved paths whose missing Time Stretcher copy was rebuilt, with its name.
     let mut stretched_names: HashMap<String, String> = HashMap::new();
+    let installed_products = Product::ALL.map(|product| library.has_original_provider(product));
+    let installed_provider = |product: Product| {
+        Product::ALL
+            .iter()
+            .position(|entry| *entry == product)
+            .is_some_and(|index| installed_products[index])
+    };
+    let prepared_kit = kit.as_ref().and_then(|source_kit| {
+        drums::prepare_kit(
+            source_kit,
+            library,
+            product,
+            events.iter().filter_map(|event| match &event.reference {
+                Reference::Drum(pattern) => Some(pattern),
+                _ => None,
+            }),
+        )
+        .ok()
+    });
     for event in events {
         let inferred_ticks = source_key(&event.reference)
             .and_then(|key| inferred_sources.get(&key).copied())
@@ -257,7 +270,11 @@ pub(crate) fn build_project(
                             bpm,
                             ticks,
                             metadata.is_none(),
-                            library.describe_missing(source_product, native_id),
+                            library.describe_missing_with(
+                                source_product,
+                                native_id,
+                                installed_provider(source_product),
+                            ),
                         )?;
                         if let Some(entry) = metadata {
                             missing.metadata.insert("Code".into(), entry.code.clone());
@@ -297,50 +314,56 @@ pub(crate) fn build_project(
                 let (id, frames, sample_rate) = if let Some(cached) = wave_cache.get(&key) {
                     *cached
                 } else {
+                    let has_embedded = embedded
+                        .iter()
+                        .any(|source| normalize_saved_path(&source.path) == key.path);
                     let wave = match resolved_waves.get(&key.path) {
                         Some(resolved) => resolved.clone(),
                         None => {
                             let wave = if product == Product::D2 {
-                                d2_source_wave(&source_path, &d2_embedded, library)
+                                d2_source_wave(&source_path, bytes, &embedded, library)
                             } else {
-                                source_wave(&source_path, &embedded, library)
+                                source_wave(&source_path, bytes, &embedded, library)
                             };
+                            let mut known_digest = None;
                             let wave = match wave {
-                                Err(reason) if product == Product::T2 => {
+                                Err(reason) if product == Product::T2 && !has_embedded => {
                                     match stretched_copy(
                                         &metadata,
                                         library,
+                                        &mut stem_index,
                                         header.bpm,
                                         declared_ticks,
                                     )? {
                                         Some(copy) => {
+                                            let audio_hash = hex_digest(&copy.digest);
                                             let provenance = serde_json::json!({
                                                 "schema_version": 1, "product": product,
                                                 "source_mix_name": path.file_name().unwrap_or_default().to_string_lossy(),
-                                                "source_mix_sha256": mix_hash.get_or_insert_with(|| format!("{:x}", Sha256::digest(bytes))),
+                                                "source_mix_sha256": mix_hash.get_or_insert_with(|| hex_digest(&sha256_bytes(bytes))),
                                                 "saved_path": &source_path, "saved_labels": [metadata.get("Native label 1"), metadata.get("Native label 2")],
                                                 "original": copy.original, "target_bpm": copy.target_bpm,
                                                 "stretcher": "sample_edit::time_stretch",
-                                                "rendered_audio_sha256": format!("{:x}", Sha256::digest(&copy.wave.bytes)),
+                                                "rendered_audio_sha256": audio_hash,
                                             });
                                             let provenance = serde_json::to_vec_pretty(&provenance)
                                                 .map_err(|error| error.to_string())?;
                                             let destination = crate::project_io::data_root()
                                                 .join("imported-audio")
-                                                .join(format!(
-                                                    "{:x}.wav",
-                                                    Sha256::digest(&copy.wave.bytes)
-                                                ));
-                                            let provenance_hash =
-                                                format!("{:x}", Sha256::digest(&provenance));
+                                                .join(format!("{audio_hash}.wav"));
+                                            let provenance_digest = sha256_bytes(&provenance);
+                                            let provenance_hash = hex_digest(&provenance_digest);
+                                            let provenance_path = destination
+                                                .with_extension(format!("{provenance_hash}.json"));
                                             queue_asset(
                                                 &mut pending_waves,
                                                 &mut pending_bytes,
-                                                destination.with_extension(format!(
-                                                    "{provenance_hash}.json"
-                                                )),
+                                                provenance_path.clone(),
                                                 provenance,
                                             )?;
+                                            pending_digests
+                                                .insert(provenance_path, provenance_digest);
+                                            known_digest = Some(copy.digest);
                                             stretched_names.insert(key.path.clone(), copy.name);
                                             Ok(copy.wave)
                                         }
@@ -351,7 +374,14 @@ pub(crate) fn build_project(
                             };
                             let resolved = match wave {
                                 Ok(wave) => {
-                                    Ok(retain_wave(wave, &mut pending_waves, &mut pending_bytes)?)
+                                    let (retained, digest) = retain_wave_with_digest(
+                                        wave,
+                                        &mut pending_waves,
+                                        &mut pending_bytes,
+                                        known_digest,
+                                    )?;
+                                    pending_digests.insert(retained.path.clone(), digest);
+                                    Ok(retained)
                                 }
                                 Err(error) => Err(error),
                             };
@@ -359,12 +389,6 @@ pub(crate) fn build_project(
                             resolved
                         }
                     };
-                    let has_embedded = d2_embedded
-                        .iter()
-                        .any(|source| normalize_saved_path(&source.path) == key.path)
-                        || embedded
-                            .iter()
-                            .any(|source| normalize_saved_path(&source.source_path) == key.path);
                     let candidates = if !has_embedded
                         && !source_path.to_lowercase().ends_with(".pxd")
                         && !Path::new(&source_path).is_file()
@@ -496,9 +520,16 @@ pub(crate) fn build_project(
                     *cached
                 } else {
                     let source_kit = kit.as_ref().ok_or("The native drum kit is missing.")?;
-                    let pcm =
-                        drums::prepare_kit(source_kit, library, product, std::iter::once(&pattern))
-                            .and_then(|prepared| drums::render(&prepared, &pattern, header.bpm));
+                    let pcm = match prepared_kit.as_ref() {
+                        Some(prepared) => drums::render(prepared, &pattern, header.bpm),
+                        None => drums::prepare_kit(
+                            source_kit,
+                            library,
+                            product,
+                            std::iter::once(&pattern),
+                        )
+                        .and_then(|prepared| drums::render(&prepared, &pattern, header.bpm)),
+                    };
                     let label = format!("{} {}", pattern.group, pattern.variant)
                         .trim()
                         .to_string();
@@ -532,7 +563,8 @@ pub(crate) fn build_project(
                     } else {
                         let pcm = pcm?;
                         let wave = encode_float_wave(&pcm)?;
-                        let hash = format!("{:x}", Sha256::digest(&wave));
+                        let wave_digest = sha256_bytes(&wave);
+                        let hash = hex_digest(&wave_digest);
                         let destination = crate::project_io::data_root()
                             .join("imported-audio")
                             .join(format!("{hash}.wav"));
@@ -559,26 +591,31 @@ pub(crate) fn build_project(
                                 destination.clone(),
                                 wave,
                             )?;
+                            pending_digests.insert(destination.clone(), wave_digest);
                             id
                         };
                         let provenance = serde_json::json!({
                             "schema_version": 1, "product": product,
                             "source_mix_name": path.file_name().unwrap_or_default().to_string_lossy(),
                             "source_mix_sha256": mix_hash
-                                .get_or_insert_with(|| format!("{:x}", Sha256::digest(bytes))),
+                                .get_or_insert_with(|| hex_digest(&sha256_bytes(bytes))),
                             "source_bpm": header.bpm, "native_units_per_bar": 128,
                             "pattern": &pattern, "kit": &kit,
                             "rendered_audio_sha256": hash, "renderer_policy": drums::renderer_policy(product),
                         });
                         let provenance = serde_json::to_vec_pretty(&provenance)
                             .map_err(|error| error.to_string())?;
-                        let provenance_hash = format!("{:x}", Sha256::digest(&provenance));
+                        let provenance_digest = sha256_bytes(&provenance);
+                        let provenance_hash = hex_digest(&provenance_digest);
+                        let provenance_path =
+                            destination.with_extension(format!("{provenance_hash}.json"));
                         queue_asset(
                             &mut pending_waves,
                             &mut pending_bytes,
-                            destination.with_extension(format!("{provenance_hash}.json")),
+                            provenance_path.clone(),
                             provenance,
                         )?;
+                        pending_digests.insert(provenance_path, provenance_digest);
                         let result = (
                             id,
                             u32::try_from(pcm.frames())
@@ -634,7 +671,7 @@ pub(crate) fn build_project(
     }
     let project = normalize_import(project)?;
     for (path, bytes) in pending_waves {
-        preserve_wave(&path, &bytes)?;
+        preserve_wave_with_digest(&path, &bytes, pending_digests.get(&path))?;
     }
     Ok(project)
 }

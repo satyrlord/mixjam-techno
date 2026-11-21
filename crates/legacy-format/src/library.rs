@@ -90,17 +90,11 @@ fn key(path: &str) -> String {
 pub struct SampleMetadata {
     /// Original factory or kit ID. Imported records need separate MIX remapping.
     pub id: u16,
-    /// Auxiliary MAX position. It must not replace the native sample ID.
-    pub max_slot: Option<u16>,
     pub path: String,
     /// Native catalog integer, stored in the original per-sample length table.
     pub nominal_bars: Option<u32>,
     pub category: String,
-    pub group: String,
     pub labels: [String; 2],
-    pub secondary: String,
-    pub source_catalog: String,
-    pub raw_fields: Option<[String; 6]>,
 }
 
 #[derive(Debug, Clone)]
@@ -115,9 +109,6 @@ impl Library {
         if max.len() > usize::from(u16::MAX) + 1 {
             return Err(LibraryError("MAX has too many slots".into()));
         }
-        let max_by_path: BTreeMap<_, _> = (0..max.len())
-            .filter_map(|id| max.get(id as u16).map(|path| (key(path), id as u16)))
-            .collect();
         let catalogs = [
             ("", "\x50XD", 731u16),
             ("rekit1/", "KIT1.TXT", 4400),
@@ -139,15 +130,10 @@ impl Library {
                 let path = format!("{prefix}{}", record.fields[0].replace('\\', "/"));
                 let entry = SampleMetadata {
                     id,
-                    max_slot: max_by_path.get(&key(&path)).copied(),
                     path,
                     nominal_bars: Some(record.nominal_bars),
                     category: record.fields[2].clone(),
-                    group: String::new(),
                     labels: [record.fields[4].clone(), record.fields[5].clone()],
-                    secondary: record.fields[1].clone(),
-                    source_catalog: name.into(),
-                    raw_fields: Some(record.fields),
                 };
                 if samples.insert(id, entry).is_some() {
                     return Err(LibraryError("Catalog exceeds its native ID region".into()));

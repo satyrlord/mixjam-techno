@@ -4,13 +4,13 @@
 
 Options uses the Utility Folded Metal shell. A vertical selector with Audio,
 Workspace, and Files is beside a body that scrolls. Until the user resizes the
-window, it keeps the height of the tallest page seen since it opened, up to
-the height of the screen, so the footer does not move between pages. A longer
-page scrolls. A fixed action row holds the tertiary Restore all defaults at
-the left, and the status, Apply, and Cancel at the right. The status and the
-page markers use the warning colour while changes wait; the selected page
-takes the selection colour. The page selection and the scroll position of
-each page stay through collapse and navigation while the window is open.
+window, it keeps the height of the tallest page shown since it opened, up to the
+height of the screen. So the footer does not move between pages. A longer page
+scrolls. A fixed action row holds the tertiary Restore all defaults at the left.
+The status, Apply, and Cancel are at the right. While changes wait, the status
+and the page markers use the warning colour. The selected page takes the
+selection colour. The page selection and the scroll position of each page stay
+through collapse and navigation while the window is open.
 
 At 960x720, 1024x768, and 1440x1000, all controls and actions must be
 reachable without horizontal scrolling. Ctrl+, opens or focuses the window.
@@ -19,18 +19,18 @@ Section titles use the 15-point uppercase heading face. A section title is
 Workspace and Files, each control has a maximum of one help line. Switches,
 such as Mute previews and Show tooltips, use the shared switch.
 
-Apply is enabled only while the draft is different from the active options,
-or while restored defaults must replace a file that is not valid. Each page
-with edits that are not applied shows a dot on its selector button. The dot
-is ink on the selected face, and the warning colour on the other buttons. The
-footer shows the count in the warning colour. Screen readers get the count as
-the button description and as a polite live footer.
+Apply is enabled only while the draft differs from the active options. It is
+also enabled while restored defaults must replace a file that is not valid. Each
+page with changes that wait shows a dot on its selector button. The dot is ink
+on the selected face, and the warning colour on the other buttons. The footer
+shows the count in the warning colour. Screen readers get the count as the
+button description and as a polite live footer.
 
-Escape, close, and Cancel close a clean draft at once. With edits that
-are not applied, they open the blocking Discard changes? confirmation. It
-holds:
+Escape, close, and Cancel close a clean draft at once. If the draft has changes
+that wait, they open the Discard changes? confirmation. This confirmation blocks
+the other controls. It holds:
 
-- Apply changes, disabled with its reason when Apply is blocked,
+- Apply changes, disabled with its reason when a value blocks Apply,
 - the Danger Discard changes,
 - Keep editing.
 
@@ -58,16 +58,20 @@ It keeps the peaks between the draws and the OVER latch of the audio engine.
 
 ### Changes and errors
 
-Audio changes show that the transport must stop, until playback, previews,
-and recording stop. Workspace and Files changes stay available during
-playback. When the preferences change outside the window, show stale-draft
-feedback with Reload active options. Keep the edits that are not saved until
-the user selects it. Show persistence and validation errors in the window.
-Restore all defaults edits only the draft, on every page.
+Audio changes show that the transport must stop, until playback, previews, and
+recording stop. Workspace and Files changes stay available during playback. When
+the preferences change outside the window, show stale-draft feedback with Reload
+active options. Keep the draft edits until the user selects Reload active
+options. Show persistence and validation errors in the window. Restore all
+defaults edits only the draft, on every page.
 
-Each colour has one meaning: coral for an error or a value that blocks Apply,
-the warning colour for a state that waits or is reduced, and the help colour
-for guidance. The fixed song folder is checked where it is typed, with the
+Each colour has one meaning:
+
+- coral for an error or a value that blocks Apply,
+- the warning colour for a state that waits or that reduces quality,
+- the help colour for guidance.
+
+The application checks the fixed song folder where the user types it, with the
 same words that keep Apply disabled.
 
 ### Files and Sample libraries
@@ -86,12 +90,12 @@ footer, because its actions apply at once:
 - the folder tempo and skipped-WAV reports,
 - the optional product providers.
 
-These operations use the Session operations. A scan applies the folder
-changes when it is complete. The next Add library folder and Scan again use
-the fallback tempo. Library and provider paths wrap in full. An enabled Remove
-describes its path. The window scrolls vertically. A
-large expanded Folder tempos list must keep the provider controls reachable.
-The provider product list shows all its rows and does not scroll.
+These operations use the Session operations. A scan applies the folder changes
+when it is complete. The next Add library folder and Scan again use the fallback
+tempo. Library and provider paths wrap in full. An enabled Remove describes its
+path. The window scrolls vertically. A large expanded Folder tempos list must
+keep the provider controls reachable. The provider product list shows all its
+rows and does not scroll.
 
 Show tooltips controls the hover hints. Accessible names, focus, errors, and
 visible guidance stay available when it is off.
@@ -111,18 +115,18 @@ uppercase titles. Native file pickers of the operating system are not part of
 this system.
 
 Every window can resize and collapse. Recorded take keeps its audio in memory
-while it is collapsed. Save take and Discard take are the explicit actions
-that resolve it. Discard take asks once more in place: Confirm discard erases
-the recording, and Keep take goes back. Import details offers Resolve manually
-for each missing sound.
+while collapsed. Save take and Discard take are the explicit actions that
+resolve it. Discard take asks once more in place: Confirm discard erases the
+recording, and Keep take returns. Import details offers Resolve manually for
+each missing sound.
 
-The collapse of a confirmation releases workspace and agent input and pauses
-its pending action. Expansion blocks again when a decision is still necessary.
-Choose path suspends its parent confirmation while the path request is
-pending, also while it is collapsed. Reject a file request that conflicts,
-and do not replace paused data. Close cancels a confirmation, and does not
-save, import, or discard. Blocking dialogs and Recorded take follow the
-height of their content until the user resizes them.
+The collapse of a confirmation releases workspace and agent input and pauses its
+pending action. Expansion blocks again when a decision is still necessary.
+Choose path suspends its parent confirmation while the path request is pending,
+also while collapsed. Reject a file request that conflicts, and do not replace
+paused data. Close cancels a confirmation, and does not save, import, or
+discard. Blocking dialogs and Recorded take follow the height of their content
+until the user resizes them.
 
 Sample conflicts confirms only through Keep choices, because the confirmation
 is a project change that the user can undo. Dismissal does not confirm. Esc
@@ -146,8 +150,8 @@ has compatibility notices.
 
 Keep task guidance in Help and control tooltips. Do not repeat drag, preview,
 tempo, or save instructions across the workspace and tool windows. Keep short
-warnings for missing audio, recordings that are not saved, polarity inversion,
-and approximate pitch preservation. Import details keeps all saved source and
+warnings for missing audio, unsaved recordings, polarity inversion, and
+approximate pitch preservation. Import details keeps all saved source and
 placement metadata as text that the user can select.
 
 Help has one page for each topic. A page list is at the left of the page, or
@@ -163,11 +167,11 @@ Page scroll keys also work when a Help header control has focus. Topic controls
 have names of the form `Help page: Mixer` to keep command names unique.
 
 The Help of a tool or a board shows only its own page, in the palette of that
-tool. It opens beside the tool window, or above the lower panel for a board,
-so that it does not cover the controls that it explains. A test makes sure
-that each tool of the rail has a page. At compact sizes, a short scrolling
-page fits above the tool. If no adjacent area can fit a page, Help opens at
-the centre; move or resize either window to make room.
+tool. It opens beside the tool window, or above the lower panel for a board. So
+it does not cover the controls that it explains. A test checks that each tool of
+the rail has a page. At compact sizes, a short scrolling page fits above the
+tool. If no adjacent area can fit a page, Help opens at the centre. Move or
+resize either window to make room.
 
 Show full file system paths without the Windows extended-length prefix. Show
 network paths as `\\server\share`. Apply this rule to folder labels, tooltips,

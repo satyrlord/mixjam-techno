@@ -13,13 +13,13 @@ builds the initial library and an empty project before it makes a session. For
 the window, it makes `--mix` absolute, so Save replaces that song.
 `Session::start_up` starts the library folder scan and opens `--mix` after it,
 or at once when no scan runs. A queued song opens only if no project change or
-unsaved take in the meantime makes a cancellation necessary. An open error
-shows in the window and does not stop startup. A successful folder adoption
-tells the frontend to clear the selections and the active drags. The `render`
-command uses `Session::headless` and `Session::export` or
-`Session::export_tracks`. Other headless CLI commands can use the library
-services directly. The GUI modules are compiled into the native binary. The
-production Rust library does not export them.
+unsaved take in the meantime makes a cancellation necessary. An open error shows
+in the window and does not stop startup. A successful folder adoption tells the
+frontend to clear the selections and the active drags. The `render` command uses
+`Session::headless` and `Session::export` or `Session::export_tracks`. Other
+headless CLI commands can use the library services directly. The build compiles
+the GUI modules into the native binary. The production Rust library does not
+export them.
 
 ## Library folder scans
 
@@ -60,14 +60,13 @@ identities agree with playback.
 `source_tempo.rs` resolves the folder tempo from matching original audio before
 it uses the fallback from the duration. The `BPM.INF` file of a pack and the
 tempo tokens in file names are stated tempos. They have priority over the
-duration reading, but not over matching original audio. Optional supplemental
-tempo identities come from `source-tempos.json` in the runtime catalog folder.
+duration reading, but not over matching original audio.
 
 ## File replacement and MIX import
 
-`src/atomic_file.rs` owns file replacement. Projects, settings, the scan cache,
-synth patterns, and WAV exports are staged beside the destination and renamed
-over it. If a single-file write fails, the current file stays intact.
+`src/atomic_file.rs` owns file replacement. It stages projects, settings, the
+scan cache, synth patterns, and WAV exports beside the destination and renames
+them over it. If a single-file write fails, the current file stays intact.
 
 Stem and sequence batches work as follows:
 
@@ -89,10 +88,13 @@ header through a bounded stream. The completed serialized song must fit the
 ## Packed samples and size limits
 
 `crates/legacy-format/src/packed.rs` owns the one packed-sample decoder,
-`decode`, and the one header parser, `parse_header`. The archive records and
-stand-alone files of the library, the PXD sources of the MIX importer, and the
-source file of the Step synth all call them. `DecodeOptions` names the two
-intended differences:
+`decode`, and the one header parser, `parse_header`. These callers use them:
+
+- The archive records and stand-alone files of the library.
+- The PXD sources of the MIX importer.
+- The source file of the Step synth.
+
+`DecodeOptions` names the two intended differences:
 
 - An archive record (`ARCHIVE`) starts the predictor at zero. It pads the audio
   with silence to the count of the header.

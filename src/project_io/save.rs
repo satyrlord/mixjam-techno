@@ -1,11 +1,33 @@
 //! Saving a song, with each product provider recorded as the folder that holds its files.
 use super::{data_root, has_song_extension, retained::retain_native_provider};
-use crate::{engine::Project, library::Library, products::Product};
+use crate::{
+    engine::{ImportedSample, Project},
+    library::Library,
+    products::Product,
+};
 use std::{collections::HashSet, path::Path};
+
+#[cfg(test)]
+thread_local! {
+    static PROBE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn probe_count() -> usize {
+    PROBE_COUNT.get()
+}
 
 /// [`save`] with each product provider recorded as the folder that holds the
 /// song's files in this library. See [`Library::song_binding`].
 pub fn save_with_library(project: &Project, library: &Library, path: &Path) -> Result<(), String> {
+    save_with_library_in(project, library, path, &data_root()).map(|_| ())
+}
+
+pub(crate) fn save_with_library_rates(
+    project: &Project,
+    library: &Library,
+    path: &Path,
+) -> Result<Vec<ImportedSample>, String> {
     save_with_library_in(project, library, path, &data_root())
 }
 
@@ -14,7 +36,7 @@ pub(super) fn save_with_library_in(
     library: &Library,
     path: &Path,
     storage: &Path,
-) -> Result<(), String> {
+) -> Result<Vec<ImportedSample>, String> {
     // A provider folder is retained below, so check the song first.
     project.validate()?;
     check_extension(path)?;
@@ -70,7 +92,7 @@ pub(super) fn save_with_library_in(
 /// A saved song references its used audio, not every sound in the browser palette.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     check_extension(path)?;
-    write(project.clone(), path)
+    write(project.clone(), path).map(|_| ())
 }
 
 fn check_extension(path: &Path) -> Result<(), String> {
@@ -83,18 +105,22 @@ fn check_extension(path: &Path) -> Result<(), String> {
 
 /// Write `saved` with only the sources that its clips use. The song writer
 /// validates what is left.
-fn write(mut saved: Project, path: &Path) -> Result<(), String> {
+fn write(mut saved: Project, path: &Path) -> Result<Vec<ImportedSample>, String> {
     saved.prune_sample_conflicts();
     let used: HashSet<_> = saved.clips.iter().map(|clip| clip.sample_id).collect();
     saved
         .imported_samples
         .retain(|sample| used.contains(&sample.id));
+    let mut resolved_rates = Vec::new();
     // Only the imports that the song keeps are read for their rate.
     for imported in &mut saved.imported_samples {
-        if imported.source_sample_rate.is_none()
-            && let Ok(ready) = Library::check_import(imported)
-        {
-            imported.source_sample_rate = Some(ready.sample_rate);
+        if imported.source_sample_rate.is_none() {
+            #[cfg(test)]
+            PROBE_COUNT.set(PROBE_COUNT.get() + 1);
+            if let Ok(ready) = Library::check_import(imported) {
+                imported.source_sample_rate = Some(ready.sample_rate);
+                resolved_rates.push(imported.clone());
+            }
         }
     }
     saved
@@ -106,5 +132,6 @@ fn write(mut saved: Project, path: &Path) -> Result<(), String> {
                 .is_some_and(|(product, _)| product == binding.product)
         })
     });
-    crate::mixjam::save(&saved, path)
+    crate::mixjam::save(&saved, path)?;
+    Ok(resolved_rates)
 }

@@ -33,10 +33,10 @@ Write a short label for the structural moment. Use a few words, not a sentence,
 and no full stop at the end.
 The data uses two styles. Both styles are correct:
 
-- **Structural label.** This is the most frequent style: `Intro`, `Build`,
-  `Drop`, `Breakdown`, `Peak`, `Outro`, `Bridge`, `Chorus`, `Verse`,
-  `Crossfade`, and compounds such as `Final Drop`, `Extended Peak`, `Vocal
-  Hook`, `Beat entry`, and `Choir Entry`.
+- **Structural label.** This is the most frequent style. Examples are `Intro`,
+  `Build`, `Drop`, `Breakdown`, `Peak`, `Outro`, `Bridge`, `Chorus`, `Verse`,
+  and `Crossfade`. Compounds are also usual, such as `Final Drop`,
+  `Extended Peak`, `Vocal Hook`, `Beat entry`, and `Choir Entry`.
 - **Named-event label.** Use this style for analysis at the instrument level, as
   in Oxygène:
   `Eminent 310 string pad`, `Mellotron enters`, `Gregorian chant`.
@@ -73,7 +73,7 @@ for:
 
 - Equipment notes: the model name, its origin, and the reason for the choice of
   that instrument.
-- Production technique: how the effect was made.
+- Production technique: how the producer made the effect.
 - Historical or cultural context: the first use of a technology, the cultural
   reception, or a note about a live performance.
 - Structural function: why this moment is important in the larger arc.
@@ -107,13 +107,13 @@ main feature of the analysis style.
 ## Metadata Fields
 
 - `label`: the primary label of the original release.
-  For a joint release, put ` · ` (space, middle dot, space) or ` / ` (space,
-  slash, space) between the labels:
+  For a joint release, separate the labels with ` · ` (space, middle dot,
+  space) or ` / ` (space, slash, space):
   `"Disques Motors · Polydor"` or `"Blizzard Entertainment / Sierra On-Line"`.
 - `producer`: use the same format for co-producers: `"Trevor Horn · Tom Newman ·
   Mike Oldfield"`.
-- Do not write an empty string `""` in `label` or `producer`. If the value is
-  not known, write `"Unknown"`.
+- Do not write an empty string `""` in `label` or `producer`. If you do not
+  know the value, write `"Unknown"`.
 - `genre`: the short display string. Put ` / ` between the primary subgenres:
   `"Electronic / Ambient"`.
 - `genreTags`: 1–9 selected filter tags.

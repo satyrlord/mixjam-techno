@@ -189,6 +189,30 @@ fn clip_menu_shortening_preserves_fade_in_before_fade_out() {
 }
 
 #[test]
+fn clip_menu_commits_numeric_text_while_the_field_is_open() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    let clip = app.session.project().clips[0].clone();
+    open_clip_menu(&ctx, &mut app, clip.id);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Clip gain");
+    frame(
+        &ctx,
+        &mut app,
+        vec![
+            key_event(egui::Key::A, egui::Modifiers::COMMAND),
+            egui::Event::Text("-3".into()),
+        ],
+        egui::Modifiers::COMMAND,
+    );
+
+    assert_eq!(
+        app.session.project().clips[0].gain,
+        mixjam_techno::application::clip_gain_from_db(-3.0)
+    );
+}
+
+#[test]
 fn clip_menu_controls_fit_the_minimum_window() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();

@@ -24,6 +24,8 @@ pub(super) use buttons::{
 };
 use gain::*;
 pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value, gain_value_in};
+#[cfg(test)]
+pub(super) use gain::{GAIN_FINE_STEP_DB, GAIN_STEP_DB, useful_taper_span};
 pub(super) use strips::{return_state, show, track_state};
 
 /// What the mixer changed: the mix of each edited track with its index,

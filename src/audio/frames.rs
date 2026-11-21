@@ -154,9 +154,6 @@ pub trait Frames: Send + Sync {
     fn channels(&self) -> u16;
     fn sample_rate(&self) -> u32;
     fn frames(&self) -> u64;
-    /// Fill `out` with interleaved samples from `first_frame` onward.
-    /// Samples past the end are silent.
-    fn read(&self, first_frame: u64, out: &mut [f32]);
     /// The tempo of a song mix, whose sends feed the FX buses.
     fn tempo(&self) -> Option<f64> {
         None
@@ -171,12 +168,9 @@ pub trait Frames: Send + Sync {
         &self,
         first_frame: u64,
         out: &mut [f32],
-        _sends: Option<&mut [f32]>,
-        _state: &mut RenderState,
-    ) -> bool {
-        self.read(first_frame, out);
-        false
-    }
+        sends: Option<&mut [f32]>,
+        state: &mut RenderState,
+    ) -> bool;
     /// The key tracks of the first `frames` frames that the last
     /// `read_block` with `state` read, for the master pedals and the FX
     /// buses.
@@ -202,12 +196,19 @@ impl Frames for Pcm {
     fn frames(&self) -> u64 {
         Pcm::frames(self)
     }
-    fn read(&self, first_frame: u64, out: &mut [f32]) {
+    fn read_block(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
+        _sends: Option<&mut [f32]>,
+        _state: &mut RenderState,
+    ) -> bool {
         let start = (first_frame as usize)
             .saturating_mul(self.channels as usize)
             .min(self.samples.len());
         let available = (self.samples.len() - start).min(out.len());
         out[..available].copy_from_slice(&self.samples[start..start + available]);
         out[available..].fill(0.0);
+        false
     }
 }

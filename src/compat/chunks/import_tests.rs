@@ -281,7 +281,7 @@ fn d2_footer_accepts_absent_zero_and_exact_counted_payloads() {
     let (bytes, start) = song(&[event], Some(&[("Z:\\missing\\source.pxd", &payload)]));
     let sources = d2_embedded_sources(&bytes, start).unwrap();
     assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0].bytes, payload);
+    assert_eq!(&bytes[sources[0].range.clone()], payload.as_slice());
     assert_eq!(sources[0].path, "Z:\\missing\\source.pxd");
 }
 
@@ -378,14 +378,22 @@ fn d2_external_packed_file_decodes_with_its_saved_identity() {
     let path = scratch.root.join("original.pxd");
     fs::write(&path, packed(387)).unwrap();
     let text = path.to_string_lossy();
-    let source = d2_source_wave(&text, &[], &Library::empty()).unwrap();
+    let source = d2_source_wave(&text, &[], &[], &Library::empty()).unwrap();
     assert_eq!(source.frames, 6);
     assert_eq!(source.sample_rate, 44100);
     assert_eq!(source.source_path, text);
     let mut reader = hound::WavReader::new(Cursor::new(source.bytes)).unwrap();
     let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
     assert_eq!(samples, vec![774; 6]);
-    assert!(d2_source_wave("Z:\\unavailable\\wrong\\avpo.pxd", &[], &Library::empty()).is_err());
+    assert!(
+        d2_source_wave(
+            "Z:\\unavailable\\wrong\\avpo.pxd",
+            &[],
+            &[],
+            &Library::empty()
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -410,15 +418,15 @@ fn d2_external_pxd_catalog_resolution_uses_d1_full_code_identity() {
         digest: None,
     };
     let library = Library::fixture(vec![sample.clone()]);
-    let source = d2_source_wave("Z:\\missing\\Dance\\BO\\AVPO.PXD", &[], &library).unwrap();
+    let source = d2_source_wave("Z:\\missing\\Dance\\BO\\AVPO.PXD", &[], &[], &library).unwrap();
     assert_eq!(source.frames, 4);
     assert_eq!(source.bytes.as_ref(), fs::read(path).unwrap());
-    assert!(d2_source_wave("Z:\\missing\\wrong\\AVPO.PXD", &[], &library).is_err());
+    assert!(d2_source_wave("Z:\\missing\\wrong\\AVPO.PXD", &[], &[], &library).is_err());
     let wrong_product = Library::fixture(vec![crate::library::Sample {
         id: Product::D2.global_sample_id(788).unwrap(),
         ..sample
     }]);
-    assert!(d2_source_wave("Z:\\missing\\BO\\AVPO.PXD", &[], &wrong_product).is_err());
+    assert!(d2_source_wave("Z:\\missing\\BO\\AVPO.PXD", &[], &[], &wrong_product).is_err());
 }
 
 #[test]
@@ -436,7 +444,7 @@ fn d2_timeline_marker_inside_embedded_pcm_does_not_hide_the_real_timeline() {
     assert_eq!(timeline.events[0].position, 0);
     let sources = d2_embedded_sources(&bytes, timeline.start).unwrap();
     assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0].bytes, payload);
+    assert_eq!(&bytes[sources[0].range.clone()], payload.as_slice());
 }
 
 #[test]
@@ -482,6 +490,7 @@ fn inherited_ids_keep_the_explicit_d2_namespace_and_loader_boundaries() {
                     gain: 1.0,
                     reference: Reference::Native(native_id),
                 }],
+                embedded_waves: Vec::new(),
             },
         )
     };
@@ -623,6 +632,7 @@ fn missing_repeated_source_infers_enough_span_for_every_trim() {
                     reference: source(),
                 },
             ],
+            embedded_waves: Vec::new(),
         },
     )
     .unwrap();
@@ -712,6 +722,7 @@ fn unavailable_wave_with_conflicting_saved_span_opens_with_explicit_inference() 
                 reference: source(),
             }))
             .collect(),
+            embedded_waves: Vec::new(),
         },
     )
     .unwrap();

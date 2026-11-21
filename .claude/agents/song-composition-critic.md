@@ -8,5 +8,6 @@ effort: high
 ---
 
 Act as the composition and arrangement critic of the song-review skill
-(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
-skill, then read `COMPOSITION-CRITIC.md` in that folder. Do only that role.
+(`.github/skills/song-review/SKILL.md`). Obey the core rules in that file, then
+read `ROLE-RULES.md` and `COMPOSITION-CRITIC.md` in that folder. Do only that
+role.

@@ -9,22 +9,22 @@ of the screen. A longer page scrolls.
 
 - **Apply** saves the changes to the preferences and keeps the window open.
   Apply is available only when there are changes.
-- A dot marks each page that has changes that are not applied. The footer
-  shows how many there are.
+- A dot marks each page that has unapplied changes. The footer shows how many
+  there are.
 - **Restore all defaults** puts the defaults of every page in the draft. To
   save them, select **Apply**.
 
-If you select **Cancel**, press Escape, or close the window with changes that
-are not applied, the window asks **Discard changes?**:
+If the draft has unapplied changes and you select **Cancel**, press Escape, or
+close the window, the window asks **Discard changes?**:
 
 - **Apply changes** applies the changes and closes the window.
 - **Discard changes** closes the window without the changes.
-- **Keep editing** goes back to the window.
+- **Keep editing** returns to the window.
 
 Without changes, these actions close the window immediately. They do not
 change the song, the undo history, the libraries, or the caches.
 
-If a different control changes a preference while Options is open, select
+If a different control changes a preference while you have Options open, select
 **Reload active options** before you select Apply. Reload replaces the draft
 with the active preferences.
 
@@ -46,7 +46,7 @@ with the active preferences.
 - Normal exports, track exports, and song-tool renders always use 4x and
   High. While one of these three settings is lower, Options shows **Playback
   quality reduced; exports use full quality**. The status bar shows **Reduced
-  quality**; select it to open Options.
+  quality**. Select it to open Options.
 - **Playback buffer target**: **Automatic**, **20 ms**, or **40 ms**. The
   default is 40 ms where the device supports it. A larger buffer can absorb
   bursts of processing, but it increases the delay between an action and its
@@ -114,15 +114,15 @@ To open it, select **Open sample libraries** on the **Files** page of Options.
 The library folder, scan, and provider actions in this window apply
 immediately, so it has no Apply or Cancel. Close it with its close button.
 
-Folder changes apply after a scan is successful. The next **Add library
+Folder changes apply after a scan succeeds. The next **Add library
 folder** or **Scan again** uses **Tempo for files without one**. If you close
 the window, the library scan continues and its changes stay. To stop a scan,
 select **Cancel library scan**.
 
 ## Options file
 
-Options are stored in `options.json` in the settings folder. If the settings
-are not valid, the application uses safe defaults and shows an error. To
-replace the settings that are not valid, select **Restore all defaults**,
-then **Apply**. This build does not overwrite settings from a newer options
-schema.
+The application stores the options in `options.json` in the settings folder. If
+the settings are not valid, the application uses safe defaults and shows an
+error. To replace the settings that are not valid, select **Restore all
+defaults**, then **Apply**. This build does not overwrite settings from a newer
+options schema.

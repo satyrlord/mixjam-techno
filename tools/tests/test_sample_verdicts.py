@@ -303,6 +303,15 @@ class OwnerVerdictTests(unittest.TestCase):
 
 
 class PaletteTests(unittest.TestCase):
+    def test_census_needs_the_songs_and_reads_no_default_song_list(self):
+        with mock.patch.object(sys, 'argv', ['palette.py', 'census']), \
+                mock.patch('sys.stderr', io.StringIO()), \
+                mock.patch.object(palette, 'census') as census:
+            with self.assertRaises(SystemExit) as exit_info:
+                palette.main()
+        self.assertEqual(exit_info.exception.code, 2)
+        census.assert_not_called()
+
     def test_a_family_admits_its_members_but_never_a_file_the_owner_rejected(self):
         roots = ['E:\\lib']
         family = verdicts.family_of('E:\\lib', 'Pads/Pad 1.wav')

@@ -53,17 +53,7 @@ impl Session {
             return;
         };
         let status = recorder.status();
-        if let Some(error) = status.error {
-            // The input cannot recover. Keep what it captured as the take.
-            self.stop();
-            self.error(if self.recorded_take.is_some() {
-                format!("{error} Recording stopped. The audio captured before that is kept.")
-            } else {
-                error
-            });
-            return;
-        }
-        if status.limit_reached {
+        if status.error.is_some() || status.limit_reached {
             self.stop();
             return;
         }

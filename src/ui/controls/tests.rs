@@ -435,3 +435,55 @@ fn disabled_rotary_rejects_accessible_edits() {
     });
     assert_eq!(value, 1.0);
 }
+
+#[test]
+fn palette_lookup_uses_explicit_state_when_panel_fills_match() {
+    let ctx = egui::Context::default();
+    let shared_fill = Color32::from_rgb(42, 42, 42);
+    let mut outer_before = None;
+    let mut inner_a = None;
+    let mut inner_b = None;
+    let mut outer_after = None;
+    let mut unstyled_panel = None;
+    let mut window_a = None;
+    let mut window_b = None;
+    let _ = ctx.run(egui::RawInput::default(), |ctx| {
+        egui::SidePanel::left("palette-test").show(ctx, |ui| {
+            apply_palette(ui, Palette::Granite);
+            ui.visuals_mut().panel_fill = shared_fill;
+            outer_before = Some(Palette::of(ui));
+            ui.scope(|ui| {
+                apply_palette(ui, Palette::Marine);
+                ui.visuals_mut().panel_fill = shared_fill;
+                ui.scope(|ui| inner_a = Some(Palette::of(ui)));
+            });
+            ui.scope(|ui| {
+                apply_palette(ui, Palette::Red);
+                ui.visuals_mut().panel_fill = shared_fill;
+                inner_b = Some(Palette::of(ui));
+            });
+            outer_after = Some(Palette::of(ui));
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.visuals_mut().panel_fill = shared_fill;
+            unstyled_panel = Some(Palette::of(ui));
+        });
+        egui::Window::new("tool-a").show(ctx, |ui| {
+            apply_palette(ui, Palette::Olive);
+            ui.visuals_mut().panel_fill = shared_fill;
+            window_a = Some(Palette::of(ui));
+        });
+        egui::Window::new("tool-b").show(ctx, |ui| {
+            apply_palette(ui, Palette::Indigo);
+            ui.visuals_mut().panel_fill = shared_fill;
+            window_b = Some(Palette::of(ui));
+        });
+    });
+    assert_eq!(outer_before, Some(Palette::Granite));
+    assert_eq!(inner_a, Some(Palette::Marine));
+    assert_eq!(inner_b, Some(Palette::Red));
+    assert_eq!(outer_after, Some(Palette::Granite));
+    assert_eq!(unstyled_panel, Some(Palette::Utility));
+    assert_eq!(window_a, Some(Palette::Olive));
+    assert_eq!(window_b, Some(Palette::Indigo));
+}

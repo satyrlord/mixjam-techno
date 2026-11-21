@@ -12,8 +12,8 @@ module is a horizontal pedalboard in signal order:
 
 Keyboard focus also scrolls a control into view. Each pedal shows its name,
 lamp, dials, arrow buttons, and switch. The dynamics pedals also show their
-gain-reduction lamps. A pedal that is off is dimmed. A drag of the header of a
-pedal moves the pedal, with an insertion marker during the drag, and the row
+gain-reduction lamps. The board dims a pedal that is off. A drag of the header
+of a pedal moves the pedal, with an insertion marker during the drag. The row
 scrolls near its ends. The arrow buttons give the same move to the keyboard,
 screen readers, and agents.
 

@@ -338,7 +338,9 @@ impl Loudness {
 /// `20 log10(pi / (2 sqrt 2))`: a sine's RMS over its rectified mean.
 const SINE_FORM_DB: f64 = 0.912_097_5;
 /// The level of 0 VU, in dBFS.
-const REFERENCE_DBFS: f64 = -18.0;
+pub const VU_REFERENCE_DBFS: f64 = -18.0;
+/// The level at which the input peak lamps light, in dBFS.
+pub const INPUT_PEAK_LAMP_DBFS: f64 = -1.0;
 
 /// The measuring state of one playback. It lives on the audio thread.
 pub(super) struct Meters {
@@ -373,7 +375,7 @@ impl Meters {
     }
     #[inline]
     pub(super) fn input(&mut self, left: f32, right: f32) {
-        let hot = db_to_gain(-1.0) as f32;
+        let hot = db_to_gain(INPUT_PEAK_LAMP_DBFS) as f32;
         for (channel, sample) in [left, right].into_iter().enumerate() {
             let [first, second] = &mut self.needle[channel];
             *first = flush(*first + (f64::from(sample.abs()) - *first) * self.needle_step);
@@ -426,7 +428,7 @@ impl Meters {
         }
         shared.store_current(&MeterReading {
             run: self.run,
-            input_vu: (gain_to_db(needle) + SINE_FORM_DB - REFERENCE_DBFS) as f32,
+            input_vu: (gain_to_db(needle) + SINE_FORM_DB - VU_REFERENCE_DBFS) as f32,
             input_peaks,
             input_peak_counts: self.input_peak_counts,
             compressor_reduction: compressor,

@@ -29,9 +29,9 @@ To find and hear sounds, use the [Sounds panel](interface.md#sounds-panel).
   an empty area.
 - To copy a clip, hold Shift or Alt while you drag it. A ghost shows where the
   clips will go. Each clip of a group must go onto a shown track or the Add row.
-  If a clip would go onto an unused track, a label names that track and the
-  drop does nothing.
-- To delete the selected clips, press Delete. Use Undo and Redo to go back and
+  If a clip goes onto an unused track, a label names that track and the drop
+  does nothing.
+- To delete the selected clips, press Delete. Use Undo and Redo to move back and
   forward through your edits.
 - To trim a clip, drag its left or right edge.
 - To set the fades, drag the handles at the top corners of the clip.
@@ -43,7 +43,7 @@ its clip.
 
 ## Clip properties
 
-To open the properties of a clip, right-click it. Alternatively, select the
+To open the properties of a clip, right-click it. You can also select the
 clip and press Shift+F10. The menu sets these values:
 
 - Gain.
@@ -59,12 +59,12 @@ of the clip, so a phrase that stops suddenly can fade away. Pitch does not
 change the length or the timing of the clip.
 
 Reverse plays a clip backwards: for example, for reversed cymbals, swells,
-and risers. The clip plays the same part of its sound, from the trim start for
-the length of the clip, from its end to its start. The fades, the gain, and
-the pitch do not move. Thus the fade in still opens the clip, and the fade out
-still closes it. If the sound is shorter than a reversed clip, the clip starts
-with silence and ends with the clip. A reversed clip shows "rev" in its
-corner.
+and risers. The clip plays the same part of its sound: from the trim start, for
+the length of the clip. The part plays from its end to its start. The fades,
+the gain, and the pitch do not move. Thus the fade in still opens the clip, and
+the fade out still closes it. If the sound is shorter than a reversed clip, the
+clip starts with silence and ends with the clip. A reversed clip shows "rev" in
+its corner.
 
 The trim and the length always refer to the forward part of the sound. Thus,
 on a reversed clip, a drag of the left edge trims the sound at the end of the
@@ -91,8 +91,8 @@ pattern file shows its waveform.
 
 A song can have sections: named parts such as Intro or Break. Each section is a
 bookmark. It shows as a colored line across the lanes, with its name on the bar
-ruler. A section continues until the next section starts. Sections are saved
-with the song. Agents set them with `set_sections`.
+ruler. A section continues until the next section starts. The song keeps its
+sections. Agents set them with `set_sections`.
 
 With sections shown, the Loop button loops the section at the playhead.
 Without sections, it loops the full song. Before the first bookmark, it loops

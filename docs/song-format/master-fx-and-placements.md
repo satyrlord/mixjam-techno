@@ -107,15 +107,15 @@ A placement holds `id`, `sampleId`, `startTick`, `durationTicks`,
 - `reverse`, from version 23. It is a boolean.
 
 `reverse` set to `true` plays the slice of the placement backwards. The slice
-starts at `offsetFrames` and lasts `durationTicks`. It is reversed within the
-placement, so the last frame of the placement plays the first frame of the
-slice. If the source is shorter than the slice, silence fills the start of the
-placement. A placement that plays forward omits `reverse`. Versions 22 and
-earlier reject it.
+starts at `offsetFrames` and lasts `durationTicks`. The slice plays in reverse
+within the placement, so the last frame of the placement plays the first frame
+of the slice. If the source is shorter than the slice, silence fills the start
+of the placement. A placement that plays forward omits `reverse`. Versions 22
+and earlier reject it.
 
-Fades, pitch, and gain apply in the own time of the placement. The fade in
-starts at the start of the placement, and the fade out ends at its end.
-Placements load in `id` order.
+Fades, pitch, and gain apply in the time of the placement. The fade in starts at
+the start of the placement, and the fade out ends at its end. Placements load in
+`id` order.
 
 A placement names audio by ID. Product catalog IDs resolve through
 `libraries`. Other IDs resolve through `samples`. `samples` links each used
@@ -125,6 +125,6 @@ product. `missingSamples`, `sampleConflicts`, `importNotices`, and
 provenance. An imported song can then reopen without its original file.
 
 `libraries` records at most one provider folder for each product. This format
-cannot keep two providers for one product. This is the case for a song that
-uses packed original audio and supplemental WAV files for one product. Save
-rejects that combination before it replaces the destination.
+cannot keep two providers for one product. A song that uses packed original
+audio and supplemental WAV files for one product has two providers. Save rejects
+that combination before it replaces the destination.

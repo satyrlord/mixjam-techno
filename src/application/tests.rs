@@ -142,3 +142,270 @@ fn fixture() -> Session {
     editor.place(1, 1, TICKS_PER_BAR, TICKS_PER_BAR).unwrap();
     Session::headless(library, editor.into_project()).unwrap()
 }
+
+#[test]
+fn in_place_continuing_steps_match_full_transaction_across_controls() {
+    let setup = || -> (Session, u64, u64) {
+        let mut s = fixture();
+        s.gesture_gap = std::time::Duration::MAX;
+        let ids: Vec<u64> = s.project().clips.iter().map(|c| c.id).collect();
+        (s, ids[0], ids[1])
+    };
+    let (mut session, clip1, clip2) = setup();
+
+    // 1. SetTempo (valid & invalid)
+    session.edit(EditCommand::SetTempo(135.0)).unwrap();
+    let mut ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    let gen0 = session.editor.generation();
+    session.edit(EditCommand::SetTempo(160.0)).unwrap();
+    ref_s.edit_discrete(EditCommand::SetTempo(160.0)).unwrap();
+    assert_eq!(session.project(), ref_s.project());
+    assert_eq!(session.editor.generation(), gen0 + 1);
+    let err_in_place = session.edit(EditCommand::SetTempo(123.0)).unwrap_err();
+    let err_full = ref_s
+        .edit_discrete(EditCommand::SetTempo(123.0))
+        .unwrap_err();
+    assert_eq!(err_in_place, err_full);
+    assert_eq!(session.project(), ref_s.project());
+
+    // 2. SetTrack + SetMaster + SetEffects + SetAutomation + SetReturnAutomation + SetClip + SetClipSounds
+    let mut t = session.project().tracks[0].clone();
+    t.gain = 0.7;
+    session
+        .edit(EditCommand::SetTrack {
+            index: 0,
+            track: Box::new(t.clone()),
+        })
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    t.gain = 0.8;
+    session
+        .edit(EditCommand::SetTrack {
+            index: 0,
+            track: Box::new(t.clone()),
+        })
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetTrack {
+            index: 0,
+            track: Box::new(t.clone()),
+        })
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+    let mut bad_t = session.project().tracks[0].clone();
+    bad_t.gain = -1.0;
+    assert_eq!(
+        session
+            .edit(EditCommand::SetTrack {
+                index: 0,
+                track: Box::new(bad_t.clone()),
+            })
+            .unwrap_err(),
+        ref_s
+            .edit_discrete(EditCommand::SetTrack {
+                index: 0,
+                track: Box::new(bad_t),
+            })
+            .unwrap_err()
+    );
+    assert_eq!(session.project(), ref_s.project());
+
+    let mut mixer_tracks = session.project().tracks.clone();
+    mixer_tracks[1].gain = 0.7;
+    session
+        .edit(EditCommand::SetMixer {
+            tracks: mixer_tracks.clone(),
+            master_gain: 0.9,
+        })
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    mixer_tracks[1].gain = 0.8;
+    session
+        .edit(EditCommand::SetMixer {
+            tracks: mixer_tracks.clone(),
+            master_gain: 0.9,
+        })
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetMixer {
+            tracks: mixer_tracks,
+            master_gain: 0.9,
+        })
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+
+    let mut master = session.project().master;
+    master.trim = -2.0;
+    session.edit(EditCommand::SetMaster(master)).unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    master.trim = -4.0;
+    session.edit(EditCommand::SetMaster(master)).unwrap();
+    ref_s.edit_discrete(EditCommand::SetMaster(master)).unwrap();
+    assert_eq!(session.project(), ref_s.project());
+
+    let mut fx = session.project().fx;
+    fx.buses[0].return_level = 0.4;
+    session.edit(EditCommand::SetEffects(fx)).unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    fx.buses[0].return_level = 0.6;
+    session.edit(EditCommand::SetEffects(fx)).unwrap();
+    ref_s.edit_discrete(EditCommand::SetEffects(fx)).unwrap();
+    assert_eq!(session.project(), ref_s.project());
+
+    let c1 = session
+        .project()
+        .clips
+        .iter()
+        .find(|c| c.id == clip1)
+        .unwrap()
+        .clone();
+    session
+        .edit(EditCommand::SetClip {
+            id: clip1,
+            start_tick: c1.start_tick,
+            gain: 0.9,
+            offset_frames: c1.offset_frames,
+            length_ticks: c1.length_ticks,
+            fades: c1.fades,
+            pitch_cents: c1.pitch_cents,
+            reverse: c1.reverse,
+        })
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    session
+        .edit(EditCommand::SetClip {
+            id: clip1,
+            start_tick: c1.start_tick,
+            gain: 0.5,
+            offset_frames: c1.offset_frames,
+            length_ticks: c1.length_ticks,
+            fades: c1.fades,
+            pitch_cents: c1.pitch_cents,
+            reverse: c1.reverse,
+        })
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetClip {
+            id: clip1,
+            start_tick: c1.start_tick,
+            gain: 0.5,
+            offset_frames: c1.offset_frames,
+            length_ticks: c1.length_ticks,
+            fades: c1.fades,
+            pitch_cents: c1.pitch_cents,
+            reverse: c1.reverse,
+        })
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+
+    session
+        .edit(EditCommand::SetClipSounds(vec![
+            ClipSound {
+                id: clip1,
+                gain: 0.7,
+                fades: c1.fades,
+                pitch_cents: 0,
+                reverse: false,
+            },
+            ClipSound {
+                id: clip2,
+                gain: 0.7,
+                fades: c1.fades,
+                pitch_cents: 0,
+                reverse: false,
+            },
+        ]))
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    let c_sounds = vec![
+        ClipSound {
+            id: clip1,
+            gain: 0.6,
+            fades: c1.fades,
+            pitch_cents: 0,
+            reverse: false,
+        },
+        ClipSound {
+            id: clip2,
+            gain: 0.6,
+            fades: c1.fades,
+            pitch_cents: 0,
+            reverse: false,
+        },
+    ];
+    session
+        .edit(EditCommand::SetClipSounds(c_sounds.clone()))
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetClipSounds(c_sounds))
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+
+    session
+        .begin_automation_gesture(0, crate::automation::Lane::Volume)
+        .unwrap();
+    session
+        .edit(EditCommand::SetAutomation {
+            track: 0,
+            lane: crate::automation::Lane::Volume,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.5,
+            }],
+        })
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    session
+        .edit(EditCommand::SetAutomation {
+            track: 0,
+            lane: crate::automation::Lane::Volume,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.8,
+            }],
+        })
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetAutomation {
+            track: 0,
+            lane: crate::automation::Lane::Volume,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.8,
+            }],
+        })
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+    session.end_automation_gesture();
+
+    session.begin_return_gesture(0).unwrap();
+    session
+        .edit(EditCommand::SetReturnAutomation {
+            bus: 0,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.4,
+            }],
+        })
+        .unwrap();
+    ref_s = Session::headless(session.library.clone(), session.project().clone()).unwrap();
+    session
+        .edit(EditCommand::SetReturnAutomation {
+            bus: 0,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.9,
+            }],
+        })
+        .unwrap();
+    ref_s
+        .edit_discrete(EditCommand::SetReturnAutomation {
+            bus: 0,
+            points: vec![crate::automation::Point {
+                tick: 0,
+                value: 0.9,
+            }],
+        })
+        .unwrap();
+    assert_eq!(session.project(), ref_s.project());
+}

@@ -37,6 +37,8 @@ impl std::fmt::Display for Stems {
 
 const NO_MEMORY: &str = "There is not enough memory to hold this song. Export it instead.";
 
+pub const NO_TRACK_SOUNDS: &str = "No track sounds: add clips, or check Mute, Solo, and L/R.";
+
 impl Mix {
     /// The most frames that a stereo PCM16 WAV file holds. Both the data
     /// chunk and the RIFF size are 32-bit, and the RIFF payload also has 36
@@ -72,7 +74,7 @@ impl Mix {
     }
 
     /// The whole mix in memory, through the FX buses and the master
-    /// pedalboard. Long songs play and export block by block through `read`
+    /// pedalboard. Long songs play and export block by block through `read_block`
     /// and `write_wav`, which need no room for the whole song. Pedals that
     /// delay the sound run on past the end, and the delay is cut from the
     /// start, so the result lines up with the song; the buses' tails ring on
@@ -240,7 +242,7 @@ impl Mix {
         self.check_export_quality()?;
         let tracks = self.sounding_tracks();
         if tracks.is_empty() {
-            return Err("No track sounds: add clips, or check Mute, Solo, and L/R.".into());
+            return Err(NO_TRACK_SOUNDS.into());
         }
         let buses = self.returning_buses(fx);
         self.check_wav_length(if buses.is_empty() {

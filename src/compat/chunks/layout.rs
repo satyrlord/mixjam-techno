@@ -3,7 +3,7 @@
 
 use super::{
     Reader,
-    waves::{d2_embedded_sources, embedded_wave_ranges, read_wave_extension},
+    waves::{EmbeddedRecord, d2_embedded_sources, embedded_wave_records, read_wave_extension},
 };
 use crate::{
     compat::{drums, settings},
@@ -43,7 +43,7 @@ pub(super) fn read_header(bytes: &[u8], product: Product) -> Result<Header, Stri
     // ordinary sample lanes. Timeline admission still uses the core count.
     let mixer_count =
         track_count + usize::from(matches!(product, Product::D3 | Product::D4 | Product::T3));
-    let mut reader = Reader { bytes, offset: 0 };
+    let mut reader = Reader::new(bytes);
     if reader.u32()? != app_id {
         return Err("The native song belongs to a different product or profile.".into());
     }
@@ -124,7 +124,7 @@ pub(super) fn read_header(bytes: &[u8], product: Product) -> Result<Header, Stri
         tracks,
         source_notices,
         settings,
-        after_mixer: reader.offset,
+        after_mixer: reader.offset(),
     })
 }
 
@@ -177,6 +177,7 @@ pub(crate) struct Event {
 pub(crate) struct Timeline {
     pub(crate) start: usize,
     pub(crate) events: Vec<Event>,
+    pub(crate) embedded_waves: Vec<EmbeddedRecord>,
 }
 
 pub(super) fn read_timeline(
@@ -191,11 +192,15 @@ pub(super) fn read_timeline(
         .ok_or("The native song has no timeline end marker.")?;
     let mut result = None;
     let mut last_error = None;
-    let mut payload_ranges: Vec<_> = if product == Product::D2 {
+    let mut embedded_waves = if product == Product::D2 {
         Vec::new()
     } else {
-        embedded_wave_ranges(bytes)?
+        embedded_wave_records(bytes)?
     };
+    let mut payload_ranges: Vec<_> = embedded_waves
+        .iter()
+        .map(|source| source.range.clone())
+        .collect();
     let mut payload_index = 0;
     // Audio payloads can contain the marker bytes. Match a complete counted
     // timeline to its own length and marker, not the last marker in the file.
@@ -231,7 +236,9 @@ pub(super) fn read_timeline(
                 if product == Product::D2 {
                     match d2_embedded_sources(bytes, offset) {
                         Ok(sources) => {
-                            payload_ranges.extend(sources.into_iter().map(|source| source.range))
+                            payload_ranges
+                                .extend(sources.iter().map(|source| source.range.clone()));
+                            embedded_waves = sources;
                         }
                         Err(error) => {
                             last_error = Some(error);
@@ -245,6 +252,7 @@ pub(super) fn read_timeline(
                 result = Some(Timeline {
                     start: offset,
                     events,
+                    embedded_waves: std::mem::take(&mut embedded_waves),
                 });
             }
             Err(error) => {
@@ -268,12 +276,12 @@ pub(super) fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, S
             product,
             Product::D2 | Product::D3 | Product::D4 | Product::H1
         ));
-    let mut reader = Reader { bytes, offset: 0 };
+    let mut reader = Reader::new(bytes);
     let mut events = Vec::new();
     let mut previous_lane = 0;
-    while reader.offset < bytes.len() {
-        if reader.offset + 1 == bytes.len() && bytes[reader.offset] == 1 {
-            reader.offset += 1;
+    while reader.offset() < bytes.len() {
+        if reader.offset() + 1 == bytes.len() && bytes[reader.offset()] == 1 {
+            reader.set_offset(reader.offset() + 1);
             break;
         }
         let lane = usize::from(reader.u8()?);
@@ -281,14 +289,11 @@ pub(super) fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, S
         if lane <= previous_lane
             || lane > maximum_lane
             || count > MAX_CLIPS
-            || count > bytes.len().saturating_sub(reader.offset) / 7
+            || count > bytes.len().saturating_sub(reader.offset()) / 7
         {
             return Err("The native timeline has an invalid lane or event count.".into());
         }
         previous_lane = lane;
-        if lane > TRACK_COUNT && count > 0 {
-            return Err("The native song uses more than 64 tracks.".into());
-        }
         for _ in 0..count {
             if events.len() >= MAX_CLIPS {
                 return Err("The native song has too many events.".into());
@@ -304,7 +309,7 @@ pub(super) fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, S
                     return Err("The native drum pattern uses unsupported trim encoding.".into());
                 }
                 let (pattern, consumed) =
-                    drums::parse_pattern(&reader.bytes[reader.offset..], sample, product)?;
+                    drums::parse_pattern(&reader.bytes()[reader.offset()..], sample, product)?;
                 reader.take(consumed)?;
                 events.push(Event {
                     track: lane - 1,
@@ -327,7 +332,7 @@ pub(super) fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, S
             events.push(event);
         }
     }
-    if previous_lane == 0 || reader.offset != bytes.len() {
+    if previous_lane == 0 || reader.offset() != bytes.len() {
         return Err("The native timeline is incomplete.".into());
     }
     Ok(events)

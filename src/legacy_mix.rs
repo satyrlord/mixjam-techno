@@ -32,7 +32,7 @@ pub(crate) fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, Str
 }
 
 fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Project, String> {
-    let mut reader = Reader { bytes, offset: 0 };
+    let mut reader = Reader::new(bytes);
     if reader.u32()? != 0x889 {
         return Err("This original mix version is not supported.".into());
     }
@@ -78,23 +78,25 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
     if !OBSERVED_LABELS.contains(&product.trim()) {
         return Err("The mix belongs to a different product.".into());
     }
-    let search_start = reader.offset;
+    let search_start = reader.offset();
     let search_end = bytes
         .len()
         .saturating_sub(16 * 5 + TRAILER.len())
         .min(search_start + 4096);
     let mut arrangement = None;
-    let payload_ranges = chunks::embedded_wave_ranges(bytes)?;
+    let embedded_waves = chunks::embedded_wave_records(bytes)?;
     let mut payload_index = 0;
     // Preamble bytes can resemble a track list. Resolve audio only after a
     // unique complete structural parse, independently of available samples.
     for start in search_start..=search_end {
-        while payload_index < payload_ranges.len() && payload_ranges[payload_index].end <= start {
+        while payload_index < embedded_waves.len()
+            && embedded_waves[payload_index].range.end <= start
+        {
             payload_index += 1;
         }
-        if payload_ranges
+        if embedded_waves
             .get(payload_index)
-            .is_some_and(|range| range.contains(&start))
+            .is_some_and(|record| record.range.contains(&start))
         {
             continue;
         }
@@ -105,13 +107,18 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
             if arrangement.is_some() {
                 return Err("The original mix has ambiguous arrangement data.".into());
             }
-            arrangement = Some(Timeline { start, events });
+            arrangement = Some((start, events));
         }
     }
-    let timeline = arrangement.ok_or(
+    let (start, events) = arrangement.ok_or(
         "Cannot decode the original mix arrangement. The file is damaged or uses an unsupported \
          profile.",
     )?;
+    let timeline = Timeline {
+        start,
+        events,
+        embedded_waves,
+    };
     // The structural parse admits any volume delta. A volume outside the range
     // of the other profiles is a damaged song and gets its own message.
     for event in &timeline.events {
@@ -131,10 +138,7 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
 }
 
 fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
-    let mut reader = Reader {
-        bytes,
-        offset: start,
-    };
+    let mut reader = Reader::at(bytes, start);
     let mut events = Vec::new();
     for track in 0..16 {
         if reader.u8()? as usize != track + 1 {
@@ -142,7 +146,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
         }
         let count = reader.u32()? as usize;
         if count > MAX_CLIPS - events.len()
-            || count > reader.bytes.len().saturating_sub(reader.offset) / 7
+            || count > reader.bytes().len().saturating_sub(reader.offset()) / 7
         {
             return Err("Invalid clip count.".into());
         }
@@ -190,7 +194,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
     if reader.take(TRAILER.len())? != TRAILER {
         return Err("Invalid mix trailer.".into());
     }
-    if reader.offset != reader.bytes.len() {
+    if reader.offset() != reader.bytes().len() {
         read_wave_appendix(&mut reader)?;
     }
     Ok(events)
@@ -203,7 +207,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
 /// the block is complete.
 fn read_wave_appendix(reader: &mut Reader<'_>) -> Result<(), String> {
     let count = reader.u32()? as usize;
-    if count > reader.bytes.len().saturating_sub(reader.offset) / 52 {
+    if count > reader.bytes().len().saturating_sub(reader.offset()) / 52 {
         return Err("Invalid embedded WAV count.".into());
     }
     for _ in 0..count {
@@ -220,7 +224,7 @@ fn read_wave_appendix(reader: &mut Reader<'_>) -> Result<(), String> {
             return Err("Invalid embedded WAV.".into());
         }
     }
-    if reader.offset != reader.bytes.len() {
+    if reader.offset() != reader.bytes().len() {
         return Err("Invalid data after the embedded WAV files.".into());
     }
     Ok(())
@@ -266,23 +270,29 @@ fn read_wave_extension(reader: &mut Reader<'_>) -> Result<WaveReference, String>
     })
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
+struct Reader<'a>(legacy_format::ByteReader<'a>);
 
 impl<'a> Reader<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self(legacy_format::ByteReader::new(bytes))
+    }
+    const fn at(bytes: &'a [u8], offset: usize) -> Self {
+        Self(legacy_format::ByteReader::at(bytes, offset))
+    }
+    const fn bytes(&self) -> &'a [u8] {
+        self.0.bytes()
+    }
+    const fn offset(&self) -> usize {
+        self.0.offset()
+    }
     fn take(&mut self, length: usize) -> Result<&'a [u8], String> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or("Invalid mix length.")?;
-        let data = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or("The original mix is truncated.")?;
-        self.offset = end;
-        Ok(data)
+        self.0.take(length).map_err(|error| {
+            match error {
+                legacy_format::ReadError::Overflow => "Invalid mix length.",
+                legacy_format::ReadError::Truncated => "The original mix is truncated.",
+            }
+            .into()
+        })
     }
     fn u8(&mut self) -> Result<u8, String> {
         Ok(self.take(1)?[0])

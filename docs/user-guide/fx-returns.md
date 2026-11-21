@@ -31,7 +31,8 @@ clean, and the bus adds its saturation beside it.
 - **Low cut** and **High cut** set the band that the drive distorts. Thus a
   bass can keep a clean sub.
 
-Twelve presets supply warmth, glue, drum crunch, bass grit, fuzz, clipping, a
-telephone band, an octave, folding, two types of crushing, and a ducked pump.
-A drive return has no delay, so it stays in phase with the dry sound. Its
-safety limiter bends the peaks immediately and does not look ahead.
+Twelve presets supply these sounds: warmth, glue, drum crunch, bass grit, fuzz,
+clipping, a telephone band, an octave, and a wavefolder. They also supply two
+types of bitcrush and a ducked pump. A drive return has no delay, so it stays in
+phase with the dry sound. Its safety limiter bends the peaks immediately and
+does not look ahead.

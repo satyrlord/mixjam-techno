@@ -10,8 +10,15 @@ param(
     [ValidateRange(1, 32)]
     [int]$Jobs = [Math]::Max(1, [Math]::Min(8, [Environment]::ProcessorCount / 2)),
     [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips', 'command-list')]
-    [string[]]$Views = @('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips', 'command-list')
+    [string[]]$Views = @()
 )
+
+if ($Views.Count -eq 0) {
+    $attr = (Get-Command $PSCommandPath).Parameters['Views'].Attributes |
+        Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
+        Select-Object -First 1
+    $Views = @($attr.ValidValues)
+}
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))

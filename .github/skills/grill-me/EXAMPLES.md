@@ -5,7 +5,7 @@
 Prompt: "Challenge the plan to add a fixed-size render buffer."
 
 First inspect the current renderer and output-device contracts. Then resolve
-buffering, latency, sample rates, offline output, and audio evidence.
+the buffer, latency, sample rates, offline output, and audio evidence.
 
 ## Project data
 
@@ -19,5 +19,6 @@ State the conflict. Ask whether the owner intends to change that product rule.
 
 Prompt: "Challenge the plan for a smaller editor window."
 
-First inspect `docs/DESIGN.md` and the native capture sizes. Ask which editing tasks
-must remain visible and testable at the proposed size.
+First inspect `docs/DESIGN.md` and the capture sizes in
+[UI verification](../../../docs/development/verification.md#ui-verification).
+Ask which editing tasks must remain visible and testable at the proposed size.

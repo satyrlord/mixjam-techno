@@ -4,49 +4,45 @@ This file holds the body of step 4 of the [song-review skill](SKILL.md).
 
 Run the critics at a milestone only:
 
-- the end of a build stage, such as the bed, the drums, or the placement of a
-  new instrument through the song;
-- the pass before a master or before the owner masters by hand;
+- the end of a build stage, such as the bed, the drums, or a new instrument
+  placed through the song.
+- the pass before a master or before the owner masters by hand.
 - a request from the owner.
 
 Between milestones, repair with the gate and the owner's notes only. Do not
 launch a critic for one small change.
 
-1. Select the primary roles for this branch.
-   The Improvement loop needs composition, mix, and blind rating.
-   Evaluation needs only the requested primary roles.
-   Substeps 3 and 5 add rhythm and Devil's advocate reviews when requested.
-   Write a brief for each selected role. Give it its role,
-   its inputs from [Role inputs](REFERENCE-INPUTS.md#role-inputs), the reference
-   sheet, the standing notes, the level history, the approved version (not to
-   the rater), the review folder, and the output path from
-   [Round log](REFERENCE-ROUNDS.md#round-log). Say that "change nothing" is a valid
-   result. Tell it to keep each proposed setting
-   inside the [control ranges](REFERENCE-CONTROLS.md#control-ranges).
-   Completion criterion: Each brief names each path that its row of the role
-   inputs table needs, the source of each target, and the control ranges.
-2. Launch the selected roles as fresh agents on the same pass.
-   Use `song-composition-critic`, `song-mix-critic`, and `song-rater` for the
-   corresponding roles.
-   Run independent roles in parallel within the harness capacity.
+1. Select the roles of the round. The Improvement loop needs the composition
+   critic, the mix critic, and the blind rater. Evaluation needs only the
+   requested roles. Add the rhythm critic if the song has drums,
+   glitches, or ratchets. Do this only when the user or the artist profile
+   asks for a rhythm review.
+   Completion criterion: The plan lists each role of the round, or the report
+   says that no role applies.
+2. Write a brief for each selected role. Give it its role and the review folder.
+   Give it the evidence package and the extra items of its row in
+   [Role inputs](REFERENCE-INPUTS.md#role-inputs). Give it the output path from
+   [Round log](REFERENCE-ROUNDS.md#round-log). Say that "change nothing" is a
+   valid result.
+   Completion criterion: Each brief names the paths that its row of the role
+   inputs needs. It also names the source of each target.
+3. Launch the selected roles as fresh agents on the same pass. Run independent
+   roles in parallel within the harness capacity. Use these agents:
+   `song-composition-critic`, `song-mix-critic`, `song-rater`, and
+   `song-rhythm-critic`.
    Completion criterion: Each selected role runs once. No role gets another
    role's output.
-3. If the user or the artist profile asks for a rhythm review, and the song
-   has drums, glitches, or ratchets, also launch the rhythm critic
-   (`song-rhythm-critic`) as a fresh agent beside the others.
-   Completion criterion: The rhythm critic runs, or no rhythm review was asked
-   for.
-4. Check each critique against its role file.
-   Completion criterion: Each composition and mix critique has at most 8
-   findings with a kind, bars, tracks, evidence, a fix, and a severity, at most
-   5 things to keep, and no score. Each level, EQ, width, send, drive, or fade
-   fix states its measured size from the audibility bar. The rhythm critique has
-   each part that `RHYTHM-CRITIC.md` lists. Each proposed setting of each role
+4. Check each critique against its role file and the
+   [finding format](REFERENCE-FINDINGS.md#finding-format).
+   Completion criterion: Each critique has the parts and the limits that its
+   role file gives, and no score. Each level, EQ, width, send, drive, or fade
+   fix states its measured size from the
+   [audibility bar](REFERENCE-NOTES.md#audibility-bar). Each proposed setting
    is inside its [control range](REFERENCE-CONTROLS.md#control-ranges), or the
    merged list names the limit.
-5. If the user or the artist profile asks for a Devil's advocate review,
-   launch the Devil's advocate (`song-devils-advocate`) as a fresh agent. Do
-   this after all other critiques of the round are written.
+5. If the user or the artist profile asks for a Devil's advocate review, wait
+   for all other critiques of the round. Then write its brief as in substep 2.
+   Launch `song-devils-advocate` as a fresh agent.
    Completion criterion: Its output follows `DEVILS-ADVOCATE.md`, and no
    proposal goes against an owner decision or a standing note.
 

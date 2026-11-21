@@ -1,7 +1,7 @@
 //! The Inspector's clip pages: one clip, and several clips together.
+use super::super::super::controls::{NumberField, number_field};
 use super::super::super::view::TICKS_PER_BEAT;
 use super::cards::{Fields, Sound, card, row, row_label, sound_cards, values};
-use super::fields::{NumberField, number_field};
 use super::*;
 use mixjam_techno::application::{ClipSound, MAX_TICKS};
 

@@ -142,10 +142,14 @@ impl Library {
             })
             .cloned()
             .collect();
+        let root_indices: Vec<RootIndex> = loaded
+            .iter()
+            .map(|root| RootIndex::build(&library.samples, root))
+            .collect::<Result<_, _>>()?;
         for product in Product::ALL {
-            library.register_wav_folders_with_aliases(
+            library.register_wav_folders_indexed(
                 product,
-                &loaded,
+                &root_indices,
                 metadata(product),
                 |id| aliases(product, id),
             )?;
@@ -258,6 +262,7 @@ impl Library {
         self.register_wav_folders_with_aliases(product, roots, metadata, |_| &[])
     }
 
+    #[cfg(test)]
     fn register_wav_folders_with_aliases<'m>(
         &mut self,
         product: Product,
@@ -272,6 +277,20 @@ impl Library {
         Ok(())
     }
 
+    fn register_wav_folders_indexed<'m>(
+        &mut self,
+        product: Product,
+        roots: &[RootIndex],
+        metadata: &[crate::catalog::WaveMetadata],
+        aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata] + Copy,
+    ) -> Result<(), String> {
+        for index in roots {
+            let supplement = self.source_root(product).is_some();
+            self.identify_wav_product_indexed(product, index, metadata, supplement, aliases)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn identify_wav_product<'m>(
         &mut self,
         product: Product,
@@ -280,56 +299,27 @@ impl Library {
         supplement: bool,
         aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata],
     ) -> Result<usize, String> {
+        let index = RootIndex::build(&self.samples, root)?;
+        self.identify_wav_product_indexed(product, &index, metadata, supplement, aliases)
+    }
+
+    fn identify_wav_product_indexed<'m>(
+        &mut self,
+        product: Product,
+        index: &RootIndex,
+        metadata: &[crate::catalog::WaveMetadata],
+        supplement: bool,
+        aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata],
+    ) -> Result<usize, String> {
         const DIGEST_SCORE: u8 = 3;
-        let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-        // File names by compact form, for archive codes, and by label key,
-        // for the original's sound names, which catalogs keep only as keys.
-        let mut by_name: HashMap<String, Vec<&Sample>> = HashMap::new();
-        let mut by_label: HashMap<String, Vec<&Sample>> = HashMap::new();
-        let mut by_digest: HashMap<([u8; 16], u32), Vec<&Sample>> = HashMap::new();
-        // Old scan caches can contain digests for other rates or tiny files.
-        // Their samples cannot establish identity against native 44.1 kHz PCM.
-        let comparable_digest = |sample: &Sample| {
-            sample.digest.filter(|_| {
-                sample.sample_rate == legacy_format::NATIVE_SAMPLE_RATE
-                    && sample.channels == 1
-                    && sample.frame_count > 2
-            })
-        };
-        let mut seen_paths = HashSet::new();
-        for sample in &self.samples {
-            let Some(path) = &sample.wav_path else {
-                continue;
-            };
-            if !path.starts_with(&root) || !seen_paths.insert(path) {
-                continue;
-            }
-            let name = path.file_stem().unwrap_or_default().to_string_lossy();
-            let compact = compact_name(&name);
-            if !compact.is_empty() {
-                by_label
-                    .entry(crate::catalog::label_key(&name))
-                    .or_default()
-                    .push(sample);
-            }
-            by_name.entry(compact).or_default().push(sample);
-            if let Some(digest) = comparable_digest(sample) {
-                by_digest
-                    .entry((digest, sample.frame_count))
-                    .or_default()
-                    .push(sample);
-            }
-        }
+        let root = &index.root;
         // A copy in another product's folder serves only when this product has none.
         let foreign = |sample: &Sample| {
             sample
                 .wav_path
                 .as_ref()
-                .is_some_and(|path| in_foreign_product_folder(path, &root, product))
+                .is_some_and(|path| in_foreign_product_folder(path, root, product))
         };
-        for files in by_digest.values_mut() {
-            files.sort_by_cached_key(|sample| (foreign(sample), sample.wav_path.clone()));
-        }
         let mut seen_ids = HashSet::new();
         let mut duplicates = Vec::new();
         let mut entries = Vec::with_capacity(metadata.len());
@@ -350,9 +340,13 @@ impl Library {
             if supplement && self.by_id.contains_key(&id) {
                 if self.verified.contains(&id)
                     && let Some(digest) = entry.pcm_identity().filter(|_| entry.frame_count > 2)
-                    && let Some(files) = by_digest.get(&(digest, entry.frame_count))
+                    && let Some(files) = index.by_digest.get(&(digest, entry.frame_count))
                 {
-                    duplicates.extend(files.iter().filter_map(|file| file.wav_path.clone()));
+                    duplicates.extend(
+                        files
+                            .iter()
+                            .filter_map(|&idx| self.samples[idx].wav_path.clone()),
+                    );
                 }
                 continue;
             }
@@ -383,7 +377,7 @@ impl Library {
             HashMap::new();
         for (entry, id, digest) in &entries {
             if let Some(digest) = digest
-                && by_digest.contains_key(&(*digest, entry.frame_count))
+                && index.by_digest.contains_key(&(*digest, entry.frame_count))
             {
                 by_identity
                     .entry((*digest, entry.frame_count))
@@ -393,9 +387,13 @@ impl Library {
         }
         for (digest, identities) in &mut by_identity {
             identities.sort_by_key(|(_, id)| *id);
-            let files = &by_digest[digest];
-            for (index, (entry, id)) in identities.iter().enumerate() {
-                let candidate = files[index.min(files.len() - 1)];
+            let mut files: Vec<&Sample> = index.by_digest[digest]
+                .iter()
+                .map(|&idx| &self.samples[idx])
+                .collect();
+            files.sort_by_cached_key(|sample| (foreign(sample), sample.wav_path.clone()));
+            for (file_index, (entry, id)) in identities.iter().enumerate() {
+                let candidate = files[file_index.min(files.len() - 1)];
                 let path = candidate.wav_path.clone().unwrap();
                 resolved.push((adopt(entry, candidate, *id), path.clone(), DIGEST_SCORE));
                 verified.insert(*id);
@@ -415,15 +413,16 @@ impl Library {
                     .unwrap_or_default()
                     .to_string_lossy();
                 for (files, score) in [
-                    (by_label.get(&name_entry.label_key), 1),
-                    (by_name.get(&compact_name(&code_name)), 2),
+                    (index.by_label.get(&name_entry.label_key), 1),
+                    (index.by_name.get(&compact_name(&code_name)), 2),
                 ] {
-                    for sample in files.into_iter().flatten() {
+                    for &sample_idx in files.into_iter().flatten() {
+                        let sample = &self.samples[sample_idx];
                         let path = sample.wav_path.as_ref().unwrap();
                         if claimed.contains(path) {
                             continue;
                         }
-                        if score < 2 && in_foreign_product_folder(path, &root, product) {
+                        if score < 2 && in_foreign_product_folder(path, root, product) {
                             continue;
                         }
                         let category_matches = score == 2
@@ -504,7 +503,10 @@ impl Library {
             self.unverified.entry(id).or_insert(path);
         }
         if count > 0 && !supplement {
-            self.bindings.push(LibraryBinding { product, root });
+            self.bindings.push(LibraryBinding {
+                product,
+                root: root.clone(),
+            });
         }
         Ok(count)
     }
@@ -529,5 +531,64 @@ impl Library {
             .filter(|sample| Product::sample_key(sample.id).is_some_and(|(p, _)| p == product))
             .count();
         found * 2 < catalog_count
+    }
+}
+
+/// Old scan caches can contain digests for other rates or tiny files.
+/// Their samples cannot establish identity against native 44.1 kHz PCM.
+fn comparable_digest(sample: &Sample) -> Option<[u8; 16]> {
+    sample.digest.filter(|_| {
+        sample.sample_rate == legacy_format::NATIVE_SAMPLE_RATE
+            && sample.channels == 1
+            && sample.frame_count > 2
+    })
+}
+
+/// Per-root sample lookup built once per folder scan and shared across products.
+struct RootIndex {
+    root: PathBuf,
+    by_name: HashMap<String, Vec<usize>>,
+    by_label: HashMap<String, Vec<usize>>,
+    by_digest: HashMap<([u8; 16], u32), Vec<usize>>,
+}
+
+impl RootIndex {
+    fn build(samples: &[Sample], root: &Path) -> Result<Self, String> {
+        let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+        // File names by compact form, for archive codes, and by label key,
+        // for the original's sound names, which catalogs keep only as keys.
+        let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_label: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_digest: HashMap<([u8; 16], u32), Vec<usize>> = HashMap::new();
+        let mut seen_paths = HashSet::new();
+        for (index, sample) in samples.iter().enumerate() {
+            let Some(path) = &sample.wav_path else {
+                continue;
+            };
+            if !path.starts_with(&root) || !seen_paths.insert(path) {
+                continue;
+            }
+            let name = path.file_stem().unwrap_or_default().to_string_lossy();
+            let compact = compact_name(&name);
+            if !compact.is_empty() {
+                by_label
+                    .entry(crate::catalog::label_key(&name))
+                    .or_default()
+                    .push(index);
+            }
+            by_name.entry(compact).or_default().push(index);
+            if let Some(digest) = comparable_digest(sample) {
+                by_digest
+                    .entry((digest, sample.frame_count))
+                    .or_default()
+                    .push(index);
+            }
+        }
+        Ok(Self {
+            root,
+            by_name,
+            by_label,
+            by_digest,
+        })
     }
 }

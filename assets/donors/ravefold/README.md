@@ -4,36 +4,30 @@ Source commit: `5965621be6ac2ea5330db9fb231755860617a285`.
 
 Preservation date: 2026-10-10.
 
-The remaining files preserve RaveFold font and license bytes for reference.
-RaveFold guides artistic direction only. These assets do not bring its feature
+This folder preserves RaveFold font and license bytes for reference. RaveFold
+guides artistic direction only. These assets do not bring its feature
 specifications, roadmap, architecture, or agent instructions into this product.
-The owner-local provenance record `local-data/research/legacy/ravefold/PROVENANCE.md`
-gives the scope. The owner-local manifest
+The owner-local provenance record
+`local-data/research/legacy/ravefold/PROVENANCE.md` gives the scope. The
+owner-local manifest
 `local-data/research/legacy/ravefold/preservation-manifest.json` records source
 paths, destination paths, sizes and SHA-256 hashes. The `local-data/` folder is
 not published.
 
 | Preserved location | Original source | Purpose |
 | --- | --- | --- |
-| `tmp/retired-assets/assets/donors/ravefold/logo/` | Original mask artwork | Historical source only |
-| `tmp/retired-assets/assets/donors/ravefold/icons/` | Original control artwork | Historical source only |
-| `tmp/retired-assets/assets/donors/ravefold/design/` | Original mask render with vector metadata | Historical source only |
 | `fonts/space-grotesk/` | Installed font package, version `5.3.0` | Font files and source metadata |
 | `licenses/` | Six notice files in `public/` | Original dependency and font notices |
 
-The vector source and the original render containing vector metadata
-are retained unchanged under `tmp/retired-assets/` following the owner's
-2026-10-11 cleanup. No vector artwork remains in application assets. The
-application uses canonical transparent PNGs from `assets/rail/` and
-`assets/app/`. The relocation receipt is
-`tmp/evidence/review-20261011-resumed/retired-assets.json`; archived manifests
-retain their original historical paths and hashes.
+The original mask artwork, control artwork and vector source are not in this
+folder. No vector artwork is in the application assets. The application uses
+canonical transparent PNGs from `assets/rail/` and `assets/app/`.
 
 The font package supplies three variable WOFF2 subsets: Latin, extended Latin
 and Vietnamese. Its CSS declares weights from 300 to 700. The preserved WOFF2
-files supplied the earlier native Space Grotesk assets. They remain preservation
-sources. The current application embeds Syncopate and Inter from their own
-upstream sources; `tools/assets/prepare-fonts.py` verifies those active assets.
+files are preservation sources only. The application embeds Syncopate and Inter
+from their own upstream sources. `tools/assets/prepare-fonts.py` verifies those
+active assets.
 
 ## License notices
 

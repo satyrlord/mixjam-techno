@@ -149,6 +149,27 @@ fn a_capture_without_audio_output_says_why_and_describes_the_transport() {
 }
 
 #[test]
+fn recording_overflow_keeps_the_take_and_reports_why_it_stopped() {
+    for poll in [false, true] {
+        let mut app = fixture();
+        app.recorder = Some(crate::recording::Recorder::overflow_fixture());
+        if poll {
+            app.poll_recording();
+        } else {
+            app.stop();
+        }
+        assert!(!app.is_recording());
+        assert_eq!(app.recorded_take.as_ref().unwrap().samples, [0.25, -0.25]);
+        let (notice, error) = app.take_notice().unwrap();
+        assert!(error);
+        assert!(
+            notice.starts_with("The recording buffer filled."),
+            "{notice}"
+        );
+    }
+}
+
+#[test]
 fn recording_blocks_sample_folder_changes_before_scanning_or_replacing_state() {
     let mut app = fixture();
     app.editor
@@ -177,7 +198,7 @@ fn recording_blocks_sample_folder_changes_before_scanning_or_replacing_state() {
         "The blocked action must retain edit history."
     );
     assert_eq!(
-        app.recorder.take().unwrap().finish().unwrap().samples,
+        app.recorder.take().unwrap().finish().unwrap().0.samples,
         vec![0.25, -0.25]
     );
 }
@@ -222,7 +243,7 @@ fn provider_changes_preserve_an_active_recording_or_folder_scan() {
         assert!(!progress.is_cancelled());
         if recording {
             assert_eq!(
-                app.recorder.take().unwrap().finish().unwrap().samples,
+                app.recorder.take().unwrap().finish().unwrap().0.samples,
                 vec![0.25, -0.25]
             );
         } else {

@@ -211,6 +211,11 @@ pub(super) fn widen(left: f64, right: f64, width: f64) -> (f64, f64) {
 /// and the frame now arriving.
 const NEEDS: usize = super::LOOKAHEAD + 1;
 
+/// The safety limiter's ceiling, in dBFS.
+pub fn return_limiter_ceiling_dbfs() -> f64 {
+    gain_to_db(SafetyLimiter::CEILING)
+}
+
 /// A return's safety limiter: stereo-linked, -1 dBFS ceiling, `LOOKAHEAD`
 /// frames of lookahead, and a 100 ms release. It always delays the return
 /// by its lookahead, on or off, so switching it never moves the sound; the

@@ -125,8 +125,14 @@ pub(super) fn booster(product: Product, saved: &Saved) -> (MasterChain, Vec<&'st
 }
 
 /// Notices for saved settings that change the original's sound and that the
-/// renderer does not apply.
-pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) -> Vec<String> {
+/// renderer does not apply. `unusable` names the switched-on Booster effects
+/// from [`booster`] whose saved values could not be read.
+pub(super) fn notices(
+    product: Product,
+    saved: &Saved,
+    has_drum_patterns: bool,
+    unusable: &[&str],
+) -> Vec<String> {
     let on = |key: &str| saved.entries.get(key).is_some_and(|value| value == "1");
     let named = |switches: &[(&str, &'static str)]| -> Vec<&'static str> {
         switches
@@ -144,7 +150,6 @@ pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) 
     }
     match product {
         Product::D3 | Product::D4 | Product::T3 => {
-            let (_, unusable) = booster(product, saved);
             if !unusable.is_empty() {
                 notices.push(format!(
                     "Saved Booster effects are not applied because their values cannot be read: \
@@ -233,7 +238,9 @@ mod tests {
         let saved = parse(&damaged);
         assert_eq!(saved.entries, BTreeMap::from([("A".into(), "1".into())]));
         assert_eq!(saved.unread, 4);
-        assert!(notices(Product::T3, &saved, false)[0].starts_with("4 saved settings entries"));
+        assert!(
+            notices(Product::T3, &saved, false, &[])[0].starts_with("4 saved settings entries")
+        );
     }
 
     #[test]
@@ -271,7 +278,7 @@ mod tests {
             (1000, 1000, 278)
         );
         assert_eq!(chain.booster_wide.spread, 444);
-        assert!(notices(Product::D4, &saved, false).is_empty());
+        assert!(notices(Product::D4, &saved, false, &unusable).is_empty());
         assert_eq!(booster(Product::D2, &saved).0, MasterChain::default());
         assert_eq!(booster(Product::H1, &saved).0, MasterChain::default());
 
@@ -301,7 +308,7 @@ mod tests {
             "Title",
             &[("BoostEQ", "0"), ("BoostCompressorLED", "0"), ("FX_3", "1")],
         ));
-        assert!(notices(Product::D4, &quiet, true).is_empty());
+        assert!(notices(Product::D4, &quiet, true, &[]).is_empty());
 
         let saved = parse(&block(
             "Title",
@@ -321,17 +328,17 @@ mod tests {
         let (chain, unusable) = booster(Product::D4, &saved);
         assert!(!chain.is_active());
         assert_eq!(unusable, ["compressor", "stereo wide"]);
-        let without_drums = notices(Product::D4, &saved, false);
+        let without_drums = notices(Product::D4, &saved, false, &unusable);
         assert_eq!(without_drums.len(), 1);
         assert!(without_drums[0].contains("cannot be read: compressor, stereo wide."));
-        let with_drums = notices(Product::D3, &saved, true);
+        let with_drums = notices(Product::D3, &saved, true, &unusable);
         assert_eq!(with_drums.len(), 2);
         assert!(with_drums[1].contains("not applied: echo, reverb on pad 1, 13."));
 
-        let house = notices(Product::H1, &saved, true);
+        let house = notices(Product::H1, &saved, true, &unusable);
         assert_eq!(house.len(), 1);
         assert!(house[0].starts_with("House saved 10 settings"));
-        assert!(notices(Product::H1, &Saved::default(), true).is_empty());
-        assert!(notices(Product::D2, &saved, true).is_empty());
+        assert!(notices(Product::H1, &Saved::default(), true, &[]).is_empty());
+        assert!(notices(Product::D2, &saved, true, &[]).is_empty());
     }
 }

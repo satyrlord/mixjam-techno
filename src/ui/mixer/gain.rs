@@ -4,6 +4,8 @@
 use super::*;
 
 const SILENCE_DB: f32 = -96.0;
+pub(in super::super) const GAIN_STEP_DB: f32 = 0.5;
+pub(in super::super) const GAIN_FINE_STEP_DB: f32 = 0.1;
 // The useful -24..+12 dB interval occupies 72% of the travel. The short
 // bottom section is linear amplitude, so the rail reaches exact zero.
 const TAPER: [(f32, f32); 6] = [
@@ -14,6 +16,12 @@ const TAPER: [(f32, f32); 6] = [
     (0.70, 0.0),
     (1.0, 12.0),
 ];
+
+/// Percentage of rail travel and the dB bounds of the main mixing range.
+#[cfg(test)]
+pub(in super::super) const fn useful_taper_span() -> (f32, f32, f32) {
+    ((TAPER[5].0 - TAPER[2].0) * 100.0, TAPER[2].1, TAPER[5].1)
+}
 
 #[derive(Clone, Copy)]
 pub(crate) enum FaderRange {
@@ -430,9 +438,9 @@ pub(crate) fn gain_keys(
         let previous_db = amplitude_to_db(*gain);
         let increment = step
             * if ui.input(|input| input.modifiers.shift) {
-                0.1
+                GAIN_FINE_STEP_DB
             } else {
-                0.5
+                GAIN_STEP_DB
             };
         let db = match range {
             FaderRange::Clip => previous_db.max(range.silence_db()) + increment,
@@ -481,7 +489,7 @@ pub(crate) fn gain_semantics(
         use egui::accesskit::Action;
         node.set_min_numeric_value(f64::from(range.silence_db()));
         node.set_max_numeric_value(f64::from(range.maximum_db()));
-        node.set_numeric_value_step(0.5);
+        node.set_numeric_value_step(f64::from(GAIN_STEP_DB));
         node.add_action(Action::SetValue);
         node.add_action(Action::Increment);
         node.add_action(Action::Decrement);
@@ -490,10 +498,9 @@ pub(crate) fn gain_semantics(
         response.mark_changed();
     }
     response.hover_hint(format!(
-        "{name} gain: {}. Drag to adjust; Shift gives fine movement. \
-         The wheel and arrow keys change 0.5 dB \
-         (Shift: 0.1 dB). Home silences, End sets +{:.0} dB. Double-click for unity. Negative dB \
-         only reduces level.",
+        "{name} gain: {}. Drag to adjust; Shift gives fine movement. The wheel and arrow keys \
+         change {GAIN_STEP_DB} dB (Shift: {GAIN_FINE_STEP_DB} dB). Home silences, End sets \
+         +{:.0} dB. Double-click for unity. Negative dB only reduces level.",
         db_text(db),
         range.maximum_db(),
     ))

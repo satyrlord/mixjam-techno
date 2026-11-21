@@ -29,7 +29,7 @@ laptops and phones, which cannot play its fundamental.
 
 To use the drive:
 
-1. Switch on the drive.
+1. Turn on the drive.
 2. Set **Amount**: how hard the drive pushes a copy of the track.
 3. Set **Character**. At 0%, the drive bends the two halves of the wave
    equally, for odd harmonics, like tape. At 100%, it bends one half, for even
@@ -37,11 +37,11 @@ To use the drive:
 4. Set **Mix**: how much of the change the drive adds.
 5. Set **Focus**. Below this frequency, the track stays clean. For a bass, set
    Focus to about twice its lowest note. The fundamental then stays the same,
-   and only the harmonics are added.
+   and the drive adds only the harmonics.
 6. Set **Output** to change the level by hand.
 
 The drive keeps the power of the track. Thus the track does not become louder
-when you switch on the drive. The drive works after the EQ and before the
+when you turn on the drive. The drive works after the EQ and before the
 compressor, so the fader does not change how hard it drives. When Mix is 0%
 and Output is 0 dB, the drive does not change the track.
 
@@ -49,7 +49,7 @@ and Output is 0 dB, the drive does not change the track.
 
 Between the drive and the ducker, the window holds the compressor of the
 track. The compressor makes the level of the track more even after its EQ and
-drive: for example, the hits of a drum loop. Switch it on, then set
+drive: for example, the hits of a drum loop. Turn it on, then set
 **Thresh** (the level above which it compresses), **Ratio**, **Attack**,
 **Release**, and **Makeup**. The compressor works before the width, the
 automation, and the fader of the track. Thus the fader does not change how
@@ -74,7 +74,7 @@ makes room for the kick.
 
 To use the ducker:
 
-1. Switch on the ducker.
+1. Turn on the ducker.
 2. Select the key track.
 3. Set **Thresh**: the level of the key above which the track ducks. The
    ducker measures the key after its fader and before the master gain. Thus

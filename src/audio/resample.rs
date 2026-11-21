@@ -532,7 +532,7 @@ mod tests {
             let mix = crate::audio::mix_with_samples(&project, &samples).unwrap();
             assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 1);
             let mut out = vec![0.0; 2048];
-            crate::audio::Frames::read(&mix, 0, &mut out);
+            mix.read(0, &mut out);
             assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 1);
             println!("{CHECKED}");
             return;

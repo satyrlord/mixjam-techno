@@ -13,9 +13,9 @@ Window IDs keep their identity, independent of the visible title format.
 
 Every face is unchanged from its pinned source and includes ASCII. Every text
 face also has the Romanian letters. Title letters use their Latin equivalents,
-not a Romanian fallback face. Inter comes after the faces of each theme for
-the symbols that they do not have, and the bundled egui proportional fonts
-come after Inter. Keep the license and provenance of every font with the
+not a Romanian fallback face. Inter comes after the faces of each theme. It
+supplies the symbols that they do not have. The bundled egui proportional
+fonts come after Inter. Keep the license and provenance of every font with the
 application. See `assets/fonts/README.md`.
 
 ## Text roles
@@ -44,10 +44,10 @@ follow it in the 12-point muted text face. Its tooltip always adds them.
 Changes to digit widths or song length must not move the adjacent controls.
 
 The song name follows the brand in the top bar, before the transport, at the
-Title size (15 points). A mark follows it when the song has changes that are
-not saved. Under a name that fits one line at that size, an 11-point muted
-line gives the length of the song in bars and minutes, if it fits the room of
-the name. The name is never clipped, so it has no tooltip.
+Title size (15 points). A mark follows it when the song has unsaved
+changes. Under a name that fits one line at that size, an 11-point muted line
+gives the length of the song in bars and minutes. The line shows only if it
+fits the room of the name. The name is never clipped, so it has no tooltip.
 
 The slot of the name has the size of the name, and always keeps room for the
 mark. Thus the first edit does not move the transport controls. A longer name
@@ -59,9 +59,9 @@ to a 9-point floor. At the floor, a very long name takes as many lines as the
 floor, and it can break words.
 
 In a compact top bar (less than 1240 points of content), the eight transport
-buttons narrow from 42 to 34 points when the name would otherwise lose its
-full size. No transport control is removed or hidden. All of them stay on
-screen at the minimum window size.
+buttons narrow from 42 to 34 points. They narrow only when the name cannot
+keep its full size. The top bar never removes or hides a transport control.
+All of them stay on screen at the minimum window size.
 
 ## Windows
 
@@ -86,7 +86,7 @@ Mixer uses the shared text-face sizes without a local title:
 - Sound summaries and the pan or Muted text use Small.
 - Rail marks and button lettering use Metadata.
 
-These sizes follow the strip, which is measured in physical pixels.
+These sizes follow the strip. The strip uses physical pixels.
 
 ## Values and clip names
 

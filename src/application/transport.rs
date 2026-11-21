@@ -226,7 +226,15 @@ impl Session {
         self.cursor_tick = 0;
         if let Some(recorder) = self.recorder.take() {
             match recorder.finish() {
-                Ok(pcm) => self.recorded_take = Some(Arc::new(pcm)),
+                Ok((pcm, error)) => {
+                    self.recorded_take = Some(Arc::new(pcm));
+                    if let Some(error) = error {
+                        self.error(format!(
+                            "{error} Recording stopped. You can save the audio \
+                             recorded before it stopped."
+                        ));
+                    }
+                }
                 Err(error) => self.error(error),
             }
         } else {

@@ -10,10 +10,11 @@ character. Do not add heavy damage, oversized bevels, or ornamental hardware.
 Mixer keeps its prepared material and faders.
 
 The Mastering pedals stand off the Indigo board on a soft drop shadow down and
-to the right, with a 6-point bevel and 4-point side walls. The light comes
-from the upper left (see [Mastering board](colors.md#mastering-board)). The FX
-units use the same raised enclosures on their Marine board. Floating windows
-share one window shadow.
+to the right. They have a 6-point bevel and 4-point side walls. The light
+falls from the upper left (see
+[Mastering board](colors.md#mastering-board)). The FX units use the same
+raised enclosures on their Marine board. Floating windows share one window
+shadow.
 
 The shared control rendering supplies the hover, keyboard focus, pressed,
 selected, and disabled states. Keep state changes immediate and visible.
@@ -37,10 +38,9 @@ in Studio). On the secondary controls, it is Accent. Header actions, category
 chips, and empty-state actions use the same outline. The surface of an open
 menu, context menu, or drop-down list is a Tab stop. While it has keyboard
 focus, it shows the Accent outline with the corner radius of the menu, over
-its rows. Undo and Redo dim and
-disable when no step is available. An engaged Loop keeps a one-point Accent
-outline. Window edges, title bars, and the bar ruler are pointer surfaces and
-get no Tab stop.
+its rows. When no step is available, Undo and Redo dim and disable. An engaged
+Loop keeps a one-point Accent outline. Window edges, title bars, and the bar
+ruler are pointer surfaces and get no Tab stop.
 
 Folded Metal windows share rounded chassis edges and the same control
 geometry. The chassis panel corners are 8 points on Vintage painted metal,

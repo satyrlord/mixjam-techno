@@ -6,6 +6,15 @@ is worth.
 
 A smell starts an inspection. It does not prove that a test is slop.
 
+## Contents
+
+- [Qualification evidence](#qualification-evidence)
+- [High-confidence candidates](#high-confidence-candidates)
+- [Contract-tracing candidates](#contract-tracing-candidates)
+- [Valid counterexamples](#valid-counterexamples)
+- [Cleanup process](#cleanup-process)
+- [Dispositions](#dispositions)
+
 ## Qualification evidence
 
 Before you edit a candidate, identify its protected behavior and relevant
@@ -84,7 +93,8 @@ If context proves one of these values, keep the test:
    Completion criterion: Each proposed edit has evidence beyond a smell name.
 4. If static evidence cannot prove signal, put a controlled fault in an isolated
    copy when possible.
-   Completion criterion: The test responds as predicted and the copy is discarded.
+   Completion criterion: The test responds as predicted, and you discard the
+   copy.
 5. Select the smallest safe disposition.
    Completion criterion: The choice follows the rules below.
 6. Run every changed test and the test suite that owns it.
@@ -93,6 +103,12 @@ If context proves one of these values, keep the test:
 7. Report each disposition and skipped proof.
    Completion criterion: You account for every candidate and runtime area.
 
+For a native UI test, build the release executable. Then run the capture
+procedure in the
+[UI verification](../../../docs/development/verification.md#ui-verification)
+section of `docs/development/verification.md`, and inspect the images. That
+section states what the captures do not verify.
+
 ## Dispositions
 
 - **Keep:** The signal is unique, or material uncertainty remains.
@@ -100,9 +116,3 @@ If context proves one of these values, keep the test:
 - **Merge:** Distinct cases remain visible after the merge.
 - **Delete:** The test is empty, irrecoverable, or proven duplicate.
 - **Replace:** A meaningful contract test must preserve the only intended protection.
-
-For a native UI check, build the release executable and run the capture
-procedure in the
-[UI verification](../../../docs/development/verification.md#ui-verification)
-section of `docs/development/verification.md`. Inspect the images. The captures
-do not verify physical audio, file pickers, or screen readers.

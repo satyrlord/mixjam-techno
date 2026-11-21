@@ -40,6 +40,160 @@ struct Header {
     created_at: String,
 }
 
+fn skip_ws(bytes: &[u8], pos: &mut usize) {
+    while *pos < bytes.len() && matches!(bytes[*pos], b' ' | b'\t' | b'\r' | b'\n') {
+        *pos += 1;
+    }
+}
+
+fn scan_string_end(bytes: &[u8], pos: &mut usize) -> Option<usize> {
+    if bytes.get(*pos) != Some(&b'"') {
+        return None;
+    }
+    let start = *pos;
+    *pos += 1;
+    while *pos < bytes.len() {
+        match bytes[*pos] {
+            b'"' => {
+                *pos += 1;
+                return Some(start);
+            }
+            b'\\' => {
+                *pos += 1;
+                if *pos >= bytes.len() {
+                    return None;
+                }
+                *pos += 1;
+            }
+            0x00..=0x1F => return None,
+            _ => *pos += 1,
+        }
+    }
+    None
+}
+
+fn skip_json_value(bytes: &[u8], pos: &mut usize) -> Option<()> {
+    skip_ws(bytes, pos);
+    let mut depth = 0usize;
+    loop {
+        skip_ws(bytes, pos);
+        match *bytes.get(*pos)? {
+            b'"' => {
+                scan_string_end(bytes, pos)?;
+            }
+            b'{' | b'[' => {
+                depth += 1;
+                *pos += 1;
+            }
+            b'}' | b']' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                *pos += 1;
+                if depth == 0 {
+                    return Some(());
+                }
+            }
+            _ => {
+                while *pos < bytes.len()
+                    && !matches!(
+                        bytes[*pos],
+                        b',' | b'}' | b']' | b'{' | b'[' | b'"' | b' ' | b'\t' | b'\r' | b'\n'
+                    )
+                {
+                    *pos += 1;
+                }
+            }
+        }
+        if depth == 0 {
+            return Some(());
+        }
+        skip_ws(bytes, pos);
+        if matches!(bytes.get(*pos), Some(b',' | b':')) {
+            *pos += 1;
+        }
+    }
+}
+
+/// Find the version in a song prefix. The full parser checks the whole file
+/// before an open succeeds.
+fn scan_header(bytes: &[u8]) -> Option<Header> {
+    let mut pos = 0;
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        pos = 3;
+    }
+    skip_ws(bytes, &mut pos);
+    if bytes.get(pos) != Some(&b'{') {
+        return None;
+    }
+    pos += 1;
+    let mut format_version: Option<u32> = None;
+    let mut created_at: Option<String> = None;
+    loop {
+        skip_ws(bytes, &mut pos);
+        match *bytes.get(pos)? {
+            b'}' => break,
+            _ => {
+                let key_start = scan_string_end(bytes, &mut pos)?;
+                let key_slice = &bytes[key_start..pos];
+                skip_ws(bytes, &mut pos);
+                if bytes.get(pos) != Some(&b':') {
+                    return None;
+                }
+                pos += 1;
+                skip_ws(bytes, &mut pos);
+                if key_slice == b"\"formatVersion\"" {
+                    if format_version.is_some() {
+                        return None;
+                    }
+                    let num_start = pos;
+                    while pos < bytes.len() && bytes[pos].is_ascii_digit() {
+                        pos += 1;
+                    }
+                    if pos == num_start || (pos - num_start > 1 && bytes[num_start] == b'0') {
+                        return None;
+                    }
+                    let version: u32 = std::str::from_utf8(&bytes[num_start..pos])
+                        .ok()?
+                        .parse()
+                        .ok()?;
+                    format_version = Some(version);
+                } else if key_slice == b"\"createdAt\"" {
+                    if created_at.is_some() {
+                        return None;
+                    }
+                    let str_start = scan_string_end(bytes, &mut pos)?;
+                    let value: String = serde_json::from_slice(&bytes[str_start..pos]).ok()?;
+                    created_at = Some(value);
+                } else {
+                    skip_json_value(bytes, &mut pos)?;
+                }
+                if let (Some(version), Some(created)) = (&format_version, &created_at)
+                    && (7..=song::FORMAT_VERSION).contains(version)
+                {
+                    return Some(Header {
+                        format_version: *version,
+                        created_at: created.clone(),
+                    });
+                }
+                skip_ws(bytes, &mut pos);
+                match bytes.get(pos) {
+                    Some(b',') => pos += 1,
+                    Some(b'}') => break,
+                    _ => return None,
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_header(bytes: &[u8]) -> Result<Header, String> {
+    serde_json::from_slice(bytes)
+        .map_err(|error| format!("Cannot read the MixJam project: {error}"))
+}
+
 fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     let mut bytes = Vec::new();
     fs::File::open(path)
@@ -50,8 +204,10 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     if bytes.len() as u64 > MAX_SONG_BYTES {
         return Err("The MixJam project exceeds the 1 GiB limit.".into());
     }
-    let header = serde_json::from_slice(&bytes)
-        .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
+    let header = match scan_header(&bytes) {
+        Some(header) => header,
+        None => parse_header(&bytes)?,
+    };
     Ok((header, bytes))
 }
 
@@ -60,9 +216,8 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
 /// a version 7 project is an import and stays unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
-    match header.format_version {
-        8..=song::FORMAT_VERSION => {
-            let mut project = song::parse(&bytes)?;
+    let loaded = match header.format_version {
+        8..=song::FORMAT_VERSION => song::parse(&bytes).map(|mut project| {
             // Songs saved before Save named them after their file kept the
             // default title.
             if (project.title.is_empty() || project.title == crate::engine::DEFAULT_TITLE)
@@ -70,18 +225,24 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
             {
                 project.title = stem.to_string_lossy().into_owned();
             }
-            Ok((project, true))
+            (project, true)
+        }),
+        7 => serde_json::from_slice::<Document>(&bytes)
+            .map_err(|e| format!("Cannot read the MixJam project: {e}"))
+            .and_then(|document| convert(document, path, library))
+            .map(|project| (project, false)),
+        _ => {
+            return Err(format!(
+                "Only MixJam format versions 7 to {} are supported.",
+                song::FORMAT_VERSION
+            ));
         }
-        7 => {
-            let document: Document = serde_json::from_slice(&bytes)
-                .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
-            convert(document, path, library).map(|project| (project, false))
-        }
-        _ => Err(format!(
-            "Only MixJam format versions 7 to {} are supported.",
-            song::FORMAT_VERSION
-        )),
-    }
+    };
+    loaded.or_else(|error| {
+        // Report header and syntax errors the same way for either reader.
+        parse_header(&bytes)?;
+        Err(error)
+    })
 }
 
 /// Write the song in the current native format.

@@ -6,8 +6,9 @@ means DESIGN.md and the pages that it links.
 Design goal: **"A clear live-set score"**
 
 The arrangement is the main work area. Graphite surfaces separate clip names,
-track numbers, and playback controls. Lime marks primary actions. Category
-colors identify the same sounds in the Sounds panel and the arrangement.
+track numbers, and playback controls. Lime marks primary actions (amber in
+Vintage). Category colors identify the same sounds in the Sounds panel and the
+arrangement.
 
 The application has three complete themes that the owner selected: Studio
 (the default), Aero, and Vintage. Each theme covers every surface: the
@@ -18,7 +19,7 @@ changes. Where it names Folded Metal, ivory strips, or enamel finishes, it
 describes Vintage, which keeps the prepared artwork. Studio and Aero paint the
 same surfaces in code with their own materials.
 
-In Vintage, every in-app window and modal uses Folded Metal: subtly aged
+In Vintage, every in-app window and modal uses Folded Metal. It has subtly aged
 folded painted metal, dark inset control bays, cream text, polished silver
 knobs, and pale metal primary buttons. Fine grain, minor scratches, and
 restrained edge wear suggest a well-kept synth from the early 2000s. Studio
@@ -51,14 +52,16 @@ behavior. If `local-data/research/PRODUCT.md` and
   of each theme.
 - Syncopate for the product name, uppercase titles in the heading face of the
   theme, and the text face of the theme for all other text.
-- A wide arrangement with the transport above, the tool rail and Sounds
-  panel at the left, the Inspector at the right, and the boards below.
-- Lime primary actions, category-colored clips, and coral recording signals.
+- A wide arrangement. The transport is above it. The tool rail and Sounds
+  panel are at the left, the Inspector is at the right, and the boards are
+  below.
+- Lime primary actions (amber in Vintage), category-colored clips, and coral
+  recording signals.
 
 The implementation is native Windows Rust with eframe/egui:
 
-- The modules of `src/ui/view/` paint the workspace: the top bar, rail,
-  status bar, score, clips, and the boards of the lower panel.
+- The modules of `src/ui/view/` paint the workspace: the top bar, rail, status
+  bar, score, clips, and the boards of the lower panel.
 - `src/ui/theme.rs` holds the theme roles.
 - `src/ui/mixer/` paints the Mixer.
 - `sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view/`, and

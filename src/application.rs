@@ -14,8 +14,8 @@ pub use crate::{
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
-        EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, Knob, KnobRange, MasterChain, MeterReading,
-        OVER_DBTP, PedalKind, presets,
+        EQ_BAND_MAX, EQ_FREQUENCIES, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob, KnobRange, MasterChain,
+        MeterReading, OVER_DBTP, PedalKind, VU_REFERENCE_DBFS, presets,
     },
     peaks::{PeakState, Peaks},
     products::Product,
@@ -61,7 +61,7 @@ pub mod fx {
     pub use crate::fx::{
         Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division,
         Echoform, Emberform, FxBus, FxBuses, Module, Range, ReverbCharacter, ReverbParam,
-        SHIMMER_INTERVALS, SpaceModel, TimeMode,
+        SHIMMER_INTERVALS, SpaceModel, TimeMode, return_limiter_ceiling_dbfs,
     };
 }
 /// Step synth pattern edits and the board's undo, apart from the screen.

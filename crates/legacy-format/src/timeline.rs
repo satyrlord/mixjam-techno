@@ -9,6 +9,14 @@ pub const BYTES_PER_BAR: u32 = 235_200;
 pub const FRAMES_PER_BAR: u32 = BYTES_PER_BAR / BYTES_PER_FRAME;
 pub const FRAMES_PER_SIXTEENTH: u32 = FRAMES_PER_BAR / 16;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridEvent {
+    pub row: usize,
+    pub track: usize,
+    pub sample_id: u16,
+    pub sixteenth_offset: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledSample {
     pub row: usize,
@@ -24,37 +32,59 @@ pub struct ScheduledSample {
 /// does not infer lengths from an unknown sample, seek, or loop state.
 pub fn schedule(
     mix: &Mix,
+    bars: impl FnMut(u16) -> Option<u32>,
+) -> Result<Vec<ScheduledSample>, MixError> {
+    let events: Vec<_> = mix
+        .events()
+        .map(|e| GridEvent {
+            row: e.row,
+            track: e.track,
+            sample_id: e.sample_id,
+            sixteenth_offset: e.auxiliary,
+        })
+        .collect();
+    schedule_events(&events, bars)
+}
+
+/// Schedule grid placements in strictly increasing row order within each track.
+pub fn schedule_events(
+    events: &[GridEvent],
     mut bars: impl FnMut(u16) -> Option<u32>,
 ) -> Result<Vec<ScheduledSample>, MixError> {
     let mut out = Vec::new();
     for track in 0..TRACKS {
         // The native WORD comparison is signed: IDs with bit 15 set are
         // skipped. The file parser still preserves those raw values.
-        let events: Vec<_> = mix
-            .events()
+        let track_events: Vec<_> = events
+            .iter()
             .filter(|e| e.track == track && e.row < EDITABLE_ROWS && e.sample_id <= i16::MAX as u16)
             .collect();
-        for (index, e) in events.iter().enumerate() {
-            if e.auxiliary >= 16 {
+        for (index, e) in track_events.iter().enumerate() {
+            if e.sixteenth_offset >= 16 {
                 return Err(MixError(format!(
                     "Sixteenth offset {} is outside 0..15 at row {} track {}",
-                    e.auxiliary, e.row, track
+                    e.sixteenth_offset, e.row, track
                 )));
             }
             let nominal = bars(e.sample_id).ok_or_else(|| {
                 MixError(format!("Missing catalog length for sample {}", e.sample_id))
             })?;
-            if nominal == 0 || nominal > 32767 || (nominal == 32767 && e.auxiliary > 0) {
+            if nominal == 0 || nominal > 32767 || (nominal == 32767 && e.sixteenth_offset > 0) {
                 return Err(MixError(
                     "Catalog length is outside the supported signed 16-bit scheduling range".into(),
                 ));
             }
             // The original adds a row for a delayed sample before it searches
             // for the next occupied row and caps the row gap to this extent.
-            let extent = (u64::from(nominal) + u64::from(e.auxiliary > 0))
+            let extent = (u64::from(nominal) + u64::from(e.sixteenth_offset > 0))
                 .min((EDITABLE_ROWS - e.row) as u64);
-            let next = events.get(index + 1);
-            if next.is_some_and(|n| n.auxiliary >= 16) {
+            let next = track_events.get(index + 1);
+            if next.is_some_and(|n| n.row <= e.row) {
+                return Err(MixError(
+                    "Grid placements must have strictly increasing rows within a track".into(),
+                ));
+            }
+            if next.is_some_and(|n| n.sixteenth_offset >= 16) {
                 return Err(MixError(
                     "Next sample has an invalid sixteenth offset".into(),
                 ));
@@ -62,8 +92,8 @@ pub fn schedule(
             let gap = next.map_or(extent, |n| (n.row - e.row) as u64).min(extent);
             let end_offset = next
                 .filter(|n| (n.row - e.row) as u64 == gap)
-                .map_or(0, |n| u64::from(n.auxiliary));
-            let start_offset = u64::from(e.auxiliary) * u64::from(FRAMES_PER_SIXTEENTH);
+                .map_or(0, |n| u64::from(n.sixteenth_offset));
+            let start_offset = u64::from(e.sixteenth_offset) * u64::from(FRAMES_PER_SIXTEENTH);
             let limit_frames = gap * u64::from(FRAMES_PER_BAR)
                 + end_offset * u64::from(FRAMES_PER_SIXTEENTH)
                 - start_offset;
@@ -71,7 +101,7 @@ pub fn schedule(
                 row: e.row,
                 track,
                 sample_id: e.sample_id,
-                sixteenth_offset: e.auxiliary,
+                sixteenth_offset: e.sixteenth_offset,
                 start_frame: e.row as u64 * u64::from(FRAMES_PER_BAR) + start_offset,
                 limit_frames,
             });
@@ -110,6 +140,24 @@ mod tests {
         assert!(schedule(&m, |_| None).is_err());
         m.set_cell(0, 0, 1, 16).unwrap();
         assert!(schedule(&m, |_| Some(1)).is_err());
+    }
+    #[test]
+    fn direct_scheduling_rejects_non_increasing_rows() {
+        let first = GridEvent {
+            row: 3,
+            track: 0,
+            sample_id: 1,
+            sixteenth_offset: 4,
+        };
+        for row in [2, 3] {
+            let next = GridEvent {
+                row,
+                sixteenth_offset: 0,
+                ..first
+            };
+            let error = schedule_events(&[first, next], |_| Some(1)).unwrap_err();
+            assert!(error.0.contains("strictly increasing rows"));
+        }
     }
     #[test]
     fn native_signed_sample_ids_are_preserved_but_not_scheduled() {

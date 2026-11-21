@@ -18,13 +18,14 @@
    - Restore defaults puts the defaults of every page in the draft, not only
      the page on show. Label it `Restore all defaults`. It changes only the
      draft, and does not reset songs, libraries, or caches.
-3. Audio changes can be drafted during playback, preview, or recording. They
-   cannot be applied until all three stop. Show `Stop playback, previews, and
-   recording to apply audio options.` Do not stop them automatically. Changes
-   only to Workspace or Files can apply during playback.
-4. A successful Apply does not mark the song dirty, add a project undo step,
-   change song metadata, or discard an unsaved project. A no-op Apply does not
-   rebuild audio or write settings.
+3. The user can edit audio changes in the draft during playback, preview, or
+   recording. Apply cannot save them until all three stop. Show `Stop
+   playback, previews, and recording to apply audio options.` Do not stop them
+   automatically. Changes only to Workspace or Files can apply during
+   playback.
+4. A successful Apply does not mark the song dirty or add a project undo step.
+   It does not change song metadata or discard an unsaved project. A no-op
+   Apply does not rebuild audio or write settings.
 5. A DSP quality change invalidates the prepared playback mixes and any
    pending playback preparation. Build the replacement state off the audio
    thread before the next Play. A completed job from an older preference
@@ -32,8 +33,8 @@
    full-quality configuration.
 6. Detect a preference change from outside the open draft: for example, the
    Sections toggle in the toolbar. Do not let an old draft overwrite it
-   silently. Keep the unsaved draft edits and offer Reload before the next
-   Apply.
+   silently. Keep the unsaved draft edits, and show `Reload active options`.
+   Apply stays disabled until the user reloads.
 7. When Options closes or collapses, the transport does not change and the
    draft does not apply. Keep the page selection and the scroll position while
    the window stays open.
@@ -51,20 +52,20 @@ Keep the runtime quality configuration outside `Project` and `MasterChain`.
 Pass it through preparation and processor construction. Do not use
 process-global mutable switches. Do not read preference files on audio
 threads. Export construction must select full quality explicitly. It must not
-use the playback configuration that was used last.
+use the playback configuration of the last playback.
 
 With 4x selected, keep the reference algorithm, sample values, latency, block
 independence, and seek and loop behavior. Off still runs the saturation curve
 and the matching, mix, focus, output, and DC-removal stages of the Drive.
-Keep the antiderivative anti-aliasing of the Drive at the base rate, and
-define and test its reference path at that rate. Off is not a bypass, and its
+Keep the antiderivative anti-aliasing of the Drive at the base rate. Define
+and test its reference path at that rate. Off is not a bypass, and its
 sound does not have to match 4x. Record the alias and frequency-response
 tradeoffs. Do not make the 4x acceptance thresholds weaker.
 
 Keep the integer alignment in both playback modes:
 
-- Keep the 69-frame stage delay as a simple delay when the oversampling
-  filters are off, and keep the compensation at the chain boundary.
+- If the oversampling filters are off, keep the 69-frame stage delay as a
+  simple delay. Keep the compensation at the chain boundary.
 - Account for a fractional phase difference in the base-rate curve and
   reference pair. Matching integer delays do not prove phase equivalence.
 - Track audio, parallel dry paths, sidechain keys, sends, and master inputs
@@ -75,11 +76,16 @@ Keep the integer alignment in both playback modes:
 Test impulses, zero-Mix identity at unity Output, seeks, very short loops, and
 both output channels.
 
-Do not change the mix sample rate, the tempo interpretation, the pitch, the
-source identity, the export length, the saved Drive settings, or the song
-schema for these options. Do not allocate, lock, read files, or design filter
-tables in the audio callback. Quality changes apply only while playback is
-stopped, so no live quality crossfade is necessary.
+These options must not change any of these items:
+
+- The mix sample rate.
+- The tempo interpretation and the pitch.
+- The source identity and the export length.
+- The saved Drive settings and the song schema.
+
+Do not allocate, lock, read files, or design filter tables in the audio
+callback. Quality changes apply only if playback is stopped, so no live
+quality crossfade is necessary.
 
 ## Preference ownership and persistence
 
@@ -103,14 +109,17 @@ stopped, so no live quality crossfade is necessary.
   Restore all defaults, followed by Apply, can replace the settings that
   are not valid. A file with an unsupported future schema must stay as it is.
   Report the incompatibility and block persistent writes. The Sections toggle in
-  the toolbar still works for the session when the file is not valid, is from a
-  newer schema, or cannot be written. Only the saved choice is lost: there is no
-  write for a file that is not valid or newer, and a failed write shows an error.
+  the toolbar still works for the session if the file is not valid. It also
+  works if the file is from a newer schema or the application cannot write the
+  file. Then the application loses only the saved choice. It does not write a
+  file that is not valid or newer, and a failed write shows an error.
 - Apply must validate the full draft and prepare all fallible resources before
   one atomic replacement of `options.json`. Adopt the active values only after
   the write is successful. A write error or a preparation error does not
   change the active preferences, the song, or the existing file, and the draft
   stays available.
+- The panel layout is not an option. It has its own `layout.json` file beside
+  `options.json`, and an Options draft does not include it.
 - A reset applies only to the options in this specification. Never delete
   audio, retained manual sources, sample caches, library registrations, or
   preservation data.
@@ -142,9 +151,10 @@ change to this schema, add migration tests.
 
 Schema policy:
 
-- A field that is added to schema 1 is optional, with a defined default. Thus
+- A field that you add to schema 1 is optional, with a defined default. Thus
   each older valid schema 1 file still loads and keeps its explicit values.
-- Each present field stays strictly typed, and unknown fields are rejected.
+- Each present field stays strictly typed, and the reader rejects unknown
+  fields. The reader also rejects a file larger than 64 KiB.
 - A file with a newer schema stays as it is and blocks persistent writes.
 - A change that cannot obey these rules needs schema 2 and a migration.
 

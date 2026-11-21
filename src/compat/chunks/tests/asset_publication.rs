@@ -58,6 +58,7 @@ fn unsupported_wave_rate_is_rejected_before_any_asset_is_published() {
                 metadata: BTreeMap::new(),
             }),
         }],
+        embedded_waves: embedded_wave_records(&bytes).unwrap(),
     };
     assert!(
         build_project(
@@ -129,7 +130,7 @@ fn interrupted_or_failed_staging_leaves_final_assets_safe_and_retryable() {
     let collision = directory.join("collision.json");
     let staged = stage_asset(&collision, b"complete metadata").unwrap();
     fs::write(&collision, b"unrelated existing metadata").unwrap();
-    assert!(publish_staged_asset(&staged, &collision, b"complete metadata").is_err());
+    assert!(publish_staged_asset(&staged, &collision, b"complete metadata", None).is_err());
     assert!(!staged.exists());
     assert_eq!(
         fs::read(&collision).unwrap(),
@@ -137,7 +138,7 @@ fn interrupted_or_failed_staging_leaves_final_assets_safe_and_retryable() {
     );
     let absent = directory.join("missing-parent/absent.wav");
     let staged = stage_asset(&path, &bytes).unwrap();
-    assert!(publish_staged_asset(&staged, &absent, &bytes).is_err());
+    assert!(publish_staged_asset(&staged, &absent, &bytes, None).is_err());
     assert!(!absent.exists());
     assert!(!staged.exists());
     fs::remove_file(&path).unwrap();
@@ -151,15 +152,77 @@ fn direct_publication_never_replaces_an_existing_asset() {
     let directory = asset_test_directory("direct-publication");
     let path = directory.join("direct.wav");
     let bytes = wave_fixture();
-    publish_asset_directly(&path, &bytes).unwrap();
+    publish_asset_directly(&path, &bytes, None).unwrap();
     assert_eq!(fs::read(&path).unwrap(), bytes);
-    publish_asset_directly(&path, &bytes).unwrap();
-    assert!(publish_asset_directly(&path, b"different bytes").is_err());
+    publish_asset_directly(&path, &bytes, None).unwrap();
+    assert!(publish_asset_directly(&path, b"different bytes", None).is_err());
     assert_eq!(fs::read(&path).unwrap(), bytes);
     let absent = directory.join("missing-parent/absent.wav");
-    assert!(publish_asset_directly(&absent, &bytes).is_err());
+    assert!(publish_asset_directly(&absent, &bytes, None).is_err());
     assert!(!absent.exists());
     assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+    fs::remove_file(&path).unwrap();
+    fs::remove_dir(&directory).unwrap();
+}
+
+#[test]
+fn unreferenced_embedded_wave_is_not_decoded_during_import() {
+    // Use distinct content so cleanup cannot race another embedded-wave fixture.
+    let valid_wave = wave_fixture_frames(44_103);
+    let destination = crate::project_io::data_root()
+        .join("imported-audio")
+        .join(format!("{:x}.wav", Sha256::digest(&valid_wave)));
+    let existed = destination.exists();
+    let mut bad_wave = valid_wave.clone();
+    // Corrupt sample rate inside an embedded WAV that no timeline event references.
+    bad_wave[24..28].copy_from_slice(&0u32.to_le_bytes());
+    let unused_path = b"C:\\old\\MIXWAVES\\unused_bad.wav";
+    let used_path = b"C:\\old\\MIXWAVES\\used_good.wav";
+    let mut bytes = header_fixture(Product::D3, 140, 140);
+    let after_mixer = bytes.len();
+    for (source_path, wav) in [(&unused_path[..], &bad_wave), (&used_path[..], &valid_wave)] {
+        bytes.extend_from_slice(&((source_path.len() + 2) as u16).to_le_bytes());
+        bytes.extend_from_slice(source_path);
+        bytes.extend_from_slice(&[0, 1]);
+        bytes.extend_from_slice(&(wav.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(wav);
+    }
+    let mut chunk = Vec::new();
+    lane(&mut chunk, 1, &[(1, -1, 0)]);
+    text_block(&mut chunk, used_path);
+    bytes.extend_from_slice(&((chunk.len() + 4) as u32).to_le_bytes());
+    bytes.extend_from_slice(&chunk);
+    bytes.extend_from_slice(&SENTINEL);
+    let timeline = read_timeline(&bytes, after_mixer, Product::D3).unwrap();
+    assert_eq!(timeline.embedded_waves.len(), 2);
+    let project = build_project(
+        Path::new("unused-embedded.mix"),
+        &bytes,
+        Product::D3,
+        &Library::empty(),
+        read_header(&bytes, Product::D3).unwrap(),
+        timeline,
+    )
+    .unwrap();
+    assert_eq!(project.imported_samples.len(), 1);
+    assert_eq!(project.imported_samples[0].path, destination);
+    if !existed {
+        fs::remove_file(destination).unwrap();
+    }
+}
+
+#[test]
+fn preserve_wave_checks_same_size_mismatch_without_full_read() {
+    let directory = asset_test_directory("same-size-verify");
+    let path = directory.join("asset.wav");
+    let bytes = wave_fixture_frames(4096);
+    let mut changed = bytes.clone();
+    let last = changed.len() - 1;
+    changed[last] ^= 0xff;
+    assert_eq!(changed.len(), bytes.len());
+    preserve_wave(&path, &bytes).unwrap();
+    assert!(preserve_wave(&path, &bytes).is_ok());
+    assert!(preserve_wave(&path, &changed).is_err());
     fs::remove_file(&path).unwrap();
     fs::remove_dir(&directory).unwrap();
 }

@@ -24,11 +24,12 @@ const KIT_REGIONS: [(u16, u16); 3] = [(3400, 3899), (3900, 4499), (4500, 5199)];
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     let bytes = super::song_file::read_song_file(path)?;
     let wav_product = library.is_wav_product(Product::D1);
+    let installed = library.has_original_provider(Product::D1);
     convert(&bytes, path, library, |native_id| {
         let id = Product::D1.global_sample_id(u32::from(native_id))?;
-        let sample = library
-            .sample_by_id(id)
-            .ok_or_else(|| library.describe_missing(Product::D1, u32::from(native_id)))?;
+        let sample = library.sample_by_id(id).ok_or_else(|| {
+            library.describe_missing_with(Product::D1, u32::from(native_id), installed)
+        })?;
         if sample.source_bpm != 140.0
             || (!wav_product && sample.sample_rate != legacy_format::NATIVE_SAMPLE_RATE)
         {
@@ -140,8 +141,10 @@ fn convert_with_catalog<'a>(
                         if frames == 0 {
                             return Err("The D1 imported sample contains no audio.".into());
                         }
+                        // Only the part inside the grid can contribute to a placement.
                         let bars = (f64::from(frames) / f64::from(spec.sample_rate) * 140.0 / 240.0)
-                            .ceil() as u32;
+                            .ceil()
+                            .min(EDITABLE_ROWS as f64) as u32;
                         Ok((path, bars, spec.sample_rate, candidates))
                     });
                 (saved, resolved)
@@ -289,38 +292,41 @@ fn convert_with_catalog<'a>(
         }
         sources.insert(event.sample, source);
     }
-    for track in 0..TRACKS {
-        let track_events: Vec<_> = events.iter().filter(|e| e.track == track).collect();
-        for (index, event) in track_events.iter().enumerate() {
-            let (sample_id, bars, _) = &sources[&event.sample];
-            let extent =
-                (*bars as usize + usize::from(event.offset > 0)).min(EDITABLE_ROWS - event.row);
-            let next = track_events.get(index + 1);
-            let gap = next.map_or(extent, |next| next.row - event.row).min(extent);
-            let end_offset = next
-                .filter(|next| next.row - event.row == gap)
-                .map_or(0, |next| u32::from(next.offset) * 16);
-            let length = (gap as u32 * TICKS_PER_BAR + end_offset)
-                .checked_sub(u32::from(event.offset) * 16)
-                .filter(|length| *length > 0)
-                .ok_or("The D1 sample has no positive scheduled duration.")?;
-            project.clips.push(Clip {
-                id: project.clips.len() as u64 + 1,
-                sample_id: *sample_id,
-                track,
-                start_tick: event.row as u32 * TICKS_PER_BAR + u32::from(event.offset) * 16,
-                length_ticks: length,
-                offset_frames: 0,
-                gain: 1.0,
-                fades: Default::default(),
-                pitch_cents: 0,
-                reverse: false,
-            });
-        }
+    let grid_events: Vec<_> = events
+        .iter()
+        .map(|event| legacy_format::timeline::GridEvent {
+            row: event.row,
+            track: event.track,
+            sample_id: event.sample,
+            sixteenth_offset: event.offset,
+        })
+        .collect();
+    let scheduled = legacy_format::timeline::schedule_events(&grid_events, |native_id| {
+        sources.get(&native_id).map(|(_, bars, _)| *bars)
+    })
+    .map_err(|error| error.to_string())?;
+    let frame_step = u64::from(legacy_format::timeline::FRAMES_PER_SIXTEENTH);
+    for event in scheduled {
+        let (sample_id, _, _) = &sources[&event.sample_id];
+        let start_tick = u32::try_from(event.start_frame / frame_step * 16)
+            .map_err(|_| "The D1 sample timeline position overflows.".to_string())?;
+        let length_ticks = u32::try_from(event.limit_frames / frame_step * 16)
+            .ok()
+            .filter(|length| *length > 0)
+            .ok_or("The D1 sample has no positive scheduled duration.")?;
+        project.clips.push(Clip {
+            id: project.clips.len() as u64 + 1,
+            sample_id: *sample_id,
+            track: event.track,
+            start_tick,
+            length_ticks,
+            offset_frames: 0,
+            gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
+            reverse: false,
+        });
     }
-    project
-        .clips
-        .sort_by_key(|clip| (clip.start_tick, clip.track));
     normalize_import(project)
 }
 
@@ -405,7 +411,7 @@ fn parse_footer(bytes: &[u8], referenced_ids: &BTreeSet<u16>) -> Result<Footer, 
         }
         return Ok(footer);
     }
-    let mut reader = Reader { bytes, offset: 0 };
+    let mut reader = Reader::new(bytes);
     let marker = reader.word()?;
     let wrapped = match marker {
         0x0a06 => false,
@@ -452,7 +458,7 @@ fn parse_footer(bytes: &[u8], referenced_ids: &BTreeSet<u16>) -> Result<Footer, 
     }
     for source_id in expected_imports {
         let payload = reader.word()? as usize;
-        let field_start = reader.offset;
+        let field_start = reader.offset();
         let fields = [
             reader.text(true)?,
             reader.text(true)?,
@@ -461,7 +467,7 @@ fn parse_footer(bytes: &[u8], referenced_ids: &BTreeSet<u16>) -> Result<Footer, 
         ];
         // Each wrapped field contains a length WORD and two delimiters. The
         // payload excludes the four length WORDs; measure original ANSI bytes.
-        if payload != reader.offset - field_start - 8 {
+        if payload != reader.offset() - field_start - 8 {
             return Err("The D1 imported record length does not match its text fields.".into());
         }
         footer.imports.push((source_id, fields));
@@ -477,28 +483,28 @@ fn parse_footer(bytes: &[u8], referenced_ids: &BTreeSet<u16>) -> Result<Footer, 
             }
         }
     }
-    if reader.offset != bytes.len() {
+    if reader.offset() != bytes.len() {
         return Err("The D1 MIX footer has unsupported trailing data.".into());
     }
     Ok(footer)
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-impl Reader<'_> {
-    fn take(&mut self, count: usize) -> Result<&[u8], String> {
-        let end = self
-            .offset
-            .checked_add(count)
-            .ok_or("The D1 footer offset overflows.")?;
-        let bytes = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or("The D1 MIX footer is truncated.")?;
-        self.offset = end;
-        Ok(bytes)
+struct Reader<'a>(legacy_format::ByteReader<'a>);
+impl<'a> Reader<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self(legacy_format::ByteReader::new(bytes))
+    }
+    const fn offset(&self) -> usize {
+        self.0.offset()
+    }
+    fn take(&mut self, count: usize) -> Result<&'a [u8], String> {
+        self.0.take(count).map_err(|error| {
+            match error {
+                legacy_format::ReadError::Overflow => "The D1 footer offset overflows.",
+                legacy_format::ReadError::Truncated => "The D1 MIX footer is truncated.",
+            }
+            .into()
+        })
     }
     fn word(&mut self) -> Result<u16, String> {
         Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))

@@ -429,3 +429,101 @@ fn installed_counted_profiles_have_explicit_complete_results() {
         );
     }
 }
+
+#[test]
+fn d2_drum_patterns_prepare_kit_once_and_keep_partial_missing_pad_fallback() {
+    fn wrapped(bytes: &mut Vec<u8>, value: &str) {
+        bytes.extend_from_slice(&((value.len() + 2) as u16).to_le_bytes());
+        bytes.extend_from_slice(value.as_bytes());
+        bytes.extend_from_slice(&[0, 1]);
+    }
+    fn d2_pattern(bytes: &mut Vec<u8>, position: i32, id: u16, masks: &[u16; 10], label: &str) {
+        bytes.push(2);
+        bytes.extend_from_slice(&position.to_le_bytes());
+        bytes.extend_from_slice(&id.to_le_bytes());
+        for mask in masks {
+            bytes.extend_from_slice(&mask.to_le_bytes());
+        }
+        wrapped(bytes, "Groove");
+        wrapped(bytes, label);
+    }
+    let directory = asset_test_directory("d2-drum-prepare");
+    let pad_wav = directory.join("pad.wav");
+    fs::write(&pad_wav, wave_fixture_frames(16)).unwrap();
+    let pad_id = Product::D2.global_sample_id(1518).unwrap();
+    let library = Library::fixture(vec![crate::library::Sample {
+        id: pad_id,
+        code: "pad".into(),
+        name: "Pad".into(),
+        bars: 1,
+        group_name: "Drum".into(),
+        offset: 0,
+        length: 0,
+        frame_count: 16,
+        sample_rate: 44_100,
+        source_bpm: 140.0,
+        channels: 1,
+        wav_path: Some(pad_wav.clone()),
+        digest: None,
+    }]);
+    let mut base = header_fixture(Product::D2, 140, 140);
+    for index in 0..10 {
+        let native_id = if index == 1 { 1518u16 } else { 1518u16 + index };
+        base.extend_from_slice(&native_id.to_le_bytes());
+        wrapped(&mut base, "Pad");
+        base.extend_from_slice(&0i16.to_le_bytes());
+        base.extend_from_slice(&0u16.to_le_bytes());
+        base.extend_from_slice(&32767u16.to_le_bytes());
+        base.extend_from_slice(&0u16.to_le_bytes());
+        if index < 9 {
+            wrapped(&mut base, "");
+        }
+    }
+    base.extend_from_slice(&[7; 18]);
+
+    let build = |include_missing: bool| {
+        let mut bytes = base.clone();
+        let after_mixer = header_fixture(Product::D2, 140, 140).len();
+        let mut chunk = Vec::new();
+        lane(&mut chunk, 1, &[]);
+        chunk.push(17);
+        chunk.extend_from_slice(&(if include_missing { 3u32 } else { 2u32 }).to_le_bytes());
+        d2_pattern(&mut chunk, -1, 7201, &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], "A");
+        d2_pattern(&mut chunk, -257, 7202, &[0, 4, 0, 0, 0, 0, 0, 0, 0, 0], "B");
+        if include_missing {
+            d2_pattern(&mut chunk, -513, 7203, &[0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "C");
+        }
+        bytes.extend_from_slice(&((chunk.len() + 4) as u32).to_le_bytes());
+        bytes.extend_from_slice(&chunk);
+        bytes.extend_from_slice(&SENTINEL);
+        let timeline = read_timeline(&bytes, after_mixer, Product::D2).unwrap();
+        let project = build_project(
+            Path::new("drums.mix"),
+            &bytes,
+            Product::D2,
+            &library,
+            read_header(&bytes, Product::D2).unwrap(),
+            timeline,
+        )
+        .unwrap();
+        let result = (
+            project.imported_samples.len(),
+            project.missing_samples.len(),
+            project
+                .imported_samples
+                .iter()
+                .map(|s| s.path.clone())
+                .collect::<Vec<_>>(),
+        );
+        for sample in &project.imported_samples {
+            let _ = fs::remove_file(&sample.path);
+        }
+        result
+    };
+    let (valid_imports, valid_missing, _) = build(false);
+    let (mixed_imports, mixed_missing, _) = build(true);
+    assert_eq!((valid_imports, valid_missing), (2, 0));
+    assert_eq!((mixed_imports, mixed_missing), (2, 1));
+    fs::remove_file(&pad_wav).unwrap();
+    fs::remove_dir(&directory).unwrap();
+}

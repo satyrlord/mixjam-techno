@@ -108,23 +108,26 @@ pub(super) struct Kit {
     pub raw_header: Vec<u8>,
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
+struct Reader<'a>(legacy_format::ByteReader<'a>);
 impl<'a> Reader<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self(legacy_format::ByteReader::new(bytes))
+    }
+    const fn at(bytes: &'a [u8], offset: usize) -> Self {
+        Self(legacy_format::ByteReader::at(bytes, offset))
+    }
+    const fn offset(&self) -> usize {
+        self.0.offset()
+    }
     fn take(&mut self, length: usize) -> Result<&'a [u8], String> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .filter(|end| *end <= self.bytes.len())
-            .ok_or("The native drum record is truncated.")?;
-        let value = &self.bytes[self.offset..end];
-        self.offset = end;
-        Ok(value)
+        self.0
+            .take(length)
+            .map_err(|_| "The native drum record is truncated.".into())
     }
     fn u16(&mut self) -> Result<u16, String> {
-        Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
+        self.0
+            .u16()
+            .map_err(|_| "The native drum record is truncated.".into())
     }
     fn wrapped_text(&mut self) -> Result<String, String> {
         let length = usize::from(self.u16()?);
@@ -159,7 +162,7 @@ pub(super) fn parse_pattern(
     native_id: u16,
     product: Product,
 ) -> Result<(Pattern, usize), String> {
-    let mut reader = Reader { bytes, offset: 0 };
+    let mut reader = Reader::new(bytes);
     let mut masks = vec![0; pad_count(product)?];
     for mask in &mut masks {
         *mask = reader.u16()?;
@@ -173,7 +176,7 @@ pub(super) fn parse_pattern(
             group,
             variant,
         },
-        reader.offset,
+        reader.offset(),
     ))
 }
 
@@ -207,10 +210,7 @@ pub(super) fn parse_kit(
 }
 
 fn parse_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, String> {
-    let mut reader = Reader {
-        bytes: &bytes[..end],
-        offset: start,
-    };
+    let mut reader = Reader::at(&bytes[..end], start);
     let mut pads = Vec::with_capacity(10);
     for index in 0..10 {
         let native_id = reader.u16()?;
@@ -243,9 +243,9 @@ fn parse_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, String> {
             return Err("The native drum pad separator is invalid.".into());
         }
     }
-    let source_end = reader.offset;
+    let source_end = reader.offset();
     let opaque_native_settings = reader.take(18)?.to_vec();
-    if reader.offset != end {
+    if reader.offset() != end {
         return Err("The native drum header does not end at the timeline.".into());
     }
     Ok(Kit {
@@ -262,10 +262,7 @@ fn parse_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, String> {
 // Gen 3 uses bare strings, sixteen pads, paired cached source paths, and an
 // opaque ten-byte extension per pad. Keep these bytes instead of naming DSP.
 fn parse_gen3_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, String> {
-    let mut reader = Reader {
-        bytes: &bytes[..end],
-        offset: start,
-    };
+    let mut reader = Reader::at(&bytes[..end], start);
     let mut pads = Vec::with_capacity(16);
     for _ in 0..16 {
         let native_id = reader.u16()?;
@@ -302,7 +299,7 @@ fn parse_gen3_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, Stri
             opaque_native_settings,
         });
     }
-    let source_end = reader.offset;
+    let source_end = reader.offset();
     // Observed files retain the selected pad once more, followed by opaque state.
     // The selected pad identity/label anchors the end of the sixteen-pad list.
     let selected_id = reader.u16()?;
@@ -310,7 +307,7 @@ fn parse_gen3_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, Stri
     if !pads
         .iter()
         .any(|pad| pad.native_id == selected_id && pad.name == selected_name)
-        || !(18..=256).contains(&end.saturating_sub(reader.offset))
+        || !(18..=256).contains(&end.saturating_sub(reader.offset()))
     {
         return Err("The native drum header footer is not supported.".into());
     }

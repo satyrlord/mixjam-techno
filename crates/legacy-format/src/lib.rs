@@ -10,5 +10,8 @@ pub mod library;
 pub mod mix;
 pub mod packed;
 pub mod playback;
+pub mod reader;
 pub mod timeline;
 pub mod wav;
+
+pub use reader::{ByteReader, ReadError};

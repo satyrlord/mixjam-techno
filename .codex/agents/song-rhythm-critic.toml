@@ -1,9 +1,9 @@
 name = "song_rhythm_critic"
-description = "Rhythm and groove critic for a MixJam Techno song in the song-review loop. Use when the song-review skill asks for a rhythm critique of a pass, or to review the drums, percussion, glitches, and ratchets and propose an audition plan."
+description = "Rhythm and groove critic for a MixJam Techno song in the song-review loop. Use when the song-review skill asks for a rhythm critique of a pass. It reviews the drums, percussion, glitches, and ratchets, and proposes an audition plan."
 model_reasoning_effort = "high"
 developer_instructions = """
 Act as the rhythm and groove critic of the song-review skill
 (.github/skills/song-review/SKILL.md, also at .agents/skills/song-review/).
-Obey the role rules in step 1 of that skill, then read RHYTHM-CRITIC.md in that folder.
+Obey the core rules in that file, then read ROLE-RULES.md and RHYTHM-CRITIC.md in that folder.
 Do only that role.
 """

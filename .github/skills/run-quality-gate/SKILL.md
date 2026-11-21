@@ -25,21 +25,26 @@ explicit approval.
 ## 2. Find the current gate
 
 1. Read `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, the Cargo manifests, and
-   the affected source or tests. If they exist, also read `AGENTS.md`,
-   `local-data/research/PRODUCT.md`, and `local-data/research/COMPATIBILITY.md`.
+   the affected source or tests. Also read the product and compatibility
+   authorities that
+   [Toolchain and folders](../../../docs/DEVELOPMENT.md#toolchain-and-folders)
+   names.
    Completion criterion: You know the current contracts and the documented checks.
 2. Read `tools/runtime/cargo.ps1` and each verifier that applies before you run
    it.
    Completion criterion: You know the toolchain, the inputs, and the side effects.
 3. Read the Applicability section of [REFERENCE.md](REFERENCE.md).
    Completion criterion: You know the phase rule for the scope.
-4. Take a worktree baseline. Mark each documented check as applicable, blocked,
-   or not available.
+4. Take a worktree baseline.
+   Completion criterion: You know the changed and untracked paths before any check.
+5. Mark each documented check as applicable, blocked, or not available.
    Completion criterion: Every check has one current status.
-5. Compare the package version in `Cargo.toml` with the version that `cargo.ps1`
-   writes from the current commit count. In verify mode, if they differ, run
-   the `cargo.ps1` checks in an isolated checkout with the same changes. If no
-   isolated checkout is available, report those checks as blocked.
+6. Compare the package version in `Cargo.toml` with the version that `cargo.ps1`
+   writes from the current commit count.
+   Completion criterion: You know if the two versions differ.
+7. In verify mode, if the versions differ, run the `cargo.ps1` checks in an
+   isolated checkout with the same changes. If no isolated checkout is
+   available, report those checks as blocked.
    Completion criterion: Verify mode does not rewrite the user's manifests.
 
 If a check is necessary but has no documented procedure, report the gap. Do not
@@ -53,7 +58,7 @@ invent a pass.
    Completion criterion: Each command has a current result, or a reason that it
    does not apply.
 2. For native font assets, run the font check in
-   [safe-frontend-iteration.md](../../../docs/architecture/safe-frontend-iteration.md).
+   [assets/fonts/README.md](../../../assets/fonts/README.md).
    Completion criterion: The font check has a current result.
 3. For visual assets, run the raster check in the
    [Visual assets](../../../docs/DEVELOPMENT.md#visual-assets) section of `docs/DEVELOPMENT.md`.
@@ -74,14 +79,17 @@ invent a pass.
    Completion criterion: Each scenario has a current result.
 9. Record device behavior, listening, and clean-machine checks separately.
    Completion criterion: No check takes its result from a different check.
-
-In verify mode, after a failure, run the independent checks that are safe.
-
-In repair mode, read the Stop conditions section of [REFERENCE.md](REFERENCE.md)
-before each fix. Before you edit, record the exact diagnostic. Fix the smallest
-root cause. Then run the same check again before you continue.
-
-Completion criterion: Every check that applies has a current result.
+10. In verify mode, after a failure, run the independent checks that are safe.
+    Completion criterion: Each safe check that does not depend on the failure
+    has a current result.
+11. In repair mode, read the Stop conditions section of
+    [REFERENCE.md](REFERENCE.md) before each fix.
+    Completion criterion: You continue only if the next fix needs no product
+    decision, policy change, or larger scope, and has a verifier.
+12. In repair mode, record the exact diagnostic before you edit.
+    Completion criterion: The record names the failed check and its message.
+13. In repair mode, fix the smallest root cause. Then run the same check again.
+    Completion criterion: The same check passes, or you report a blocker.
 
 ## 4. Report the gate
 
@@ -93,13 +101,14 @@ Completion criterion: Every check that applies has a current result.
    Completion criterion: The overall status follows from the individual results.
 
 Do not invent a coverage percentage or change the meaning of a configured
-threshold. Native captures do not prove listening, microphone, file-picker, or
-screen-reader behavior. Do not report 150% or 200% display scaling as not
-verified, because it is out of scope.
+threshold. Report the capture limits that the
+[UI verification](../../../docs/development/verification.md#ui-verification)
+section states. Do not report a display scale that it puts out of scope.
 
 ## Completion criterion
 
 Verify mode is complete when all safe checks that apply have a current status.
 Repair mode is complete when you fix and check again each root cause in scope.
-State every unavailable check, blocker, and runtime area that is not verified.
+State every unavailable check, blocker, and runtime area that you did not
+verify.
 A focused check does not prove an overall pass.

@@ -11,9 +11,11 @@ If the user does not permit workspace edits, stay read-only.
 
 ## 1. Prepare the decision tree
 
-1. Read `docs/ARCHITECTURE.md` and the design or feature document that applies.
-   If they exist, also read `AGENTS.md`, `local-data/research/PRODUCT.md`,
-   and `local-data/research/COMPATIBILITY.md`.
+1. Read `docs/ARCHITECTURE.md`, the architecture pages that apply, and the
+   design or feature document that applies. Also read the product and
+   compatibility authorities that
+   [Toolchain and folders](../../../docs/DEVELOPMENT.md#toolchain-and-folders)
+   names.
    Completion criterion: You know the approved contract and the open questions.
 2. Inspect the implementation that the plan claims already exists.
    Completion criterion: Each implementation claim has direct evidence.
@@ -49,7 +51,7 @@ If you need a concrete question sequence, read [EXAMPLES.md](EXAMPLES.md).
 
 1. Identify the specification or domain document that owns each decision.
    Completion criterion: Every durable fact has one owner.
-2. If the user permits edits, update only the owning document.
+2. If the user permits edits, update only that document.
    Completion criterion: No parallel decision document exists.
 3. If the user does not permit edits, report the exact document change for later.
    Completion criterion: Another agent can apply it without a new discussion of

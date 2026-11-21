@@ -159,8 +159,8 @@ struct TrackControls<'a> {
     pan_automated: bool,
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
-    /// Whether the track's channel EQ, compressor, or ducker is on or its
-    /// width is not 100%, and whether its EQ button was pressed.
+    /// Whether the track's channel EQ, drive, compressor, or ducker is on or
+    /// its width is not 100%, and whether its EQ button was pressed.
     eq_on: bool,
     open_eq: &'a mut bool,
 }

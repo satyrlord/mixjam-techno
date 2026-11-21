@@ -52,13 +52,13 @@ agent can see later work, that work can pull attention from the current criterio
 
 ### Reference
 
-Reference is supporting information that the agent reads when a branch needs
-it. Examples are rules, facts, schemas, and examples.
+Reference is information that the agent reads when a branch needs it. Examples
+are rules, facts, schemas, and examples.
 
 ### External reference
 
-External reference is supporting information outside the skill package, for
-example a document in `docs/`. More than one skill can use it.
+External reference is information outside the skill package, for example a
+document in `docs/`. More than one skill can use it.
 
 ### Information hierarchy
 

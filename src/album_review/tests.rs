@@ -237,10 +237,10 @@ fn adding_preserves_invalid_files_and_files_created_after_loading() {
 
 #[test]
 fn own_work_takes_local_listening_links_and_a_song_file() {
-    let mut own = review("eklipse-reality", "eklipse", "Reality", 2026, &["Techno"]);
+    let mut own = review("eklipse-horizon", "eklipse", "Horizon", 2026, &["Techno"]);
     own.kind = Kind::Own;
-    own.local_audio = Some("D:/masters/reality.wav".into());
-    own.song_file = Some("D:/songs/reality.mixjam".into());
+    own.local_audio = Some("D:/masters/horizon.wav".into());
+    own.song_file = Some("D:/songs/horizon.mixjam".into());
     own.bandcamp_url = Some("https://eklipse-music.bandcamp.com/album/nostalgia".into());
     own.tracks[0].local_audio = Some("D:/masters/01.WAV".into());
     own.tracks[0].song_file = Some("D:/songs/01.mix".into());
@@ -254,7 +254,7 @@ fn own_work_takes_local_listening_links_and_a_song_file() {
     ] {
         assert!(text.contains(key), "{key}");
     }
-    own.local_audio = Some("D:/masters/reality.mp3".into());
+    own.local_audio = Some("D:/masters/horizon.mp3".into());
     assert!(own.issues()[0].contains("localAudio must name a .wav file"));
 }
 
@@ -355,7 +355,7 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             &["Ambient", "New Age"],
         ))
         .unwrap();
-    let mut own = review("eklipse-reality", "eklipse", "Reality", 2026, &["Techno"]);
+    let mut own = review("eklipse-horizon", "eklipse", "Horizon", 2026, &["Techno"]);
     own.kind = Kind::Own;
     own.tracks[1].tags = vec!["Acid".into(), "Four-on-the-floor".into()];
     shelf.add(own).unwrap();
@@ -397,7 +397,7 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             kind: Some(Kind::Own),
             ..Default::default()
         }),
-        ["eklipse-reality"]
+        ["eklipse-horizon"]
     );
     // A track filter matches a review with at least one such track.
     assert_eq!(
@@ -405,7 +405,7 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             tag: Some("four on the floor".into()),
             ..Default::default()
         }),
-        ["eklipse-reality"]
+        ["eklipse-horizon"]
     );
 
     let tracks = shelf.tracks(&Query {

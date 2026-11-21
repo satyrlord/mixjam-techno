@@ -13,7 +13,7 @@
 //! The same key tracks feed the master pedals' and the FX buses' keys
 //! (`Keys`): a dynamics pedal or an FX ducker whose key names a track
 //! listens to that track instead of its own input.
-use crate::master::dsp::flush32;
+use crate::master::dsp::{flush32, pole_at};
 use crate::master::{KnobRange, range, ratio_range};
 use serde::{Deserialize, Serialize};
 
@@ -168,11 +168,6 @@ impl Ducker {
 /// How fast the key's peak falls: 10 ms.
 const PEAK_FALL_SECONDS: f32 = 0.010;
 
-/// A smoothing pole for a time constant in seconds at the mix rate.
-fn pole(seconds: f32, rate: f32) -> f32 {
-    (-1.0 / (seconds * rate).max(1e-6)).exp()
-}
-
 /// A ducker's settings, ready for the audio thread.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Run {
@@ -185,12 +180,13 @@ pub(crate) struct Run {
 
 impl Run {
     pub(crate) fn new(ducker: &Ducker, rate: f32) -> Self {
+        let rate = f64::from(rate);
         Self {
             threshold_db: ducker.threshold,
             depth_db: ducker.depth,
-            attack: pole(ducker.attack / 1000.0, rate),
-            release: pole(ducker.release / 1000.0, rate),
-            fall: pole(PEAK_FALL_SECONDS, rate),
+            attack: pole_at(f64::from(ducker.attack) / 1000.0, rate) as f32,
+            release: pole_at(f64::from(ducker.release) / 1000.0, rate) as f32,
+            fall: pole_at(f64::from(PEAK_FALL_SECONDS), rate) as f32,
         }
     }
 

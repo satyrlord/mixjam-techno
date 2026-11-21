@@ -13,17 +13,55 @@ use mixjam_techno::{
 };
 use std::{path::PathBuf, process::ExitCode, sync::Arc};
 
-fn main() -> ExitCode {
-    match run() {
+const EXIT_NO_TRACK_SOUNDS: u8 = 3;
+
+#[derive(Debug, PartialEq, Eq)]
+enum RunError {
+    Message(String),
+    NoTrackSounds(String),
+}
+
+impl From<String> for RunError {
+    fn from(message: String) -> Self {
+        Self::Message(message)
+    }
+}
+
+impl From<&str> for RunError {
+    fn from(message: &str) -> Self {
+        Self::Message(message.to_owned())
+    }
+}
+
+fn map_stems_error(error: String) -> RunError {
+    if error == audio::NO_TRACK_SOUNDS {
+        RunError::NoTrackSounds(error)
+    } else {
+        RunError::Message(error)
+    }
+}
+
+fn exit_for(result: Result<(), RunError>) -> ExitCode {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
+        Err(RunError::Message(e)) => {
             // A failed agent request has already printed its reply.
             if !e.is_empty() {
                 eprintln!("{e}");
             }
             ExitCode::FAILURE
         }
+        Err(RunError::NoTrackSounds(e)) => {
+            if !e.is_empty() {
+                eprintln!("{e}");
+            }
+            ExitCode::from(EXIT_NO_TRACK_SOUNDS)
+        }
     }
+}
+
+fn main() -> ExitCode {
+    exit_for(run())
 }
 
 fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(), String> {
@@ -40,7 +78,7 @@ fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(
     Ok(())
 }
 
-fn run() -> Result<(), String> {
+fn run() -> Result<(), RunError> {
     // Paths come through as the OS gave them; a non-Unicode argument is an
     // error only where text is needed.
     let mut args = std::env::args_os().skip(1);
@@ -65,7 +103,7 @@ fn run() -> Result<(), String> {
                 let request = args.map(text).collect::<Result<Vec<_>, _>>()?;
                 return match agent::run_client(&request)? {
                     true => Ok(()),
-                    false => Err(String::new()),
+                    false => Err(RunError::Message(String::new())),
                 };
             }
             "--agent" => agent_port = agent_port.or(Some(agent::DEFAULT_PORT)),
@@ -98,7 +136,8 @@ fn run() -> Result<(), String> {
                 if samples.len() > MAX_LIBRARY_FOLDERS {
                     return Err(format!(
                         "--samples can be given up to {MAX_LIBRARY_FOLDERS} times."
-                    ));
+                    )
+                    .into());
                 }
             }
             "--source-bpm" => {
@@ -128,11 +167,13 @@ fn run() -> Result<(), String> {
             }
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH ...] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH, or up to 9 library folders with one --samples for each; the app merges them into one sound browser. The Sample libraries window does the same. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH ...] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH, or up to 9 library folders with one --samples for each; the app merges them into one sound browser. The Sample libraries window does the same. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard, and exits with code 3 when no track sounds.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
-            other => return Err(format!("Unknown argument: {other}. Use --help for usage.")),
+            other => {
+                return Err(format!("Unknown argument: {other}. Use --help for usage.").into());
+            }
         }
     }
     if source_bpm.is_some_and(|bpm| !bpm.is_finite() || bpm <= 0.0) {
@@ -185,7 +226,7 @@ fn run() -> Result<(), String> {
                 library = loaded;
             }
             Err(error) if command == "gui" => startup_messages.push(error),
-            Err(error) => return Err(error),
+            Err(error) => return Err(error.into()),
         }
     }
     if command == "gui" {
@@ -259,10 +300,10 @@ fn run() -> Result<(), String> {
                 .ok_or("verify-fixtures requires --app PATH to the development fixtures.")?;
             let folder = root.join("\x65Jay").join("mix");
             let mut paths = std::fs::read_dir(&folder)
-                .map_err(|e| e.to_string())?
+                .map_err(|e| RunError::Message(e.to_string()))?
                 .map(|r| r.map(|x| x.path()))
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| RunError::Message(e.to_string()))?;
             paths.sort();
             let mut total = 0;
             for path in paths
@@ -336,7 +377,7 @@ fn run() -> Result<(), String> {
                     );
                 }
                 Target::Stems(folder) => {
-                    let written = session.export_tracks(&folder)?;
+                    let written = session.export_tracks(&folder).map_err(map_stems_error)?;
                     println!(
                         "Wrote {written} as stereo audio at {} Hz to {}",
                         audio::Mix::SAMPLE_RATE,
@@ -419,7 +460,7 @@ fn run() -> Result<(), String> {
                         Ok(Box::new(app))
                     }),
                 )
-                .map_err(|e| e.to_string())
+                .map_err(|e| RunError::Message(e.to_string()))
             }
             #[cfg(not(feature = "gui"))]
             {
@@ -492,5 +533,37 @@ mod tests {
         assert_eq!(library.bindings(), before);
         assert!(library.sample_by_id(174).is_some());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn silent_stems_export_maps_to_exit_code_three() {
+        let dir = std::env::temp_dir().join(format!(
+            "mixjam-silent-stems-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let session = mixjam_techno::application::Session::headless(
+            Arc::new(Library::empty()),
+            Project::default(),
+        )
+        .unwrap();
+        let error = session
+            .export_tracks(&dir)
+            .map(|_| ())
+            .map_err(map_stems_error);
+        assert_eq!(
+            error,
+            Err(RunError::NoTrackSounds(audio::NO_TRACK_SOUNDS.into()))
+        );
+        assert_eq!(exit_for(error), ExitCode::from(EXIT_NO_TRACK_SOUNDS));
+        assert_eq!(
+            exit_for(Err(RunError::Message("other error".into()))),
+            ExitCode::FAILURE
+        );
+        assert_eq!(exit_for(Ok(())), ExitCode::SUCCESS);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

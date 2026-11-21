@@ -29,6 +29,7 @@ gitignored `node_modules/` folder.
 For a shallow clone, run `git fetch --unshallow` before the build.
 `tools/runtime/install-rust.ps1` installs Rust in `local-data/toolchain/`, and
 does not change the user PATH. `tools/runtime/cargo.ps1` runs that toolchain.
+`tools/runtime/install-rust.ps1` and `tools/verify-ui.ps1` need PowerShell 7.
 
 The repository holds the public files. The gitignored `local-data/` folder holds
 the necessary private project data and tools. The gitignored `tmp/` folder holds
@@ -52,7 +53,8 @@ does not need Git.
 
 Cargo needs a semantic package version. Thus `tools/runtime/cargo.ps1` writes
 the same version in that form to `Cargo.toml` and `Cargo.lock` before each run:
-`1.005` is `1.5.0`. The major number of the package version must be equal to
+`1.005` is `1.5.0`. It replaces a file whole, and only if the version in the
+file is different. The major number of the package version must be equal to
 `APP_MAJOR_VERSION`.
 
 ## Checks
@@ -75,23 +77,23 @@ have a maximum of 80 columns. Tables, code blocks, and headings have no limit.
 
 The format check passes some code that rustfmt does not format:
 
-- Stable rustfmt keeps a statement as written when the statement cannot fit a
-  line, for example a statement with a long string literal.
-- Rustfmt does not visit a file that the crate gets to only through
+- Stable rustfmt keeps a statement as written if the statement cannot fit a
+  line. An example is a statement with a long string literal.
+- Rustfmt does not visit a file that the crate reaches only through
   `include!`.
 
 `src/lib.rs` includes `src/ui.rs` for the native UI tests, in the module
 `ui_test_harness`. To run only the UI tests, use that name as the test filter.
-`src/main.rs` also
-declares `src/ui.rs` as a module, so rustfmt formats it and follows its
-`#[path]` test modules. `tools/check-rust-format.py` formats each tracked or
-new Rust file separately, and reports each region that rustfmt skips. Thus it
-also checks a file that only `include!` gets to. Split a long literal with `\`
-line continuations, so that each line fits in 100 columns.
+`src/main.rs` also declares `src/ui.rs` as a module, so rustfmt formats it and
+follows its `#[path]` test modules. `tools/check-rust-format.py` formats each
+tracked or new Rust file separately, and reports each region that rustfmt
+skips. Thus it also checks a file that only `include!` reaches. Split a long
+literal with `\` line continuations, so that each line fits in 100 columns.
 
 The Python tests check these items:
 
 - The Rust literal handling of the format checker.
+- The raster asset check.
 - The song tools in `tools/song/`.
 - The Album Review lookup tool in `tools/album-review/`, offline.
 - The byte preservation of the pinned font assets through the Git line-ending
@@ -113,7 +115,7 @@ It gives the Booster pedals their format-16 keys.
 
 Visual assets are transparent PNGs, painted at one image pixel for each screen
 pixel. Each asset has one prepared PNG size, for 100% display scaling, the only
-scale in scope. SVG files and embedded SVG artwork are prohibited in tracked and
+scale in scope. Do not use SVG files or embedded SVG artwork in tracked and
 non-ignored project files.
 
 Run `python tools/assets/check-raster-assets.py` after asset or source changes,

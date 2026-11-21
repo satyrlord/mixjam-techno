@@ -1,9 +1,10 @@
 # MixJam Techno agent skills
 
 These repository skills follow the current owner decisions. If they exist,
-`AGENTS.md` and the private notes `local-data/research/PRODUCT.md` and
-`local-data/research/COMPATIBILITY.md` record those decisions. The skills also
-work without them. `docs/ARCHITECTURE.md` describes the native application
+`AGENTS.md` and the private notes that
+[Toolchain and folders](../../docs/DEVELOPMENT.md#toolchain-and-folders) names
+record those decisions. The skills also work without them.
+[ARCHITECTURE.md](../../docs/ARCHITECTURE.md) describes the native application
 boundary. Use the current repository files to verify commands and behavior.
 Historical donor instructions do not apply to this workspace.
 
@@ -19,11 +20,11 @@ first sentence of that description. If you change a description, change its row.
 | [explore-test](explore-test/SKILL.md) | Test a feature of the built MixJam Techno application by use, and report its bugs and usability issues. |
 | [full-code-review](full-code-review/SKILL.md) | Review a MixJam Techno change set against current code and product contracts. |
 | [grill-me](grill-me/SKILL.md) | Challenge a MixJam Techno plan or design before implementation. |
-| [improve-codebase-architecture](improve-codebase-architecture/SKILL.md) | Improve MixJam Techno architecture and ownership boundaries. |
+| [improve-codebase-architecture](improve-codebase-architecture/SKILL.md) | Improve MixJam Techno architecture and ownership boundaries, or refactor its code without a change in behavior. |
 | [operate-app](operate-app/SKILL.md) | Operate the running MixJam Techno window through its agent control channel. |
-| [refactor](refactor/SKILL.md) | Refactor MixJam Techno without a change in behavior. |
 | [run-quality-gate](run-quality-gate/SKILL.md) | Run or repair MixJam Techno's documented Rust and native-artifact checks. |
 | [song-review](song-review/SKILL.md) | Review, rate, or master a song made with MixJam Techno. |
+| [ub-mode](ub-mode/SKILL.md) | Apply the reduced engineering principles to every code change. |
 
 The writing policy for all skills is in
 [deslop/PROSE.md](deslop/PROSE.md#writing-policy-asd-ste100).

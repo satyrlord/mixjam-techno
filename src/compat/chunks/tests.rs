@@ -15,8 +15,8 @@ use super::{
     },
     project::build_project,
     waves::{
-        Wave, embedded_wave_records, embedded_waves, normalize_saved_path, read_external_wave,
-        read_wave_extension, source_wave, wave_info,
+        EmbeddedRecord, embedded_wave_records, embedded_waves, normalize_saved_path,
+        read_external_wave, read_wave_extension, source_wave, wave_info,
     },
 };
 use crate::products::IMPORTED_ID_START;

@@ -2,10 +2,11 @@
 
 ## `eq`
 
-`eq` is the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
-"midQ", "highHz", "highDb", "highCut"}`. Every key is required. The second
-peak adds `peak2Hz`, `peak2Db`, and `peak2Q`. A lane saves each of these keys
-only when it differs from its default (250 Hz, 0 dB, and 1).
+`eq` is the channel EQ, from version 15: `{"on", "lowCut", "lowHz", "lowDb",
+"midHz", "midDb", "midQ", "highHz", "highDb", "highCut"}`. The saved `eq` must
+hold every one of these keys. The second peak adds `peak2Hz`, `peak2Db`, and
+`peak2Q` from version 18. A lane saves each of these keys only when it differs
+from its default (250 Hz, 0 dB, and 1).
 
 The bands run in this order:
 
@@ -23,16 +24,16 @@ gain of 0 is off. A lane whose EQ is off at the default settings omits `eq`.
 
 ## `drive`
 
-`drive` is the lane drive, from version 22. It runs after the EQ and before
-the compressor. Every key is required: `{"on", "amount", "character", "mix",
-"focus", "output"}`.
+`drive` is the lane drive, from version 22. It runs after the EQ and before the
+compressor. The saved `drive` must hold every key: `{"on", "amount",
+"character", "mix", "focus", "output"}`.
 
-- `amount`, from 0 to 24 dB, is how hard a copy of the lane is driven into the
-  saturation curve.
+- `amount`, from 0 to 24 dB, is the level that drives a copy of the lane into
+  the saturation curve.
 - `character`, from 0 to 100 percent, goes from a symmetric curve (odd
   harmonics) to a one-sided curve (mostly even harmonics).
-- `mix`, from 0 to 100 percent, is how much of the change in the copy is added
-  to the clean lane.
+- `mix`, from 0 to 100 percent, is the share of the change in the copy that the
+  drive adds to the clean lane.
 - `focus`, from 20 to 2000 Hz, is the corner of a 24 dB/octave high-pass on
   that change. Below it, the lane stays clean.
 - `output`, from -12 to 12 dB, is the trim after the drive.
@@ -44,8 +45,9 @@ omits `drive`. Versions 21 and earlier reject the key.
 
 ## `compressor`
 
-`compressor` is the lane compressor after the drive. Every key is required:
-`{"on", "threshold", "ratio", "attack", "release", "makeup"}`.
+`compressor` is the lane compressor after the drive, from version 18. The saved
+`compressor` must hold every key: `{"on", "threshold", "ratio", "attack",
+"release", "makeup"}`.
 
 - `threshold` is from -60 to 0 dBFS.
 - `ratio` is from 1 to 20.
@@ -58,22 +60,23 @@ A lane whose compressor is off at the default settings (-20 dBFS, 4:1, 10 ms,
 
 ## `width`
 
-`width` is the stereo width of the lane in percent, before its pan. It is from
-0 (mono) to 200. A lane at 100% omits it.
+`width` is the stereo width of the lane in percent, before its pan. It is from 0
+(mono) to 200. It exists from version 18. A lane at 100% omits it.
 
 ## `ducker`
 
-`ducker` lowers the lane while another lane, its key, sounds. Every key is
-required: `{"on", "key", "threshold", "depth", "attack", "release"}`.
+`ducker` lowers the lane while another lane, its key, sounds. It exists from
+version 17. The saved `ducker` must hold every key: `{"on", "key", "threshold",
+"depth", "attack", "release"}`.
 
 - `key` is a track from 1 to 64. While the ducker is on, it is not the track of
   the lane itself.
-- `threshold` is from -60 to 0 dBFS. It is measured on the key lane after its
-  fader and pan, and before the master gain.
+- `threshold` is from -60 to 0 dBFS. The mix measures it on the key lane after
+  its fader and pan, and before the master gain.
 - `depth` is from 0 to 24 dB.
 - `attack` is from 0.1 to 50 ms.
 - `release` is from 10 to 1000 ms.
 
-The key tracks of all duckers, pedals, and effects are limited together. See
-[FX buses](master-fx-and-placements.md#fx-buses). A lane whose ducker is off
-at the default settings omits `ducker`.
+All duckers, pedals, and effects together use at most 8 key tracks. See [FX
+buses](master-fx-and-placements.md#fx-buses). A lane whose ducker is off at the
+default settings omits `ducker`.

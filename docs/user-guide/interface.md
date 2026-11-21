@@ -44,8 +44,8 @@ button of a tool or a board opens only its own page, beside the tool.
 The score toolbar above the lanes holds Arrange and Mix, the Automation menu,
 Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool rail,
 the Sounds panel, the Inspector, and the lower panel. The score then fills the
-window. To show the panels again, press **F** again, or select the **Tools**,
-**Boards**, **Sounds**, or **Inspector** switch in the status bar.
+window. To show the panels again, press **F** again. You can also select the
+**Tools**, **Boards**, **Sounds**, or **Inspector** switch in the status bar.
 
 ## Tool rail and lower panel
 
@@ -65,9 +65,9 @@ shorter window, the rail makes its tools smaller and uses lines, not headings,
 between the groups. If the rail does not fit the window, turn the mouse wheel
 over it to scroll it.
 
-To shrink the rail to icons, select the **Tools** switch at the right of the
-status bar, or the double chevron at the top of the rail. Do the same step
-again to show the names.
+To shrink the rail to icons, select the double chevron at the top of the rail.
+You can also select the **Tools** switch at the right of the status bar. Do the
+same step again to show the names.
 
 Mixer, Mastering, FX returns, and Step synth share the lower panel. The name
 of the board that shows is at the start of the top row of the panel. To show a
@@ -79,9 +79,9 @@ panel again, select **Boards** again, or select a board in the rail.
 
 ## Command list
 
-To open the command list, select the magnifier beside the Options gear at the
-left end of the status bar, or press **Ctrl+K**. The list holds all that the
-application can do:
+To open the command list, press **Ctrl+K**. You can also select the magnifier
+beside the Options gear at the left end of the status bar. The list holds all
+that the application can do:
 
 - The tools of the rail.
 - Options and Help.
@@ -108,9 +108,9 @@ are the search, the library and category filters, the category chips, and the
 sort. Each row of the list shows the name, the category, the length in bars,
 and the waveform of a sound.
 
-To open the Sounds panel, select the **Sounds** switch in the status bar, or
-the strip named SOUNDS beside the rail. To fold the panel, select the chevron
-at its top.
+To open the Sounds panel, select the strip named SOUNDS beside the rail. You
+can also select the **Sounds** switch in the status bar. To fold the panel,
+select the chevron at its top.
 
 To use a sound:
 
@@ -144,22 +144,23 @@ lower panel folded.
 
 The Inspector at the right of the score shows the selected item:
 
-- **Nothing selected**: the song, with its tempo and length, a clip count for
+- Nothing selected: the song, with its tempo and length, a clip count for
   each category, and its sections. Click a section to scroll the score to it.
-- **A track**: click the name of a track in its lane header. This opens a
+- A track: click the name of a track in its lane header. This opens a
   folded Inspector. The track page shows the EQ curve, processing switches,
   level, pan, outputs, and sends. Click the EQ curve to open the channel EQ
-  window. While the track page is open, click the name again to see the song.
-- **One clip**: a picture of the clip, where you can drag its fade handles,
-  and its fades, gain, pitch, Reverse, start, length, and trim start. If its
-  sound is missing, **Locate the sound** asks for the file.
-- **Several clips**: their shared fades, gain, pitch, and Reverse. A change
+  window. On the track page, click the name again to see the song.
+- One clip: a picture of the clip with fade handles that you can drag. The page
+  also shows its fades, gain, pitch, Reverse, start, length, and trim start.
+  If its sound is missing, **Locate the sound…** asks for the file.
+- Several clips: their shared fades, gain, pitch, and Reverse. A change
   sets every selected clip. A dash marks mixed numbers and fade curves.
-  Reverse shows **Some play backwards** when the selection is mixed.
+  If some of the clips play backwards and some do not, Reverse shows
+  **Some play backwards**.
 
 You can undo all changes that you make in the Inspector. To fold the Inspector
-to a strip, select the chevron at its top, or the **Inspector** switch in the
-status bar.
+to a strip, select the chevron at its top. You can also select the
+**Inspector** switch in the status bar.
 
 In a small window, the Sounds panel, the Inspector, and the lower panel share
 the space. The panel that you opened last shows, and the others fold until
@@ -175,8 +176,8 @@ The song overview above the score shows the full song:
 - A frame around the part of the song that the score shows.
 
 To move the score, click or drag in the overview. When the overview has the
-focus, Left and Right move by one screen, and Home and End go to the start and
-the end. The overview does not change the song.
+focus, Left and Right move by one screen. Home and End go to the start and the
+end. The overview does not change the song.
 
 To fold the overview, select the button at its lower right, or the
 **Overview** switch in the status bar. The overview then shows as a bar named

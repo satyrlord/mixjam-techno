@@ -1,6 +1,9 @@
 //! MIX import records and wrapped byte strings recovered from original save/load code.
 //! This module does not open referenced paths or emulate the original import dialog.
-use crate::mix::Mix;
+use crate::{
+    mix::Mix,
+    reader::{ByteReader, ReadError},
+};
 use std::{collections::BTreeSet, fmt};
 
 pub const FIRST_FACTORY_ID: u16 = 731;
@@ -89,10 +92,7 @@ impl MixFooter {
         }
     }
     pub fn parse(mix: &Mix) -> Result<Self, ImportError> {
-        let mut input = Cursor {
-            bytes: &mix.trailer,
-            offset: 0,
-        };
+        let mut input = Cursor(ByteReader::new(&mix.trailer));
         if input.word()? != 0x0a08 {
             return Err(ImportError("Unsupported MIX footer string format".into()));
         }
@@ -158,7 +158,7 @@ impl MixFooter {
             kit_regions,
             imports,
             routes,
-            trailing: input.bytes[input.offset..].to_vec(),
+            trailing: input.0.bytes()[input.0.offset()..].to_vec(),
         })
     }
 
@@ -293,22 +293,14 @@ fn text(output: &mut Vec<u8>, value: &ByteText) -> Result<(), ImportError> {
     output.extend_from_slice(&[0, 1]);
     Ok(())
 }
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-impl Cursor<'_> {
-    fn take(&mut self, count: usize) -> Result<&[u8], ImportError> {
-        let end = self
-            .offset
-            .checked_add(count)
-            .ok_or_else(|| ImportError("MIX footer offset overflow".into()))?;
-        let result = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or_else(|| ImportError(format!("Incomplete MIX footer at byte {}", self.offset)))?;
-        self.offset = end;
-        Ok(result)
+struct Cursor<'a>(ByteReader<'a>);
+impl<'a> Cursor<'a> {
+    fn take(&mut self, count: usize) -> Result<&'a [u8], ImportError> {
+        let at = self.0.offset();
+        self.0.take(count).map_err(|error| match error {
+            ReadError::Overflow => ImportError("MIX footer offset overflow".into()),
+            ReadError::Truncated => ImportError(format!("Incomplete MIX footer at byte {at}")),
+        })
     }
     fn word(&mut self) -> Result<u16, ImportError> {
         let bytes = self.take(2)?;

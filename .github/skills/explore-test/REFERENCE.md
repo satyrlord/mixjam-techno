@@ -10,8 +10,8 @@ Read this file when [SKILL.md](SKILL.md) points to a section.
 
 ## Note kinds
 
-Write one line for each note: the kind, the plan step, what you did, what you
-saw, and the evidence path. Use these kinds.
+Write one line for each note: the kind, the plan step, your action, the
+result, and the evidence path. Use these kinds.
 
 | Kind | Use it for |
 | --- | --- |
@@ -20,7 +20,7 @@ saw, and the evidence path. Use these kinds.
 | `agent-gap` | A control is on screen but not in `ui`, or its name differs from its visible label. |
 | `docs-gap` | The docs or the help text are missing, stale, or wrong. |
 | `works` | A function gave the expected result, verified with evidence. |
-| `question` | A behavior can be a defect or intended, and the code, the docs, and the help text do not decide it. Also each default that you used for a missing parameter. |
+| `question` | A behavior can be a defect or a design choice. The code, the docs, and the help text do not decide it. Also each default that you used for a missing parameter. |
 
 Examples of `usability` notes:
 
@@ -37,7 +37,7 @@ Examples of `agent-gap` notes:
 - A control is missing from the accessibility tree.
 - A control has no accessible name, or two controls have the same name.
 - A name in `ui` differs from the visible label.
-- A function can be reached only with `pointer` or `key`.
+- Only `pointer` or `key` input can operate a function.
 
 ## Evidence methods
 
@@ -58,7 +58,7 @@ A claim with no evidence is a suspicion. Mark it as a suspicion in the report.
 
 ## Report format
 
-Use this order. Leave out a group that has no issue.
+Use this order. Do not write a group that has no issue.
 
 1. Summary: the subject, the task, the output path, and the counts of issues.
 2. Bugs.

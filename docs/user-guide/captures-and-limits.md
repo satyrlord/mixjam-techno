@@ -15,9 +15,9 @@ folder holds:
 
 - `device.wav`: the audio that the application wrote to the device, as 32-bit
   float.
-- `source.wav`: the mixer samples before the conversion to the device format,
-  and before the application replaced samples that are not valid (NaN or
-  infinity) with silence.
+- `source.wav`: the mixer samples before the conversion to the device format.
+  It keeps samples that are not valid (NaN or infinity). The device audio has
+  silence in their place.
 - `state.json`: these values:
   - The title and the file of the song.
   - The transport, and the bar and tick of the playhead.
@@ -36,17 +36,20 @@ The application also saves a capture automatically when one of these occurs:
 - NaN or infinity in the output.
 - A device error.
 
-The automatic capture is saved four seconds after the event. If the output is
-replaced, a pending capture is saved earlier. The application saves a maximum
-of one automatic capture in five minutes, and the status line tells you about
-it. Keep the application open until the status line confirms the save.
+The application saves an automatic capture four seconds after the event. If a
+new output replaces the old one, it saves a pending capture earlier. The
+application saves a maximum of one automatic capture in five minutes, and the
+status line tells you about it. Keep the application open until the status line
+confirms the save.
 
 The files do not record changes from the system mixer or the driver, or the
 sound from the speakers. Send the folder with a description of what you heard.
 
 ## Known limits
 
-No song, recording, sample, or edit has a fixed duration limit. The file
+A song has 4096 bars at most, and no clip can end after bar 4096. This is about
+2.3 hours at 120 BPM and 1.5 hours at 180 BPM. A song holds up to 1,000,000
+clips. A recording, a sample, or an edit has no fixed duration limit. The file
 formats set these limits:
 
 - A WAV file holds a maximum of 4 GiB. A 16-bit WAV file holds about 2.1
@@ -55,10 +58,10 @@ formats set these limits:
 - A mix export is stereo, so it holds about 6.7 hours. The application cannot
   export a longer song as one WAV file. The export tells you this before it
   writes a file. Stems have the same limit.
-- A recording stops when its take gets to the 16-bit WAV limit, which is more
-  than 13 hours at 44.1 kHz. It has no shorter time limit.
-- An edited, stretched, or synthesized sample, and a sample with effects, can
-  be as long as a WAV file can hold, and no longer.
+- A recording stops at the 16-bit WAV limit, more than 13 hours at 44.1 kHz.
+  It has no shorter time limit.
+- An edited, stretched, or synthesized sample can be as long as a WAV file can
+  hold. A sample with effects has the same limit.
 - A sample file of the first original product is a maximum of 2 GiB. This is
   the largest file that the loader of that product can read.
 - A packed sample is a maximum of 64 MiB. It can declare a maximum of

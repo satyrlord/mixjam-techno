@@ -6,8 +6,8 @@ use std::collections::HashMap;
 pub(crate) struct SourceTempos(HashMap<[u8; 16], Option<f64>>);
 
 impl SourceTempos {
-    /// The tempos of the runtime catalogs and their `source-tempos.json`,
-    /// gathered once for each reading of the catalogs.
+    /// The tempos of the runtime catalogs, gathered once for each reading of
+    /// the catalogs.
     pub(crate) fn for_catalogs(catalogs: &'static catalog::Catalogs) -> &'static Self {
         type Shared = Option<(usize, &'static SourceTempos)>;
         static SHARED: std::sync::Mutex<Shared> = std::sync::Mutex::new(None);
@@ -33,9 +33,6 @@ impl SourceTempos {
                     result.insert(digest, entry.source_bpm);
                 }
             }
-        }
-        for (digest, bpm) in catalogs.source_tempos() {
-            result.insert(*digest, *bpm);
         }
         result
     }
@@ -139,7 +136,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_catalogs_and_their_source_tempos_both_give_evidence() {
+    fn runtime_catalogs_give_tempo_evidence() {
         let folder =
             std::env::temp_dir().join(format!("mixjam-source-tempos-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
@@ -166,11 +163,6 @@ mod tests {
             }],
         };
         std::fs::write(folder.join("t1.json"), serde_json::to_vec(&file).unwrap()).unwrap();
-        std::fs::write(
-            folder.join(catalog::SOURCE_TEMPOS),
-            serde_json::to_vec(&[([2_u8; 16], 90.0)]).unwrap(),
-        )
-        .unwrap();
         let catalogs = catalog::Catalogs::open(Some(folder.clone()));
         assert!(catalogs.problems().is_empty(), "{:?}", catalogs.problems());
         let evidence = SourceTempos::from_catalogs(&catalogs);
@@ -181,12 +173,6 @@ mod tests {
             probe(Some(digest)),
         ];
         assert_eq!(evidence.folder(probes.iter()), Some(180.0));
-        let probes = [
-            probe(Some([2; 16])),
-            probe(Some([2; 16])),
-            probe(Some([2; 16])),
-        ];
-        assert_eq!(evidence.folder(probes.iter()), Some(90.0));
         std::fs::remove_dir_all(folder).unwrap();
     }
 

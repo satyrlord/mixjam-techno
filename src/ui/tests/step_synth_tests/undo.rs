@@ -334,3 +334,44 @@ fn step_synth_adopts_replacement_audio_with_the_same_palette_id() {
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn step_synth_keeps_settings_when_the_same_audio_moves() {
+    let (ctx, mut app, dir) = sample_conflicts_fixture("step-source-rebound");
+    app.session.confirm_sample_conflicts().unwrap();
+    app.conflicts.open = false;
+    app.selection.sample = Some(1_000_000);
+    app.boards.module = BottomModule::StepSynth;
+    // Set the draft before the board observes it for the first time.
+    app.step_synth.state.start_ms = 500.0;
+    app.step_synth.state.loop_source = true;
+    settle(&ctx, &mut app, 3);
+    let before = app.step_synth.state.clone();
+    assert!(!app.step_synth.grid.can_undo(false));
+
+    let candidates = &app.session.sample_conflicts()[0].candidates;
+    std::fs::copy(&candidates[0], &candidates[1]).unwrap();
+    app.session.resolve_sample_conflict(0, 1).unwrap();
+    settle(&ctx, &mut app, 3);
+
+    assert_eq!(app.source_id(), Some(1_000_000));
+    assert_eq!(app.step_synth.state, before);
+    assert!(!app.step_synth.grid.can_undo(false));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn step_synth_uses_playable_audio_to_set_source_length() {
+    let (ctx, mut app, dir) = sample_conflicts_fixture("step-source-read-failed");
+    app.session.confirm_sample_conflicts().unwrap();
+    app.conflicts.open = false;
+    let path = &app.session.sample_conflicts()[0].candidates[0];
+    std::fs::remove_file(path).unwrap();
+    app.selection.sample = Some(1_000_000);
+    app.boards.module = BottomModule::StepSynth;
+    settle(&ctx, &mut app, 3);
+
+    assert_eq!(app.source_id(), Some(1_000_000));
+    assert_eq!(app.step_synth.adopted.as_ref().unwrap().1, None);
+    std::fs::remove_dir_all(dir).unwrap();
+}

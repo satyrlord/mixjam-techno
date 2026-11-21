@@ -4,7 +4,7 @@
 
 use super::{
     Reader,
-    assets::{encode_float_wave, queue_asset},
+    assets::{encode_float_wave, hex_digest, queue_asset, sha256_bytes},
     layout::{SENTINEL, WaveReference, first_text},
 };
 use crate::{
@@ -12,10 +12,9 @@ use crate::{
     library::Library,
     products::Product,
 };
-use sha2::{Digest, Sha256};
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs,
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -71,10 +70,7 @@ pub(super) fn read_wave_extension(
     // its original path. Its 12-byte `02 00 00 01` extension starts like an
     // empty label, so empty labels do not select this layout.
     let framed_labels_follow = || {
-        let mut peek = Reader {
-            bytes: reader.bytes,
-            offset: reader.offset,
-        };
+        let mut peek = Reader::at(reader.bytes(), reader.offset());
         (0..2).all(|_| {
             peek.block()
                 .is_ok_and(|label| (3..=262).contains(&label.len()) && label.ends_with(&[0, 1]))
@@ -120,24 +116,24 @@ pub(super) fn read_wave_extension(
     }
     // Known path extensions can carry up to three additional text tokens.
     for index in 0..3 {
-        let saved = reader.offset;
-        if saved + 2 > reader.bytes.len() {
+        let saved = reader.offset();
+        if saved + 2 > reader.bytes().len() {
             break;
         }
         let length =
-            u16::from_le_bytes(reader.bytes[saved..saved + 2].try_into().unwrap()) as usize;
-        if !(4..=260).contains(&length) || saved + 2 + length > reader.bytes.len() {
+            u16::from_le_bytes(reader.bytes()[saved..saved + 2].try_into().unwrap()) as usize;
+        if !(4..=260).contains(&length) || saved + 2 + length > reader.bytes().len() {
             break;
         }
-        let token = &reader.bytes[saved + 2..saved + 2 + length];
+        let token = &reader.bytes()[saved + 2..saved + 2 + length];
         let text = token.split(|byte| *byte == 0).next().unwrap_or_default();
         if text.is_empty() || text.iter().any(|byte| !matches!(*byte, 9 | 32..=126)) {
             break;
         }
         metadata.insert(format!("Native label {}", index + 1), first_text(token));
-        reader.offset += 2 + length;
+        reader.set_offset(saved + 2 + length);
     }
-    let tail = &reader.bytes[reader.offset..];
+    let tail = &reader.bytes()[reader.offset()..];
     if tail.starts_with(&[2, 0, 0, 1]) {
         metadata.insert(
             "Native extension bytes".into(),
@@ -168,6 +164,7 @@ pub(super) fn read_wave_extension(
 }
 
 pub(super) struct Wave<'a> {
+    #[allow(dead_code)]
     pub(super) source_path: String,
     pub(super) bytes: Cow<'a, [u8]>,
     pub(super) frames: u32,
@@ -181,23 +178,37 @@ pub(super) struct RetainedWave {
     pub(super) sample_rate: u32,
 }
 
+#[cfg(test)]
 pub(super) fn retain_wave<'a>(
     wave: Wave<'a>,
     pending: &mut Vec<(PathBuf, Cow<'a, [u8]>)>,
     total_bytes: &mut usize,
 ) -> Result<RetainedWave, String> {
-    let hash = format!("{:x}", Sha256::digest(&wave.bytes));
+    retain_wave_with_digest(wave, pending, total_bytes, None).map(|(retained, _)| retained)
+}
+
+pub(super) fn retain_wave_with_digest<'a>(
+    wave: Wave<'a>,
+    pending: &mut Vec<(PathBuf, Cow<'a, [u8]>)>,
+    total_bytes: &mut usize,
+    known_digest: Option<[u8; 32]>,
+) -> Result<(RetainedWave, [u8; 32]), String> {
+    let digest = known_digest.unwrap_or_else(|| sha256_bytes(&wave.bytes));
+    let hash = hex_digest(&digest);
     let path = crate::project_io::data_root()
         .join("imported-audio")
         .join(format!("{hash}.wav"));
     if !pending.iter().any(|(existing, _)| *existing == path) {
         queue_asset(pending, total_bytes, path.clone(), wave.bytes)?;
     }
-    Ok(RetainedWave {
-        path,
-        frames: wave.frames,
-        sample_rate: wave.sample_rate,
-    })
+    Ok((
+        RetainedWave {
+            path,
+            frames: wave.frames,
+            sample_rate: wave.sample_rate,
+        },
+        digest,
+    ))
 }
 
 pub(super) fn wave_info(bytes: &[u8]) -> Result<(u32, u32), String> {
@@ -236,7 +247,7 @@ pub(super) fn wave_info(bytes: &[u8]) -> Result<(u32, u32), String> {
     Ok((frames, spec.sample_rate))
 }
 
-pub(super) fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'_>>, String> {
+pub(crate) fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedRecord>, String> {
     let mut sources = Vec::new();
     // A record's audio payload cannot hold further records. Without this
     // bound, nested headers would each be decoded as a complete WAV.
@@ -289,13 +300,11 @@ pub(super) fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'
             }
         }
         if let Some(source_path) = source_path {
-            let wav = &bytes[riff..riff + size];
             if sources.len() >= MAX_EMBEDDED_WAVES {
                 return Err("The native song has too many embedded WAV records.".into());
             }
-            sources.push(EmbeddedSource {
+            sources.push(EmbeddedRecord {
                 path: source_path,
-                bytes: wav,
                 range: riff..riff + size,
             });
             payload_end = riff + size;
@@ -304,22 +313,16 @@ pub(super) fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'
     Ok(sources)
 }
 
-/// Framed WAV payloads are audio, even when their bytes resemble a timeline.
-pub(crate) fn embedded_wave_ranges(bytes: &[u8]) -> Result<Vec<std::ops::Range<usize>>, String> {
-    Ok(embedded_wave_records(bytes)?
-        .into_iter()
-        .map(|source| source.range)
-        .collect())
-}
-
+#[cfg(test)]
 pub(super) fn embedded_waves(bytes: &[u8]) -> Result<Vec<Wave<'_>>, String> {
     embedded_wave_records(bytes)?
         .into_iter()
         .map(|source| {
-            let (frames, sample_rate) = wave_info(source.bytes)?;
+            let raw = &bytes[source.range];
+            let (frames, sample_rate) = wave_info(raw)?;
             Ok(Wave {
                 source_path: source.path,
-                bytes: Cow::Borrowed(source.bytes),
+                bytes: Cow::Borrowed(raw),
                 frames,
                 sample_rate,
             })
@@ -333,23 +336,29 @@ pub(super) fn basename(path: &str) -> &str {
 
 pub(super) fn source_wave<'a>(
     path: &str,
-    embedded: &'a [Wave<'_>],
+    song_bytes: &'a [u8],
+    embedded: &[EmbeddedRecord],
     library: &Library,
 ) -> Result<Wave<'a>, String> {
     let normalized = normalize_saved_path(path);
     let matches: Vec<_> = embedded
         .iter()
-        .filter(|wave| normalize_saved_path(&wave.source_path) == normalized)
+        .filter(|wave| normalize_saved_path(&wave.path) == normalized)
         .collect();
     if let Some(first) = matches.first() {
-        if matches.iter().any(|other| other.bytes != first.bytes) {
+        let first_bytes = &song_bytes[first.range.clone()];
+        if matches
+            .iter()
+            .any(|other| &song_bytes[other.range.clone()] != first_bytes)
+        {
             return Err("The native WAV reference matches different embedded audio files.".into());
         }
+        let (frames, sample_rate) = wave_info(first_bytes)?;
         return Ok(Wave {
             source_path: path.into(),
-            bytes: Cow::Borrowed(&first.bytes),
-            frames: first.frames,
-            sample_rate: first.sample_rate,
+            bytes: Cow::Borrowed(first_bytes),
+            frames,
+            sample_rate,
         });
     }
     let file = if Path::new(path).is_file() {
@@ -375,9 +384,33 @@ pub(super) fn source_wave<'a>(
 
 pub(super) struct StretchedCopy {
     pub(super) wave: Wave<'static>,
+    pub(super) digest: [u8; 32],
     pub(super) name: String,
     pub(super) original: serde_json::Value,
     pub(super) target_bpm: f64,
+}
+
+fn code_stem(code: &str) -> String {
+    let name = basename(code);
+    name.rsplit_once('.')
+        .map_or(name, |(stem, _)| stem)
+        .to_ascii_lowercase()
+}
+
+pub(super) struct StemIndex(HashMap<String, Option<usize>>);
+
+impl StemIndex {
+    pub(super) fn build(library: &Library) -> Self {
+        let mut by_stem: HashMap<String, Option<usize>> = HashMap::new();
+        for (index, sample) in library.samples.iter().enumerate() {
+            let stem = code_stem(&sample.code);
+            by_stem
+                .entry(stem)
+                .and_modify(|slot| *slot = None)
+                .or_insert(Some(index));
+        }
+        Self(by_stem)
+    }
 }
 
 /// The T2 editor's Time Stretcher (editor strings `TimeStretchOrginal`,
@@ -392,6 +425,7 @@ pub(super) struct StretchedCopy {
 pub(super) fn stretched_copy(
     metadata: &BTreeMap<String, String>,
     library: &Library,
+    stem_index: &mut Option<StemIndex>,
     song_bpm: f64,
     declared_ticks: Option<u32>,
 ) -> Result<Option<StretchedCopy>, String> {
@@ -410,20 +444,12 @@ pub(super) fn stretched_copy(
     if !folder.to_ascii_lowercase().ends_with("[time]") || stem.is_empty() {
         return Ok(None);
     }
+    let index = stem_index.get_or_insert_with(|| StemIndex::build(library));
     // Library codes keep the original file name, as in `bn/r1la037.pxd`.
-    let code_stem = |code: &str| {
-        let name = basename(code);
-        name.rsplit_once('.')
-            .map_or(name, |(stem, _)| stem)
-            .to_string()
-    };
-    let mut matches = library
-        .samples
-        .iter()
-        .filter(|sample| code_stem(&sample.code).eq_ignore_ascii_case(stem));
-    let (Some(sample), None) = (matches.next(), matches.next()) else {
+    let Some(sample_index) = index.0.get(&stem.to_ascii_lowercase()).copied().flatten() else {
         return Ok(None);
     };
+    let sample = &library.samples[sample_index];
     let bars = declared_ticks.map_or(sample.bars, |ticks| ticks / TICKS_PER_BAR);
     if sample.bars == 0 || bars == 0 {
         return Ok(None);
@@ -433,13 +459,16 @@ pub(super) fn stretched_copy(
     let stretched = crate::sample_edit::time_stretch(&pcm, sample.source_bpm, target_bpm)?;
     let frames =
         u32::try_from(stretched.frames()).map_err(|_| "The stretched sound is too long.")?;
+    let bytes = encode_float_wave(&stretched)?;
+    let digest = sha256_bytes(&bytes);
     Ok(Some(StretchedCopy {
         wave: Wave {
             source_path: file.clone(),
-            bytes: Cow::Owned(encode_float_wave(&stretched)?),
+            bytes: Cow::Owned(bytes),
             frames,
             sample_rate: stretched.sample_rate,
         },
+        digest,
         name: format!("{} {target_bpm} BPM", sample.name),
         original: serde_json::json!({
             "id": sample.id, "code": &sample.code, "name": &sample.name,
@@ -453,36 +482,30 @@ pub(super) fn normalize_saved_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }
 
-pub(super) struct EmbeddedSource<'a> {
-    pub(super) path: String,
-    pub(super) bytes: &'a [u8],
-    pub(super) range: std::ops::Range<usize>,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct EmbeddedRecord {
+    pub(crate) path: String,
+    pub(crate) range: std::ops::Range<usize>,
 }
 
 pub(super) fn d2_embedded_sources(
     bytes: &[u8],
     timeline_start: usize,
-) -> Result<Vec<EmbeddedSource<'_>>, String> {
-    let mut timeline = Reader {
-        bytes,
-        offset: timeline_start,
-    };
+) -> Result<Vec<EmbeddedRecord>, String> {
+    let mut timeline = Reader::at(bytes, timeline_start);
     let length = timeline.u32()? as usize;
     let marker = timeline_start
         .checked_add(length)
         .ok_or("The D2 timeline length is invalid.")?;
-    let mut reader = Reader {
-        bytes,
-        offset: marker,
-    };
+    let mut reader = Reader::at(bytes, marker);
     if reader.take(4)? != SENTINEL {
         return Err("The D2 timeline end marker is invalid.".into());
     }
-    if reader.offset == bytes.len() {
+    if reader.offset() == bytes.len() {
         return Ok(Vec::new());
     }
     let count = reader.u32()? as usize;
-    if count > MAX_EMBEDDED_WAVES || count > bytes.len().saturating_sub(reader.offset) / 12 {
+    if count > MAX_EMBEDDED_WAVES || count > bytes.len().saturating_sub(reader.offset()) / 12 {
         return Err("The D2 embedded-audio count is invalid.".into());
     }
     let mut sources = Vec::new();
@@ -502,14 +525,14 @@ pub(super) fn d2_embedded_sources(
         if length == 0 {
             return Err("The D2 embedded audio is empty.".into());
         }
-        let start = reader.offset;
-        sources.push(EmbeddedSource {
+        let start = reader.offset();
+        reader.take(length)?;
+        sources.push(EmbeddedRecord {
             path,
-            bytes: reader.take(length)?,
-            range: start..reader.offset,
+            range: start..reader.offset(),
         });
     }
-    if reader.offset != bytes.len() {
+    if reader.offset() != bytes.len() {
         return Err("The D2 embedded-audio footer has unexpected trailing data.".into());
     }
     Ok(sources)
@@ -557,7 +580,8 @@ pub(super) fn packed_wave(path: &str, bytes: &[u8]) -> Result<Wave<'static>, Str
 
 pub(super) fn d2_source_wave<'a>(
     path: &str,
-    embedded: &'a [EmbeddedSource<'_>],
+    song_bytes: &'a [u8],
+    embedded: &[EmbeddedRecord],
     library: &Library,
 ) -> Result<Wave<'a>, String> {
     let normalized = normalize_saved_path(path);
@@ -566,23 +590,27 @@ pub(super) fn d2_source_wave<'a>(
         .filter(|source| normalize_saved_path(&source.path) == normalized)
         .collect();
     if let Some(first) = matches.first() {
-        if matches.iter().any(|other| other.bytes != first.bytes) {
+        let first_bytes = &song_bytes[first.range.clone()];
+        if matches
+            .iter()
+            .any(|other| &song_bytes[other.range.clone()] != first_bytes)
+        {
             return Err("The native audio reference matches different embedded files.".into());
         }
         return if normalized.ends_with(".pxd") {
-            packed_wave(path, first.bytes)
+            packed_wave(path, first_bytes)
         } else {
-            let (frames, sample_rate) = wave_info(first.bytes)?;
+            let (frames, sample_rate) = wave_info(first_bytes)?;
             Ok(Wave {
                 source_path: path.into(),
-                bytes: Cow::Borrowed(first.bytes),
+                bytes: Cow::Borrowed(first_bytes),
                 frames,
                 sample_rate,
             })
         };
     }
     if !normalized.ends_with(".pxd") {
-        return source_wave(path, &[], library);
+        return source_wave(path, &[], &[], library);
     }
     if Path::new(path).is_file() {
         return packed_wave(path, &read_external_wave(Path::new(path))?);

@@ -526,6 +526,19 @@ class RenderCacheTests(unittest.TestCase):
             entry.unlink()
             self.assertFalse(render.from_cache(cache, key, other))
 
+    def test_from_cache_validates_and_hashes_in_one_read_including_trailing_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, source, output = root / 'cache', root / 'source.wav', root / 'output.wav'
+            key = 'b' * 32
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            source.write_bytes(source.read_bytes() + b'LIST\x04\x00\x00\x00meta')
+            render.to_cache(cache, key, source)
+            with mock.patch.object(render, 'file_digest', wraps=render.file_digest) as digest_calls:
+                self.assertTrue(render.from_cache(cache, key, output))
+            digest_calls.assert_not_called()
+            self.assertEqual(output.read_bytes(), source.read_bytes())
+
     def test_cache_requires_a_digest_and_preserves_the_output_on_a_miss(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -685,14 +698,19 @@ class RenderCacheTests(unittest.TestCase):
         song.ducker(2, 1)
         def native(command, **kwargs):
             if '--stems' in command:
-                return mock.Mock(returncode=1, stdout='',
-                                 stderr='No track sounds: add clips, or check Mute, Solo, and L/R.\n')
+                return mock.Mock(returncode=render.NO_TRACK_SOUNDS_EXIT, stdout='',
+                                 stderr='No track sounds.\n')
             mixjam.write_wav(command[command.index('--output') + 1], 44100, np.zeros((8, 2)))
             return mock.Mock(returncode=0)
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.subprocess, 'run', side_effect=native):
             result = render.render_lanes(song.document(), {'bass': [2]}, Path(directory), jobs=1)
             _, pcm = mixjam.read_wav(result['bass'])
             np.testing.assert_array_equal(pcm, 0)
+        def fail_stems(command, **kwargs):
+            return mock.Mock(returncode=1, stdout='', stderr='disk full\n')
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.subprocess, 'run', side_effect=fail_stems):
+            with self.assertRaises(SystemExit):
+                render.render_lanes(song.document(), {'bass': [2]}, Path(directory), jobs=1)
 
     def test_renders_yield_the_processor(self):
         calls = []

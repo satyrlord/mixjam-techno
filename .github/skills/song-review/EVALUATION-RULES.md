@@ -7,7 +7,7 @@ Evaluation rules:
 - Launch each requested critic as a fresh agent (step 4). For a general
   review, use the composition critic and the mix critic.
 - If the user asks for a rating, launch the blind rater as a fresh agent
-  (step 4), at the same time as the requested critics.
+  (step 4). Launch it at the same time as the requested critics.
 - Record the requested rating in step 5.1. If more than one role reports, use
   the merged list of step 5.2.
 - Give each role its inputs from [Role inputs](REFERENCE-INPUTS.md#role-inputs)
@@ -20,5 +20,5 @@ Evaluation rules:
   the review folder.
 
 For the Recommendation branch, launch the mastering engineer only after the
-gate passes. Do not apply its board. If the gate is blocked, report the
+gate passes. Do not apply its board. If a blocker stops the gate, report the
 blocker.

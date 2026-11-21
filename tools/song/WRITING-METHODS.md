@@ -10,8 +10,8 @@ channels. Channels of opposite polarity do not make an audible ending count
 as silence.
 
 `song.save(path)` stages the song and its `.meta.json` before it replaces either
-file. If replacing the song fails, it restores the earlier metadata. Use one
-writer per song path.
+file. If the replacement of the song fails, it restores the earlier metadata.
+Use one writer per song path.
 
 `song.automate(track, lane, points)` accepts the lanes `volume`, `filter`,
 `pan`, `repeat`, `repeatgate`, `pitch`, `compression`, and `send1` to `send4`.
@@ -29,18 +29,18 @@ its control's range. A rejected batch leaves the earlier points unchanged.
   out over 3 ms. The lane steps like `repeat` and is at 100 before its first
   point. It acts only while `repeat` is on, so it can end at any value.
 - A `pitch` lane is `[(bar, cents), ...]`, from -4800 to 2400 cents. It bends
-  the playback speed of the lane. It is varispeed, like a tape. Pitch and speed
-  move together. `song.automate(3, 'pitch', [(8.5, 0), (9, -4800), (9.0625,
+  the playback speed of the lane. It works like varispeed on a tape. Pitch and
+  speed move together. `song.automate(3, 'pitch', [(8.5, 0), (9, -4800), (9.0625,
   0)])` is a tape-stop over the second half of bar 8.
 
-A `pitch` lane is 0 before its first point, so it needs no resting points. It
-moves in straight lines in cents. It adds to the own pitch of each clip. It
-runs before the Repeat lane. It must be back at 0 before a later clip on the
-lane. A clip keeps its length. If the lane slows a clip, the clip ends at its
-end. If the lane speeds it up, its sound ends where its source runs out. The
-mechanical gate follows this speed clock when it checks the source duration,
-the silent gaps, and the source window at the ending of a clip. This includes
-reversal.
+A `pitch` lane is 0 before its first point, so it needs no extra point at 0
+there. It moves in straight lines in cents. It adds to the own pitch of each
+clip. It runs before the Repeat lane. It must be back at 0 before a later clip
+on the lane. A clip keeps its length. If the lane slows a clip, the clip ends at
+its end. If the lane speeds it up, its sound ends where its source runs out. The
+mechanical gate follows this speed clock. It does so when it checks the source
+duration, the silent gaps, and the source window at the end of a clip. This
+includes reversal.
 
 A `compression` lane sets the compressor mix from 0 to 100 percent. The
 writer adds points at 100 before the first point if needed. The mix changes
@@ -57,15 +57,21 @@ throw a delay or reverb at the end of a phrase.
 clip. Fades, pitch, and gain stay in the own time of the clip.
 
 `song.drive(track, amount=12, character=25, mix=50, focus=100, output=0)`
-switches on the drive of a lane. The drive runs after the EQ of the lane and
+enables the drive of a lane. The drive runs after the EQ of the lane and
 before its compressor. It adds harmonics above `focus` Hz and keeps the power
-of the lane, so small speakers can play a held bass. Set `focus` to about twice
-the lowest note of the lane to keep the fundamental clean. `on=False` at the
+of the lane. Small speakers can therefore play a held bass. Set `focus` to about
+twice the lowest note of the lane to keep the fundamental clean. `on=False` at the
 default settings removes the drive, as the app saves it.
 
-The ranges of the drive are `amount` 0 to 24 dB, `character` and `mix` 0 to
-100 percent, `focus` 20 to 2000 Hz, and `output` -12 to 12 dB. The library and
-the application reject a lane setting outside the range of its control. The
+The ranges of the drive are:
+
+- `amount`: 0 to 24 dB
+- `character` and `mix`: 0 to 100 percent
+- `focus`: 20 to 2000 Hz
+- `output`: -12 to 12 dB
+
+The library and the application reject a lane setting outside the range of its
+control. The
 ranges of all lane, clip, and automation controls are in
 [Control ranges](../../.github/skills/song-review/REFERENCE-CONTROLS.md#control-ranges).
 

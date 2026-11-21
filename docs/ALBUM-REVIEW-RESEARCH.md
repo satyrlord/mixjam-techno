@@ -4,7 +4,7 @@ This file is a shortlist of albums for new album analyses.
 The list order is by similarity to the albums in `assets/album-review/`.
 If two albums have the same similarity, the more popular album is first.
 Each album is in the list once.
-When a review of an album is saved, remove the album from this list.
+When you save a review of an album, remove the album from this list.
 
 Each item gives the artist, the album title, the release year, the genre, and
 the source codes.
@@ -15,8 +15,8 @@ no value.
 
 A source code shows that the album is on the list of that source.
 A number after `#` is the rank of the album on that list (1 is the highest rank).
-A code without a number shows that the list has no ranks, or that the rank is
-not known.
+A code without a number shows that the list has no ranks, or that the file
+records no rank.
 
 | Code | Source | Date | URL |
 | --- | --- | --- | --- |

@@ -26,6 +26,14 @@ order:
 - **Scan again** reads all folders again: for example, after you add files or
   connect a drive.
 
+### Optional product providers
+
+Under the folder list, the **Optional product providers** section adds a
+provider folder for one original product. Select the product in **Provider
+product**, then select **Choose folder**. **No providers** shows when the list
+is empty. **Remove**, next to a provider, removes it. A product has one
+provider folder. To use another folder, remove the first one.
+
 ### Scans
 
 The scan runs in the background. The Sample libraries window shows the progress.
@@ -51,25 +59,25 @@ A scan reads mono and stereo WAV files in these encodings:
 A scan also reads extensible headers, long format chunks, and odd-length
 metadata. A scanned file has no length limit of its own. It can be as long as a
 WAV file can be, which is almost 4 GiB. If the audio ends in the middle of its
-last frame, only that partial frame is lost. The scan ignores macOS `._`
+last frame, the scan drops only that partial frame. The scan ignores macOS `._`
 metadata files beside the WAV files.
 
 **Skipped WAVs** on the Sample libraries window lists the files that the
 application cannot use, with the reason:
 
 - An empty or damaged file.
-- Audio that is cut off.
+- Truncated audio.
 - A different encoding, for example ADPCM.
 
 ### Folders that cannot be read
 
-If the application cannot read a library folder, or the folder has no WAV file
-that it can read, the other folders still load. The status line names the
-folder and the reason. The Sample libraries window shows the reason under the
-folder. The folder stays in the list, but its sounds are not in the Sounds
-panel until a later scan can read it. Songs that use these sounds show them as
-missing. If the application cannot read any folder, the scan fails and the
-sounds do not change.
+If the application cannot read a library folder, the other folders still load.
+This also applies when the folder has no WAV file that it can read. The status
+line names the folder and the reason. The Sample libraries window shows the
+reason under the folder. The folder stays in the list. Its sounds are not in the
+Sounds panel until a later scan can read it. Songs that use these sounds show
+them as missing. If the application cannot read any folder, the scan fails and
+the sounds do not change.
 
 The scan skips a link in a library folder that goes to a place outside that
 folder. The rest of the folder loads.
@@ -92,9 +100,9 @@ true:
 - These files are 75% or more of the folder.
 - All known tempos agree.
 
-This rule resolves the octave ambiguity of the original 180 BPM and 90 BPM
-packs without folder names. For other folders, the application uses the loop
-lengths to find a tempo. These sources can also set the tempo:
+This rule finds the tempo of an extracted product pack without its folder name.
+For other folders, the application uses the loop lengths to find a tempo. These
+sources can also set the tempo:
 
 - A `BPM.INF` file of a pack can correct the estimate.
 - A tempo and a key in a file name, for example
@@ -102,14 +110,13 @@ lengths to find a tempo. These sources can also set the tempo:
 
 A folder tempo from authenticated audio overrides these estimates and names.
 
-If the application cannot find a tempo, it uses **Tempo for files without
-one** from the Sample libraries window. The default is 140 BPM. A loop length can
-fit half or double its actual tempo. In this case, the application uses the
-tempo from 88 to 176 BPM, unless **Tempo for files without one** is the other
-tempo.
+If the application cannot find a tempo, it uses **Tempo for files without one**
+from the Sample libraries window. The default is 140 BPM. A loop length can fit
+half or double its actual tempo. In this case, the application uses the tempo
+from 88 to 176 BPM, unless **Tempo for files without one** is the other tempo.
 
 Before you scan a 180 BPM pack, set **Tempo for files without one** to 180 if
-these conditions are both true:
+both conditions are true:
 
 - No file or folder states the tempo.
 - Not enough authenticated audio agrees on the tempo.

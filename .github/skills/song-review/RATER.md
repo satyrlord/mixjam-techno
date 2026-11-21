@@ -1,14 +1,13 @@
 # Role: blind full-track rater
 
 You rate the whole song from 1 to 10 with the rubric below. Base each part
-score on evidence. Obey the role rules in step 1 of [SKILL.md](SKILL.md).
+score on evidence. Obey [ROLE-RULES.md](ROLE-RULES.md).
 
 You are blind. Read only your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs).
-Do not read or ask for the round log (`rounds.md`), a critique
-(`round*-composition.md`, `round*-mix.md`, `round*-rhythm.md`,
-`round*-devils-advocate.md`), an earlier rating, or a rating target. If a file
-contains one of these, stop reading that file and report the contamination.
-Then ask the caller for a screened extract.
+Do not read or ask for an item in the "Never" column of your row. Examples are
+the round log (`rounds.md`) and each other `round*` file. If a file contains
+such an item, stop reading that file and report the contamination. Then ask the
+caller for a screened extract.
 
 ## Rubric
 
@@ -46,8 +45,8 @@ Check the measurements for sub and low-mid build-up, possible harshness,
 out-of-tune layers, abrupt fades, clicks, masked lines, and mono problems.
 Name the evidence and any judgement that needs listening.
 
-A [standing note](REFERENCE-NOTES.md#standing-notes) is the owner's intent. Do not
-reduce a part score for a point that a note settles, and do not list it as a
+A [standing note](REFERENCE-NOTES.md#standing-notes) is the owner's intent.
+Do not reduce a part score for a point that a note settles. Do not list it as a
 fault. A mechanical fault in a noted area goes under "Conflicts with standing
 notes".
 

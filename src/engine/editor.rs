@@ -1,6 +1,9 @@
 //! The editor: validated edits to a project with undo and redo.
 use super::{Clip, ImportedSample, MAX_TICKS, Project, TRACK_COUNT};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 pub struct Editor {
     pub(super) project: Project,
@@ -60,6 +63,54 @@ impl Editor {
             self.generation += 1;
         }
         Ok(())
+    }
+    /// Apply one step of an already-started continuing gesture in place without
+    /// cloning the whole project or scanning unaffected tracks/clips.
+    pub fn transact_continuing_in_place<S>(
+        &mut self,
+        apply: impl FnOnce(&mut Project) -> (S, bool),
+        validate: impl FnOnce(&Project) -> Result<(), String>,
+        revert: impl FnOnce(&mut Project, S),
+    ) -> Result<(), String> {
+        let (saved, changed) = apply(&mut self.project);
+        if let Err(error) = validate(&self.project) {
+            revert(&mut self.project, saved);
+            return Err(error);
+        }
+        if changed {
+            self.redo.clear();
+            self.generation += 1;
+        }
+        Ok(())
+    }
+    /// Record import sample rates probed during Save without creating an undo
+    /// step or changing generation.
+    pub(crate) fn record_import_rates(&mut self, probed: &[ImportedSample]) {
+        if probed.is_empty() {
+            return;
+        }
+        let rates: HashMap<_, _> = probed.iter().map(|sample| (sample.id, sample)).collect();
+        let mut updated = HashMap::new();
+        for project in std::iter::once(&mut self.project)
+            .chain(&mut self.undo)
+            .chain(&mut self.redo)
+        {
+            let key = Arc::as_ptr(&project.imported_samples.0);
+            let samples = updated.entry(key).or_insert_with(|| {
+                let mut samples = project.imported_samples.clone();
+                for (index, sample) in project.imported_samples.iter().enumerate() {
+                    if sample.source_sample_rate.is_none()
+                        && let Some(source) = rates.get(&sample.id)
+                        && source.path == sample.path
+                        && source.origin == sample.origin
+                    {
+                        samples[index].source_sample_rate = source.source_sample_rate;
+                    }
+                }
+                samples
+            });
+            project.imported_samples.clone_from(samples);
+        }
     }
     /// Record current library bindings. They follow the selected providers
     /// and are not an edit, so history does not change.

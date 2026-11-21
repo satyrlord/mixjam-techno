@@ -1,5 +1,11 @@
 # Song-review reference: merged list, round log, and targets
 
+## Contents
+
+- [Merged list](#merged-list)
+- [Round log](#round-log)
+- [Generic targets](#generic-targets)
+
 ## Merged list
 
 At a milestone, the main agent merges the outputs of all roles into one list,
@@ -17,7 +23,7 @@ Score X.X for pass N (blind rater, for information only).
 2. Short title (severity). Bars, tracks. The fix in one or two lines. (sources: C1, M3)
 
 ## Auditions (identity)
-3. Short title. What the audition compares. (sources: rhythm plan 2, DA 1)
+3. Short title. What the audition compares. (sources: H2, D1)
 
 ## Conflicts
 - M5 goes against note 3 (the hole at 65-68). Dropped.
@@ -32,23 +38,26 @@ Score X.X for pass N (blind rater, for information only).
 - Apply the [audibility bar](REFERENCE-NOTES.md#audibility-bar) to each rater
   item and to each critic finding that does not state its value. Move each item
   under the bar to "Measured only".
-- Move each finding that fails the [reference
-  test](REFERENCE-NOTES.md#reference-test), that goes against the [level
-  history](REFERENCE-NOTES.md#level-history), or that the approved version
-  already has to "Conflicts", with its reason.
+- Move each finding to "Conflicts", with its reason, if it:
+  - fails the [reference test](REFERENCE-NOTES.md#reference-test).
+  - goes against a [standing note](REFERENCE-NOTES.md#standing-notes), the
+    [level history](REFERENCE-NOTES.md#level-history), or a rule of the artist
+    profile.
+  - undoes an accepted fix.
+  - repeats a rejected finding without new evidence.
+  - names a trait that the approved version already has.
 - Merge the findings that name the same fault at the same bars into one item,
   and name all its sources. The sources are C (composition), M (mix), H
   (rhythm), D (Devil's advocate) and R (the rater's items), with their numbers.
 - Order each section by severity. Number the items straight through the list,
   so that the owner can answer with numbers.
-- Each finding of each role is in one item or under "Conflicts".
 - Before repairs, use "Proposed correctness" instead of "Applied without
   asking".
   Use that heading throughout Evaluation. Do not describe a proposed change as
   done.
-- Keep mechanical faults from "Conflicts with standing notes" pending for the
-  owner.
-  A settled judgement does not make a measured fault disappear.
+- Keep each mechanical fault in a noted area visible, as pending for the
+  owner's decision. A settled judgement does not make a measured fault
+  disappear. Do not discard it.
 - If no rater ran, omit the score. A score describes only the pass that the
   rater reviewed.
 
@@ -94,10 +103,10 @@ reference profile gives a target, use that target.
 
 - Gate: 0 mechanical problems, and the premaster peaks under -0.3 dBFS. A drowned
   lane in `audible.txt` is a question for the owner's ear, not a gate failure.
-- Master: peak -1 dBFS; loud sections near -12 to -9 dB RMS (mono sum); crest
-  in loud blocks 8-12 dB; breakdowns at least 6 dB under the loud sections.
+- Master: peak -1 dBFS. Loud sections near -12 to -9 dB RMS (mono sum). Crest
+  in loud blocks 8-12 dB. Breakdowns at least 6 dB under the loud sections.
 - Low end: mono below 120 Hz. The kick and the bass do not mask each other.
 - Width: L/R correlation 0.75-0.95 in loud sections.
-- Arrangement: each section has a job, and transitions are prepared. No sound
+- Arrangement: each section has a job, and each transition has a lead-in. No sound
   stops dead, and no lane is inaudible.
 - At most 5 rounds.

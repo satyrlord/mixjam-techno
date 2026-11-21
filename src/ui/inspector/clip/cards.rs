@@ -1,7 +1,7 @@
 //! The cards of the clip pages: the fade and sound cards that one clip and
 //! several clips share, and the row layout of every card.
+use super::super::super::controls::{NumberField, curve_field, gain_field, number_field};
 use super::super::super::view::TICKS_PER_BEAT;
-use super::fields::{NumberField, curve_field, gain_field, number_field};
 use super::*;
 use mixjam_techno::application::{Fades, MAX_PITCH_CENTS};
 
@@ -159,6 +159,7 @@ pub(super) fn sound_cards(
     if gain_field(
         ui,
         value,
+        &format!("{CLIP} gain value"),
         &mut sound.gain,
         mixed.gain && !set_gain,
         &mut discrete,

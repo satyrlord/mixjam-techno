@@ -22,7 +22,7 @@ shows. It is a board in the lower panel and not a tool window. Use
   pattern. Each note has its `pitch` in semitones from the source pitch, and its
   `note` name. The names go from `A` (the source pitch) up to `G#`.
 
-Each pitch cell is named from its step and its pitch, such as
+The name of each pitch cell has its step and its pitch, such as
 `Step 16, -12 semitones`. The description of the cell has the note name and
 the scale: `Note A, in scale.` or `Note C#, not in scale.` Read it with
 `ui all=true contains="Step 16"`.
@@ -46,9 +46,9 @@ one clip. `state` gives the `reverse` of each clip.
 `automate track=N lane=LANE points=[[BAR,VALUE],...]` replaces one automation
 lane. `points=[]` clears it. The lanes are these:
 
-- `volume`.
-- `send1` to `send4`.
-- `filter`.
+- `volume`: -60 (silence) to 6 dB over the fader.
+- `send1` to `send4`: 0 to 1. The lane replaces the send knob.
+- `filter`: -1 low-pass to 1 high-pass, open at 0.
 - `pan`: -1 hard left to 1 hard right, 0 center.
 - `repeat`: 0 off, or 4, 8, 16, 32, or 64 for 1/4 to 1/64 repeats.
 - `repeatgate`: 5 to 100, the percent of each repeat that sounds.
@@ -64,9 +64,9 @@ takes the value at its start. Thus
 `automate track=2 lane=repeatgate points=[[5,25],[5.5,100]]` makes the repeats
 from bar 5 short plucks.
 
-The pitch lane is varispeed, as on a tape. Pitch and speed move together, and
-add to the pitch of each clip. The lane is 0 before its first point and moves in
-straight lines. Thus
+The pitch lane works as varispeed on a tape. Pitch and speed move together,
+and add to the pitch of each clip. The lane is 0 before its first point and
+moves in straight lines. Thus
 `automate track=3 lane=pitch points=[[8.5,0],[9,-4800],[9.0625,0]]` is a tape
 stop over the second half of bar 8.
 

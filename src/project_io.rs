@@ -16,6 +16,9 @@ pub use data_folder::{
 pub(crate) use data_folder::{default_root, save_section_bookmarks};
 pub use open::{detect_product, open, open_song, resolve};
 pub(crate) use retained::retain_manual_wave;
+#[cfg(test)]
+pub(crate) use save::probe_count;
+pub(crate) use save::save_with_library_rates;
 pub use save::{save, save_with_library};
 
 fn has_song_extension(path: &std::path::Path) -> bool {

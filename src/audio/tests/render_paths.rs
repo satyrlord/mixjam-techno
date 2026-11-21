@@ -101,7 +101,7 @@ fn digests() -> Vec<(String, u64)> {
             &play(&mix, &project, 30_000, Some([10_000, 40_000]), 256, 200_000),
         );
         let mut read = vec![0.0; (mix.frames() as usize + 100) * 2];
-        Frames::read(&*mix, 0, &mut read);
+        mix.read(0, &mut read);
         add(name("read"), &read);
     }
     // Decoded audio: through the board without buses, and alone.

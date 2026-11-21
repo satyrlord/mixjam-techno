@@ -444,3 +444,83 @@ fn legacy_folder_recovery_survives_save_reopen_and_resolves_saved_placeholders()
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn header_scanner_handles_reordered_keys_escapes_and_preserves_errors() {
+    let dir = std::env::temp_dir().join(format!("mixjam-header-scan-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+
+    // Nested objects, arrays, and escaped strings before formatVersion/createdAt.
+    let path = dir.join("reordered.mixjam");
+    let saved = Project {
+        title: "Title with { \"formatVersion\": 99, \\\"braces\\\" }".into(),
+        source_notices: vec!["a\\b\"formatVersion\": 99".into()],
+        ..Project::default()
+    };
+    save(&saved, &dir.join("base.mixjam")).unwrap();
+    let mut doc: Value =
+        serde_json::from_slice(&fs::read(dir.join("base.mixjam")).unwrap()).unwrap();
+    let reordered = json!({
+        "song": doc["song"],
+        "sourceNotices": doc["sourceNotices"],
+        "lanes": doc["lanes"],
+        "createdAt": "2026-01-01T00:00:00Z",
+        "modifiedAt": doc["modifiedAt"],
+        "appVersion": doc["appVersion"],
+        "samples": doc["samples"],
+        "missingSamples": doc["missingSamples"],
+        "sampleConflicts": doc["sampleConflicts"],
+        "importNotices": doc["importNotices"],
+        "libraries": doc["libraries"],
+        "master": doc["master"],
+        "fxBuses": doc["fxBuses"],
+        "formatVersion": doc["formatVersion"],
+    });
+    fs::write(&path, serde_json::to_vec(&reordered).unwrap()).unwrap();
+    let (loaded, is_song) = load_song(&path, &Library::empty()).unwrap();
+    assert!(is_song);
+    assert_eq!(loaded.title, saved.title);
+
+    // Unsupported version & missing header fields fall back to identical error messages.
+    doc["formatVersion"] = json!(27);
+    let unsupported = dir.join("unsupported.mixjam");
+    fs::write(&unsupported, serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert_eq!(
+        load_song(&unsupported, &Library::empty()).unwrap_err(),
+        "Only MixJam format versions 7 to 26 are supported."
+    );
+
+    let missing_created = dir.join("missing-created.mixjam");
+    let obj = doc.as_object_mut().unwrap();
+    obj.remove("createdAt");
+    obj.insert("formatVersion".into(), json!(song::FORMAT_VERSION));
+    fs::write(&missing_created, serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert!(
+        load_song(&missing_created, &Library::empty())
+            .unwrap_err()
+            .starts_with("Cannot read the MixJam project:")
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn header_scanner_keeps_header_errors_after_a_valid_prefix() {
+    let dir = std::env::temp_dir().join(format!("mixjam-invalid-header-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("invalid.mixjam");
+    for text in [
+        r#"{"formatVersion":26,"createdAt":"first","createdAt":"second"}"#,
+        r#"{"createdAt":"first","formatVersion":26,"song":{"title":"unfinished""#,
+        r#"{"createdAt":"first","formatVersion":26.0}"#,
+        r#"{"formatVersion":7,"createdAt":"first","appVersion":4,"createdAt":"second"}"#,
+    ] {
+        fs::write(&path, text).unwrap();
+        let expected = format!(
+            "Cannot read the MixJam project: {}",
+            serde_json::from_str::<super::Header>(text).err().unwrap()
+        );
+        assert_eq!(load_song(&path, &Library::empty()).unwrap_err(), expected);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}

@@ -340,3 +340,81 @@ fn unsaved_mix_and_take_require_a_pending_action_before_replacement() {
     session.discard_recorded_take();
     assert!(!session.needs_save_confirmation());
 }
+
+#[test]
+fn saving_keeps_probed_import_rates_across_saves_and_undo() {
+    let dir = fixture_dir();
+    let wave = dir.join("unprobed.wav");
+    Pcm {
+        sample_rate: 22_050,
+        channels: 1,
+        samples: vec![0.25; 22_050],
+    }
+    .write_wav(&wave)
+    .unwrap();
+    let wave = std::fs::canonicalize(wave).unwrap();
+    let sample_id = crate::products::IMPORTED_ID_START;
+    let project = Project {
+        tracks: vec![crate::engine::Track::default(); crate::engine::TRACK_COUNT],
+        imported_samples: vec![crate::engine::ImportedSample {
+            id: sample_id,
+            name: "Unprobed".into(),
+            group_name: "Wave".into(),
+            path: wave.clone(),
+            source_bpm: 140.0,
+            source_sample_rate: None,
+            origin: None,
+        }]
+        .into(),
+        clips: vec![crate::engine::Clip {
+            id: 1,
+            sample_id,
+            track: 0,
+            start_tick: 0,
+            length_ticks: crate::engine::TICKS_PER_BAR,
+            offset_frames: 0,
+            gain: 1.0,
+            fades: crate::engine::Fades::default(),
+            pitch_cents: 0,
+            reverse: false,
+        }],
+        ..Project::default()
+    };
+    let mut library = Library::empty();
+    library.apply_imports(&project.imported_samples).unwrap();
+    assert_eq!(library.sample_by_id(sample_id).unwrap().sample_rate, 22_050);
+    Pcm {
+        sample_rate: 44_100,
+        channels: 1,
+        samples: vec![0.25; 44_100],
+    }
+    .write_wav(&wave)
+    .unwrap();
+    let mut session = Session::headless(Arc::new(library), project).unwrap();
+    // Create an undo snapshot that also still has `source_sample_rate: None`.
+    session.edit(EditCommand::SetTempo(130.0)).unwrap();
+    let song_path = dir.join("probed-once.mixjam");
+    let before_first = crate::project_io::probe_count();
+    session.save(&song_path).unwrap();
+    let after_first = crate::project_io::probe_count();
+    assert_eq!(after_first - before_first, 1);
+    assert_eq!(
+        session.project().imported_samples[0].source_sample_rate,
+        Some(44_100)
+    );
+    assert!(!session.unsaved());
+    assert!(session.editor.can_undo());
+
+    session.save(&song_path).unwrap();
+    assert_eq!(crate::project_io::probe_count() - after_first, 0);
+
+    // Reverting to the undo snapshot keeps the recorded rate without re-probing.
+    assert!(session.editor.undo());
+    assert_eq!(
+        session.project().imported_samples[0].source_sample_rate,
+        Some(44_100)
+    );
+    session.save(&song_path).unwrap();
+    assert_eq!(crate::project_io::probe_count() - after_first, 0);
+    std::fs::remove_dir_all(dir).unwrap();
+}

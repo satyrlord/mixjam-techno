@@ -26,9 +26,9 @@ A saved review is a repository file. Commit it only when the user asks.
 | Request | Branch | Differences |
 | --- | --- | --- |
 | Review a released album | Reference | All steps |
-| Correct an existing review | Correction | Step 1 finds the review; steps 2 to 5 apply only to the fields that change; step 7 uses `update_review` |
-| Review the owner's own album or song | Own work | Steps 2 and 3 use local files; `kind` is `own` |
-| Review more than one album | Several albums | Step 1 once; steps 2 to 6 make one draft for each album; steps 7 to 9 for each draft |
+| Correct an existing review | Correction | Step 1 finds the review. Steps 2 to 5 apply only to the fields that change. Step 7 uses `update_review`. |
+| Review the owner's own album or song | Own work | Steps 2 and 3 use local files. `kind` is `own`. |
+| Review more than one album | Several albums | Do step 1 once. Steps 2 to 6 make one draft for each album. Do steps 7 to 9 for each draft. |
 
 For several albums, if sub-agents are available, give each sub-agent this
 skill and one album. Ask it for a draft and its evidence only. A sub-agent must
@@ -58,7 +58,7 @@ the drafts one after the other.
    album.
 2. For that release, run `python -I tools/album-review/lookup.py tracks MBID`.
    Completion criterion: You have the track list, the durations, and the
-   runtime, or you know which values need a different source.
+   runtime. Otherwise you know which values need a different source.
 3. Read sources for the year, the label, the producers, the genre, and the
    production context. Use the Wikipedia article of the album when it exists.
    Use other reliable sources for the facts that it does not give.
@@ -66,7 +66,7 @@ the drafts one after the other.
 4. For own work, use the local masters, the song files, and the facts that the
    owner gives. Measure the durations from the masters. If no release exists,
    do not do substeps 1 and 2.
-   Completion criterion: Each value comes from a local file or from the owner.
+   Completion criterion: A local file or the owner gave each value.
 5. Write the metadata fields in the formats of the "Metadata Fields" section
    of the writing guide.
    Completion criterion: Each required field has a supported value in its
@@ -87,9 +87,9 @@ Do not invent a missing fact.
    durations.
    Completion criterion: The track list agrees with the pages, or you report
    the difference.
-3. For own work, add `localAudio` (a WAV master) and `songFile` (a `.mixjam` or
-   `.mix` song) for the album or song and for each track. Analyse the local
-   masters when the tools can read them.
+3. For own work, add `localAudio` (a WAV master) and `songFile` (a `.mixjam`
+   or `.mix` song). Add both to the review and to each track. Analyse the
+   local masters when the tools can read them.
    Completion criterion: Each local path exists on this computer.
 
 If the audio is not available to you, do not say that you listened to it.
@@ -115,7 +115,7 @@ path unless the owner asks.
    review has neither field.
 
 Do not copy a cover image into the repository. If no source gives a reliable
-cover, leave out `coverUrl`. The window then shows its placeholder.
+cover, omit `coverUrl`. The window then shows its placeholder.
 
 ## Step 5: Write the analysis
 
@@ -149,7 +149,7 @@ cover, leave out `coverUrl`. The window then shows its placeholder.
 2. If the reply is an error and the problem is in scope, correct the problem
    and send the review again.
    Completion criterion: The reply has `"ok":true` and the `path` of the saved
-   file, or you report the error that blocks the save.
+   file. Otherwise you report the error that blocks the save.
 
 ## Step 8: Check the window
 
@@ -163,7 +163,7 @@ cover, leave out `coverUrl`. The window then shows its placeholder.
 
 ## Step 9: Update the research shortlist
 
-1. In `docs/ALBUM-REVIEW-RESEARCH.md` and the files in
-   `docs/album-review-research/`, find the list item with the same artist
-   and album title, and remove it.
+1. Find the list item with the same artist and album title in
+   `docs/ALBUM-REVIEW-RESEARCH.md` and in `docs/album-review-research/`.
+   Remove it.
    Completion criterion: The shortlist has no item for the reviewed album.

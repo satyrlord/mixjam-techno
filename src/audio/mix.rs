@@ -293,6 +293,24 @@ impl Mix {
         }
         state.next_frame = Some(next_frame);
     }
+
+    /// A read that starts the filters from silence and holds the mix to full
+    /// scale, as no board follows it. Frames past the song's end are silent.
+    /// Playback and export call `read_block` with their own `RenderState`
+    /// and control their tail processing instead.
+    #[cfg(test)]
+    pub(crate) fn read(&self, first_frame: u64, out: &mut [f32]) {
+        let frames = self
+            .frames
+            .saturating_sub(first_frame)
+            .min((out.len() / 2) as u64) as usize;
+        let (sound, silence) = out.split_at_mut(frames * 2);
+        if !sound.is_empty() {
+            self.read_block(first_frame, sound, None, &mut RenderState::default());
+            hold_to_full_scale(sound);
+        }
+        silence.fill(0.0);
+    }
 }
 
 impl Frames for Mix {
@@ -304,22 +322,6 @@ impl Frames for Mix {
     }
     fn frames(&self) -> u64 {
         self.frames
-    }
-    /// A read that starts the filters from silence and holds the mix to full
-    /// scale, as no board follows it. Frames past the song's end are silent.
-    /// Playback and export call `read_block` with their own `RenderState`
-    /// and control their tail processing instead.
-    fn read(&self, first_frame: u64, out: &mut [f32]) {
-        let frames = self
-            .frames
-            .saturating_sub(first_frame)
-            .min((out.len() / 2) as u64) as usize;
-        let (sound, silence) = out.split_at_mut(frames * 2);
-        if !sound.is_empty() {
-            self.read_block(first_frame, sound, None, &mut RenderState::default());
-            hold_to_full_scale(sound);
-        }
-        silence.fill(0.0);
     }
     fn read_block(
         &self,

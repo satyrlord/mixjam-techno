@@ -116,7 +116,7 @@ fn a_mix_reads_any_block_like_the_whole_render_and_has_no_length_limit() {
         let mut frame = 0;
         while frame < mix.frames() {
             let mut block = vec![1.0; block_frames * 2];
-            Frames::read(&mix, frame, &mut block);
+            mix.read(frame, &mut block);
             pieces.extend(block);
             frame += block_frames as u64;
         }
@@ -138,7 +138,7 @@ fn a_mix_reads_any_block_like_the_whole_render_and_has_no_length_limit() {
     assert!(Mix::reserve_pcm(u64::MAX).is_err());
     let first = (f64::from(last_bar) * long.project().frames_per_tick(44_100)).round() as u64;
     let mut block = vec![0.0; 2048 * 2];
-    Frames::read(&mix, first, &mut block);
+    mix.read(first, &mut block);
     let gain = long.project().master_gain;
     assert_eq!(
         block[..8],
@@ -148,7 +148,7 @@ fn a_mix_reads_any_block_like_the_whole_render_and_has_no_length_limit() {
             .collect::<Vec<_>>()[..]
     );
     let mut before = vec![1.0; 64];
-    Frames::read(&mix, first - 32, &mut before);
+    mix.read(first - 32, &mut before);
     assert!(before.iter().all(|x| *x == 0.0));
 }
 
@@ -419,9 +419,16 @@ impl Frames for Probe {
     fn frames(&self) -> u64 {
         1_000_000
     }
-    fn read(&self, _first_frame: u64, out: &mut [f32]) {
+    fn read_block(
+        &self,
+        _first_frame: u64,
+        out: &mut [f32],
+        _sends: Option<&mut [f32]>,
+        _state: &mut super::RenderState,
+    ) -> bool {
         self.reads.fetch_add(1, Ordering::Relaxed);
         out.fill(0.25);
+        false
     }
 }
 

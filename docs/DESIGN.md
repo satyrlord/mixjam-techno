@@ -55,7 +55,7 @@ colors:
   mastering-amber: "#f6b240"
   mastering-red: "#e84838"
 typography:
-  # Studio's faces; the Themes section gives Aero's and Vintage's.
+  # Studio's faces. design/themes.md gives Aero's and Vintage's.
   display:
     fontFamily: "Syncopate"
     textTransform: "uppercase"
@@ -107,7 +107,7 @@ typography:
     fontSize: "18px"
     fontWeight: 600
 rounded:
-  # Studio's radii; theme.rs Roles::corner gives Aero's and Vintage's.
+  # Studio's radii. theme.rs Roles::corner gives Aero's and Vintage's.
   clip: "2px"
   control: "2.5px"
   transport: "3px"
@@ -284,9 +284,9 @@ The owner confirmed these after an audit. Do not report them as defects.
 
 ### Avoid
 
-- Do not keep the material of one theme inside another theme: no metal
-  chassis or ivory strips in Studio or Aero, and no plastic gloss in Studio.
-  Do not add repeated waveform traces.
+- Do not keep the material of one theme inside another theme. Do not use a
+  metal chassis or ivory strips in Studio or Aero. Do not use plastic gloss in
+  Studio. Do not add repeated waveform traces.
 - Do not branch on a theme in tool bodies or interaction code. Add a role or
   extend a shared painter.
 - Do not move or resize a control for one theme.

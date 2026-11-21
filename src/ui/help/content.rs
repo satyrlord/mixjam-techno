@@ -60,7 +60,11 @@ pub(super) const SHORTCUTS: &[Block] = &[
             "Drag it to a track, or select it and click a track",
         ),
         ("Preview", &[], "Double-click a sound or clip"),
-        ("Move / copy", &["Alt"], "drag a clip; Alt copies it"),
+        (
+            "Move / copy",
+            &["Shift", "Alt"],
+            "drag a clip; Shift or Alt copies it",
+        ),
         ("Fine snap", &["Ctrl"], "while dragging: sixteenth notes"),
         (
             "Select group",
@@ -113,7 +117,7 @@ pub(super) const ARRANGE: &[Block] = &[
     ]),
     Heading("Edit clips"),
     Facts(&[
-        "Drag a clip to move it; Alt-drag copies it. Hold Ctrl for sixteenth-note positions.",
+        "Drag a clip to move it; Shift-drag or Alt-drag copies it. Hold Ctrl for sixteenth-note positions.",
         "Shift-click clips, or drag across an empty area, to select a group. Delete removes the selection.",
         "Ctrl+D copies the selected clips to the bars that follow.",
         "Right-click a clip, or press Shift+F10, for exact gain, trim, length, fades, and pitch, and for Preview, Duplicate, and Delete. A missing sound also offers Resolve manually.",

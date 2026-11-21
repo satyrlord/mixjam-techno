@@ -307,6 +307,7 @@ impl Session {
             command => command,
         };
         let mut sound_indices = Vec::new();
+        let mut clip_index = None;
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
         match &command {
             EditCommand::SetClip {
@@ -318,12 +319,14 @@ impl Session {
                 ..
             } => {
                 check_pitch(*pitch_cents, "Clip pitch")?;
-                let clip = self
+                let index = self
                     .project()
                     .clips
                     .iter()
-                    .find(|clip| clip.id == *id)
+                    .position(|clip| clip.id == *id)
                     .ok_or("The clip does not exist.")?;
+                clip_index = Some(index);
+                let clip = &self.project().clips[index];
                 let max_offset = if let Some(sample) = self.missing_sample(clip.sample_id) {
                     (f64::from(sample.nominal_ticks) * f64::from(sample.sample_rate) * 240.0
                         / sample.source_bpm
@@ -442,70 +445,241 @@ impl Session {
             }
             _ => false,
         };
-        let apply = |project: &mut Project| match command {
-            EditCommand::SetTempo(bpm) => project.bpm = bpm,
-            EditCommand::SetLoop(region) => project.loop_region = region,
-            EditCommand::SetSections(sections) => project.sections = sections,
-            EditCommand::SetMixer {
-                tracks,
-                master_gain,
-            } => {
-                project.tracks = tracks;
-                project.master_gain = master_gain;
-            }
-            EditCommand::SetTrack { index, track } => project.tracks[index] = *track,
-            EditCommand::SetTrackMix { .. } => unreachable!("normalised to SetTrack above"),
-            EditCommand::SetClip {
-                id,
-                start_tick,
-                gain,
-                offset_frames,
-                length_ticks,
-                fades,
-                pitch_cents,
-                reverse,
-            } => {
-                if let Some(clip) = project.clips.iter_mut().find(|clip| clip.id == id) {
-                    clip.start_tick = start_tick;
-                    clip.gain = gain;
-                    clip.offset_frames = offset_frames;
-                    clip.length_ticks = length_ticks;
-                    clip.fades = fades.fit(length_ticks);
-                    clip.pitch_cents = pitch_cents;
-                    clip.reverse = reverse;
+        if continuing && self.editor.can_undo() {
+            match command {
+                EditCommand::SetTempo(bpm) => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let old = std::mem::replace(&mut p.bpm, bpm);
+                        (old, old != p.bpm)
+                    },
+                    Project::validate_bpm,
+                    |p, old| p.bpm = old,
+                )?,
+                EditCommand::SetMixer {
+                    tracks,
+                    master_gain,
+                } => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let old = (
+                            std::mem::replace(&mut p.tracks, tracks),
+                            std::mem::replace(&mut p.master_gain, master_gain),
+                        );
+                        let changed = old.0 != p.tracks || old.1 != p.master_gain;
+                        (old, changed)
+                    },
+                    |p| {
+                        p.validate_master_gain()?;
+                        p.validate_tracks()?;
+                        p.validate_keys()
+                    },
+                    |p, (tracks, master_gain)| {
+                        p.tracks = tracks;
+                        p.master_gain = master_gain;
+                    },
+                )?,
+                EditCommand::SetTrack { index, track } => {
+                    self.editor.transact_continuing_in_place(
+                        |p| {
+                            let old = std::mem::replace(&mut p.tracks[index], *track);
+                            let changed = old != p.tracks[index];
+                            (old, changed)
+                        },
+                        |p| {
+                            p.validate_track(index)?;
+                            p.validate_keys()
+                        },
+                        |p, old| p.tracks[index] = old,
+                    )?
+                }
+                EditCommand::SetMaster(chain) => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let old = std::mem::replace(&mut p.master, chain);
+                        let changed = old != p.master;
+                        (old, changed)
+                    },
+                    |p| {
+                        p.master.validate()?;
+                        p.validate_keys()
+                    },
+                    |p, old| p.master = old,
+                )?,
+                EditCommand::SetEffects(buses) => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let old = std::mem::replace(&mut p.fx, buses);
+                        let changed = old != p.fx;
+                        (old, changed)
+                    },
+                    |p| {
+                        p.fx.validate()?;
+                        p.validate_keys()
+                    },
+                    |p, old| p.fx = old,
+                )?,
+                EditCommand::SetAutomation {
+                    track,
+                    lane,
+                    points,
+                } => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let target = p.tracks[track].automation.lane_mut(lane);
+                        let old = std::mem::replace(target, points);
+                        let changed = old != *target;
+                        (old, changed)
+                    },
+                    |p| p.validate_track(track),
+                    |p, old| *p.tracks[track].automation.lane_mut(lane) = old,
+                )?,
+                EditCommand::SetReturnAutomation { bus, points } => {
+                    self.editor.transact_continuing_in_place(
+                        |p| {
+                            let old = std::mem::replace(&mut p.return_automation[bus], points);
+                            let changed = old != p.return_automation[bus];
+                            (old, changed)
+                        },
+                        |p| p.validate_return_lane(bus),
+                        |p, old| p.return_automation[bus] = old,
+                    )?
+                }
+                EditCommand::SetClip {
+                    id: _,
+                    start_tick,
+                    gain,
+                    offset_frames,
+                    length_ticks,
+                    fades,
+                    pitch_cents,
+                    reverse,
+                } => {
+                    let index = clip_index.expect("validated clip index");
+                    self.editor.transact_continuing_in_place(
+                        |p| {
+                            let clip = &mut p.clips[index];
+                            let old = clip.clone();
+                            clip.start_tick = start_tick;
+                            clip.gain = gain;
+                            clip.offset_frames = offset_frames;
+                            clip.length_ticks = length_ticks;
+                            clip.fades = fades.fit(length_ticks);
+                            clip.pitch_cents = pitch_cents;
+                            clip.reverse = reverse;
+                            let changed = old != *clip;
+                            (old, changed)
+                        },
+                        |p| Project::validate_clip_fields(&p.clips[index]),
+                        |p, old| p.clips[index] = old,
+                    )?;
+                }
+                EditCommand::SetClipSounds(sounds) => self.editor.transact_continuing_in_place(
+                    |p| {
+                        let mut saved = Vec::with_capacity(sounds.len());
+                        let mut changed = false;
+                        for (sound, index) in sounds.into_iter().zip(sound_indices.iter().copied())
+                        {
+                            let clip = &mut p.clips[index];
+                            let old = clip.clone();
+                            clip.gain = sound.gain;
+                            clip.fades = sound.fades.fit(clip.length_ticks);
+                            clip.pitch_cents = sound.pitch_cents;
+                            clip.reverse = sound.reverse;
+                            changed |= old != *clip;
+                            saved.push((index, old));
+                        }
+                        (saved, changed)
+                    },
+                    |p| {
+                        for &index in &sound_indices {
+                            Project::validate_clip_fields(&p.clips[index])?;
+                        }
+                        Ok(())
+                    },
+                    |p, saved| {
+                        for (index, old) in saved {
+                            p.clips[index] = old;
+                        }
+                    },
+                )?,
+                other => {
+                    self.editor.transact_continuing(|project| match other {
+                        EditCommand::SetLoop(region) => project.loop_region = region,
+                        EditCommand::SetSections(sections) => project.sections = sections,
+                        EditCommand::SetSwitch { track, switch, on } => {
+                            *switch.get_mut(&mut project.tracks[track]) = on;
+                        }
+                        EditCommand::DeleteClips(ids) => {
+                            let ids: BTreeSet<_> = ids.into_iter().collect();
+                            project.clips.retain(|clip| !ids.contains(&clip.id));
+                        }
+                        _ => unreachable!("continuing variants handled in place"),
+                    })?;
                 }
             }
-            EditCommand::SetClipSounds(sounds) => {
-                for (sound, index) in sounds.into_iter().zip(sound_indices) {
-                    let clip = &mut project.clips[index];
-                    clip.gain = sound.gain;
-                    clip.fades = sound.fades.fit(clip.length_ticks);
-                    clip.pitch_cents = sound.pitch_cents;
-                    clip.reverse = sound.reverse;
-                }
-            }
-            EditCommand::SetSwitch { track, switch, on } => {
-                *switch.get_mut(&mut project.tracks[track]) = on;
-            }
-            EditCommand::DeleteClips(ids) => {
-                let ids: BTreeSet<_> = ids.into_iter().collect();
-                project.clips.retain(|clip| !ids.contains(&clip.id));
-            }
-            EditCommand::SetMaster(chain) => project.master = chain,
-            EditCommand::SetEffects(buses) => project.fx = buses,
-            EditCommand::SetAutomation {
-                track,
-                lane,
-                points,
-            } => *project.tracks[track].automation.lane_mut(lane) = points,
-            EditCommand::SetReturnAutomation { bus, points } => {
-                project.return_automation[bus] = points;
-            }
-        };
-        if continuing {
-            self.editor.transact_continuing(apply)?;
         } else {
-            self.editor.transact(apply)?;
+            let apply = |project: &mut Project| match command {
+                EditCommand::SetTempo(bpm) => project.bpm = bpm,
+                EditCommand::SetLoop(region) => project.loop_region = region,
+                EditCommand::SetSections(sections) => project.sections = sections,
+                EditCommand::SetMixer {
+                    tracks,
+                    master_gain,
+                } => {
+                    project.tracks = tracks;
+                    project.master_gain = master_gain;
+                }
+                EditCommand::SetTrack { index, track } => project.tracks[index] = *track,
+                EditCommand::SetTrackMix { .. } => unreachable!("normalised to SetTrack above"),
+                EditCommand::SetClip {
+                    id: _,
+                    start_tick,
+                    gain,
+                    offset_frames,
+                    length_ticks,
+                    fades,
+                    pitch_cents,
+                    reverse,
+                } => {
+                    if let Some(index) = clip_index {
+                        let clip = &mut project.clips[index];
+                        clip.start_tick = start_tick;
+                        clip.gain = gain;
+                        clip.offset_frames = offset_frames;
+                        clip.length_ticks = length_ticks;
+                        clip.fades = fades.fit(length_ticks);
+                        clip.pitch_cents = pitch_cents;
+                        clip.reverse = reverse;
+                    }
+                }
+                EditCommand::SetClipSounds(sounds) => {
+                    for (sound, index) in sounds.into_iter().zip(sound_indices) {
+                        let clip = &mut project.clips[index];
+                        clip.gain = sound.gain;
+                        clip.fades = sound.fades.fit(clip.length_ticks);
+                        clip.pitch_cents = sound.pitch_cents;
+                        clip.reverse = sound.reverse;
+                    }
+                }
+                EditCommand::SetSwitch { track, switch, on } => {
+                    *switch.get_mut(&mut project.tracks[track]) = on;
+                }
+                EditCommand::DeleteClips(ids) => {
+                    let ids: BTreeSet<_> = ids.into_iter().collect();
+                    project.clips.retain(|clip| !ids.contains(&clip.id));
+                }
+                EditCommand::SetMaster(chain) => project.master = chain,
+                EditCommand::SetEffects(buses) => project.fx = buses,
+                EditCommand::SetAutomation {
+                    track,
+                    lane,
+                    points,
+                } => *project.tracks[track].automation.lane_mut(lane) = points,
+                EditCommand::SetReturnAutomation { bus, points } => {
+                    project.return_automation[bus] = points;
+                }
+            };
+            if continuing {
+                self.editor.transact_continuing(apply)?;
+            } else {
+                self.editor.transact(apply)?;
+            }
         }
         // An accepted command that changes nothing is not an edit.
         if self.editor.generation() != generation {

@@ -29,7 +29,7 @@ import json
 import math
 import re
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -108,6 +108,47 @@ def sample_names(document):
     return names
 
 
+def playable_ticks(placement, sound, clock, bpm):
+    if clock:
+        return clock.source_ticks(placement, sound, bpm)
+    return sound.ticks - ticks_of(placement['offsetFrames'], sound.rate, sound.play_bpm)
+
+
+def ending_is_loud(placement, sound, clock, bpm, data, whole):
+    """Check the source window that reaches the clip ending."""
+    start = placement['startTick']
+    duration = placement['durationTicks']
+    end = start + duration
+    offset = placement['offsetFrames']
+    source_per_second = sound.rate * bpm / sound.play_bpm
+    if placement.get('reverse', False):
+        # The last reversed output frames read forward from the trim.
+        first = offset
+        slice_frames = duration / TICKS_PER_BAR * 240 / bpm * source_per_second
+        window_frames = min(source_per_second * 0.05, slice_frames)
+        if clock:
+            last_output = clock.frame(end) - 1
+            first_output = max(clock.frame(start), last_output - round(44100 * 0.05))
+            window_frames = (clock.at(last_output) - clock.at(first_output)) * source_per_second / 44100
+        last = first + max(1, int(window_frames))
+    else:
+        # Inspect the last 50 ms of sound before any silent remainder.
+        plays = playable_ticks(placement, sound, clock, bpm)
+        if duration < plays - 4:
+            return True  # The clip cuts the sound short.
+        start_output = clock.frame(start)
+        sound_end = min(clock.frame(end), clock.frame(start + plays))
+        first_output = max(start_output, sound_end - round(44100 * 0.05))
+        step = sound.rate / 44100 * bpm / sound.play_bpm
+        origin = clock.at(start_output)
+        first = offset + math.floor((clock.at(first_output) - origin) * step)
+        last_position = (clock.at(max(start_output, sound_end - 1)) - origin) * step
+        last = offset + math.floor(last_position) + 1
+    segment = data[first:min(len(data), last)]
+    level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
+    return level > 1e-12 and level >= whole * 0.1
+
+
 def mechanical(document, lanes, found=None):
     """The gate's problem list. Source duration and ending windows follow Pitch.
 
@@ -117,7 +158,31 @@ def mechanical(document, lanes, found=None):
     names = sample_names(document)
     problems = []
     sounds = {}
-    ending_sources = {}
+    bpm = document['song']['bpm']
+    song_lanes = document['lanes']
+    twin_starts = defaultdict(set)
+    for index, lane in enumerate(song_lanes, 1):
+        group = twin_base((lanes.get(str(index)) or {}).get('name', ''))
+        twin_starts[group or index].update(p['startTick'] for p in lane['placements'])
+    clocks = []
+    exposed_endings = set()
+    ending_sources = defaultdict(list)
+    for index, lane in enumerate(song_lanes, 1):
+        pitch = lane.get('automation', {}).get('pitch')
+        clock = PitchClock(pitch, bpm) if pitch else None
+        clocks.append(clock)
+        info = lanes.get(str(index)) or {}
+        if info.get('role') not in MELODIC:
+            continue
+        starts = twin_starts[twin_base(info.get('name', '')) or index]
+        for p in lane['placements']:
+            end = p['startTick'] + p['durationTicks']
+            if p.get('fades', {}).get('out', {}).get('ticks', 0) or any(t in starts for t in range(end - 16, end + 1)):
+                continue
+            exposed_endings.add(id(p))
+            if clock or p.get('reverse', False):
+                ending_sources[p['sampleId']].append((p, clock))
+    ending_levels = {}
     # Catalog audio resolves through the application and its provider libraries.
     # This file-only check cannot establish its source duration or end level.
     for sample_id in sorted(set(names) - set(samples) - set(missing_ids)):
@@ -126,8 +191,16 @@ def mechanical(document, lanes, found=None):
     for sample in samples.values():
         if not Path(sample['path']).exists():
             problems.append(f"The file {sample['path']} is missing.")
+        elif sample['id'] in ending_sources:
+            rate, data = read_wav(sample['path'])
+            sound = Sound(sample['path'], sample['sourceBpm'], bpm, decoded=(rate, data))
+            sounds[sample['id']] = sound
+            whole = float(np.sqrt(np.mean(data ** 2)))
+            for p, clock in ending_sources[sample['id']]:
+                ending_levels[id(p)] = ending_is_loud(p, sound, clock, bpm, data, whole)
+            del data
         else:
-            sounds[sample['id']] = Sound(sample['path'], sample['sourceBpm'], document['song']['bpm'])
+            sounds[sample['id']] = Sound(sample['path'], sample['sourceBpm'], bpm)
     # A sound the song lists as missing plays as silence.
     silent = Counter(p['sampleId'] for lane in document['lanes'] for p in lane['placements']
                      if p['sampleId'] in missing_ids)
@@ -135,15 +208,9 @@ def mechanical(document, lanes, found=None):
     if silent:
         problems.append(f"{len(silent)} missing sounds play as silence in {sum(silent.values())} of {total} "
                         f"placements: " + ', '.join(missing_ids[i] for i, _ in silent.most_common(8)) + '.')
-    name_of = lambda i: twin_base((lanes.get(str(i + 1)) or {}).get('name', ''))
-    for index, lane in enumerate(document['lanes']):
-        pitch = lane.get('automation', {}).get('pitch', [])
-        clock = PitchClock(pitch, document['song']['bpm']) if pitch else None
+    for index, (lane, clock) in enumerate(zip(song_lanes, clocks)):
         info = lanes.get(str(index + 1))
         placements = sorted(lane['placements'], key=lambda p: p['startTick'])
-        group = name_of(index) if info else None
-        starts = {p['startTick'] for i, other in enumerate(document['lanes'])
-                  if (group and name_of(i) == group) or i == index for p in other['placements']}
         for a, b in zip(placements, placements[1:]):
             if b['startTick'] < a['startTick'] + a['durationTicks']:
                 problems.append(f"On track {index + 1} at bar {b['startTick'] / TICKS_PER_BAR + 1:.2f}, "
@@ -154,61 +221,21 @@ def mechanical(document, lanes, found=None):
                 continue
             bar = p['startTick'] / TICKS_PER_BAR + 1
             name = samples[p['sampleId']]['name']
-            plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.play_bpm)
-            if clock:
-                plays = clock.source_ticks(p, sound, document['song']['bpm'])
+            plays = playable_ticks(p, sound, clock, bpm)
             if p['durationTicks'] > plays + 4:
                 gap = 'at its start' if p.get('reverse', False) else 'at its end'
                 problems.append(f"The {name} clip on track {index + 1} at bar {bar:.2f} outlasts its sound by "
                                 f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars. "
                                 f"This leaves a silent gap {gap}.")
             end = p['startTick'] + p['durationTicks']
-            fade_out = p.get('fades', {}).get('out', {}).get('ticks', 0)
             cut = p['durationTicks'] < plays - 4
-            continued = any(t in starts for t in range(end - 16, end + 1))
-            if not info or info['role'] not in MELODIC or continued or fade_out:
+            if id(p) not in exposed_endings:
                 continue
             if p.get('reverse', False):
-                # The last output frames read forward from the trim offset, not
-                # the source tail. Limit the window to this placement's slice.
-                if p['sampleId'] not in ending_sources:
-                    ending_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
-                data = ending_sources[p['sampleId']]
-                first = p['offsetFrames']
-                source_per_second = sound.rate * document['song']['bpm'] / sound.play_bpm
-                slice_frames = p['durationTicks'] / TICKS_PER_BAR * 240 / document['song']['bpm'] * source_per_second
-                window_frames = min(source_per_second * 0.05, slice_frames)
-                if clock:
-                    last_output = clock.frame(end) - 1
-                    first_output = max(clock.frame(p['startTick']), last_output - round(44100 * 0.05))
-                    window_frames = (clock.at(last_output) - clock.at(first_output)) * source_per_second / 44100
-                last = min(len(data), first + max(1, int(window_frames)))
-                segment = data[first:last]
-                whole = float(np.sqrt(np.mean(data ** 2)))
-                level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
-                abrupt = level > 1e-12 and level >= whole * 0.1
+                abrupt = ending_levels[id(p)]
                 reason = 'The reversed slice is still loud at its end.'
             else:
-                ends_loud = sound.ends_loud
-                if clock and not cut:
-                    if p['sampleId'] not in ending_sources:
-                        ending_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
-                    data = ending_sources[p['sampleId']]
-                    start_output = clock.frame(p['startTick'])
-                    # The source can end before the placement. Inspect the
-                    # final 50 ms of its sound, before any silent remainder.
-                    sound_end = min(clock.frame(end), clock.frame(p['startTick'] + plays))
-                    first_output = max(start_output, sound_end - round(44100 * 0.05))
-                    step = sound.rate / 44100 * document['song']['bpm'] / sound.play_bpm
-                    origin = clock.at(start_output)
-                    first = p['offsetFrames'] + math.floor((clock.at(first_output) - origin) * step)
-                    last_position = (clock.at(max(start_output, sound_end - 1)) - origin) * step
-                    last = p['offsetFrames'] + math.floor(last_position) + 1
-                    segment = data[first:min(len(data), last)]
-                    whole = float(np.sqrt(np.mean(data ** 2)))
-                    level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
-                    ends_loud = level > 1e-12 and level >= whole * 0.1
-                abrupt = cut or ends_loud
+                abrupt = cut or (ending_levels[id(p)] if clock else sound.ends_loud)
                 reason = 'The clip is cut short.' if cut else 'The sound is still loud at its end.'
             if abrupt:
                 problems.append(f"The {name} clip on track {index + 1} ({info['name']}) starts at bar {bar:.2f} "

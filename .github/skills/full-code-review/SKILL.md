@@ -18,17 +18,19 @@ Start with a read-only review. Repair findings only when the user asks for fixes
 3. Read each scoped file and its callers and tests.
    Completion criterion: You can describe the changed behavior and its consumers.
 4. Read the documents that own the changed behavior:
-   - the owner's current decisions and, if they exist,
-     `local-data/research/PRODUCT.md` and `local-data/research/COMPATIBILITY.md`
-     for product scope
-   - `docs/ARCHITECTURE.md` for application ownership
+   - the owner's current decisions and the product and compatibility
+     authorities that
+     [Toolchain and folders](../../../docs/DEVELOPMENT.md#toolchain-and-folders)
+     names, for product scope
+   - `docs/ARCHITECTURE.md` and the architecture pages that apply, for
+     application ownership
    - `docs/DESIGN.md` for native UI work
 
    Completion criterion: Each changed behavior has a current contract or a
    stated gap.
 5. Map the affected behavior to current tests and artifact evidence.
-   Completion criterion: Each check that applies is passed, failed, blocked, or
-   not run.
+   Completion criterion: Each check that applies has the status pass, fail,
+   blocked, or not run.
 
 Treat donor material as dated evidence. Use original product artifacts and
 measured behavior to assess parity claims. If skills are in scope, read them
@@ -55,7 +57,7 @@ once in `.github/skills`. The folders `.agents/skills`, `.claude/skills`, and
 2. If a confirmed defect needs a common repair pattern, read [REFERENCE.md](REFERENCE.md).
    Completion criterion: The remedy agrees with the owning contract.
 
-A passing unit test does not prove native interaction, physical audio, or
+A unit test that passes does not prove native interaction, physical audio, or
 original-product parity. Do not use a file-size limit. Check ownership,
 cohesion, and edit cost.
 
@@ -67,11 +69,11 @@ cohesion, and edit cost.
    and remedy.
    Completion criterion: Another agent can reproduce each finding.
 3. Account for every scoped path and affected contract.
-   Completion criterion: The report keeps findings separate from areas that are
-   not verified.
+   Completion criterion: The report keeps findings separate from areas that
+   you did not verify.
 
 Treat existing review comments as hypotheses until current evidence confirms
-them. If no defect is confirmed, say so and state the limits of the review.
+them. If you confirm no defect, say so and state the limits of the review.
 
 ## 4. Repair when the user asks
 
@@ -82,7 +84,7 @@ them. If no defect is confirmed, say so and state the limits of the review.
 3. Run the checks that apply, with the `run-quality-gate` skill.
    Completion criterion: Each affected check has a current result.
 4. Review the final diff and the workspace state.
-   Completion criterion: Each accepted finding is fixed or has a stated blocker.
+   Completion criterion: Each accepted finding has a fix or a stated blocker.
 
 For a broad or high-risk repair, get an independent review from a clean context
 if one is available. Do not stage, commit, or publish as part of a review,

@@ -10,6 +10,8 @@ use std::{ops::RangeInclusive, sync::Arc};
 mod textures;
 #[path = "controls/buttons.rs"]
 mod buttons;
+#[path = "controls/clip_fields.rs"]
+mod clip_fields;
 #[path = "controls/knobs.rs"]
 mod knobs;
 #[path = "controls/readouts.rs"]
@@ -21,6 +23,10 @@ mod surfaces;
 pub(super) use buttons::{
     button, button_at, focus_color, header_button, icon_button_surface, print_color, rail_surface,
     toggle_at,
+};
+pub(super) use clip_fields::{
+    FadeEdge, FadeHandleSpec, NumberField, curve_field, curve_menu, fade_handle, gain_field,
+    inline_gain_field, inline_number_field, number_field, snapped_fade_ticks,
 };
 pub(super) use knobs::{RotarySpec, rotary, wheel};
 pub(super) use readouts::{disclosure, number, progress, radio, status_text, value_style};
@@ -225,6 +231,16 @@ impl Palette {
         }
     }
     fn of(ui: &egui::Ui) -> Self {
+        let pass = ui.ctx().cumulative_pass_nr();
+        if let Some(palette) = ui.data(|data| {
+            ui.stack().iter().find_map(|ancestor| {
+                data.get_temp::<(u64, Self)>(palette_id(ancestor.id))
+                    .filter(|(stored_pass, _)| *stored_pass == pass)
+                    .map(|(_, palette)| palette)
+            })
+        }) {
+            return palette;
+        }
         [
             Self::Marine,
             Self::Granite,
@@ -238,12 +254,19 @@ impl Palette {
     }
 }
 
+fn palette_id(ui_id: egui::Id) -> egui::Id {
+    ui_id.with("controls-palette")
+}
+
 pub(super) fn apply_palette(ui: &mut egui::Ui, palette: Palette) {
     let visuals = ui.visuals_mut();
     visuals.panel_fill = palette.body();
     visuals.selection.bg_fill = palette.accent();
     visuals.selection.stroke = Stroke::new(1.0_f32, roles().ink);
     visuals.override_text_color = None;
+    let pass = ui.ctx().cumulative_pass_nr();
+    let id = palette_id(ui.unique_id());
+    ui.data_mut(|data| data.insert_temp(id, (pass, palette)));
 }
 
 #[derive(Clone, Copy)]

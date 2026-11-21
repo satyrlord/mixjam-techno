@@ -1,6 +1,6 @@
 """A song's palette of sound families: palette.py census | families | suggest | make | add | remove | show | check
 
-python -I tools/song/palette.py census [SONG.mixjam ...]
+python -I tools/song/palette.py census SONG.mixjam [SONG.mixjam ...]
 python -I tools/song/palette.py families SONG.mixjam
 python -I tools/song/palette.py suggest [WORD ...] [--kind KIND] [--key KEY] [--tag TAG ...] [--bpm N] [--library TEXT]
                                         [--all] [--limit N]
@@ -15,9 +15,8 @@ brings its numbered variations, so a palette holds about 100 to 200 files.
 A family is the files of one folder that differ only in a number, chord name,
 tempo and key tag, or left/right mark. See `verdicts.py`.
 
-- `census` counts the families and files that songs place. By default it reads the owner's
-  converted songs in local-data/songs/review/album-mix. Sounds imported from the original
-  products count by their file name.
+- `census` counts the families and files that the given songs place. Sounds imported from the
+  original products count by their file name.
 - `families` lists one song's families with the files placed from each.
 - `suggest` lists families from the verdicts (`verdicts.py build`), the owner's approved ones first,
   then by their share of ok files. Families that the owner rejected, that sound out of tune or cheesy,
@@ -56,7 +55,6 @@ OWNER_OUT = {'rejected', 'out-of-tune', 'cheesy'}
 # A family this large is a bank of different sounds that share a name, not one sound's variations: a palette
 # made from a song keeps only the files the song uses from it.
 BIG_FAMILY = 12
-CENSUS_DEFAULT = ['review/album-mix/*.mixjam']  # patterns in the songs folder (env.songs_folder)
 
 
 def roots():
@@ -242,7 +240,7 @@ def product_catalog():
         names = catalog_names()
         # By name with case, as the application orders them: of two conflicting releases, the same one loads.
         for path in sorted(folder.iterdir(), key=lambda path: path.name) if folder.is_dir() else []:
-            if not path.is_file() or path.suffix.lower() != '.json' or path.name.lower() == 'source-tempos.json':
+            if not path.is_file() or path.suffix.lower() != '.json':
                 continue
             try:
                 product, release, fingerprint, entries = read_release(path)
@@ -306,20 +304,9 @@ def placed_samples(song_path):
     return out
 
 
-def song_files(arguments):
-    if arguments:
-        return [Path(a) for a in arguments]
-    files, songs = [], env.songs_folder()
-    for pattern in CENSUS_DEFAULT:
-        files += sorted(songs.glob(pattern))
-    passes = sorted(songs.glob('melancholia/reality/pass*/reality.mixjam'),
-                    key=lambda p: int(p.parent.name[4:]) if p.parent.name[4:].isdigit() else -1)
-    return files + passes[-1:]
-
-
 def census(arguments):
     rows = []
-    for path in song_files(arguments):
+    for path in map(Path, arguments):
         placed = placed_samples(path)
         families = {s['family'] or f'file|{s["path"]}' for s in placed}
         rows.append((path, len(families), len(placed)))
@@ -545,7 +532,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     commands = parser.add_subparsers(dest='command', required=True)
     c = commands.add_parser('census')
-    c.add_argument('songs', nargs='*')
+    c.add_argument('songs', nargs='+')
     f = commands.add_parser('families')
     f.add_argument('song')
     s = commands.add_parser('suggest')

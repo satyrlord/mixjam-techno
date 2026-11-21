@@ -1,12 +1,19 @@
 # Song-review reference: notes and tests
 
+## Contents
+
+- [Standing notes](#standing-notes)
+- [Level history](#level-history)
+- [Reference test](#reference-test)
+- [Audibility bar](#audibility-bar)
+
 ## Standing notes
 
-The standing notes of a song are the owner's judgements that hold until the
-owner changes them: a verdict on a sound, an intended character, a level
-intent, an approved exception or device, a rejected proposal. They keep the
-roles from raising the same settled point in every round. The main agent keeps
-them in `standing-notes.md` in the song's folder:
+The standing notes of a song are the owner's judgements. They hold until the
+owner changes them. A note can be a verdict on a sound, an intended character,
+a level intent, an approved exception or device, or a rejected proposal. They
+stop the roles from repeating a settled point in every round. The main agent
+keeps them in `standing-notes.md` in the song's folder:
 
 ```markdown
 # Standing notes: SONG TITLE
@@ -25,16 +32,17 @@ them in `standing-notes.md` in the song's folder:
   log.
 - Do not put a score, a rating, or a critique in the file.
 
-A role does not raise a finding or a proposal against a note. If its evidence
-shows a mechanical fault in a noted area, such as a click, a clip, or a phase
-loss, it reports the fault under the heading "Conflicts with standing notes",
-with the note's number. These do not count toward the finding limit.
+A role does not raise a finding or a proposal against a note. If a role's
+evidence shows a mechanical fault in a noted area, it reports the fault under
+the heading "Conflicts with standing notes". It gives the note's number.
+Examples are a click, a clip, or a phase loss. These do not count toward the
+finding limit.
 
 ## Level history
 
 A reviewer that sees one pass does not know why a level is where it is. The
-level history stops the same control from moving back and forth over the
-rounds. The main agent keeps it in `level-history.md` in the song's folder:
+level history keeps a control from going back and forth over the rounds. The
+main agent keeps it in `level-history.md` in the song's folder:
 
 ```markdown
 # Level history: SONG TITLE
@@ -44,8 +52,8 @@ rounds. The main agent keeps it in `level-history.md` in the song's folder:
 | track 12 fader (String Pad A) | pass 3 -4, pass 5 -7, pass 6 -10, pass 7 -7, pass 8 -4 dB | critics: masking; then the repairs went back | pass 8: -4 dB is right |
 ```
 
-- Add a row when a control moves in two directions over the passes, or when
-  the owner settles a value by ear.
+- Add a row when a control moves in two directions over the passes. Add a row
+  when the owner settles a value by ear.
 - Do not put a score, a rating, or a critique in the file.
 
 A role does not propose to move a control in the history in a direction that
@@ -54,19 +62,18 @@ earlier move and says why the result is now different.
 
 ## Reference test
 
-The artist profile can name a reference sheet: a short extract of the
-reference album, with each habit of the profile against what the album's own
+The artist profile can name a reference sheet. It is a short extract of the
+reference album. It sets each habit of the profile against what the album's own
 tracks do. Read it before you judge the song.
 
-Before you write a finding, a deduction, or a proposal that rests on a
-number, a median, a range, or a habit, ask: "Does the same sentence fault a
-track of the reference album?"
+A finding, a deduction, or a proposal can rest on a number, a median, a range,
+or a habit. Before you write one, ask: "Does the same sentence fault a track
+of the reference album?"
 
 1. If yes, it is a trait of the artist. Do not list it as a fault. Do not
    reduce a score for it. Do not propose a change for it.
-2. If the song uses the trait in a way that the owner possibly does not
-   intend, put one line under "Judgements that need ears". Give the
-   measurement, not a fix.
+2. If the trait is possibly not the owner's intent, put one line
+   under "Judgements that need ears". Give the measurement, not a fix.
 3. A rule that the profile marks as the owner's decision stands. Standing
    notes stand. The test is for habits and medians, not for the owner's
    decisions.
@@ -76,8 +83,8 @@ If there is no reference sheet, apply the test to the reference studies.
 ## Audibility bar
 
 A fix that nobody can hear wastes a round and can harm the song. Apply this
-bar to each finding whose fix changes a level, an EQ, a width, a send, a
-drive, or a fade:
+bar to each finding with a fix that changes a level, EQ, width, send, drive,
+or fade:
 
 1. Render the pass with the fix: `render.py SONG_WITH_FIX OUT --no-master
    --cache DIR`.
@@ -89,9 +96,10 @@ drive, or a fade:
 4. If the difference is 20 dB or more under the premaster in every band, the
    fix is under the bar. Move it to the list "Measured only" with its value.
 
-A finding under the bar does not count toward the finding limit and does not
-go on an A/B page. The owner can still request it. A mechanical fault, such
-as a click, a clip, or a cut phrase, is not under the bar because of its size.
+A finding under the bar does not count toward the finding limit. It is not a
+row on an A/B page. The owner can still request it. A mechanical fault is
+never under the bar because of its size. Examples are a click, a clip, or a
+cut phrase.
 
 The blind rater does not render. The main agent applies the bar to the
 rater's items before the merged list.

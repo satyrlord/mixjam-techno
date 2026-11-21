@@ -1,21 +1,29 @@
 # Album analysis: reference
 
-This file is the reference for the `album-analysis` skill: the storage, the
-id format, the fields, the rules, the requests, the cover art, and the lookup
-tool. The rules for the prose, the tags, the energy levels, and the timeline
-events are in `docs/ALBUM-REVIEW-WRITING.md`.
+This file is the reference for the `album-analysis` skill.
+`docs/ALBUM-REVIEW-WRITING.md` has the rules for the prose, the tags, the
+energy levels, and the timeline events.
+
+## Contents
+
+- [Storage](#storage)
+- [Id format](#id-format)
+- [Fields](#fields)
+- [Requests](#requests)
+- [Cover art](#cover-art)
+- [Lookup tool](#lookup-tool)
 
 ## Storage
 
 - Each review is one file, `assets/album-review/<id>.json`, in the
-  repository. The application reads the folder at run time. The reviews are
-  not compiled into the executable.
-- The application looks for `assets/album-review` beside its own folder: the
-  repository root for a build in `target/`, or the installation folder. It
-  does not use the data folder. When the folder is missing, the window shows
-  **No reviews folder**.
-- The files are pretty JSON with two-space indents, the keys in the order of
-  the tables below, and a final newline. The application writes this form.
+  repository. The application reads the folder at run time. The executable
+  does not contain the reviews.
+- The application searches for `assets/album-review` beside its own folder.
+  That is the repository root for a build in `target/`, or the installation
+  folder. It does not use the data folder. When the folder is missing, the
+  window shows **No reviews folder**.
+- The files are pretty JSON with two-space indents and a final newline. The
+  keys are in the order of the tables below. The application writes this form.
 - A file that breaks a rule does not load. The window and the `reviews` reply
   list it with the reason.
 
@@ -45,19 +53,19 @@ Review fields, in file order:
 | `runtime` | Required | `M:SS` or `MM:SS` under one hour, `H:MM:SS` from one hour. Within 30 seconds of the track sum. |
 | `isSoundtrack` | Optional | `true` when present. Leave it out for an album that is not a soundtrack. |
 | `coverUrl` | Optional | The http or https address of the cover image. |
-| `coverSource` | Optional | The http or https address of the page that the image comes from. |
+| `coverSource` | Optional | The http or https address of the page of the image. |
 | `youtubeUrl` | Optional | https on `www.youtube.com`, `music.youtube.com`, or `youtu.be`. |
 | `bandcampUrl` | Optional | https on `bandcamp.com` or a subdomain of it. |
 | `localAudio` | Own work only | The path of a `.wav` master on this computer. |
 | `songFile` | Own work only | The path of a `.mixjam` or `.mix` song. |
-| `overview` | Required | Non-empty. Paragraphs are separated by a blank line (`\n\n`). |
+| `overview` | Required | Non-empty. A blank line (`\n\n`) separates paragraphs. |
 | `tracks` | Required | One or more tracks. |
 
 Track fields, in file order:
 
 | Field | Status | Rule |
 | --- | --- | --- |
-| `num` | Required | The track number, from 1; unique within the review. |
+| `num` | Required | The track number, from 1. It is unique within the review. |
 | `title` | Required | Non-empty. |
 | `duration` | Required | `M:SS` or `MM:SS`. |
 | `energy` | Required | `low`, `mid`, `high`, or `peak`. |
@@ -68,14 +76,16 @@ Track fields, in file order:
 | `songFile` | Own work only | The track's song file. |
 
 Event fields: `timestamp` (`M:SS` or `MM:SS`), `section`, and `description`
-are required and non-empty. `detail` is optional and non-empty when present.
+must be present and non-empty. `detail` is optional and non-empty when present.
 
 A file with an unknown field does not load.
 
-The application also rejects placeholder text: the overview lead `Initial
-scaffold generated from MusicBrainz metadata.`, the role `Initial scaffold
-only. Narrative role pending detailed listen.`, the tags `Scaffold` and `Tags
-Pending`, and the event description `Detailed timestamp notes pending.`
+The application also rejects this placeholder text:
+
+- the overview lead `Initial scaffold generated from MusicBrainz metadata.`
+- the role `Initial scaffold only. Narrative role pending detailed listen.`
+- the tags `Scaffold` and `Tags Pending`
+- the event description `Detailed timestamp notes pending.`
 
 The rules do not check the content of the tags or the prose.
 
@@ -111,8 +121,9 @@ started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
 - `coverUrl` is a remote address. The repository holds no cover image.
 - The window downloads a cover only when a person selects **Display cover
   art**. The download runs on a background thread, with the user agent
-  `MixJamTechno/<version>`. It accepts only http and https, at most 20 MB, in
-  20 seconds, and only a JPEG, PNG, or WebP image.
+  `MixJamTechno/<version>`. It accepts only http and https addresses. It
+  accepts only a JPEG, PNG, or WebP image of at most 20 MB. The download ends
+  after 20 seconds.
 - Downloaded covers go to `album-review/covers/<id>.<ext>` in the data folder
   (`%LOCALAPPDATA%\MixJam Techno`, or `MIXJAM_TECHNO_DATA_DIR`). The cache keeps
   at most 256 MB and removes the least recently viewed covers first. **Clear

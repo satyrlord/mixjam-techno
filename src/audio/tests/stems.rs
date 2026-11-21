@@ -94,7 +94,7 @@ fn exported_tracks_and_returns_sum_to_the_mix_without_the_board() {
         editor.place(sample, track, 0, 256).unwrap();
     }
     let mut project = editor.project().clone();
-    project.title = "Reality: take 2".into();
+    project.title = "Horizon: take 2".into();
     let samples = HashMap::from([(1, tone(110.0)), (2, tone(3000.0)), (3, tone(700.0))]);
     project.master_gain = 0.5;
     project.tracks[0].gain = 0.6;
@@ -167,11 +167,11 @@ fn exported_tracks_and_returns_sum_to_the_mix_without_the_board() {
     assert_eq!(
         names,
         [
-            "Reality_ take 2 - FX 2 return.wav",
-            "Reality_ take 2 - FX 4 return.wav",
-            "Reality_ take 2 - Track 01.wav",
-            "Reality_ take 2 - Track 03.wav",
-            "Reality_ take 2 - Track 05.wav",
+            "Horizon_ take 2 - FX 2 return.wav",
+            "Horizon_ take 2 - FX 4 return.wav",
+            "Horizon_ take 2 - Track 01.wav",
+            "Horizon_ take 2 - Track 03.wav",
+            "Horizon_ take 2 - Track 05.wav",
         ]
     );
     let parts: Vec<Pcm> = names

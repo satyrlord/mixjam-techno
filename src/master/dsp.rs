@@ -165,9 +165,14 @@ impl<T: Held, const LOOKAHEAD: usize, const SPAN: usize> LookaheadGain<T, LOOKAH
     }
 }
 
-/// The feedback coefficient of a one-pole filter with this time constant.
+/// The feedback coefficient of a one-pole filter with this time constant at `rate`.
+pub(crate) fn pole_at(seconds: f64, rate: f64) -> f64 {
+    (-1.0 / (seconds * rate).max(1e-6)).exp()
+}
+
+/// The feedback coefficient of a one-pole filter with this time constant at [`RATE`].
 pub(crate) fn pole(seconds: f64) -> f64 {
-    (-1.0 / (seconds * RATE)).exp()
+    pole_at(seconds, RATE)
 }
 
 /// The time constant of the compressors' power detectors.

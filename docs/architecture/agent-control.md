@@ -24,10 +24,15 @@ key, or that sends a malformed line. An HTTP form post without the key does not
 get to the queue. If the window does not take a request within 30 seconds, the
 request fails and cannot run later.
 
-When the server is dropped, it removes the session key, closes the active
-connections, and clears its window wake callback. It also wakes the listener and
-waits until the listener releases the port. If the server cannot connect to
-wake the listener, it does not wait. Thus the window can still close.
+When the application drops the server, the server does these tasks:
+
+- It removes the session key.
+- It closes the active connections.
+- It clears its window wake callback.
+- It wakes the listener and waits until the listener releases the port.
+
+If the server cannot connect to wake the listener, it does not wait. Thus the
+window can still close.
 
 ## The frontend driver
 
@@ -40,16 +45,16 @@ input of that frame:
 - For a position, it sends pointer and keyboard events.
 
 An accessibility `Click` does not move the keyboard focus, and a pointer click
-does. Thus the driver runs `Step::Defocus` before it: it takes the focus from
-the focused control, unless that control is the target. Without it, the keys
-that follow a `click` go to the control that was focused earlier. For example,
-the routing of Ctrl+Z between the Step synth board and the song follows the
-focus. `state.focus` and `ui.focus` name the focused control, so that an agent
-can check the focus without a screenshot.
+does. Thus the driver runs `Step::Defocus` before it. `Step::Defocus` takes the
+focus from the focused control, unless that control is the target. Without it,
+the keys that follow a `click` go to the control that had focus earlier. For
+example, the routing of Ctrl+Z between the Step synth board and the song
+follows the focus. `state.focus` and `ui.focus` name the focused control, so
+that an agent can check the focus without a screenshot.
 
 A request replies after the frames that show its result. Arrangement requests
-call the same `Session` operations as the lane gestures, because the lanes are
-one painted surface without separate controls. The driver holds no project
+call the same `Session` operations as the lane gestures. The lanes are one
+painted surface and have no separate controls. The driver holds no project
 state. It gets to the backend only through `application.rs`, and the source
 guard covers it.
 
@@ -79,11 +84,11 @@ screen together:
 - The controls of each board carry the name of the board.
 - The filters of the sound library keep their own names.
 
-If a control is painted on a shared surface, add it to the arrangement requests
-instead.
+If the application paints a control on a shared surface, add it to the
+arrangement requests instead.
 
 egui makes the surface of an open menu, context menu, or drop-down list a Tab
-stop, and gives it no name. `name_open_menus` names that surface `Menu` at the
+stop. It gives the surface no name. `name_open_menus` names it `Menu` at the
 end of each frame. A menu that opens from another menu gets the name `Menu 2`.
 A long drop-down list scrolls, and its scroll parts are Tab stops also. They
 get the names `Menu drag to scroll` and `Menu vertical scroll bar`.

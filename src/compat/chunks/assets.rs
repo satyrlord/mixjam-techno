@@ -36,7 +36,7 @@ pub(crate) fn restore_missing(
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("pxd")) =>
         {
-            let wave = d2_source_wave(&path.to_string_lossy(), &[], library)?;
+            let wave = d2_source_wave(&path.to_string_lossy(), &[], &[], library)?;
             (wave.bytes.into_owned(), Product::D2, "Imported")
         }
         MissingReference::Generated {
@@ -121,12 +121,34 @@ pub(super) fn queue_asset<'a>(
     Ok(())
 }
 
+use std::fmt::Write as _;
+
+pub(super) fn sha256_bytes(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+pub(super) fn hex_digest(digest: &[u8; 32]) -> String {
+    let mut text = String::with_capacity(64);
+    for byte in digest {
+        let _ = write!(text, "{byte:02x}");
+    }
+    text
+}
+
 pub(super) fn preserve_wave(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    preserve_wave_with_digest(path, bytes, None)
+}
+
+pub(super) fn preserve_wave_with_digest(
+    path: &Path,
+    bytes: &[u8],
+    digest: Option<&[u8; 32]>,
+) -> Result<(), String> {
     if path.try_exists().map_err(|error| error.to_string())? {
-        return verify_existing_asset(path, bytes);
+        return verify_existing_asset(path, bytes, digest);
     }
     let temporary = stage_asset(path, bytes)?;
-    publish_staged_asset(&temporary, path, bytes)
+    publish_staged_asset(&temporary, path, bytes, digest)
 }
 
 pub(super) fn stage_asset(path: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
@@ -166,19 +188,24 @@ pub(super) fn publish_staged_asset(
     temporary: &Path,
     path: &Path,
     bytes: &[u8],
+    digest: Option<&[u8; 32]>,
 ) -> Result<(), String> {
     let result = match fs::hard_link(temporary, path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            verify_existing_asset(path, bytes)
+            verify_existing_asset(path, bytes, digest)
         }
-        Err(_) => publish_asset_directly(path, bytes),
+        Err(_) => publish_asset_directly(path, bytes, digest),
     };
     let _ = fs::remove_file(temporary);
     result
 }
 
-pub(super) fn publish_asset_directly(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(super) fn publish_asset_directly(
+    path: &Path,
+    bytes: &[u8],
+    digest: Option<&[u8; 32]>,
+) -> Result<(), String> {
     let mut file = match fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -186,7 +213,7 @@ pub(super) fn publish_asset_directly(path: &Path, bytes: &[u8]) -> Result<(), St
     {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            return verify_existing_asset(path, bytes);
+            return verify_existing_asset(path, bytes, digest);
         }
         Err(error) => return Err(format!("Cannot publish the imported asset: {error}")),
     };
@@ -199,19 +226,49 @@ pub(super) fn publish_asset_directly(path: &Path, bytes: &[u8]) -> Result<(), St
     Ok(())
 }
 
-fn verify_existing_asset(path: &Path, bytes: &[u8]) -> Result<(), String> {
+fn verify_existing_asset(
+    path: &Path,
+    bytes: &[u8],
+    digest: Option<&[u8; 32]>,
+) -> Result<(), String> {
     let file = fs::File::open(path).map_err(|error| error.to_string())?;
     let expected = bytes.len() as u64;
     if file.metadata().map_err(|error| error.to_string())?.len() != expected {
         return Err("An imported asset hash path already contains different data.".into());
     }
-    let mut actual = Vec::with_capacity(bytes.len());
-    file.take(expected + 1)
-        .read_to_end(&mut actual)
-        .map_err(|error| error.to_string())?;
-    if actual == bytes {
+    let expected_hash = digest.copied().unwrap_or_else(|| sha256_bytes(bytes));
+    if matches_asset_contents(file, expected, expected_hash).map_err(|error| error.to_string())? {
         Ok(())
     } else {
         Err("An imported asset hash path already contains different data.".into())
+    }
+}
+
+fn matches_asset_contents(
+    source: impl Read,
+    expected: u64,
+    expected_hash: [u8; 32],
+) -> std::io::Result<bool> {
+    let mut hasher = Sha256::new();
+    // An external writer can grow the file after the metadata length check.
+    let length = std::io::copy(&mut source.take(expected + 1), &mut hasher)?;
+    let actual_hash: [u8; 32] = hasher.finalize().into();
+    Ok(length == expected && actual_hash == expected_hash)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asset_verification_reads_one_byte_past_the_expected_prefix() {
+        let bytes = b"known";
+        let expected = bytes.len() as u64;
+        let digest = sha256_bytes(bytes);
+        assert!(matches_asset_contents(bytes.as_slice(), expected, digest).unwrap());
+
+        let mut grown = Cursor::new(b"known extra bytes");
+        assert!(!matches_asset_contents(&mut grown, expected, digest).unwrap());
+        assert_eq!(grown.position(), expected + 1);
     }
 }

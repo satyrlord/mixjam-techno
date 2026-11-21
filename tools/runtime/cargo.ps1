@@ -15,8 +15,14 @@ if ($LASTEXITCODE -eq 0) {
     # Replace each file whole. A concurrent Cargo call then never reads a half-written manifest.
     function Write-Whole([string]$path, [string]$content) {
         $staged = '{0}.{1}.tmp' -f $path, $PID
-        [IO.File]::WriteAllText($staged, $content, $encoding)
-        [IO.File]::Replace($staged, $path, [NullString]::Value)
+        try {
+            [IO.File]::WriteAllText($staged, $content, $encoding)
+            [IO.File]::Replace($staged, $path, [NullString]::Value)
+        } finally {
+            if (Test-Path -LiteralPath $staged) {
+                Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
     $manifest = Join-Path $workspace 'Cargo.toml'
     $text = [IO.File]::ReadAllText($manifest)
@@ -26,10 +32,15 @@ if ($LASTEXITCODE -eq 0) {
     $line = 'version = "' + $version + '"'
     if ($current.Value -ne $line) {
         Write-Whole $manifest ($text.Remove($current.Index, $current.Length).Insert($current.Index, $line))
-        $lock = Join-Path $workspace 'Cargo.lock'
+    }
+    # Check the lockfile even if a previous run already replaced the manifest.
+    $lock = Join-Path $workspace 'Cargo.lock'
+    if ([IO.File]::Exists($lock)) {
         $text = [IO.File]::ReadAllText($lock)
-        $text = [regex]::Replace($text, '(?<=name = "mixjam-techno"\r?\nversion = ")[^"]+', $version)
-        Write-Whole $lock $text
+        $updated = [regex]::Replace($text, '(?<=name = "mixjam-techno"\r?\nversion = ")[^"]+', $version)
+        if ($updated -cne $text) {
+            Write-Whole $lock $updated
+        }
     }
 }
 

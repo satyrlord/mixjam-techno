@@ -14,7 +14,7 @@ mod schedule;
 mod source;
 mod track;
 
-pub use export::Stems;
+pub use export::{NO_TRACK_SOUNDS, Stems};
 pub use frames::{Frames, RenderState};
 pub use mix::Mix;
 pub use output::OutputConfiguration;

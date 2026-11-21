@@ -192,8 +192,16 @@ impl Library {
 
     /// Explain an unresolved native identity in a song import error.
     pub fn describe_missing(&self, product: Product, native_id: u32) -> String {
+        self.describe_missing_with(product, native_id, self.has_original_provider(product))
+    }
+
+    pub(crate) fn describe_missing_with(
+        &self,
+        product: Product,
+        native_id: u32,
+        installed: bool,
+    ) -> String {
         let label = product.label();
-        let installed = self.has_original_provider(product);
         match product
             .global_sample_id(native_id)
             .ok()

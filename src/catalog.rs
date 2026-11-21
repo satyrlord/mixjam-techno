@@ -2,9 +2,7 @@
 //! Installation paths do not form part of sample identity.
 mod releases;
 
-pub use releases::{
-    CatalogFile, Catalogs, FOLDER, Release, SCHEMA, SOURCE_TEMPOS, SourceFile, fingerprint,
-};
+pub use releases::{CatalogFile, Catalogs, FOLDER, Release, SCHEMA, SourceFile, fingerprint};
 
 use crate::products::Product;
 use serde::{Deserialize, Serialize};

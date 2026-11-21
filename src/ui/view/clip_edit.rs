@@ -4,7 +4,7 @@ use super::*;
 pub(in super::super) use mixjam_techno::application::{
     CLIP_SILENCE_DB, MAX_CLIP_GAIN, clip_gain_db, clip_gain_from_db, clip_gain_max_db,
 };
-use mixjam_techno::application::{Fade, FadeCurve, MAX_PITCH_CENTS, MAX_TICKS};
+use mixjam_techno::application::{Fade, MAX_PITCH_CENTS, MAX_TICKS};
 
 /// The lane context menu: what it was opened on, and where.
 #[derive(Default)]
@@ -52,72 +52,45 @@ impl MixJamApp {
         let mut reverse = clip.reverse;
         let mut change = false;
         let mut fades = clip.fades;
-        egui::Grid::new("clip_properties")
+        egui::Grid::new(("clip_properties", id))
             .num_columns(2)
             .spacing(Vec2::new(10.0, 6.0))
             .show(ui, |ui| {
                 // The mixer shows dB, so the clip does too. An untouched value
                 // keeps its exact saved amplitude.
                 ui.label("Gain (dB)");
-                let mut db = clip_gain_db(gain);
-                if name_control(
-                    ui.add(
-                        egui::DragValue::new(&mut db)
-                            .range(CLIP_SILENCE_DB..=clip_gain_max_db())
-                            .speed(0.1)
-                            .custom_formatter(|value, _| {
-                                if value <= f64::from(CLIP_SILENCE_DB) {
-                                    "-inf".into()
-                                } else {
-                                    format!("{value:+.1}")
-                                }
-                            })
-                            .custom_parser(|text| {
-                                let text = text.trim().to_lowercase();
-                                let text = text.trim_end_matches("db").trim();
-                                if matches!(text, "-inf" | "-infinity" | "silence") {
-                                    Some(f64::from(CLIP_SILENCE_DB))
-                                } else {
-                                    text.parse().ok()
-                                }
-                            }),
-                    ),
-                    &format!("{prefix} gain"),
-                )
-                .hover_hint("Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.")
-                .changed()
-                {
-                    gain = clip_gain_from_db(db);
-                    change = true;
-                }
+                change |= controls::inline_gain_field(ui, &format!("{prefix} gain"), &mut gain);
                 ui.end_row();
                 ui.label("Trim start (frames)");
-                change |= name_control(
-                    ui.add(
-                        egui::DragValue::new(&mut offset)
-                            .range(0..=max_frames.saturating_sub(1))
-                            .speed(100),
-                    ),
-                    &format!("{prefix} trim start (frames)"),
-                )
-                .hover_hint("Source frames that the clip skips. The clip does not move.")
-                .changed();
+                change |= controls::inline_number_field(
+                    ui,
+                    controls::NumberField {
+                        name: &format!("{prefix} trim start (frames)"),
+                        range: 0..=max_frames.saturating_sub(1),
+                        speed: 100.0,
+                        affixes: ("", ""),
+                        mixed: false,
+                        hint: "Source frames that the clip skips. The clip does not move.",
+                    },
+                    &mut offset,
+                );
                 ui.end_row();
                 ui.label("Length (bars)");
                 let longest = MAX_TICKS - clip.start_tick;
                 let ticks_per_bar = f64::from(TICKS_PER_BAR);
                 let mut bars = f64::from(length) / ticks_per_bar;
-                if name_control(
-                    ui.add(
-                        egui::DragValue::new(&mut bars)
-                            .range(1.0 / ticks_per_bar..=f64::from(longest) / ticks_per_bar)
-                            .clamp_existing_to_range(false)
-                            .speed(1.0 / 16.0),
-                    ),
-                    &format!("{prefix} length (bars)"),
-                )
-                .changed()
-                {
+                if controls::inline_number_field(
+                    ui,
+                    controls::NumberField {
+                        name: &format!("{prefix} length (bars)"),
+                        range: 1.0 / ticks_per_bar..=f64::from(longest) / ticks_per_bar,
+                        speed: 1.0 / 16.0,
+                        affixes: ("", ""),
+                        mixed: false,
+                        hint: "",
+                    },
+                    &mut bars,
+                ) {
                     length = ((bars * ticks_per_bar).round() as u32).clamp(1, longest);
                     change = true;
                 }
@@ -282,10 +255,10 @@ impl MixJamApp {
         let snap = |ticks: f64, step: u32| {
             ((ticks / f64::from(step)).round() * f64::from(step)).max(0.0) as u32
         };
-        let (edge_step, fade_step) = if fine {
-            (TICKS_PER_BAR / 16, 1)
+        let edge_step = if fine {
+            TICKS_PER_BAR / 16
         } else {
-            (TICKS_PER_BAR, TICKS_PER_BAR / 16)
+            TICKS_PER_BAR
         };
         let end = clip.start_tick + clip.length_ticks;
         let shortest = (TICKS_PER_BAR / 16).min(clip.length_ticks);
@@ -332,20 +305,29 @@ impl MixJamApp {
                 shaped.fades = clip.fades.fit(shaped.length_ticks);
             }
             ClipHandle::FadeIn => {
-                shaped.fades.fade_in.ticks = snap(tick - f64::from(clip.start_tick), fade_step)
-                    .min(clip.length_ticks - clip.fades.fade_out.ticks);
+                shaped.fades.fade_in.ticks = controls::snapped_fade_ticks(
+                    controls::FadeEdge::In,
+                    tick - f64::from(clip.start_tick),
+                    0,
+                    clip.length_ticks - clip.fades.fade_out.ticks,
+                    fine,
+                );
             }
             ClipHandle::FadeOut => {
-                let sound_end = clip.start_tick
-                    + sound_ticks(
-                        clip,
-                        sample,
-                        self.session
-                            .project()
-                            .sample_playback_bpm(sample.id, sample.source_bpm),
-                    );
-                shaped.fades.fade_out.ticks = snap(f64::from(sound_end) - tick, fade_step)
-                    .min(clip.length_ticks - clip.fades.fade_in.ticks);
+                let sound_end = sound_ticks(
+                    clip,
+                    sample,
+                    self.session
+                        .project()
+                        .sample_playback_bpm(sample.id, sample.source_bpm),
+                );
+                shaped.fades.fade_out.ticks = controls::snapped_fade_ticks(
+                    controls::FadeEdge::Out,
+                    tick - f64::from(clip.start_tick),
+                    sound_end,
+                    clip.length_ticks - clip.fades.fade_in.ticks,
+                    fine,
+                );
             }
             ClipHandle::Gain => {
                 // Each `GAIN_PIXELS` of travel up or down is one dB, or a
@@ -448,47 +430,28 @@ fn fade_controls(ui: &mut egui::Ui, prefix: &str, edge: &str, fade: &mut Fade, r
     ui.label(format!("Fade {edge} (beats)"));
     ui.horizontal(|ui| {
         let mut beats = f64::from(fade.ticks) / f64::from(TICKS_PER_BEAT);
-        let mut change = false;
-        if name_control(
-            ui.add(
-                egui::DragValue::new(&mut beats)
-                    .range(0.0..=f64::from(room) / f64::from(TICKS_PER_BEAT))
-                    .speed(1.0 / 16.0)
-                    .max_decimals(3),
-            ),
-            &format!("{prefix} fade {edge} (beats)"),
-        )
-        .hover_hint(if edge == "in" {
-            "Fade in from the clip's start, in beats. 0 is no fade."
-        } else {
-            "Fade out to the end of the clip's sound, in beats: the clip's end, or earlier \
-         where the sound runs out. 0 is no fade."
-        })
-        .changed()
-        {
+        let mut change = controls::inline_number_field(
+            ui,
+            controls::NumberField {
+                name: &format!("{prefix} fade {edge} (beats)"),
+                range: 0.0..=f64::from(room) / f64::from(TICKS_PER_BEAT),
+                speed: 1.0 / 16.0,
+                affixes: ("", ""),
+                mixed: false,
+                hint: if edge == "in" {
+                    "Fade in from the clip's start, in beats. 0 is no fade."
+                } else {
+                    "Fade out to the end of the clip's sound, in beats: the clip's end, or \
+                     earlier where the sound runs out. 0 is no fade."
+                },
+            },
+            &mut beats,
+        );
+        if change {
             fade.ticks = ((beats * f64::from(TICKS_PER_BEAT)).round() as u32).min(room);
-            change = true;
         }
         // A submenu, because a combo box inside the context menu would close it.
-        let name = format!("{prefix} fade {edge} curve");
-        let response = ui
-            .menu_button(fade.curve.label(), |ui| {
-                for curve in FadeCurve::ALL {
-                    if ui
-                        .selectable_label(fade.curve == curve, curve.label())
-                        .clicked()
-                    {
-                        change |= fade.curve != curve;
-                        fade.curve = curve;
-                        ui.close();
-                    }
-                }
-            })
-            .response;
-        name_control(response, &name).hover_hint(
-            "Linear, Equal power for crossfades that keep their loudness, or Exponential, \
-         even steps in decibels like a natural decay.",
-        );
+        change |= controls::curve_menu(ui, &format!("{prefix} fade {edge} curve"), &mut fade.curve);
         change
     })
     .inner
@@ -502,28 +465,30 @@ fn pitch_controls(ui: &mut egui::Ui, prefix: &str, cents: &mut i32) -> bool {
     ui.label("Pitch");
     let change = ui
         .horizontal(|ui| {
-            let semitone_change = name_control(
-                ui.add(
-                    egui::DragValue::new(&mut semitones)
-                        .range(-MAX_PITCH_CENTS / 100..=MAX_PITCH_CENTS / 100)
-                        .speed(0.1)
-                        .suffix(" st"),
-                ),
-                &format!("{prefix} pitch (semitones)"),
-            )
-            .hover_hint("Transpose the clip in semitones. Its length and timing stay the same.")
-            .changed();
-            let cent_change = name_control(
-                ui.add(
-                    egui::DragValue::new(&mut fine)
-                        .range(-99..=99)
-                        .speed(0.5)
-                        .suffix(" ct"),
-                ),
-                &format!("{prefix} pitch (cents)"),
-            )
-            .hover_hint("Fine-tune the clip in cents, hundredths of a semitone.")
-            .changed();
+            let semitone_change = controls::inline_number_field(
+                ui,
+                controls::NumberField {
+                    name: &format!("{prefix} pitch (semitones)"),
+                    range: -MAX_PITCH_CENTS / 100..=MAX_PITCH_CENTS / 100,
+                    speed: 0.1,
+                    affixes: ("", " st"),
+                    mixed: false,
+                    hint: "Transpose the clip in semitones. Its length and timing stay the same.",
+                },
+                &mut semitones,
+            );
+            let cent_change = controls::inline_number_field(
+                ui,
+                controls::NumberField {
+                    name: &format!("{prefix} pitch (cents)"),
+                    range: -99..=99,
+                    speed: 0.5,
+                    affixes: ("", " ct"),
+                    mixed: false,
+                    hint: "Fine-tune the clip in cents, hundredths of a semitone.",
+                },
+                &mut fine,
+            );
             semitone_change || cent_change
         })
         .inner;

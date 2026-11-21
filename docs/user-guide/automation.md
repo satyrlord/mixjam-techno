@@ -10,9 +10,9 @@ groups:
 | Send amount, on every track | FX 1 send to FX 4 send. Each has the name of the effect on its bus. |
 | Return level, one line across the song | FX 1 return to FX 4 return |
 
-The menu marks the current lane. Each lane shows how much it holds: the number
-of tracks with points ("2 tracks"), or the number of points on a return lane
-("4 points"). To edit clips again, choose **Off**.
+The menu marks the current lane. Each lane shows how much it holds. A track
+lane shows the number of tracks with points ("2 tracks"). A return lane shows
+the number of points ("4 points"). To edit clips again, choose **Off**.
 
 To edit points on a lane:
 
@@ -49,13 +49,13 @@ ratchets. Its row has six steps. From the bottom, they are Off, 1/4, 1/8,
 before its first point. It keeps the value of each point until the next point,
 and it shows these values as steps.
 
-Where the lane turns on, it takes the sound at that point. It then plays one
-note length of that sound again and again. A faster value later in the same
-run keeps the start and makes the slice shorter. Thus 1/8, then 1/16, then
-1/32 makes the repeats faster. Off plays the live sound again.
+Where the lane changes from Off to a step, it takes the sound at that point. It
+then plays one note length of that sound again and again. A faster value later
+in the same run keeps the start and makes the slice shorter. Thus 1/8, then
+1/16, then 1/32 makes the repeats faster. Off plays the live sound again.
 
 Each repeat fades in over a few milliseconds, so it does not click. The
-repeats go through the EQ, the pan, and the FX sends of the track.
+repeats pass through the EQ, the pan, and the FX sends of the track.
 
 ## Repeat gate lane
 
@@ -93,12 +93,14 @@ track come after the Pitch lane.
 
 ## Compression lane
 
-The Compression lane sets how much of the compressor of a track is mixed in.
-At the bottom of the row, 0% gives the sound before compression. At the top,
-100% gives the full effect of the compressor settings. Points snap in 5% steps.
+The Compression lane sets the mix between the sound before and after the
+compressor of a track. At the bottom of the row, 0% gives the sound before
+compression. At the top, 100% gives the full effect of the compressor settings.
+Points snap in 5% steps.
 
 Use it when one phrase of a compressed track must keep its dynamics. Draw the
-lane down to 0% just before the phrase and back up to 100% just after it.
+lane down to 0% just before the phrase. Draw it up to 100% just after the
+phrase.
 
 The lane holds its first and last values outside its points and moves in
 straight lines between points. Without points, the compressor applies in

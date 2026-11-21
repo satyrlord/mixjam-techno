@@ -12,7 +12,7 @@ A lane WAV in an output folder and its cache entry are hard links to one file.
 An unchanged lane takes no more disk space in each new output folder. On
 another volume, the tool copies the lane. The tools replace a lane WAV. They do
 not write into it. If another program writes into a lane WAV, the cache entry
-no longer matches its recorded digest, and the tool renders the lane again.
+does not match its recorded digest. The tool then renders the lane again.
 Copy a lane WAV before you edit it. A missing digest also needs a new render.
 
 A staged link or copy must pass the WAV and digest checks before it replaces an
@@ -26,16 +26,17 @@ Caching needs these conditions:
   tempo.
 - The song has no native, library, missing-source, conflict, or origin
   dependency.
+- The song has no sections, or all its sections are valid.
 
 Other songs still render, with no cache reuse. Cache keys include the content
 of the source files, the render settings, the global Solo state, the master
 gain, and the renderer build. A gain change needs a new render. The tool does
 not rescale cached PCM.
 
-Repeat lane renders keep the duration of the whole song, so captured audio can
-continue after the last clip of the lane. Their cache keys include that
-duration. When the audibility report selects the bars to measure, it follows
-the Repeat captures. FX tails stay outside that selection.
+Repeat lane renders keep the duration of the whole song. Captured audio can
+therefore continue after the last clip of the lane. Their cache keys include
+that duration. When the audibility report selects the bars to measure, it
+follows the Repeat captures. FX tails stay outside that selection.
 
 Use `--no-master` for intermediate trials only. `measure.py` and the
 song-review gate need a current `master.wav` from a render without that
@@ -48,8 +49,8 @@ build`. A verdict does not use a measurement from an older file. The palette
 reader checks each verdict against the current file and analysis.
 
 Palette files made from songs keep pathless native samples by ID. The palette
-reader uses format-3 release catalogs. It reports invalid or conflicting
-files. Catalogs hold no sound names. The reader takes the names from valid
+reader uses format-3 release catalogs. It reports files that are invalid
+or in conflict. Catalogs hold no sound names. The reader takes the names from valid
 private name files for the accepted product and release. It rejects an invalid
 name file in full. If no name matches, the reader identifies a sound by its
 archive code.
@@ -65,8 +66,8 @@ does not replace the linked WAV.
 
 For `master.py`, `--bpm` overrides the tempo. Without that option, a supplied
 song gives its tempo. With no song, the tool uses the metadata tempo, or 140
-BPM when none is available. A missing section list leaves out the section
-table.
+BPM when none is available. If the section list is missing, the report has
+no section table.
 
 The mechanical report checks the source duration of WAV files linked in
 `samples`. It checks abrupt endings on lanes with a melodic role in the
@@ -87,4 +88,5 @@ reversed clips, lanes with Pitch automation, and simultaneous clips in a
 rendered lane. It cannot model their source positions separately.
 It does not model EQ or drive. The report marks unavailable comparisons.
 A candidate needs a new render before acceptance. Tracks with the same lane
-name, including `(twin)` tracks, share the renderer's lane file and candidates.
+name share the renderer's lane file and candidates. This includes `(twin)`
+tracks.

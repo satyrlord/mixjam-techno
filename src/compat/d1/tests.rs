@@ -481,3 +481,109 @@ fn all_sixteen_shipped_d1_mixes_import_with_native_ids_and_complete_footers() {
     }
     assert_eq!(count, 16);
 }
+
+#[test]
+fn d1_schedule_matches_legacy_format_across_offsets_and_boundaries() {
+    let mut b = mix();
+    // Place clips across multiple tracks, offsets, multi-bar cuts, and the row-349 guard edge.
+    place(&mut b, 0, 2, 731, 4);
+    place(&mut b, 1, 2, 732, 12);
+    place(&mut b, 0, 0, 733, 0);
+    place(&mut b, 2, 0, 734, 8);
+    place(&mut b, 349, 7, 735, 15);
+    let bars_for = |id: u16| match id {
+        731..=734 => Some(3),
+        735 => Some(4),
+        _ => None,
+    };
+    let resolve_var = |id: u16| {
+        bars_for(id)
+            .map(|bars| {
+                (
+                    Product::D1.global_sample_id(u32::from(id)).unwrap(),
+                    bars,
+                    "base.\x70xd".into(),
+                )
+            })
+            .ok_or_else(|| "Unknown".to_string())
+    };
+    let project = convert(&b, Path::new("parity.mix"), &Library::empty(), resolve_var).unwrap();
+    let legacy_mix_events = [
+        (0usize, 2usize, 731u16, 4u16),
+        (1, 2, 732, 12),
+        (0, 0, 733, 0),
+        (2, 0, 734, 8),
+        (349, 7, 735, 15),
+    ];
+    let mut legacy = legacy_format::mix::Mix::default();
+    for (row, track, id, offset) in legacy_mix_events {
+        legacy.set_cell(row, track, id, offset).unwrap();
+    }
+    let scheduled = legacy_format::timeline::schedule(&legacy, bars_for).unwrap();
+    let step = u64::from(legacy_format::timeline::FRAMES_PER_SIXTEENTH);
+    let expected: Vec<_> = scheduled
+        .into_iter()
+        .map(|s| {
+            (
+                s.track,
+                (s.start_frame / step * 16) as u32,
+                (s.limit_frames / step * 16) as u32,
+            )
+        })
+        .collect();
+    let actual: Vec<_> = project
+        .clips
+        .iter()
+        .map(|c| (c.track, c.start_tick, c.length_ticks))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn a_long_external_wave_is_cropped_to_the_editable_grid() {
+    let root = std::env::temp_dir().join(format!(
+        "d1-long-wave-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&root).unwrap();
+    let wave_path = root.join("long.wav");
+    // A low sample rate exceeds 32,767 source bars in a small valid fixture.
+    fs::write(
+        &wave_path,
+        legacy_format::wav::PcmWave {
+            sample_rate: 1,
+            channels: 1,
+            samples: vec![1000; 60_000],
+        }
+        .encode()
+        .unwrap(),
+    )
+    .unwrap();
+
+    let mut bytes = mix();
+    place(&mut bytes, 349, 0, IMPORT_FIRST, 15);
+    bytes.extend([8, 10, 1, 0]);
+    wrapped(&mut bytes, b"Long take");
+    bytes.extend(1u16.to_le_bytes());
+    let fields: [&[u8]; 4] = [b"Recorded", b"take", b"long.wav", b"Voice"];
+    let payload = 8 + fields.iter().map(|field| field.len()).sum::<usize>();
+    bytes.extend((payload as u16).to_le_bytes());
+    for field in fields {
+        wrapped(&mut bytes, field);
+    }
+    bytes.extend(8u16.to_le_bytes());
+    bytes.extend([0; 16]);
+    let project = convert(&bytes, &root.join("song.mix"), &Library::empty(), resolve).unwrap();
+    assert_eq!(
+        project.imported_samples[0].path,
+        fs::canonicalize(&wave_path).unwrap()
+    );
+    assert_eq!(project.clips[0].start_tick, 350 * TICKS_PER_BAR - 16);
+    assert_eq!(project.clips[0].length_ticks, 16);
+    fs::remove_file(wave_path).unwrap();
+    fs::remove_dir(root).unwrap();
+}

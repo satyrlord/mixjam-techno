@@ -148,8 +148,12 @@ impl Topic {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::mixer::{GAIN_FINE_STEP_DB, GAIN_STEP_DB, useful_taper_span};
     use super::*;
-    use mixjam_techno::application::{MAX_MIXER_GAIN_DB, OVER_DBTP};
+    use mixjam_techno::application::{
+        INPUT_PEAK_LAMP_DBFS, MAX_MIXER_GAIN_DB, OVER_DBTP, VU_REFERENCE_DBFS,
+        fx::return_limiter_ceiling_dbfs,
+    };
 
     fn page_says(topic: Topic, fact: &str) -> bool {
         topic.text().iter().any(|line| line.contains(fact))
@@ -170,6 +174,70 @@ mod tests {
         assert!(
             page_says(Topic::Mastering, &format!("{OVER_DBTP:.0} dBFS")),
             "the mastering page must quote the peak lamp level, {OVER_DBTP:.0} dBFS"
+        );
+    }
+
+    #[test]
+    fn the_manual_names_both_clip_copy_modifiers_that_a_drop_accepts() {
+        // `drag.rs` copies a dropped clip while Shift or Alt is held.
+        assert!(
+            page_says(Topic::Arrange, "Shift-drag or Alt-drag copies it"),
+            "the arrange page must name Shift and Alt as copy modifiers"
+        );
+        assert!(
+            page_says(Topic::Shortcuts, "Shift or Alt copies it"),
+            "the shortcut sheet must name Shift and Alt as copy modifiers"
+        );
+    }
+
+    #[test]
+    fn the_manual_quotes_the_mixer_gain_step_and_taper_range() {
+        let step = format!("{GAIN_STEP_DB:.1} dB");
+        assert!(
+            page_says(Topic::Mixer, &step),
+            "the mixer page must quote the {step} arrow gain step"
+        );
+        let fine = format!("{GAIN_FINE_STEP_DB:.1} dB");
+        assert!(
+            page_says(Topic::Mixer, &fine),
+            "the mixer page must quote the {fine} fine gain step"
+        );
+        let (percent, low, high) = useful_taper_span();
+        let travel = format!("{percent:.0}% of its travel to {low:.0} through {high:+.0} dB");
+        assert!(
+            page_says(Topic::Mixer, &travel),
+            "the mixer page must quote the taper travel: {travel}"
+        );
+        let top = format!("{MAX_MIXER_GAIN_DB:+.0} dB");
+        assert!(
+            page_says(Topic::Mixer, &top),
+            "the mixer page must quote the +End key gain limit {top}"
+        );
+    }
+
+    #[test]
+    fn the_manual_quotes_mastering_and_fx_meter_and_limiter_references() {
+        let vu_ref = format!("0 VU is {VU_REFERENCE_DBFS:.0} dBFS");
+        assert!(
+            page_says(Topic::Mastering, &vu_ref),
+            "the mastering page must quote the VU reference: {vu_ref}"
+        );
+        let peak_lamp = format!("light at {INPUT_PEAK_LAMP_DBFS:.0} dBFS");
+        assert!(
+            page_says(Topic::Mastering, &peak_lamp),
+            "the mastering page must quote the input peak lamp threshold: {peak_lamp}"
+        );
+        let over_tp = format!("passes {OVER_DBTP:.0} dBTP");
+        assert!(
+            page_says(Topic::Mastering, &over_tp),
+            "the mastering page must quote the OVER true-peak threshold: {over_tp}"
+        );
+        let ceiling = format!("{:.6}", return_limiter_ceiling_dbfs());
+        let ceiling = ceiling.trim_end_matches('0').trim_end_matches('.');
+        let fx_ceiling = format!("below {ceiling} dBFS");
+        assert!(
+            page_says(Topic::FxReturns, &fx_ceiling),
+            "the FX returns page must quote the bus limiter ceiling: {fx_ceiling}"
         );
     }
 }

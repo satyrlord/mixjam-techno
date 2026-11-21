@@ -11,7 +11,8 @@ missing sources, and selected synth notes.
 
 The Loop, Drum, Bass, Sequence, Sphere/Wave, Effect, Voice, and Other Sample
 colors identify sounds. Sound rows use a 20% overlay of the category color.
-Arrangement clips use the full category fill with text in the Canvas color.
+Arrangement clips use the full category fill with dark text (the Canvas color
+in Studio).
 Selection adds a clip border in the Text color.
 
 **The Shared Category Rule.** Use the same category color for a sound in the
@@ -29,6 +30,10 @@ Drag Label fills the label that follows the pointer while a sound or clip
 moves. It has no other use.
 
 ## Folded Metal
+
+The hex values in this page are Vintage's. `src/ui/theme.rs` holds the Studio
+and Aero values, and the Mastering enamels are the base colors that Studio and
+Aero adjust.
 
 The Folded Metal palettes share dark inset bays and controls, cream
 lettering, polished silver knob caps, and pale metal primary buttons. Each
@@ -53,10 +58,11 @@ palettes.
 Common controls use Face `#232624`, Cream `#f9f2dc`, Ink `#121412`, and pale
 metal Primary `#d4cdb6`. Disabled faces use `#3d403c` with `#c9cbc0`
 lettering. Palette accents identify focus, selection, and active indicators.
-A focus ring that crosses the chassis needs 3:1 against it. The Red accent
-gets only 2.6:1, so the Red ring uses Cream. The default frame token uses
-Utility, and each tool body selects its named variant. Destructive buttons use
-Danger `#833627` with cream text. Error text uses Coral in every window.
+A focus ring that crosses the chassis needs 3:1 against it. In Vintage, the
+Red accent gets only 2.6:1, so the Red ring uses Cream. The default frame
+token uses Utility, and each tool body selects its named variant. Destructive
+buttons use Danger `#833627` with cream text. Error text uses Coral in every
+window.
 
 ## Mastering board
 
@@ -102,8 +108,8 @@ clears the lamp. The rose of the Limiter marks it as the fixed last stage of
 the board. It has no drag grip or move buttons, and its header line says that
 it always runs last.
 
-The Input and Output units at the ends of the board are dark inset bays with
-cream lettering, as in the bays of the other tools. The VU meter has a
+The Input and Output units are at the ends of the board. They are dark inset
+bays with cream lettering, as in the other tools. The VU meter has a
 Mastering Ivory face, an ink scale, a red zone above 0 VU, and Mastering Red
 peak lamps. The Output unit shows:
 
@@ -117,20 +123,20 @@ Amber. These four tokens are local to the board.
 
 Each dynamics pedal ends its dials with Key, which reads Own or a track
 number. The five dials of the Bus compressor take three columns, and the three
-dials of the Limiter take two rows. The duckers of the FX returns board end
-with the same Key dial.
+dials of the Limiter take two rows. Each ducker of the FX returns board has the
+same Key dial as its last dial.
 
 The strip below the board is one 30-point row of chips in a dark well. It
 shows the enamel of each pedal again, in signal order, with a cream outline
-around the pedals in view. A click on a chip, or focus on a control above the
-strip, returns a scrolled board to its top, where the units and the whole row
-show. Focus on a chip scrolls the board down to it.
+around the pedals in view. A click on a chip returns a scrolled board to its
+top. Focus on a control above the strip does the same. At the top, the units
+and the whole row show. Focus on a chip scrolls the board down to it.
 
-The whole pedal is painted. Knobs sit directly on the enamel, with ink scale
-marks, ink labels, and an ink focus ring. Values show in small dark windows
-with cream digits. The shared rotary draws ink marks where a caller sets the
-egui `dark_mode` off for a light painted surface. All other windows keep cream
-marks in dark bays.
+The application paints the whole pedal. Knobs sit directly on the enamel, with
+ink scale marks, ink labels, and an ink focus ring. Values show in small dark
+windows with cream digits. The shared rotary draws ink marks where a caller
+sets the egui `dark_mode` off for a light painted surface. All other windows
+keep cream marks in dark bays.
 
 A lit pedal lamp uses Accent with a soft glow: lime in Studio and Aero, amber
 in Vintage. A pedal that is off keeps a dark lamp, darker knob caps, and a
@@ -143,6 +149,7 @@ cables have a metal plug at each socket or pedal.
 Mixer Metal and Mixer Ink are for the ivory strips and their dark live text.
 Mixer Cream is the lettering of the dark controls. Mixer Face and Mixer Edge
 define the native value wells, buttons, and strip borders. Mixer Amber marks
-inverted polarity, and the named checked state stays available. The graphite
-surround and the fine ivory grain come from prepared material tiles. These
-tokens are local to the Mixer.
+inverted polarity, and the named checked state stays available. In Vintage,
+prepared material tiles give the graphite surround and the fine ivory grain.
+These tokens are the Vintage values and are local to the Mixer. Studio and Aero
+paint the strips with their own `strip` roles in `src/ui/theme.rs`.

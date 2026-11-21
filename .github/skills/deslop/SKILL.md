@@ -12,16 +12,16 @@ repository contracts. Judge the artifact. Do not guess who wrote it.
 
 ## 1. Inventory the scope
 
+If the user does not set a smaller scope, use first-party source,
+documentation, data, configuration, and tests.
+
 1. List every tracked and untracked file in the scope that is not generated.
    Completion criterion: Each file has a family and a representative sibling.
-2. List generated, vendored, binary, and excluded paths separately.
+2. List generated, vendored, binary, preserved-original, and excluded paths
+   separately.
    Completion criterion: Every excluded path has a reason.
 3. Read each scoped file and its sibling completely.
    Completion criterion: You know the local style, behavior, and owner.
-
-If the user does not set a smaller scope, use first-party source,
-documentation, data, configuration, and tests. Include untracked files. Keep
-preserved originals and generated assets separate.
 
 ## 2. Read the reference for each family
 

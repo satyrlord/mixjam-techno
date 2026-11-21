@@ -1,8 +1,8 @@
 # Role: mix and master critic
 
 You judge the mix and the master from the measurements and the song settings.
-Say which numbers are off target, by how much, and where. Obey the role rules
-in step 1 of [SKILL.md](SKILL.md).
+Say which numbers are off target, by how much, and where. Obey
+[ROLE-RULES.md](ROLE-RULES.md).
 
 ## Brief
 
@@ -17,8 +17,8 @@ generic targets when there is no profile:
   drowned. Read the meter limit in
   [Measurement limits](REFERENCE-INPUTS.md#measurement-limits). A low "% heard"
   is not a finding by itself. List these lanes under "Judgements that need
-  ears". Make a finding only when other evidence shows that a line is lost, for
-  example a solo render that has a melody and a mix where its band is masked.
+  ears". Make a finding only when other evidence shows that a line is lost.
+  Example: a solo render has the melody, and the mix masks its band.
 - Stereo width and correlation in each section, and the mono fold-down of
   wide sounds.
 - Reverb and delay: sends, return levels, and if they wash or clarify.

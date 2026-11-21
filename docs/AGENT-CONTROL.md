@@ -105,7 +105,7 @@ With pending changes, Cancel, Escape, or close opens
 To manage folders and providers, click `Open sample libraries` on the Files
 page. It opens `window="Sample libraries"`:
 
-- Its actions apply at once; it has no Apply, Cancel, or Done.
+- Its actions apply at once. It has no Apply, Cancel, or Done.
 - `Close Sample libraries` closes it, and a running scan continues.
 - Add library folder and Scan again use `Tempo for files without one`.
 - `Cancel library scan` cancels a scan.
@@ -121,11 +121,13 @@ available.
 ## Libraries, reviews, and captures
 
 `libraries` lists the library folders in order, and the reason when a folder
-did not load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the
-list with 1 to 9 folders and scans them, as the Sample libraries window
-does. One folder can be text: `folders=D:\drums`. The sounds change
-when the scan ends. Send `wait idle=true` before you use them. `state` also has
-the folders under `song.library`.
+did not load. Its reply also has `max_folders`, `fallback_bpm`, and `scan`.
+`set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with 1 to 9
+folders and scans them, as the Sample libraries window does. One folder can be
+text: `folders=D:\drums`. `fallback_bpm=N` sets the tempo for files without
+one, from 1 to 999. If you omit it, the tempo does not change. The sounds
+change when the scan ends. Send `wait idle=true` before you use them. `state`
+also has the folders under `song.library`.
 
 `reviews`, `review`, and `review_tracks` read the Album Review folder.
 `add_review` and `update_review` write it. They do not need the Album Review
@@ -147,14 +149,14 @@ and gives the reason.
 
 ## File choices
 
-While an agent is attached, a file choice opens a **Choose path** modal in the
-window, in place of the native dialog. Set its **Path** field and select
-**Confirm path**. A person can also type the path. When the path is not valid,
-the modal stays open and shows an error under the field, such as "That file
+In agent mode, a file choice opens a **Choose path** modal in the window, in
+place of the native dialog. Set its **Path** field and select
+**Confirm path**. A person can also type the path. If the path is not valid,
+the modal stays open. It shows an error under the field, such as "That file
 does not exist." `state.path_prompt.error` has that text. It is `null` when
-there is no error. If the song changes while an
-Open path choice is collapsed, cancel that choice and start Open again. The old
-choice keeps its path draft and cannot replace the later edits.
+there is no error. If the song changes while an Open path choice shows
+collapsed, cancel that choice and start Open again. The old choice keeps its path
+draft and cannot replace the later edits.
 
 ## Security
 
@@ -166,5 +168,5 @@ the application.
 
 The key file uses the default permissions of the file system. The application
 does not set a more restrictive access control list. Any user or program that
-can read the key can control the window, and can save files to a path that it
-supplies. A request without the key cannot authenticate.
+can read the key can control the window. It can also save files to a path that
+it supplies. A request without the key cannot authenticate.

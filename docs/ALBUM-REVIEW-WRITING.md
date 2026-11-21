@@ -5,13 +5,14 @@ This guide gives the rules for the album analysis content in
 It covers the overviews, the track roles, the tags, the energy levels, and the
 timeline events.
 
-This guide is about the prose only. The full procedure to add an album is in the
-[album-analysis skill](../.github/skills/album-analysis/SKILL.md).
-That procedure includes the metadata sources, the listening links, and the validation.
+This guide is about the prose only. The
+[album-analysis skill](../.github/skills/album-analysis/SKILL.md) has the full
+procedure to add an album. That procedure includes the metadata sources, the
+listening links, and the validation.
 
 The source of truth is the set of high-quality entries in the
-`assets/album-review/` directory.
-If this guide and the data do not agree, change the guide to agree with the data.
+`assets/album-review/` directory. If this guide and the data do not agree,
+change the guide to agree with the data.
 
 ## Related Files
 
@@ -63,9 +64,10 @@ The overview is an analytical statement of 3–11 sentences. Most overviews have
 6–9 sentences. It is not a promotional text.
 Use one to three paragraphs. Separate them with a literal `\n\n` in the JSON string.
 The paragraphs separate the recording context from the reception. An optional
-last paragraph says how the timestamps were found and how accurate they are, for
-example "Section timestamps are measured on a rip of the CD and are approximate
-to ±5 seconds." It can also name the edition that the review follows.
+last paragraph states the method and the accuracy of the timestamps. For
+example: "Section timestamps are measured on a rip of the CD and are
+approximate to ±5 seconds." It can also name the edition that the review
+follows.
 
 **Required content:**
 
@@ -111,8 +113,8 @@ it.
   prefix.
 - State *what the track does in the structure*, not how it sounds.
 - Prefer noun phrases or subordinate clauses to full sentences with a predicate.
-- Mention a chart position, a single release, or a guest vocalist only if it is
-  directly related to the structural role of the track.
+- Mention a chart position, a single release, or a guest vocalist only for a
+  direct link to the structural role.
 
 **Good examples:**
 
@@ -162,13 +164,12 @@ Give exactly one of these values: `low`, `mid`, `high`, or `peak`.
 A track has one energy value. Use the highest level in the track, not the
 average level.
 Give `peak` only to a true summit, and give it to few tracks. In the current
-data, about 1 track in 27 is `peak`.
+data, about 1 track in 28 is `peak`.
 
 ---
 
 ## Timeline events, names, and metadata
 
-The rules for the timeline event fields, instrument and sample names, and the
-metadata fields are in [the second part of this
-guide](album-review-writing/timeline-names-metadata.md). They are part of this
-guide: obey both files.
+[The second part of this guide](album-review-writing/timeline-names-metadata.md)
+has the rules for the timeline event fields, the instrument and sample names,
+and the metadata fields. Obey both files.

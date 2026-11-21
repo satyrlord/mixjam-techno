@@ -58,7 +58,7 @@ visually. It has these parameters:
 - `-Executable PATH` selects another build.
 - `-OutputDirectory PATH` selects the capture folder. The default is
   `tmp\evidence\ui\redesign`.
-- `-Views` selects a subset of the cases.
+- `-Views` selects a subset of the cases. The default is all cases.
 - `-Themes` selects a subset of `studio`, `aero`, and `vintage`. The default is
   all three.
 - `-Sizes` selects a subset of the three window sizes.
@@ -86,8 +86,8 @@ The capture cases include these views:
 - `inspector-song`, `inspector-track`, `inspector-clip`, and `inspector-clips`
   open the Inspector on each of its pages.
 - `automation-menu` opens the Automation lane menu over the song with fades and
-  automation. Track 9 of that song plays a Step synth sequence that was saved
-  with its pattern, and the clip shows the notes.
+  automation. Track 9 of that song plays a Step synth sequence with its saved
+  pattern. The clip shows the notes.
 - `command-list` opens the command list over the default song.
 - `mix-view` shows the Mix view of the score, with the lower panel on
   Mastering. `mix-view-dense` fills it with the full song. `mix-view-empty`
@@ -106,25 +106,29 @@ The Mastering cases include a bypassed board. The capture set also covers Help,
 Sample libraries, Import sound, Import details, Save your changes?, and Sample
 conflicts. The Album Review cases are the grid, a filtered grid, an album page,
 and a missing reviews folder. The set covers the three tool windows and the
-Step synth board, with expanded effects, provider settings, and the processing
-states of a missing source. It has no case for the Help windows of the tools or
-for Choose path. UI tests check that a tool's Help opens beside the
-tool. Recorded-take captures check the window layout with a
-synthetic presentation state. They do not record audio.
+Step synth board. It also covers expanded effects, provider settings, and the
+processing states of a missing source. It has no case for the Help windows of
+the tools or for Choose path. UI tests check that a tool's Help opens beside
+the tool. Recorded-take captures check the window layout with a synthetic
+presentation state. They do not record audio.
 
-Through the agent channel of the built application, verify keyboard page
-selection, draft edits, Apply, Cancel, Restore all defaults, and focus
-restoration. Inspect the accessibility tree separately from the capture
-appearance. [Native frontend](../architecture/frontend.md) describes the themes,
-the shared shell and controls, and the collapse behavior that the captures
-show.
+Use the agent channel of the built application to verify these items:
 
-The ignored `arrangement_frame_time` test times the Arrange view on a song of
-64 tracks by 256 bars with waveforms, at each lane height and at the zoom
-limits. Run it optimized with `cargo.ps1 -CargoArguments @('test','--release',
+- Keyboard page selection and draft edits.
+- Apply, Cancel, and Restore all defaults.
+- Focus restoration.
+
+Inspect the accessibility tree separately from the capture appearance.
+[Native frontend](../architecture/frontend.md) describes the themes, the shared
+shell and controls, and the collapse behavior that the captures show.
+
+The ignored `arrangement_frame_time` test times the Arrange view. The song has
+64 tracks of 256 bars, with waveforms. The test covers each lane height and the
+zoom limits. It prints the median, p95, and maximum frame time of each case.
+Run it optimized with `cargo.ps1 -CargoArguments @('test','--release',
 '--locked','--lib','arrangement_frame_time','--','--ignored','--nocapture')`.
 The p95 frame time of each case must stay below 16.7 ms.
 
-A body that overflows its window shows a scroll bar. Short blocking dialogs
-follow the height of their content. The captures do not verify screen readers
-or other accessibility, physical audio, or native file pickers.
+A body that is taller than its window shows a scroll bar. A short dialog that
+blocks the window follows the height of its content. The captures do not verify
+screen readers or other accessibility, physical audio, or native file pickers.

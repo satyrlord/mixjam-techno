@@ -83,6 +83,43 @@ fn history_entries_share_the_import_list_until_an_edit_changes_it() {
 }
 
 #[test]
+fn a_probed_rate_updates_only_matching_sources_and_keeps_history_shared() {
+    let sample = ImportedSample {
+        id: 1_000_000,
+        name: "Palette sound".into(),
+        group_name: "Wave".into(),
+        path: PathBuf::from("old.wav"),
+        source_bpm: 140.0,
+        source_sample_rate: None,
+        origin: None,
+    };
+    let mut editor = Editor::new(Project {
+        imported_samples: vec![sample].into(),
+        ..Project::default()
+    });
+    editor
+        .transact(|project| project.imported_samples[0].path = PathBuf::from("new.wav"))
+        .unwrap();
+    editor.transact(|project| project.bpm = 135.0).unwrap();
+    let generation = editor.generation();
+    let mut probed = editor.project.imported_samples[0].clone();
+    probed.source_sample_rate = Some(44_100);
+
+    editor.record_import_rates(&[probed]);
+
+    assert_eq!(editor.generation(), generation);
+    assert_eq!(
+        editor.project.imported_samples[0].source_sample_rate,
+        Some(44_100)
+    );
+    assert!(std::sync::Arc::ptr_eq(
+        &editor.project.imported_samples.0,
+        &editor.undo[1].imported_samples.0,
+    ));
+    assert_eq!(editor.undo[0].imported_samples[0].source_sample_rate, None);
+}
+
+#[test]
 fn zero_move_preserves_clip_order_history_and_redo_and_checks_ids() {
     let mut editor = Editor::new(Project::default());
     let first = editor.place(1, 0, 0, 256).unwrap();

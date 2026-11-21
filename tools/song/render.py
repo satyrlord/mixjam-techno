@@ -165,12 +165,15 @@ def run(song_path, wav_path, data=None):
         raise SystemExit(f'Cannot render {song_path}: {result.stdout}{result.stderr}')
 
 
+NO_TRACK_SOUNDS_EXIT = 3
+
+
 def run_stems(song_path, folder, data):
     """Render track and FX parts with complete key context; False when no track sounds."""
     environment = dict(os.environ, MIXJAM_TECHNO_DATA_DIR=str(data))
     result = native([str(env.exe()), 'render', '--mix', str(song_path), '--stems', str(folder)], environment)
     if result.returncode != 0:
-        if result.stderr.strip() == 'No track sounds: add clips, or check Mute, Solo, and L/R.':
+        if result.returncode == NO_TRACK_SOUNDS_EXIT:
             return False
         raise SystemExit(f'Cannot render stems for {song_path}: {result.stdout}{result.stderr}')
     return True
@@ -373,9 +376,25 @@ def file_digest(path):
     return digest.hexdigest()
 
 
-def check_lane_wav(path):
-    """Raise unless `path` is a complete stereo PCM16 WAV."""
-    with wave.open(str(path), 'rb') as audio:
+class _HashingReader:
+    """Forward-only binary reader that computes SHA-256 while streaming."""
+
+    def __init__(self, source):
+        self._source = source
+        self._digest = hashlib.sha256()
+
+    def read(self, size=-1):
+        data = self._source.read(size)
+        if data:
+            self._digest.update(data)
+        return data
+
+    def hexdigest(self):
+        return self._digest.hexdigest()
+
+
+def _check_lane_wav_stream(stream):
+    with wave.open(stream, 'rb') as audio:
         if audio.getnchannels() != 2 or audio.getsampwidth() != 2 or audio.getnframes() <= 0:
             raise ValueError('The cached lane is not a stereo PCM16 WAV.')
         remaining = audio.getnframes() * 4
@@ -384,6 +403,16 @@ def check_lane_wav(path):
             if not block:
                 raise ValueError('The cached lane WAV is incomplete.')
             remaining -= len(block)
+
+
+def check_and_digest_lane_wav(path):
+    """Validate a stereo PCM16 WAV and compute its SHA-256 digest in one read."""
+    with open(path, 'rb') as source:
+        reader = _HashingReader(source)
+        _check_lane_wav_stream(reader)
+        while reader.read(1024 * 1024):
+            pass
+        return reader.hexdigest()
 
 
 def cache_temporary(folder, mode='w+b', encoding=None):
@@ -409,8 +438,7 @@ def share(source, destination, expected_digest=None):
         except OSError:
             shutil.copyfile(source, path)
         if expected_digest is not None:
-            check_lane_wav(path)
-            if file_digest(path) != expected_digest:
+            if check_and_digest_lane_wav(path) != expected_digest:
                 raise ValueError('The cached lane WAV does not match its digest.')
         os.replace(path, destination)
     finally:

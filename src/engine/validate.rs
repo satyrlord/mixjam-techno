@@ -6,47 +6,55 @@ use super::{
 use std::collections::HashSet;
 
 impl Project {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != PROJECT_SCHEMA_VERSION {
-            return Err("This project version is not supported.".into());
-        }
-        if self.tracks.len() != TRACK_COUNT {
-            return Err("The project must have 64 track slots.".into());
-        }
+    pub(crate) fn validate_bpm(&self) -> Result<(), String> {
         if !SUPPORTED_BPMS.contains(&self.bpm) {
             return Err("Tempo must be 120, 125, 130, 135, 140, 160, or 180 BPM.".into());
         }
-        if self.pitch_ratio != 1.0 {
-            return Err("Project pitch must be 1.0.".into());
-        }
-        if self.import_notices.iter().any(|notice| {
-            !notice.source_bpm.is_finite()
-                || notice.source_bpm <= 0.0
-                || !SUPPORTED_BPMS.contains(&notice.target_bpm)
-        }) {
-            return Err("The project has invalid import tempo data.".into());
-        }
-        if self
-            .source_settings
-            .iter()
-            .any(|(key, value)| key.is_empty() || key.contains('\0') || value.contains('\0'))
-        {
-            return Err("The project has invalid saved source settings.".into());
-        }
-        let mut library_products = HashSet::new();
-        if self.libraries.iter().any(|binding| {
-            binding.root.as_os_str().is_empty() || !library_products.insert(binding.product)
-        }) {
-            return Err("Each product needs one library binding with a nonempty root.".into());
-        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_master_gain(&self) -> Result<(), String> {
         if !valid_mixer_gain(self.master_gain) {
             return Err("Master amplitude must be from 0 to 4.".into());
         }
-        self.master.validate()?;
-        self.fx.validate()?;
-        for (bus, lane) in self.return_automation.iter().enumerate() {
-            crate::automation::validate_return_points(lane)
-                .map_err(|error| format!("FX {}: {error}", bus + 1))?;
+        Ok(())
+    }
+
+    pub(crate) fn validate_track(&self, index: usize) -> Result<(), String> {
+        let track = self
+            .tracks
+            .get(index)
+            .ok_or("The track is outside the project.")?;
+        if !valid_mixer_gain(track.gain) {
+            return Err("Track amplitude must be from 0 to 4.".into());
+        }
+        if !track.pan.is_finite() || !(-1.0..=1.0).contains(&track.pan) {
+            return Err("Track pan must be from -1 to 1.".into());
+        }
+        if track
+            .sends
+            .iter()
+            .any(|send| !send.is_finite() || !(0.0..=1.0).contains(send))
+        {
+            return Err("Track sends must be from 0 to 1.".into());
+        }
+        if !track.width.is_finite() || !(TRACK_WIDTH.low..=TRACK_WIDTH.high).contains(&track.width)
+        {
+            return Err("Track width must be from 0 to 200%.".into());
+        }
+        track
+            .automation
+            .validate()
+            .and_then(|()| track.eq.validate())
+            .and_then(|()| track.drive.validate())
+            .and_then(|()| track.compressor.validate())
+            .and_then(|()| track.ducker.validate(index))
+            .map_err(|error| format!("Track {}: {error}", index + 1))
+    }
+
+    pub(crate) fn validate_tracks(&self) -> Result<(), String> {
+        if self.tracks.len() != TRACK_COUNT {
+            return Err("The project must have 64 track slots.".into());
         }
         if self
             .tracks
@@ -85,6 +93,10 @@ impl Project {
                 .and_then(|()| track.ducker.validate(index))
                 .map_err(|error| format!("Track {}: {error}", index + 1))?;
         }
+        Ok(())
+    }
+
+    pub(crate) fn validate_keys(&self) -> Result<(), String> {
         let mut keys: Vec<usize> = self
             .tracks
             .iter()
@@ -100,6 +112,77 @@ impl Project {
                  as keys."
             ));
         }
+        Ok(())
+    }
+
+    pub(crate) fn validate_return_lane(&self, bus: usize) -> Result<(), String> {
+        let lane = self
+            .return_automation
+            .get(bus)
+            .ok_or("The FX bus does not exist.")?;
+        crate::automation::validate_return_points(lane)
+            .map_err(|error| format!("FX {}: {error}", bus + 1))
+    }
+
+    pub(crate) fn validate_clip_fields(clip: &super::Clip) -> Result<(), String> {
+        if clip.track >= TRACK_COUNT
+            || clip.length_ticks == 0
+            || clip
+                .start_tick
+                .checked_add(clip.length_ticks)
+                .is_none_or(|end| end > MAX_TICKS)
+            || !valid_gain(clip.gain)
+        {
+            return Err(format!(
+                "Clip {} has invalid track, time, or volume data.",
+                clip.id
+            ));
+        }
+        if clip.fades.fit(clip.length_ticks) != clip.fades {
+            return Err(format!("Clip {} has fades longer than the clip.", clip.id));
+        }
+        check_pitch(clip.pitch_cents, format_args!("Clip {} pitch", clip.id))
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != PROJECT_SCHEMA_VERSION {
+            return Err("This project version is not supported.".into());
+        }
+        if self.tracks.len() != TRACK_COUNT {
+            return Err("The project must have 64 track slots.".into());
+        }
+        self.validate_bpm()?;
+        if self.pitch_ratio != 1.0 {
+            return Err("Project pitch must be 1.0.".into());
+        }
+        if self.import_notices.iter().any(|notice| {
+            !notice.source_bpm.is_finite()
+                || notice.source_bpm <= 0.0
+                || !SUPPORTED_BPMS.contains(&notice.target_bpm)
+        }) {
+            return Err("The project has invalid import tempo data.".into());
+        }
+        if self
+            .source_settings
+            .iter()
+            .any(|(key, value)| key.is_empty() || key.contains('\0') || value.contains('\0'))
+        {
+            return Err("The project has invalid saved source settings.".into());
+        }
+        let mut library_products = HashSet::new();
+        if self.libraries.iter().any(|binding| {
+            binding.root.as_os_str().is_empty() || !library_products.insert(binding.product)
+        }) {
+            return Err("Each product needs one library binding with a nonempty root.".into());
+        }
+        self.validate_master_gain()?;
+        self.master.validate()?;
+        self.fx.validate()?;
+        for bus in 0..self.return_automation.len() {
+            self.validate_return_lane(bus)?;
+        }
+        self.validate_tracks()?;
+        self.validate_keys()?;
         if self.clips.len() > MAX_CLIPS {
             return Err("The project has too many clips.".into());
         }

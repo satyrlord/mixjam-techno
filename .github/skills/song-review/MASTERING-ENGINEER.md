@@ -2,13 +2,13 @@
 
 You explore the master pedalboard on the premaster of the song and recommend
 a board. Decide by measurement against the reference profile. Say which
-choices need ears. Obey the role rules in step 1 of [SKILL.md](SKILL.md).
+choices need ears. Obey [ROLE-RULES.md](ROLE-RULES.md).
 
 ## Evidence
 
 Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). Also read:
 
-- the board rules of the artist profile;
+- the board rules of the artist profile.
 - the factory presets of the application, in `src/master/presets.rs`. A preset
   sets the settings and the order of the pedals, and switches the booster
   pedals off. It keeps the trim, the bypass, and the keys of the dynamics
@@ -17,8 +17,8 @@ Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). Also read:
 The premaster is `OUT/premaster.wav`, with the board and the trim off. Select
 the target for each measure in this order:
 
-1. the target of the artist profile;
-2. the target of the reference profile that `master.py` reads;
+1. the target of the artist profile.
+2. the target of the reference profile that `master.py` reads.
 3. if there is no artist profile, the
    [generic target](REFERENCE-ROUNDS.md#generic-targets).
 
@@ -29,9 +29,9 @@ each target.
 
 Run `python -I tools/song/master.py PREMASTER BOARD.json OUT_DIR --song SONG`
 for each board. The tool renders the board over the premaster. It measures the
-loud blocks, the sections, the 1/3-octave balance against the references, and
-the drums: how far the board pushes the hits down, and the kick and hat attack
-against the premaster. Report the limits of `master.py` in
+loud blocks, the sections, and the 1/3-octave balance against the references.
+It also measures the drums: how far the board pushes the hits down, and the
+kick and hat attack against the premaster. Report the limits of `master.py` in
 [Measurement limits](REFERENCE-INPUTS.md#measurement-limits).
 
 1. Measure the premaster and the current board.
@@ -47,22 +47,23 @@ against the premaster. Report the limits of `master.py` in
 5. Select the board that meets the most targets without harm to the drums or
    to the section contrast.
    Completion criterion: Each choice has a measured reason.
-6. Make a more restrained alternative and a bolder alternative from the same family.
-   Completion criterion: Both are fitted and measured.
+6. Make a more restrained alternative and a bolder alternative from the same
+   family.
+   Completion criterion: You fitted and measured both.
 
 The limiter is always the last pedal. Keep the order of the board unless a measured
 reason needs a change. Do not change the mix.
 
 ## Pedal notes
 
-These notes come from measurements of the pedals on one mix. They are a start
-for step 2, not a result. Measure the pedals again on this mix.
+These notes are a start for step 2, not a result. Measure each pedal again on
+this mix.
 
 | Pedal | Notes |
 | --- | --- |
 | trim | Gain before every pedal. It also sets how hard `boosterCompressor` works. |
-| boosterEq | 10 bands, 50 is flat: 60 Hz and 12 kHz shelves (about 0.24 dB per step) and Q 4 peaks from 80 Hz to 9 kHz (about 0.36 dB per step). The only narrow tool on the board. |
-| boosterCompressor | A level-riding compressor with a treble-weighted detector and a saturator: drive levels, speed sets the release, gain is makeup. Moderate drive carries several dB of loudness. High drive flattens the crest. |
+| boosterEq | 10 bands. 50 is flat. The 60 Hz and 12 kHz shelves move about 0.24 dB per step. The Q 4 peaks from 80 Hz to 9 kHz move about 0.36 dB per step. It is the only narrow tool on the board. |
+| boosterCompressor | A compressor that rides the level, with a treble-weighted detector and a saturator: drive levels, speed sets the release, gain is makeup. Moderate drive carries several dB of loudness. High drive flattens the crest. |
 | boosterWide | Delays the side signal by about 1 ms. It combs each channel. Use `imaging` for width. |
 | softClip | Acts only on peaks above its knee. After a large negative trim, it can stay inactive. |
 | tube | Small drives change little. Large drives lower the level and the crest. |
@@ -78,9 +79,9 @@ for step 2, not a result. Measure the pedals again on this mix.
 ## Output
 
 - A table of the pedals: what each does on this mix.
-- The recommended board as JSON (the shape of `board()` in
-  `tools/song/mixjam.py`, trim included), saved as `board-roundN.json` in the
-  review folder, and what each active pedal does in it.
+- The recommended board as JSON, with trim included, in the shape of `board()`
+  in `tools/song/mixjam.py`. Save it as `board-roundN.json` in the review
+  folder. Say what each active pedal does in it.
 - A table: recommended board, current board, and targets, for loudness, peak,
   crest, low-end shares, tonal indices, correlation, spread, section contrast,
   and the drum line.

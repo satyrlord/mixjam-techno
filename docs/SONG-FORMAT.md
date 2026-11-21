@@ -4,7 +4,7 @@ A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 26 is
 the current song format. The application writes only this version. Versions 8
 to 25 open and migrate. Version 7 is the earlier MixJam project format. It is
 import-only: **Save** never replaces a version-7 file. `src/mixjam/song.rs`
-owns the format, and its tests cover each version.
+owns the format.
 
 ## Contents
 
@@ -27,7 +27,7 @@ document holds these keys:
 - `libraries`
 
 From version 11, a document also holds `master`. From version 13, it also holds
-`fxBuses`. Each key is required from the version that adds it.
+`fxBuses`. A song of the version that adds a key must hold that key.
 
 `sourceSettings` holds, as text, the settings that the original product saved
 with an imported song. A song without such settings omits the key.

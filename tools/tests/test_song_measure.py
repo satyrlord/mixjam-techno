@@ -400,6 +400,37 @@ class MeasureTests(unittest.TestCase):
             measure.mechanical(song, {})
         cuts.assert_called_once_with(song, {}, measure.phrase.GATED)
 
+    def test_ending_sources_reuse_decoded_audio_without_reading_wav_twice(self):
+        import weakref
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_a = root / 'rev.wav'
+            source_b = root / 'pitch.wav'
+            data = np.zeros((44100, 2))
+            data[:22050] = 0.5
+            mixjam.write_wav(source_a, 44100, data)
+            mixjam.write_wav(source_b, 44100, data[::-1])
+            song = mixjam.Song('dedup', bpm=120)
+            song.clip(1, source_a, 0, 128, reverse=True)
+            song.clip(2, source_b, 0, 128)
+            document = song.document()
+            document['lanes'][1]['automation'] = {'pitch': [{'tick': 0, 'value': -1200}]}
+            roles = {'1': {'name': 'Pad 1', 'role': 'pad'}, '2': {'name': 'Pad 2', 'role': 'pad'}}
+            decoded = []
+            read_wav = measure.read_wav
+
+            def read_ending_source(path):
+                self.assertTrue(all(previous() is None for previous in decoded))
+                rate, pcm = read_wav(path)
+                decoded.append(weakref.ref(pcm))
+                return rate, pcm
+
+            with mock.patch.object(measure, 'read_wav', side_effect=read_ending_source) as measure_read, \
+                    mock.patch.object(mixjam, 'read_wav', wraps=mixjam.read_wav) as mixjam_read:
+                measure.mechanical(document, roles)
+            self.assertEqual(measure_read.call_count + mixjam_read.call_count, 2)
+
 
 if __name__ == '__main__':
     unittest.main()

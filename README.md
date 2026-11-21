@@ -20,7 +20,8 @@ your own songs, for you and for song-building agents.
 - Rust. `tools/runtime/install-rust.ps1` installs it in `local-data/toolchain/`,
   and does not change the user PATH.
 - The Visual Studio C++ build tools and the Windows SDK.
-- Python 3 for the checks. The song tools need Python 3.9 or later and numpy.
+- Python 3 and Node.js with npm for the checks. The song tools need Python 3.9
+  or later and numpy.
 
 ## Build and run
 
@@ -37,11 +38,12 @@ build again after source changes, use `-Build`, or build it yourself:
 .\tools\runtime\cargo.ps1 build --release --locked
 ~~~
 
-At the first start, select **Options → Sample libraries → Add library folder**.
-The gear at the left end of the status bar, or **Ctrl+,**, opens Options.
-Settings, the scan cache, and generated audio use
-`%LOCALAPPDATA%\MixJam Techno`. To use another writable folder, set
-`MIXJAM_TECHNO_DATA_DIR`.
+At the first start, the **Sample libraries** window opens. Select **Add library
+folder**, then select a folder of WAV files. To open the window later, select
+the **Options** gear at the left end of the status bar, or press **Ctrl+,**.
+Then select **Files** and **Open sample libraries**. Settings, the scan cache,
+and generated audio use `%LOCALAPPDATA%\MixJam Techno`. To use another writable
+folder, set `MIXJAM_TECHNO_DATA_DIR`.
 
 ## Documentation
 

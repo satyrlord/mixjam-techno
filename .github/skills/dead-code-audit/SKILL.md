@@ -16,9 +16,11 @@ description: >
 
 ## 2. Make the graph
 
-1. Read `docs/ARCHITECTURE.md`, the Cargo manifests, `build.rs`, and the
-   contracts that apply. If they exist, also read `AGENTS.md`,
-   `local-data/research/PRODUCT.md`, and `local-data/research/COMPATIBILITY.md`.
+1. Read `docs/ARCHITECTURE.md`, the architecture pages that apply, the Cargo
+   manifests, `build.rs`, and the contracts that apply. Also read the product
+   and compatibility authorities that
+   [Toolchain and folders](../../../docs/DEVELOPMENT.md#toolchain-and-folders)
+   names.
    Completion criterion: You know all configured graph tools and protected paths.
 2. List each executable, library, feature, test, build script, CLI command,
    runtime catalog, runtime asset, and preservation entry.
@@ -42,12 +44,14 @@ commands must prove that they exist.
 1. For every candidate, check each reachability path in this list:
    - Rust modules, feature gates, trait calls, macros, and public APIs
    - CLI dispatch, `Session` operations, serialization, migrations, and import profiles
-   - runtime catalogs, `build.rs`, embedded font and rail assets, and runtime paths
+   - runtime catalogs, `build.rs`, assets that `include_bytes!` embeds, and
+     runtime paths
    - test, fixture, optional oracle, build, and documentation paths
    - preservation snapshots, manifests, Git bundles, and approved research
 
    Completion criterion: Each path in the list has a result for each candidate.
-2. If a dynamic path can cause a false positive, read [EXAMPLES.md](EXAMPLES.md).
+2. If a dynamic path can cause a false positive, read [EXAMPLES.md](EXAMPLES.md),
+   which lists the common false positives.
    Completion criterion: Each dynamic path has a trace from source to consumer.
 3. Before you classify a candidate as dead, read [REFERENCE.md](REFERENCE.md).
    Completion criterion: The candidate meets deletion conditions 1 to 4 in REFERENCE.md.
@@ -69,7 +73,7 @@ Static analysis alone does not permit a deletion.
 
 ## Completion criterion
 
-Each candidate is live, false positive, removed, or unresolved. For each item,
-the report gives the tool result, the local proof, the action, and the verifier
-after the action. If a necessary tool or dynamic path is not available, do not
-claim a clean audit.
+Each candidate is live, dead, or unresolved. In cleanup mode, each dead
+candidate is also removed. For each item, the report gives the tool result, the
+local proof, the action, and the verifier after the action. If a necessary tool
+or dynamic path is not available, do not claim a clean audit.

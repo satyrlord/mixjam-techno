@@ -50,12 +50,15 @@ impl Session {
         {
             self.editor.set_title(stem.to_string_lossy().into_owned());
         }
-        if let Err(error) =
-            crate::project_io::save_with_library(self.project(), &self.library, path)
-        {
-            self.editor.set_title(previous);
-            return Err(error);
-        }
+        let rates =
+            match crate::project_io::save_with_library_rates(self.project(), &self.library, path) {
+                Ok(rates) => rates,
+                Err(error) => {
+                    self.editor.set_title(previous);
+                    return Err(error);
+                }
+            };
+        self.editor.record_import_rates(&rates);
         // An edit after Save must be undoable back to the saved state.
         self.gesture = None;
         self.file = Some(path.to_path_buf());

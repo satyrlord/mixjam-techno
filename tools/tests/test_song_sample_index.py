@@ -82,7 +82,10 @@ class SampleIndexTests(unittest.TestCase):
             self.assertEqual(samples.parse_name(name), expected, name)
 
     def test_typed_keys_and_chord_tables_use_one_spelling(self):
-        self.assertEqual([samples.parse_key(k) for k in ('A min', 'f#m', 'Gb', 'Bbm', 'x')], ['Am', 'F#m', 'F#', 'A#m', None])
+        self.assertEqual(
+            [samples.parse_key(k) for k in ('A min', 'f#m', 'Gb', 'Bbm', 'F♯m', 'B♭', 'A   MAJ', 'E#', 'Cb', 'A-m', 'x')],
+            ['Am', 'F#m', 'F#', 'A#m', 'F#m', 'A#', 'A', 'F', 'B', None, None],
+        )
         self.assertEqual([samples.german_chord(c) for c in ('c', 'Dis', 'Gis', 'H', 'es')], ['Cm', 'D#', 'G#', 'B', 'D#m'])
 
     def test_header_gives_length_and_loop_tempo_and_the_pack_gives_chords(self):

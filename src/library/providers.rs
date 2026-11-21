@@ -474,6 +474,12 @@ impl Library {
             .map(|(index, sample)| (sample.id, index))
             .collect();
     }
+
+    #[cfg(test)]
+    pub(crate) fn bind_source_root_for_test(&mut self, product: Product, root: PathBuf) {
+        self.bindings.retain(|binding| binding.product != product);
+        self.bindings.push(LibraryBinding { product, root });
+    }
 }
 
 #[derive(Deserialize)]

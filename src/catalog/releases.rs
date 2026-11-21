@@ -17,8 +17,6 @@ use std::{
 
 /// The catalog folder under the application's `assets`.
 pub const FOLDER: &str = "catalog";
-/// The file of extra source tempos in the catalog folder. It is not a catalog.
-pub const SOURCE_TEMPOS: &str = "source-tempos.json";
 /// The catalog file format that this application reads and writes.
 pub const SCHEMA: u32 = 3;
 const RELEASE_NAME_LIMIT: usize = 64;
@@ -116,7 +114,6 @@ pub struct Catalogs {
     identities: [Vec<WaveMetadata>; Product::ALL.len()],
     /// Alternative names from compatible releases, keyed by native ID.
     aliases: [BTreeMap<u32, Vec<WaveMetadata>>; Product::ALL.len()],
-    source_tempos: Vec<([u8; 16], f64)>,
     problems: Vec<(String, String)>,
 }
 
@@ -183,12 +180,7 @@ impl Catalogs {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let loaded = if name.eq_ignore_ascii_case(SOURCE_TEMPOS) {
-                read_source_tempos(&path).map(|tempos| self.source_tempos = tempos)
-            } else {
-                read_catalog(&path).and_then(|file| self.merge(&name, file))
-            };
-            if let Err(error) = loaded {
+            if let Err(error) = read_catalog(&path).and_then(|file| self.merge(&name, file)) {
                 self.problems.push((name, error));
             }
         }
@@ -299,11 +291,6 @@ impl Catalogs {
             .map_or(&[], Vec::as_slice)
     }
 
-    /// Tempos of other original sounds, by audio digest, from `source-tempos.json`.
-    pub fn source_tempos(&self) -> &[([u8; 16], f64)] {
-        &self.source_tempos
-    }
-
     /// Files that did not load, each with the reason.
     pub fn problems(&self) -> &[(String, String)] {
         &self.problems
@@ -378,18 +365,21 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
                 .into(),
         );
     }
-    let schema = serde_json::from_str::<serde_json::Value>(&text)
-        .ok()
-        .and_then(|value| value.get("schema")?.as_u64());
-    if schema == Some(2) {
-        return Err(
-            "This catalog has format 2, which holds the original sound names and file paths. \
-             Generate it again."
-                .into(),
-        );
+    const OLD_FORMAT: &str = "This catalog has format 2, which holds the original sound names and file paths. \
+         Generate it again.";
+    let mut file: CatalogFile = serde_json::from_str(&text).map_err(|error| {
+        let schema = serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .and_then(|value| value.get("schema")?.as_u64());
+        if schema == Some(2) {
+            OLD_FORMAT.into()
+        } else {
+            format!("This is not a sample catalog: {error}")
+        }
+    })?;
+    if file.schema == 2 {
+        return Err(OLD_FORMAT.into());
     }
-    let mut file: CatalogFile = serde_json::from_str(&text)
-        .map_err(|error| format!("This is not a sample catalog: {error}"))?;
     if file.schema != SCHEMA {
         return Err(format!(
             "Catalog format {} is not supported; this application reads format {SCHEMA}.",
@@ -454,19 +444,6 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
     }
     file.samples.sort_by_key(|entry| entry.native_id);
     Ok(file)
-}
-
-fn read_source_tempos(path: &Path) -> Result<Vec<([u8; 16], f64)>, String> {
-    let text = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let tempos: Vec<([u8; 16], f64)> = serde_json::from_str(&text)
-        .map_err(|error| format!("Cannot read the source tempos: {error}"))?;
-    if tempos
-        .iter()
-        .any(|(_, bpm)| !bpm.is_finite() || *bpm <= 0.0)
-    {
-        return Err("A source tempo is not a finite positive tempo.".into());
-    }
-    Ok(tempos)
 }
 
 #[cfg(test)]
@@ -721,6 +698,27 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_catalog_fields_are_rejected() {
+        let folder = Folder::new("duplicate-fields");
+        let valid = release(Product::D1, "download", "d1", vec![sample(731, 1)]);
+        let text = serde_json::to_string(&valid).unwrap();
+        let text = text.replacen(
+            "\"native_id\":731",
+            "\"native_id\":732,\"native_id\":731",
+            1,
+        );
+        folder.write("d1.json", &text);
+
+        let catalogs = folder.open();
+        assert!(catalogs.releases().is_empty());
+        assert!(
+            catalogs.problems()[0]
+                .1
+                .contains("duplicate field `native_id`")
+        );
+    }
+
+    #[test]
     fn a_folder_change_is_seen_without_reading_the_catalogs_again() {
         let folder = Folder::new("changes");
         folder.catalog(
@@ -788,25 +786,18 @@ mod tests {
     }
 
     #[test]
-    fn source_tempos_are_read_beside_the_catalogs_and_checked() {
+    fn a_tempo_list_beside_the_catalogs_is_not_a_catalog() {
+        // The application reads sample catalogs only. A tempo list for
+        // products outside its scope is a stray file.
         let folder = Folder::new("tempos");
-        folder.write(SOURCE_TEMPOS, "[[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],0.0]]");
-        let invalid = folder.open();
-        assert!(invalid.source_tempos().is_empty());
-        assert!(invalid.problems()[0].1.contains("finite positive"));
         folder.write(
-            SOURCE_TEMPOS,
+            "source-tempos.json",
             "[[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],90.0]]",
         );
-        let valid = folder.open();
-        assert_eq!(
-            valid.source_tempos(),
-            [(
-                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                90.0
-            )]
-        );
-        assert!(valid.problems().is_empty() && valid.releases().is_empty());
+        let catalogs = folder.open();
+        assert!(catalogs.releases().is_empty());
+        assert_eq!(catalogs.problems().len(), 1);
+        assert_eq!(catalogs.problems()[0].0, "source-tempos.json");
     }
 
     #[test]
