@@ -294,7 +294,7 @@ fn empty_project_record_chooser_can_create_track_64_without_empty_rows() {
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.score.tracks, vec![0]);
     assert_eq!(app.score.add_track, Some(0));
-    assert!(occupied_tracks(app.session.project()).is_empty());
+    assert!(app.session.project().occupied_tracks().is_empty());
     assert!((app.score.rect.unwrap().height() - app.score.row_height).abs() < 0.1);
     let menu_ctx = egui::Context::default();
     configure_style(&menu_ctx);
@@ -368,7 +368,7 @@ fn empty_project_record_chooser_can_create_track_64_without_empty_rows() {
     assert_eq!(app.session.project().clips[0].track, 63);
     assert_eq!(app.session.project().tracks.len(), 64);
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(occupied_tracks(app.session.project()), vec![63]);
+    assert_eq!(app.session.project().occupied_tracks(), vec![63]);
     assert!(app.score.tracks.len() <= 2);
 }
 
@@ -661,4 +661,221 @@ fn shift_drag_copies_clips_and_a_ghost_shows_where_they_land() {
         |clip| clip.start_tick == source.start_tick + 4 * TICKS_PER_BAR
             && clip.sample_id == source.sample_id
     ));
+}
+
+#[test]
+fn a_secondary_button_release_does_not_drop_a_dragged_clip() {
+    let (ctx, mut app) = fixture();
+    let canvas = app.score.rect.unwrap();
+    let clips = &app.session.project().clips;
+    let first_id = clips[0].id;
+    let first = app.clip_rect(&clips[0], canvas).center() + GRIP;
+    let target = first + Vec2::new(app.score.bar_width, 0.0);
+    let middle = app.clip_rect(&clips[1], canvas).center();
+    let before = app.session.project().clone();
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, first, true, none);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(middle)],
+        none,
+    );
+    assert!(app.gestures.drag.is_some(), "The drag is under way.");
+    for pressed in [true, false] {
+        button_at(
+            &ctx,
+            &mut app,
+            middle,
+            egui::PointerButton::Secondary,
+            pressed,
+        );
+    }
+    assert!(
+        app.gestures.drag.is_some(),
+        "Releasing the other button leaves the drag open."
+    );
+    assert_eq!(
+        app.session.project(),
+        &before,
+        "Releasing the other button drops nothing."
+    );
+    assert_eq!(app.selection.clips, [first_id].into_iter().collect());
+    assert!(app.clip_menu.clip.is_none());
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(target)],
+        none,
+    );
+    pointer(&ctx, &mut app, target, false, none);
+    assert!(app.gestures.drag.is_none());
+    assert_eq!(
+        app.session.project().clips[0].start_tick,
+        TICKS_PER_BAR,
+        "Releasing the primary button drops the clip."
+    );
+}
+
+#[test]
+fn a_clip_drops_when_its_drag_button_is_released() {
+    use egui::PointerButton::{Primary, Secondary};
+
+    for (owner, other) in [(Primary, Secondary), (Secondary, Primary)] {
+        let (ctx, mut app) = fixture();
+        let canvas = app.score.rect.unwrap();
+        let clip = app.session.project().clips[0].clone();
+        let start = app.clip_rect(&clip, canvas).center() + GRIP;
+        let end = start + Vec2::new(app.score.bar_width, 0.0);
+        let count = app.session.project().clips.len();
+        button_at(&ctx, &mut app, start, owner, true);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(end)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.gestures.drag.is_some());
+        button_at(&ctx, &mut app, end, other, true);
+        button_at(&ctx, &mut app, end, owner, false);
+        assert!(app.gestures.drag.is_none());
+        let clips = &app.session.project().clips;
+        assert_eq!(clips.len(), count + usize::from(owner == Secondary));
+        assert_eq!(clips.contains(&clip), owner == Secondary);
+        assert!(clips.iter().any(|placed| {
+            placed.sample_id == clip.sample_id
+                && placed.start_tick == clip.start_tick + TICKS_PER_BAR
+        }));
+        let after = app.session.project().clone();
+        button_at(&ctx, &mut app, end, other, false);
+        assert_eq!(app.session.project(), &after);
+    }
+}
+
+#[test]
+fn a_secondary_drag_on_the_ruler_sets_no_loop() {
+    let (ctx, mut app) = fixture();
+    let ruler = app.score.ruler_rect.unwrap();
+    let bar = app.score.bar_width;
+    let from = Pos2::new(ruler.left() + 1.5 * bar, ruler.center().y);
+    let to = from + Vec2::new(2.0 * bar, 0.0);
+    secondary_drag(&ctx, &mut app, from, to);
+    assert_eq!(
+        app.session.project().loop_region,
+        None,
+        "The other button sets no loop."
+    );
+    assert!(app.score.loop_start.is_none());
+    assert!(
+        !app.session.has_history_step(false),
+        "No history step was made."
+    );
+    secondary_then_primary_drag(&ctx, &mut app, from, to);
+    assert_eq!(app.session.project().loop_region, None);
+    assert!(app.score.loop_start.is_none());
+    assert!(!app.session.has_history_step(false));
+    // The same drag with the primary button sets the loop.
+    let (ctx, mut app) = fixture();
+    drag(&ctx, &mut app, from, to, egui::Modifiers::NONE);
+    assert!(app.session.project().loop_region.is_some());
+}
+
+#[test]
+fn a_primary_ruler_drag_keeps_its_anchor_through_another_button_release() {
+    let (ctx, mut app) = fixture();
+    app.session.remember_section_bookmarks(true).unwrap();
+    let ruler = app.score.ruler_rect.unwrap();
+    let bar = app.score.bar_width;
+    let from = Pos2::new(ruler.left() + 0.5 * bar, ruler.center().y);
+    let middle = from + Vec2::new(bar, 0.0);
+    let to = from + Vec2::new(2.0 * bar, 0.0);
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, from, true, none);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(middle)],
+        none,
+    );
+    assert_eq!(app.score.loop_start, Some(0));
+    for pressed in [true, false] {
+        button_at(
+            &ctx,
+            &mut app,
+            middle,
+            egui::PointerButton::Secondary,
+            pressed,
+        );
+    }
+    assert_eq!(app.session.project().loop_region, None);
+    assert_eq!(app.score.loop_start, Some(0));
+    assert!(!egui::Popup::is_any_open(&ctx));
+    let cursor = app.session.cursor_tick();
+    button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, true);
+    pointer(&ctx, &mut app, to, false, none);
+    assert_eq!(
+        app.session.project().loop_region,
+        Some([0, 3 * TICKS_PER_BAR])
+    );
+    assert!(app.score.loop_start.is_none());
+    assert_eq!(app.session.cursor_tick(), cursor);
+    assert!(app.session.project().sections.is_empty());
+    button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, false);
+}
+
+#[test]
+fn a_secondary_button_release_does_not_end_a_marquee() {
+    let (ctx, mut app) = fixture();
+    let canvas = app.score.rect.unwrap();
+    let bar = app.score.bar_width;
+    let from = Pos2::new(
+        canvas.left() + 3.5 * bar,
+        canvas.top() + app.score.row_height / 2.0,
+    );
+    let over = from + Vec2::new(bar, 0.0);
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, from, true, none);
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(over)], none);
+    assert!(
+        app.gestures.marquee_origin.is_some(),
+        "The marquee is under way."
+    );
+    for pressed in [true, false] {
+        button_at(
+            &ctx,
+            &mut app,
+            over,
+            egui::PointerButton::Secondary,
+            pressed,
+        );
+    }
+    assert!(
+        app.gestures.marquee_origin.is_some(),
+        "Releasing the other button leaves the marquee open."
+    );
+    pointer(&ctx, &mut app, over, false, none);
+    assert!(app.gestures.marquee_origin.is_none());
+}
+
+#[test]
+fn a_missed_marquee_release_does_not_leave_the_marquee_stuck() {
+    use mixjam_techno::application::automation::Lane;
+    let (ctx, mut app) = fixture();
+    let canvas = app.score.rect.unwrap();
+    let bar = app.score.bar_width;
+    let from = Pos2::new(
+        canvas.left() + 3.5 * bar,
+        canvas.top() + app.score.row_height / 2.0,
+    );
+    let over = from + Vec2::new(bar, 0.0);
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, from, true, none);
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(over)], none);
+    assert!(app.gestures.marquee_origin.is_some());
+    // Release while automation hides lane_drags().
+    app.score_tools.automation_lane = Some(Lane::Volume);
+    pointer(&ctx, &mut app, over, false, none);
+    app.score_tools.automation_lane = None;
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from)], none);
+    assert!(app.gestures.marquee_origin.is_none());
 }

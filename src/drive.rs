@@ -45,7 +45,10 @@
 //! drive is off mixes exactly as it did before the drive existed.
 use crate::master::{
     KnobRange,
-    dsp::{Biquad, Coefficients, DcBlocker, Delay, Oversampler, db_to_gain, flush, pole},
+    dsp::{
+        Biquad, Coefficients, DcBlocker, Delay, Oversampler, POWER_FLOOR, PowerDetector,
+        db_to_gain, log_cosh, pole,
+    },
     range, ratio_range,
 };
 use crate::playback_quality::Oversampling;
@@ -140,12 +143,7 @@ impl DriveParam {
 
     /// Set the control, held to its range.
     pub fn set(self, drive: &mut Drive, value: f32) {
-        let range = self.range();
-        let value = if value.is_nan() {
-            range.default
-        } else {
-            value.clamp(range.low, range.high)
-        };
+        let value = self.range().hold(value);
         match self {
             Self::Amount => drive.amount = value,
             Self::Character => drive.character = value,
@@ -158,10 +156,10 @@ impl DriveParam {
 
 impl Drive {
     pub fn validate(&self) -> Result<(), String> {
-        if DriveParam::ALL.into_iter().any(|param| {
-            let (value, range) = (param.get(self), param.range());
-            !(value.is_finite() && (range.low..=range.high).contains(&value))
-        }) {
+        if !DriveParam::ALL
+            .into_iter()
+            .all(|param| param.range().contains(param.get(self)))
+        {
             return Err("A drive setting is out of range.".into());
         }
         Ok(())
@@ -185,13 +183,6 @@ fn curve(u: f64, character: f64) -> f64 {
     } else {
         bent + character * (u - bent)
     }
-}
-
-/// `ln cosh u`, the antiderivative of `tanh`, without overflow.
-#[inline]
-fn log_cosh(u: f64) -> f64 {
-    let size = u.abs();
-    size + (-2.0 * size).exp().ln_1p() - std::f64::consts::LN_2
 }
 
 /// The antiderivative of `curve` that is zero at zero.
@@ -263,8 +254,6 @@ const MATCH_TIME: f64 = 0.015;
 const LEVEL_TIME: f64 = 0.15;
 /// The corner of the blockers that take the offset out of the copy.
 const BLOCKER_HZ: f64 = 5.0;
-/// A power far below hearing, so that silence divides by nothing.
-const FLOOR: f64 = 1e-12;
 /// The quality factors of the two sections of a fourth-order Butterworth
 /// high-pass.
 const FOCUS_Q: [f64; 2] = [0.541_196_100_146_197, 1.306_562_964_876_376_5];
@@ -375,8 +364,8 @@ impl Run {
             let power = |pair: [f64; 2]| 0.5 * (pair[0] * pair[0] + pair[1] * pair[1]);
             let dry_power = power(dry);
             let [dry_fast, copy_fast, dry_slow, wet_slow] = &mut state.detectors;
-            let matched = ((dry_fast.follow(dry_power, fast) + FLOOR)
-                / (copy_fast.follow(power(copy), fast) + FLOOR))
+            let matched = ((dry_fast.follow(dry_power, fast) + POWER_FLOOR)
+                / (copy_fast.follow(power(copy), fast) + POWER_FLOOR))
                 .sqrt()
                 .clamp(self.copy[0], self.copy[1]);
             let mut wet = [0.0_f64; 2];
@@ -386,28 +375,13 @@ impl Run {
                 let change = state.focus[1].process(channel, change);
                 wet[channel] = dry[channel] + self.mix * change;
             }
-            let level = ((dry_slow.follow(dry_power, slow) + FLOOR)
-                / (wet_slow.follow(power(wet), slow) + FLOOR))
+            let level = ((dry_slow.follow(dry_power, slow) + POWER_FLOOR)
+                / (wet_slow.follow(power(wet), slow) + POWER_FLOOR))
                 .sqrt()
                 .clamp(self.level[0], self.level[1])
                 * self.output;
             *frame = wet.map(|sample| (sample * level) as f32);
         }
-    }
-}
-
-/// A power detector: two one-pole stages in a row, which smooth the ripple
-/// of a low note far better than one stage with the same response time.
-#[derive(Clone, Copy, Default)]
-struct Detector([f64; 2]);
-
-impl Detector {
-    #[inline]
-    fn follow(&mut self, power: f64, pole: f64) -> f64 {
-        let [first, second] = &mut self.0;
-        *first = flush(power + (*first - power) * pole);
-        *second = flush(*first + (*second - *first) * pole);
-        *second
     }
 }
 
@@ -432,7 +406,7 @@ pub(crate) struct State {
     focus: [Biquad; 2],
     /// The clean track's and the copy's power for the matching, and the
     /// clean track's and the result's for the level.
-    detectors: [Detector; 4],
+    detectors: [PowerDetector; 4],
     /// The input frame that the next block starts with, when the history
     /// leads up to it.
     pub(crate) next: Option<u64>,
@@ -450,7 +424,7 @@ impl Default for State {
             base_delays: [[Delay::ZERO; 2]; 2],
             blockers: [[DcBlocker::ZERO; 2]; 2],
             focus: [Biquad::FLAT; 2],
-            detectors: [Detector::default(); 4],
+            detectors: [PowerDetector::default(); 4],
             next: None,
         }
     }

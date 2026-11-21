@@ -30,12 +30,20 @@ import hashlib
 import json
 import math
 import os
+import sys
 import wave
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import numpy as np
+
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+import wavio  # noqa: E402
 
 TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
@@ -50,6 +58,15 @@ REPEAT_VALUES = (0, 4, 8, 16, 32, 64)
 REPEAT_GATE_RANGE = (5.0, 100.0)
 # The pitch lane's range in cents (PITCH_FLOOR_CENTS and PITCH_CEILING_CENTS in src/automation.rs).
 PITCH_RANGE = (-4800.0, 2400.0)
+# Track automation ranges (Lane::range in src/automation/model.rs).
+AUTOMATION_RANGES = {
+    'volume': (-60.0, 6.0),
+    'filter': (-1.0, 1.0),
+    'pan': (-1.0, 1.0),
+    'repeatGate': REPEAT_GATE_RANGE,
+    'pitch': PITCH_RANGE,
+    **{f'send{bus}': (0.0, 1.0) for bus in range(1, 5)},
+}
 # An FX bus's return lane: 0 to 2, where 1 is the full return (RETURN_CEILING).
 RETURN_RANGE = (0.0, 2.0)
 
@@ -60,6 +77,90 @@ MELODIC = {'pad', 'lead', 'keys', 'arp', 'fx', 'vocal', 'atmos'}
 def tick(bar, beat=1.0):
     """The tick of a 1-based bar and beat; fractions are allowed."""
     return int(round((bar - 1) * TICKS_PER_BAR + (beat - 1) * TICKS_PER_BEAT))
+
+
+def point_tick(bar, value, label):
+    """The tick of an automation point at a 1-based `bar`; the bar and the value are checked."""
+    last_bar = MAX_BARS + 1
+    if not 1 <= bar <= last_bar:
+        raise ValueError(f'{label} has a point at bar {bar}. A bar must be a finite number from 1 to {last_bar}.')
+    if not math.isfinite(float(value)):
+        raise ValueError(f'{label} has the value {value} at bar {bar}. A value must be finite.')
+    return tick(bar)
+
+
+def twin_base(name):
+    """A lane and its cross-fade twin ("Name (twin)") count as one lane."""
+    return name.replace(' (twin)', '')
+
+
+def valid_section_name(name):
+    """Whether `name` is a section name as the song reader accepts it (src/engine.rs): one line of
+    1 to MAX_SECTION_NAME characters, trimmed, without control characters or surrogates."""
+    return (isinstance(name, str) and name == name.strip() and 1 <= len(name) <= MAX_SECTION_NAME
+            and not any(ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF for c in name))
+
+
+def _stage_file(path, data):
+    """Write and close a temporary file beside its destination."""
+    text = isinstance(data, str)
+    temporary = NamedTemporaryFile('w' if text else 'wb', encoding='utf-8' if text else None,
+                                   dir=path.parent, suffix='.tmp', delete=False)
+    part = Path(temporary.name)
+    try:
+        with temporary as output:
+            output.write(data)
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
+    return part
+
+
+@contextmanager
+def _staged_file(path, data):
+    part = _stage_file(path, data)
+    try:
+        yield part
+    finally:
+        part.unlink(missing_ok=True)
+
+
+def atomic_write_text(path, text):
+    """Write `text` as `Path.write_text` does, then replace `path`."""
+    path = Path(path)
+    with _staged_file(path, text) as part:
+        os.replace(part, path)
+
+
+def _publish_song(path, song_part, metadata, metadata_part):
+    """Publish the song last. Restore the earlier metadata if that replacement fails."""
+    try:
+        previous = metadata.read_bytes()
+    except FileNotFoundError:
+        previous = None
+    backup = None if previous is None else _stage_file(metadata, previous)
+    try:
+        os.replace(metadata_part, metadata)
+        os.replace(song_part, path)
+    except BaseException:
+        # An interrupt can reach Python after a rename succeeded. Recover only
+        # when the metadata rename finished and the song rename did not.
+        if metadata_part.exists() or not song_part.exists():
+            raise
+        saved_backup, backup = backup, None
+        try:
+            if saved_backup is None:
+                metadata.unlink(missing_ok=True)
+            else:
+                os.replace(saved_backup, metadata)
+        except OSError as error:
+            if saved_backup is None:
+                raise OSError(f'Cannot remove {metadata} after the song save failed.') from error
+            raise OSError(f'Cannot restore {metadata}. The earlier metadata is in {saved_backup}.') from error
+        raise
+    finally:
+        if backup is not None:
+            backup.unlink(missing_ok=True)
 
 
 def db(amplitude):
@@ -98,9 +199,7 @@ def read_wav(path):
     if width == 2:
         data = np.frombuffer(raw, '<i2').astype(np.float32) / 32768
     elif width == 3:
-        b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
-        ints = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
-        data = (np.where(ints >= 1 << 23, ints - (1 << 24), ints)).astype(np.float32) / (1 << 23)
+        data = wavio.unpack_pcm24(raw).astype(np.float32) / (1 << 23)
     elif width == 4:
         data = np.frombuffer(raw, '<i4').astype(np.float32) / (1 << 31)
     else:
@@ -134,6 +233,8 @@ class Sound:
         rate, data = read_wav(self.path)
         self.rate = rate
         self.frames = len(data)
+        if self.frames == 0:
+            raise ValueError(f'{self.path} has no audio.')
         self.pcm_digest = None
         if rate == 44100 and data.shape[1] == 1 and self.frames > 2:
             # Match catalog::pcm_identity: wrapping PCM16 differences, without the final frame.
@@ -187,19 +288,21 @@ class Song:
         self.master = board()
         self.master_gain = 1.0
         self.sections = []
-        self.palette = self.palette_path = self.palette_roots = None
+        self.palette = self.palette_path = self.palette_roots = self.palette_keys = None
 
     def use_palette(self, path):
         """Hold the song to a palette (`palette.py make`): a sound outside its families stops the script."""
         import palette as palettes
         chosen = palettes.load_palette(path)
         roots = palettes.roots()
+        keys = palettes.palette_keys(chosen)
         for sound in self.sounds:
-            if not palettes.allowed(chosen, sound, roots):
+            if not palettes.allowed(chosen, sound, roots, keys):
                 raise ValueError(f'{sound} is outside the palette {path}.')
         self.palette_path = Path(path)
         self.palette = chosen
         self.palette_roots = roots
+        self.palette_keys = keys
 
     # Sounds and lanes.
     def tempo(self, path, bpm):
@@ -213,7 +316,7 @@ class Song:
         source_bpm = self.tempos.get(path, source_bpm or self.bpm)
         if self.palette is not None:
             import palette as palettes  # tools/song/palette.py
-            if not palettes.allowed(self.palette, path, self.palette_roots):
+            if not palettes.allowed(self.palette, path, self.palette_roots, self.palette_keys):
                 raise ValueError(f'{path} is outside the palette {self.palette_path}.')
         if path not in self.sounds:
             self.sounds[path] = Sound(path, source_bpm, self.bpm)
@@ -446,20 +549,20 @@ class Song:
             entries = list(automation.get(lane, []))
         ticks = {entry['tick'] for entry in entries}
         for bar, value in points:
-            if tick(bar) in ticks:
+            at = point_tick(bar, value, f'Track {track} {name}')
+            if at in ticks:
                 raise ValueError(f'Track {track} {name} has more than one point at bar {bar}.')
-            if lane == 'pan' and not -1.0 <= float(value) <= 1.0:
-                raise ValueError(f'Track {track} pan must be from -1 to 1, not {value}.')
-            if lane == 'repeat' and (isinstance(value, bool) or float(value) not in REPEAT_VALUES):
-                raise ValueError(f'Track {track} repeat must be 0 (off), 4, 8, 16, 32, or 64, not {value}.')
-            low, high = REPEAT_GATE_RANGE
-            if lane == 'repeatGate' and not low <= float(value) <= high:
-                raise ValueError(f'Track {track} repeatgate must be from {low:g} to {high:g}, not {value}.')
-            low, high = PITCH_RANGE
-            if lane == 'pitch' and (isinstance(value, bool) or not low <= float(value) <= high):
-                raise ValueError(f'Track {track} pitch must be from {low:g} to {high:g} cents, not {value}.')
-            ticks.add(tick(bar))
-            entries.append(dict(tick=tick(bar), value=float(value)))
+            number = float(value)
+            if lane == 'repeat':
+                if isinstance(value, bool) or number not in REPEAT_VALUES:
+                    raise ValueError(f'Track {track} repeat must be 0 (off), 4, 8, 16, 32, or 64, not {value}.')
+            else:
+                low, high = AUTOMATION_RANGES[lane]
+                if not low <= number <= high or (lane == 'pitch' and isinstance(value, bool)):
+                    units = ' cents' if lane == 'pitch' else ''
+                    raise ValueError(f'Track {track} {name} must be from {low:g} to {high:g}{units}, not {value}.')
+            ticks.add(at)
+            entries.append(dict(tick=at, value=number))
         entries.sort(key=lambda entry: entry['tick'])
         if lane.startswith('send'):
             automation.setdefault('sends', [[], [], [], []])[int(lane[4:]) - 1] = entries
@@ -492,12 +595,13 @@ class Song:
         ticks = {entry['tick'] for entry in entries}
         low, high = RETURN_RANGE
         for bar, value in points:
-            if tick(bar) in ticks:
+            at = point_tick(bar, value, f'FX {index} return')
+            if at in ticks:
                 raise ValueError(f'FX {index} return has more than one point at bar {bar}.')
             if isinstance(value, bool) or not low <= float(value) <= high:
                 raise ValueError(f'FX {index} return must be from {low:g} to {high:g}, not {value}.')
-            ticks.add(tick(bar))
-            entries.append(dict(tick=tick(bar), value=float(value)))
+            ticks.add(at)
+            entries.append(dict(tick=at, value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
         self.returns[index - 1] = entries
 
@@ -561,9 +665,7 @@ class Song:
 
     def section(self, name, first_bar, bars):
         """Name a span of the form. The song shows it as a bookmark, and the reports use it."""
-        if (not isinstance(name, str) or name != name.strip()
-                or not 1 <= len(name) <= MAX_SECTION_NAME
-                or any(ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF for c in name)):
+        if not valid_section_name(name):
             raise ValueError(f'A section name must be 1 to {MAX_SECTION_NAME} characters on one line, '
                              'without leading or trailing spaces.')
         self.sections.append(dict(name=name, first_bar=first_bar, bars=bars))
@@ -581,11 +683,14 @@ class Song:
     def save(self, path, master=True):
         """Write the song and, beside it, `.meta.json` with lane names and roles, sections, tempo and key."""
         path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.document(master), indent=1), encoding='utf-8')
+        metadata = path.with_suffix('.meta.json')
         meta = dict(lanes={str(t): dict(name=self.names[t], role=r) for t, r in self.roles.items()},
                     sections=self.sections, bpm=self.bpm, key=self.key)
-        path.with_suffix('.meta.json').write_text(json.dumps(meta, indent=1), encoding='utf-8')
+        song_text = json.dumps(self.document(master), indent=1)
+        metadata_text = json.dumps(meta, indent=1)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _staged_file(path, song_text) as song_part, _staged_file(metadata, metadata_text) as metadata_part:
+            _publish_song(path, song_part, metadata, metadata_part)
         return path
 
 

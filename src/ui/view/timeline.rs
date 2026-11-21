@@ -4,6 +4,7 @@
 //! `score_lanes.rs` and the lane headers in `track_headers.rs`, then draws the
 //! ruler and applies the headers' changes.
 use super::*;
+use mixjam_techno::application::MAX_TICKS;
 
 /// The score's zoom, follow mode, and loop drag, and its layout as last drawn
 /// for the drags, the song overview, and the agent.
@@ -91,7 +92,7 @@ pub(super) struct HeaderChanges {
     /// A lane fader that moved: the track and its new gain.
     pub(super) gain: Option<(usize, f32)>,
     /// In the Mix view, each track's sound summary, built in one pass.
-    pub(super) summaries: Vec<(String, String)>,
+    pub(super) summaries: Arc<Vec<(String, String)>>,
     pub(super) mix: mixer::Changes,
     /// Horizontal wheel input that the Mix view columns took.
     pub(super) mix_wheel: f32,
@@ -103,17 +104,18 @@ impl MixJamApp {
             self.cancel_section_edit();
         }
         let overview = self.song_overview(ui);
-        self.score_toolbar(ui);
+        let occupied = self.session.project().occupied_tracks();
+        self.score_toolbar(ui, occupied.len());
         ui.add_space(12.0);
         self.score.rect = None;
         self.score.drop_rect = None;
         self.score.ruler_rect = None;
-        let frame = self.score_frame(ui);
+        let frame = self.score_frame(ui, occupied);
         let mut headers = HeaderChanges {
             summaries: if frame.mix {
-                mixer_sample_summaries(self.session.project(), self.session.library())
+                self.sample_summaries()
             } else {
-                Vec::new()
+                Arc::default()
             },
             ..Default::default()
         };
@@ -161,8 +163,7 @@ impl MixJamApp {
     }
 
     /// Choose this frame's rows and lay out the score, and allocate the ruler strip.
-    fn score_frame(&mut self, ui: &mut egui::Ui) -> ScoreFrame {
-        let occupied = occupied_tracks(self.session.project());
+    fn score_frame(&mut self, ui: &mut egui::Ui, occupied: Vec<usize>) -> ScoreFrame {
         let occupied_count = occupied.len();
         self.score.add_track =
             if self.recording.track < TRACK_COUNT && !occupied.contains(&self.recording.track) {
@@ -431,18 +432,7 @@ impl MixJamApp {
         // numbers never touch. The last number can have narrow digits, so
         // reserve the widest repeated digit for this many places.
         let digits = frame.bars.to_string().len();
-        let number_width = (0..=9)
-            .map(|digit| {
-                ui.painter()
-                    .layout_no_wrap(
-                        digit.to_string().repeat(digits),
-                        FontId::proportional(13.0),
-                        roles().text,
-                    )
-                    .size()
-                    .x
-            })
-            .fold(0.0_f32, f32::max);
+        let number_width = ruler_number_width(ui, digits);
         let step = bar_step(bar_width, RULER_NUMBER_SPACING.max(number_width + 8.0));
         for bar in (first_bar..last_bar).filter(|bar| bar % step == 0) {
             let x = ruler.left() + bar as f32 * bar_width;
@@ -465,29 +455,37 @@ impl MixJamApp {
                 },
             );
         }
-        if ruler_response.clicked()
+        let start = controls::primary_drag_start(ui, &ruler_response);
+        if self.score.loop_start.is_none()
+            && let Some(origin) = start
+        {
+            self.score.loop_start = Some(self.position_tick(origin.x, ruler, false));
+        }
+        let dragging = self.score.loop_start.is_some();
+        if !dragging
+            && controls::primary_clicked(ui, &ruler_response)
             && let Some(pos) = ruler_response.interact_pointer_pos()
         {
             self.seek(self.position_tick(pos.x, ruler, false));
         }
-        if ruler_response.drag_started() {
-            self.score.loop_start = ui
-                .input(|i| i.pointer.press_origin())
-                .map(|p| self.position_tick(p.x, ruler, false));
-        }
-        if ruler_response.drag_stopped()
+        // Releasing another button clears egui's drag, but the loop is
+        // still anchored until the primary button is released.
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary))
             && let (Some(start), Some(pos)) = (
                 self.score.loop_start.take(),
-                ruler_response.interact_pointer_pos(),
+                ui.input(|i| i.pointer.latest_pos()),
             )
         {
             let end = self.position_tick(pos.x, ruler, false);
-            let region = [start.min(end), start.max(end).saturating_add(TICKS_PER_BAR)];
+            let region = loop_region(start, end);
             let result = self.session.edit(EditCommand::SetLoop(Some(region)));
             self.apply(result);
         }
         if self.sections.bookmarks {
-            self.section_gestures(ui, &ruler_response, ruler, &tags);
+            if !dragging {
+                self.section_gestures(&ruler_response, ruler, &tags);
+            }
+            self.section_rename_editor(ui, ruler);
         }
     }
 
@@ -548,4 +546,64 @@ fn follow_offset(
     let next =
         (playhead - visible_width * 0.25).clamp(0.0, (content_width - visible_width).max(0.0));
     ((next - offset).abs() > 0.5).then_some(next)
+}
+
+/// The width of the widest repeated digit with `digits` places, in the ruler's
+/// font. It depends only on the font, so one theme and scale measure it once.
+fn ruler_number_width(ui: &egui::Ui, digits: usize) -> f32 {
+    let key = egui::Id::new((
+        "ruler-number-width",
+        digits,
+        theme::current(),
+        ui.ctx().pixels_per_point().to_bits(),
+    ));
+    if let Some(width) = ui.ctx().data(|data| data.get_temp::<f32>(key)) {
+        return width;
+    }
+    let width = (0..=9)
+        .map(|digit| {
+            ui.painter()
+                .layout_no_wrap(
+                    digit.to_string().repeat(digits),
+                    FontId::proportional(13.0),
+                    roles().text,
+                )
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max);
+    ui.ctx().data_mut(|data| data.insert_temp(key, width));
+    width
+}
+
+/// The loop that a ruler drag from `start` to `end` makes: whole bars, with
+/// the bar under the later end included, and inside the timeline.
+fn loop_region(start: u32, end: u32) -> [u32; 2] {
+    let first = start.min(end).min(MAX_TICKS - TICKS_PER_BAR);
+    let last = start.max(end).saturating_add(TICKS_PER_BAR).min(MAX_TICKS);
+    [first, last]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_loop_dragged_to_the_last_bar_stays_inside_the_timeline() {
+        assert_eq!(
+            loop_region(0, 4095 * TICKS_PER_BAR),
+            [0, MAX_TICKS],
+            "The last bar ends at the end of the timeline."
+        );
+        let [first, last] = loop_region(4090 * TICKS_PER_BAR, 5000 * TICKS_PER_BAR);
+        assert_eq!(last, MAX_TICKS);
+        assert!(first < last);
+        let [first, last] = loop_region(6000 * TICKS_PER_BAR, 5000 * TICKS_PER_BAR);
+        assert!(first < last && last <= MAX_TICKS);
+        assert_eq!(
+            loop_region(2 * TICKS_PER_BAR, TICKS_PER_BAR),
+            [TICKS_PER_BAR, 3 * TICKS_PER_BAR],
+            "Either drag direction makes the same loop."
+        );
+    }
 }

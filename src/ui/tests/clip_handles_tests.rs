@@ -492,3 +492,144 @@ fn clip_fades_pitch_and_automation_points_edit_from_the_arrangement() {
         "Undo restores the point."
     );
 }
+
+fn set_gain(app: &mut MixJamApp, gain: f32) {
+    let clip = app.session.project().clips[0].clone();
+    app.session
+        .edit(EditCommand::SetClip {
+            id: clip.id,
+            start_tick: clip.start_tick,
+            gain,
+            offset_frames: clip.offset_frames,
+            length_ticks: clip.length_ticks,
+            fades: clip.fades,
+            pitch_cents: clip.pitch_cents,
+            reverse: clip.reverse,
+        })
+        .unwrap();
+}
+
+#[test]
+fn the_gain_handle_tops_out_at_the_same_gain_as_the_inspector_field() {
+    for start_gain in [1.0, MAX_CLIP_GAIN] {
+        let (ctx, mut app) = fixture();
+        set_gain(&mut app, start_gain);
+        let rect = app.clip_rect(&app.session.project().clips[0], app.score.rect.unwrap());
+        let handle = gain_handle(rect, app.score.drop_rect.unwrap(), start_gain);
+        let before = app.session.project().clone();
+        let token = app.session.project_change_token();
+        drag(
+            &ctx,
+            &mut app,
+            handle,
+            handle - Vec2::new(0.0, 300.0),
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.session.project().clips[0].gain,
+            MAX_CLIP_GAIN,
+            "Dragging up from {start_gain} stops at the Inspector's maximum."
+        );
+        if start_gain == MAX_CLIP_GAIN {
+            assert_eq!(
+                app.session.project(),
+                &before,
+                "A clip at the maximum stays unchanged and makes no history step."
+            );
+            assert_eq!(app.session.project_change_token(), token);
+            assert!(app.session.history_step(false).unwrap());
+            assert_eq!(app.session.project().clips[0].gain, 1.0);
+        }
+    }
+}
+
+#[test]
+fn a_secondary_button_release_does_not_end_a_handle_drag() {
+    let (ctx, mut app) = fixture();
+    let rect = app.clip_rect(&app.session.project().clips[0], app.score.rect.unwrap());
+    let handle = gain_handle(rect, app.score.drop_rect.unwrap(), 1.0);
+    let before = app.session.project().clone();
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, handle, true, none);
+    for step in 1..=3 {
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(
+                handle - Vec2::new(0.0, 4.0 * step as f32),
+            )],
+            none,
+        );
+    }
+    assert!(app.gestures.handle_drag.is_some(), "The drag is under way.");
+    let at = handle - Vec2::new(0.0, 12.0);
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Secondary,
+                pressed,
+                modifiers: none,
+            }],
+            none,
+        );
+    }
+    assert!(
+        app.gestures.handle_drag.is_some(),
+        "Releasing the other button leaves the drag open."
+    );
+    assert_eq!(
+        app.session.project(),
+        &before,
+        "Releasing the other button commits nothing."
+    );
+    pointer(&ctx, &mut app, at, false, none);
+    assert!(app.gestures.handle_drag.is_none());
+    assert_ne!(
+        app.session.project().clips[0].gain,
+        before.clips[0].gain,
+        "Releasing the primary button commits the drag."
+    );
+}
+
+#[test]
+fn a_primary_press_does_not_turn_a_secondary_clip_drag_into_a_handle_edit() {
+    let (ctx, mut app) = fixture();
+    let clip = app.session.project().clips[0].clone();
+    let rect = app.clip_rect(&clip, app.score.rect.unwrap());
+    let handle = gain_handle(rect, app.score.drop_rect.unwrap(), clip.gain);
+    let target = handle + Vec2::new(app.score.bar_width, 0.0);
+    let none = egui::Modifiers::NONE;
+    button_at(&ctx, &mut app, handle, egui::PointerButton::Secondary, true);
+    pointer(&ctx, &mut app, handle, true, none);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(target)],
+        none,
+    );
+    assert!(app.gestures.handle_drag.is_none());
+    assert!(matches!(
+        app.gestures.drag,
+        Some(DragItem::Clip { copy: true, .. })
+    ));
+    pointer(&ctx, &mut app, target, false, none);
+    assert!(app.session.project().clips.contains(&clip));
+    assert!(app.gestures.drag.is_some());
+    button_at(
+        &ctx,
+        &mut app,
+        target,
+        egui::PointerButton::Secondary,
+        false,
+    );
+    let clips = &app.session.project().clips;
+    assert!(clips.contains(&clip));
+    assert!(clips.iter().any(|placed| {
+        placed.sample_id == clip.sample_id
+            && placed.start_tick == clip.start_tick + TICKS_PER_BAR
+            && placed.gain == clip.gain
+    }));
+}

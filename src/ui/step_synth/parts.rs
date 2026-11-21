@@ -60,18 +60,20 @@ pub(super) fn dial(ui: &mut egui::Ui, cell: Rect, value: &mut f64, spec: Dial<'_
 pub(super) fn length_control(ui: &mut egui::Ui, rect: Rect, length: &mut u8) {
     let response = ui.interact(rect, ui.id().with("length"), Sense::click_and_drag());
     let mut value = i64::from(*length);
-    if response.clicked() || response.drag_started() {
+    let start = controls::primary_drag_start(ui, &response).is_some();
+    if response.clicked() || start {
         response.request_focus();
     }
     let drag_id = response.id.with("drag");
-    if response.drag_started() {
+    if start {
         ui.ctx()
             .data_mut(|data| data.insert_temp(drag_id, (value, 0.0_f32)));
     }
-    if response.dragged()
+    if controls::primary_drag_or_stop(ui, &response)
         && let Some((start, travel)) = ui.ctx().data(|data| data.get_temp::<(i64, f32)>(drag_id))
     {
-        let travel = travel + response.drag_delta().x - response.drag_delta().y;
+        let delta = ui.input(|input| input.pointer.delta());
+        let travel = travel + delta.x - delta.y;
         ui.ctx()
             .data_mut(|data| data.insert_temp(drag_id, (start, travel)));
         value = start + (travel / 6.0).round() as i64;

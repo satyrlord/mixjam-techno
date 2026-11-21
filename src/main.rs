@@ -11,9 +11,7 @@ use mixjam_techno::{
     products::{LibraryBinding, Product},
     project_io,
 };
-#[cfg(feature = "gui")]
-use std::sync::Arc;
-use std::{path::PathBuf, process::ExitCode};
+use std::{path::PathBuf, process::ExitCode, sync::Arc};
 
 fn main() -> ExitCode {
     match run() {
@@ -320,17 +318,17 @@ fn run() -> Result<(), String> {
                 _ => return Err("render requires either --output WAV or --stems FOLDER.".into()),
             };
             let (p, resolved_library) = project_io::open(&path, &library)?;
-            library = resolved_library;
             for notice in &p.import_notices {
                 println!(
                     "Imported tempo: {} -> {} BPM.",
                     notice.source_bpm, notice.target_bpm
                 );
             }
-            let mix = audio::prepare_project(&p, &library)?;
+            let session =
+                mixjam_techno::application::Session::headless(Arc::new(resolved_library), p)?;
             match target {
                 Target::Mix(target) => {
-                    mix.write_wav(&target, &p.master, &p.fx)?;
+                    session.export(&target)?;
                     println!(
                         "Wrote stereo audio at {} Hz to {}",
                         audio::Mix::SAMPLE_RATE,
@@ -338,9 +336,7 @@ fn run() -> Result<(), String> {
                     );
                 }
                 Target::Stems(folder) => {
-                    std::fs::create_dir_all(&folder)
-                        .map_err(|error| format!("Cannot create {}: {error}", folder.display()))?;
-                    let written = mix.write_stems(&folder, &p.title, &p.fx)?;
+                    let written = session.export_tracks(&folder)?;
                     println!(
                         "Wrote {written} as stereo audio at {} Hz to {}",
                         audio::Mix::SAMPLE_RATE,
@@ -351,21 +347,22 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => {
-            let project = if let Some(path) = &mix
-                && !background_scan
-            {
-                let (project, resolved_library) = project_io::open(path, &library)?;
-                library = resolved_library;
-                project
-            } else {
-                Project {
-                    libraries: library.bindings().to_vec(),
-                    imported_samples: library.imported_samples().into(),
-                    ..Project::default()
-                }
+            // The session opens `--mix` itself, so that Save replaces the song
+            // and an open error shows in the window.
+            let project = Project {
+                libraries: library.bindings().to_vec(),
+                imported_samples: library.imported_samples().into(),
+                ..Project::default()
             };
             #[cfg(feature = "gui")]
             {
+                // The window saves the song in place, so it keeps a full path.
+                let mix = mix
+                    .map(|path| {
+                        std::path::absolute(&path)
+                            .map_err(|error| format!("Cannot use the --mix path: {error}"))
+                    })
+                    .transpose()?;
                 let size = std::env::var("MIXJAM_TECHNO_WINDOW_SIZE")
                     .ok()
                     .and_then(|value| {
@@ -409,16 +406,10 @@ fn run() -> Result<(), String> {
                             mixjam_techno::application::Session::new(Arc::new(library), project)?;
                         let mut messages = startup_messages;
                         session.prefer_providers(&explicit_providers);
-                        if background_scan {
-                            if let Err(error) = session.start_wave_scan(&samples, source_bpm) {
-                                messages.push(error);
-                            }
-                            if let Some(path) = &mix
-                                && let Err(error) = session.open_after_scan(path)
-                            {
-                                messages.push(error);
-                            }
-                        }
+                        messages.extend(session.start_up(
+                            background_scan.then_some((samples.as_slice(), source_bpm)),
+                            mix.as_deref(),
+                        ));
                         let mut app = ui::MixJamApp::new(cc, session);
                         if let Some(server) = agent_server {
                             app.attach_agent(server, &cc.egui_ctx);

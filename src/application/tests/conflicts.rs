@@ -23,6 +23,76 @@ fn identical_missing_paths_include_windows_verbatim_spellings() {
 }
 
 #[test]
+fn rejected_missing_paths_match_by_windows_path_or_the_id_of_an_empty_reference() {
+    let rejected = |path: &str, source_id: u16| MissingReference::Generated {
+        product: Product::D1,
+        kind: crate::compat::UNRESOLVED_IMPORT_PATH.into(),
+        data: if path.is_empty() {
+            serde_json::json!({"saved_path": path, "source_id": source_id})
+        } else {
+            serde_json::json!({"saved_path": path})
+        },
+    };
+    let saved = rejected(r"\Drums\Take.wav", 2083);
+    assert!(same_missing_reference(
+        &saved,
+        &rejected("/drums/take.WAV", 2084)
+    ));
+    assert!(same_missing_reference(
+        &saved,
+        &MissingReference::External {
+            path: "/drums/TAKE.wav".into(),
+            origin: Some(Product::T1),
+        }
+    ));
+    assert!(!same_missing_reference(
+        &saved,
+        &rejected(r"\Other\Take.wav", 2084)
+    ));
+    assert!(same_missing_reference(
+        &rejected("", 2083),
+        &rejected("", 2083)
+    ));
+    assert!(!same_missing_reference(
+        &rejected("", 2083),
+        &rejected("", 2084)
+    ));
+    assert!(same_missing_reference(
+        &rejected(r"\\host\share\a.wav", 1),
+        &rejected(r"\\?\UNC\HOST\share\a.wav", 2)
+    ));
+    assert!(!same_missing_reference(
+        &rejected(r"\\host\share\a.wav", 1),
+        &rejected(r"\host\share\a.wav", 2)
+    ));
+    assert!(!same_missing_reference(
+        &rejected(r"\take.wav", 1),
+        &MissingReference::External {
+            path: "take.wav".into(),
+            origin: None,
+        }
+    ));
+    assert!(!same_missing_reference(
+        &rejected(r"\\.\take.wav", 1),
+        &MissingReference::External {
+            path: "take.wav".into(),
+            origin: None,
+        }
+    ));
+    assert!(!same_missing_reference(
+        &rejected(r"\\?\pipe\a.wav", 1),
+        &MissingReference::External {
+            path: "pipe/a.wav".into(),
+            origin: None,
+        }
+    ));
+    assert!(!same_missing_reference(
+        &rejected(r"\", 1),
+        &rejected(".", 2)
+    ));
+}
+
+#[test]
 fn conflict_switch_updates_all_instances_and_preserves_musical_trims_with_history() {
     let (mut session, root) = conflict_fixture();
     let original = session.project().clone();

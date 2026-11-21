@@ -163,6 +163,7 @@ cover, leave out `coverUrl`. The window then shows its placeholder.
 
 ## Step 9: Update the research shortlist
 
-1. In `docs/ALBUM-REVIEW-RESEARCH.md`, find the list item with the same artist
+1. In `docs/ALBUM-REVIEW-RESEARCH.md` and the files in
+   `docs/album-review-research/`, find the list item with the same artist
    and album title, and remove it.
    Completion criterion: The shortlist has no item for the reviewed album.

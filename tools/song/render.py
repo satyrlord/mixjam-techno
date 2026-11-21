@@ -47,25 +47,35 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
 import threading
+import time
 import wave
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audible  # noqa: E402
 import env  # noqa: E402
-from mixjam import (FORMAT_VERSION, MAX_BARS, MAX_SECTION_NAME, TICKS_PER_BAR,
-                    board_off as _board_off, read_wav, write_wav)  # noqa: E402
+from lanes import add, lane_groups, lane_roles, mix_down, read_meta, song_end_tick  # noqa: E402,F401
+from mixjam import (FORMAT_VERSION, IMPORTED_ID_START, MAX_BARS, TICKS_PER_BAR,
+                    atomic_write_text, board_off as _board_off, read_wav, valid_section_name,
+                    write_wav)  # noqa: E402
 
 # Lane renders kept for later rounds; the lanes of a 7-minute song take about 1.6 GB.
 CACHE_LIMIT = 4 * 2 ** 30
 CACHE_VERSION = 'lanes-v2'
+CACHE_KEY = re.compile(r'[0-9a-f]{32}')
+CACHE_TEMPORARY_PREFIX = 'mixjam-lane-'
+CACHE_TEMPORARY = re.compile(rf'{CACHE_TEMPORARY_PREFIX}([0-9]+)-[0-9a-z_]+\.tmp')
+# A temporary cache file this old belongs to a render that stopped.
+STALE_TEMPORARY_SECONDS = 24 * 3600
 # Concurrent lane renders at most; each render starts its own worker threads.
 MAX_JOBS = 4
 # Windows BELOW_NORMAL_PRIORITY_CLASS and job-object values (winbase.h, winnt.h).
@@ -176,41 +186,6 @@ def copy(document):
     return json.loads(json.dumps(document))
 
 
-def read_meta(song):
-    path = Path(song).with_suffix('.meta.json')
-    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
-
-
-def lane_groups(document, meta):
-    """Lane name to its 1-based tracks, for every used track: the names in the meta, a twin
-    ("NAME (twin)") with its lane, and a track the meta does not name as its own lane."""
-    names = {int(k): v['name'] for k, v in meta['lanes'].items()} if meta else {}
-    groups = {}
-    for track, lane in enumerate(document['lanes'], 1):
-        if lane['placements']:
-            name = names.get(track, f'track {track}').replace(' (twin)', '')
-            groups.setdefault(name, []).append(track)
-    return groups
-
-
-def lane_roles(groups, meta):
-    """Lane name to its role, for lanes that the meta names."""
-    roles = {}
-    for name, tracks in groups.items():
-        info = (meta or {}).get('lanes', {}).get(str(min(tracks)))
-        if info is not None:
-            roles[name] = info['role']
-    return roles
-
-
-def song_end_tick(document):
-    """The native Project.end_tick bound, including an explicit loop end."""
-    end = max((p['startTick'] + p['durationTicks'] for lane in document['lanes']
-               for p in lane['placements']), default=4 * TICKS_PER_BAR)
-    loop = document['song'].get('loopRegion')
-    return max(end, loop[1] if loop else 0)
-
-
 def solo(document, tracks):
     """The premaster with only `tracks` playing, for a group without external keys."""
     part = board_off(copy(document))
@@ -267,28 +242,29 @@ def keyed_document(document, tracks):
 
 def keyed_parts(document, tracks, path, wav, data):
     """Extract the selected dry tracks and their FX; key audio stays in separate files."""
-    path.write_text(json.dumps(keyed_document(document, tracks)), encoding='utf-8')
-    with TemporaryDirectory(prefix=path.stem + '-parts-', dir=wav.parent) as directory:
-        folder = Path(directory)
-        if not run_stems(path, folder, data):
-            # Native stem export has no parts for a silent song. Its whole mix is silence too.
-            run(path, wav, data)
-            path.unlink()
-            return
-        files = sorted(folder.glob('*.wav'))
-        if not files:
-            raise SystemExit(f'The stem render produced no audio for {path}.')
-        rate, first = read_wav(files[0])
-        total = np.zeros_like(first)
-        selected = {f'lane - Track {track:02d}.wav' for track in tracks}
-        for file in files:
-            if file.name in selected or file.name.startswith('lane - FX '):
-                part_rate, samples = read_wav(file)
-                if part_rate != rate:
-                    raise SystemExit(f'The stem sample rates differ for {path}.')
-                total = add(total, samples)
-        write_wav(wav, rate, total)
-    path.unlink()
+    try:
+        atomic_write_text(path, json.dumps(keyed_document(document, tracks)))
+        with TemporaryDirectory(prefix=path.stem + '-parts-', dir=wav.parent) as directory:
+            folder = Path(directory)
+            if not run_stems(path, folder, data):
+                # Native stem export has no parts for a silent song. Its whole mix is silence too.
+                run(path, wav, data)
+                return
+            files = sorted(folder.glob('*.wav'))
+            if not files:
+                raise SystemExit(f'The stem render produced no audio for {path}.')
+            rate, first = read_wav(files[0])
+            total = np.zeros_like(first)
+            selected = {f'lane - Track {track:02d}.wav' for track in tracks}
+            for file in files:
+                if file.name in selected or file.name.startswith('lane - FX '):
+                    part_rate, samples = read_wav(file)
+                    if part_rate != rate:
+                        raise SystemExit(f'The stem sample rates differ for {path}.')
+                    total = add(total, samples)
+            write_wav(wav, rate, total)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def exe_stamp():
@@ -319,9 +295,7 @@ def cacheable_sections(document):
         tick, name = section['startTick'], section['name']
         if type(tick) is not int or not previous < tick < MAX_BARS * TICKS_PER_BAR:
             return False
-        if (not isinstance(name, str) or name != name.strip()
-                or not 1 <= len(name) <= MAX_SECTION_NAME
-                or any(ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF for c in name)):
+        if not valid_section_name(name):
             return False
         previous = tick
     return True
@@ -344,7 +318,7 @@ def source_fingerprints(document):
     fingerprints, paths = {}, {}
     for sample_id in used:
         sample = samples.get(sample_id)
-        if sample_id < 1_000_000 or sample is None or sample.get('origin') is not None:
+        if sample_id < IMPORTED_ID_START or sample is None or sample.get('origin') is not None:
             return None
         path = Path(sample.get('path', ''))
         if not path.is_absolute() or not sample.get('sourceBpm'):
@@ -412,6 +386,13 @@ def check_lane_wav(path):
             remaining -= len(block)
 
 
+def cache_temporary(folder, mode='w+b', encoding=None):
+    # A hard link keeps the WAV's mtime. Name the stage with its own creation time.
+    prefix = f'{CACHE_TEMPORARY_PREFIX}{time.time_ns()}-'
+    return NamedTemporaryFile(mode, dir=folder, prefix=prefix, suffix='.tmp',
+                              delete=False, encoding=encoding)
+
+
 def share(source, destination, expected_digest=None):
     """Publish `source` at `destination` as a hard link, so both names use one file on disk.
 
@@ -419,7 +400,7 @@ def share(source, destination, expected_digest=None):
     With `expected_digest`, validate the staged WAV and its digest before publication.
     A failure leaves the destination intact.
     """
-    with NamedTemporaryFile(dir=destination.parent, suffix='.tmp', delete=False) as temporary:
+    with cache_temporary(destination.parent) as temporary:
         path = Path(temporary.name)
     try:
         path.unlink()
@@ -463,9 +444,10 @@ def to_cache(cache, key, wav):
         digest = file_digest(wav)
         entry = folder / f'{key}.wav'
         share(wav, entry)
-        with NamedTemporaryFile('w', dir=folder, suffix='.tmp', delete=False, encoding='ascii') as temporary:
-            temporary.write(digest + '\n')
+        temporary = cache_temporary(folder, 'w', encoding='ascii')
         try:
+            with temporary:
+                temporary.write(digest + '\n')
             os.replace(temporary.name, entry.with_suffix('.sha256'))
         finally:
             Path(temporary.name).unlink(missing_ok=True)
@@ -474,10 +456,28 @@ def to_cache(cache, key, wav):
 
 
 def prune_cache(cache, limit=CACHE_LIMIT):
-    """Delete the least recently used renders until the cache holds at most `limit` bytes."""
+    """Delete the least recently used renders until the cache holds at most `limit` bytes.
+
+    Also delete abandoned digest and temporary files after the grace period."""
+    folder = cache / CACHE_VERSION
+    stale = time.time() - STALE_TEMPORARY_SECONDS
+    for digest in folder.glob('*.sha256'):
+        try:
+            if (CACHE_KEY.fullmatch(digest.stem) and not digest.with_suffix('.wav').exists()
+                    and digest.stat().st_mtime < stale):
+                digest.unlink(missing_ok=True)
+        except OSError:
+            continue
+    for temporary in folder.glob(f'{CACHE_TEMPORARY_PREFIX}*.tmp'):
+        try:
+            match = CACHE_TEMPORARY.fullmatch(temporary.name)
+            if match and int(match[1]) < stale * 1e9:
+                temporary.unlink(missing_ok=True)
+        except OSError:
+            continue
     entries = []
-    for entry in (cache / CACHE_VERSION).glob('*.wav'):
-        if len(entry.stem) != 32 or any(char not in '0123456789abcdef' for char in entry.stem):
+    for entry in folder.glob('*.wav'):
+        if not CACHE_KEY.fullmatch(entry.stem):
             continue
         try:
             stat = entry.stat()
@@ -508,8 +508,9 @@ def render_lanes(document, groups, out, jobs=None, cache=None):
 
     def one(item):
         name, tracks = item
-        path = out / f'lane-{min(tracks):02d}.mixjam'
-        wav = path.with_suffix('.wav')
+        stem = f'lane-{min(tracks):02d}'
+        wav = out / f'{stem}.wav'
+        data = out / '.data' / stem
         keys = ducker_keys(document, tracks) - set(tracks)
         key = None
         if cache and fingerprints is not None:
@@ -517,48 +518,53 @@ def render_lanes(document, groups, out, jobs=None, cache=None):
             key = lane_key(part, tracks, bool(keys), fingerprints)
             if key is not None and from_cache(cache, key, wav):
                 return name, wav
-        # The lane file can be a link to a cache entry; replace it rather than write through it.
-        wav.unlink(missing_ok=True)
-        if not keys:
-            path.write_text(json.dumps(solo(document, tracks)), encoding='utf-8')
-            run(path, wav, out / '.data' / path.stem)
-            path.unlink()
-        else:
-            keyed_parts(document, tracks, path, wav, out / '.data' / path.stem)
+        # Both render paths replace the WAV atomically, also when it is a cache link.
+        with TemporaryDirectory(prefix=f'{stem}-', dir=out) as directory:
+            path = Path(directory) / f'{stem}.mixjam'
+            if not keys:
+                path.write_text(json.dumps(solo(document, tracks)), encoding='utf-8')
+                run(path, wav, data)
+            else:
+                keyed_parts(document, tracks, path, wav, data)
         # Do not publish under an earlier identity when a source or the renderer
         # changed while the native command ran.
         if cache and key is not None and key == lane_key(part, tracks, bool(keys)):
             to_cache(cache, key, wav)
         return name, wav
 
+    stopped = threading.Event()
+
+    def run_unless_stopped(item):
+        if stopped.is_set():
+            return None
+        try:
+            return one(item)
+        except BaseException:
+            # Stop the next queued lane before the coordinator gets to cancel futures.
+            stopped.set()
+            raise
+
     # Lower the calling thread before workers inherit its priority on Linux.
     contain()
     with ThreadPoolExecutor(jobs) as pool:
-        lanes = dict(pool.map(one, groups.items()))
+        futures = []
+        try:
+            for item in groups.items():
+                futures.append(pool.submit(run_unless_stopped, item))
+            wait(futures, return_when=FIRST_EXCEPTION)
+        finally:
+            stopped.set()
+            for future in futures:
+                future.cancel()
+        for future in futures:
+            if not future.cancelled():
+                error = future.exception()
+                if error is not None:
+                    raise error
+        lanes = dict(future.result() for future in futures)
     if cache:
         prune_cache(cache)
     return lanes
-
-
-def add(total, data):
-    """`total` plus `data`, padded to the longer of the two."""
-    if total is None:
-        return data.astype(np.float32)
-    if len(data) > len(total):
-        total = np.pad(total, ((0, len(data) - len(total)), (0, 0)))
-    total[:len(data)] += data
-    return total
-
-
-def mix_down(lanes, roles):
-    """The premaster and one stem per role, as sums of the lane renders: rate, premaster, stems."""
-    rate, premaster, stems = None, None, {}
-    for name, wav in lanes.items():
-        rate, data = read_wav(wav)
-        premaster = add(premaster, data)
-        if name in roles:
-            stems[roles[name]] = add(stems.get(roles[name]), data)
-    return rate, premaster, stems
 
 
 def fit_gain(song, peak, target_db, part_peaks=()):
@@ -585,7 +591,7 @@ def fit_gain(song, peak, target_db, part_peaks=()):
             raise SystemExit(f'The fitted {name} would exceed full scale. '
                              'Lower the gain target or adjust the lane gains.')
     document['song']['masterGain'] = fitted
-    song.write_text(json.dumps(document, indent=1), encoding='utf-8')
+    atomic_write_text(song, json.dumps(document, indent=1))
     return scale
 
 
@@ -605,15 +611,17 @@ def parse_arguments(argv):
 
 def main():
     arguments = parse_arguments(sys.argv[1:])
-    import audible  # it imports this module
     song, out, jobs = arguments.song, arguments.out, arguments.jobs
     out.mkdir(parents=True, exist_ok=True)
     cache = None if arguments.no_cache else (arguments.cache or out.resolve().parent / 'lane-cache')
     document = json.loads(song.read_text(encoding='utf-8'))
     meta = read_meta(song)
     groups = lane_groups(document, meta)
+    if not groups:
+        raise SystemExit('The song has no clips.')
+    peaks = {}
     lanes = render_lanes(document, groups, out, jobs, cache)
-    rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta))
+    rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta), peaks)
     scale = 1.0
     if arguments.fit_gain is not None:
         target = arguments.fit_gain
@@ -625,7 +633,7 @@ def main():
                 fit_gain(song, peak, target)
                 document = json.loads(song.read_text(encoding='utf-8'))
                 lanes = render_lanes(document, groups, out, jobs, cache)
-                rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta))
+                rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta), peaks)
             peak = float(np.abs(premaster).max())
             actual = 20 * math.log10(peak) if peak > 0 else -math.inf
             if abs(actual - target) > 0.05:
@@ -633,8 +641,7 @@ def main():
                       f'and the target is {target:.2f} dBFS.',
                       file=sys.stderr)
         else:
-            part_peaks = [(f'lane "{name}"', float(np.abs(read_wav(wav)[1]).max()))
-                          for name, wav in lanes.items()]
+            part_peaks = [(f'lane "{name}"', peaks[name]) for name in lanes]
             part_peaks.extend((f'stem "{role}"', float(np.abs(stem).max()))
                               for role, stem in stems.items())
             scale = fit_gain(song, float(np.abs(premaster).max()), target, part_peaks)

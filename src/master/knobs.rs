@@ -171,6 +171,20 @@ pub(crate) const fn ratio_range(low: f32, high: f32, default: f32, step: f32) ->
         ..range(low, high, default, step)
     }
 }
+impl KnobRange {
+    /// A value held to the range. A value that is not a number gives the default.
+    pub(crate) fn hold(self, value: f32) -> f32 {
+        if value.is_nan() {
+            self.default
+        } else {
+            value.clamp(self.low, self.high)
+        }
+    }
+    /// Whether a value is a finite number in the range.
+    pub(crate) fn contains(self, value: f32) -> bool {
+        value.is_finite() && (self.low..=self.high).contains(&value)
+    }
+}
 
 impl Knob {
     /// Every knob: the trim, then each pedal's knobs in the first order.
@@ -264,12 +278,7 @@ impl Knob {
     }
     /// Set the knob, held to its range. The Booster knobs take whole positions.
     pub fn set(self, chain: &mut MasterChain, value: f32) {
-        let range = self.range();
-        let value = if value.is_nan() {
-            range.default
-        } else {
-            value.clamp(range.low, range.high)
-        };
+        let value = self.range().hold(value);
         let whole = value.round() as u16;
         match self {
             Self::Trim => chain.trim = value,

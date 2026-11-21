@@ -33,7 +33,7 @@ def parse(text):
 def load(root=ROOT):
     """The file's values with the environment's overrides."""
     path = Path(root) / ENV_FILE
-    values = parse(path.read_text(encoding='utf-8')) if path.exists() else {}
+    values = parse(path.read_text(encoding='utf-8-sig')) if path.exists() else {}
     for key in list(values):
         if key in os.environ:
             values[key] = os.environ[key]
@@ -81,6 +81,11 @@ def exe(root=ROOT):
     if not found.exists():
         raise SystemExit(f'{found} does not exist. Build it with the release command in README.md.')
     return found
+
+
+def songs_folder(root=ROOT):
+    """The folder of the owner's song scripts and renders in the repository's local-data."""
+    return Path(root) / 'local-data' / 'songs'
 
 
 def reference_profile(root=ROOT):

@@ -10,6 +10,7 @@ owns the format, and its tests cover each version.
 
 - [Envelope](#envelope)
 - [Song and lanes](song-format/song-and-lanes.md#song-and-lanes)
+- [Lane processing keys](song-format/lane-processing.md#lane-processing-keys)
 - [Master pedalboard](song-format/master-fx-and-placements.md#master-pedalboard)
 - [FX buses](song-format/master-fx-and-placements.md#fx-buses)
 - [Placements and samples](song-format/master-fx-and-placements.md#placements-and-samples)

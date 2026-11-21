@@ -381,6 +381,7 @@ impl Review {
     }
 
     /// The total length of the tracks, in seconds, when every duration is valid.
+    #[cfg(test)]
     pub fn track_seconds(&self) -> Option<u32> {
         self.tracks
             .iter()

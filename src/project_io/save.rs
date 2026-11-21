@@ -15,10 +15,9 @@ pub(super) fn save_with_library_in(
     path: &Path,
     storage: &Path,
 ) -> Result<(), String> {
+    // A provider folder is retained below, so check the song first.
     project.validate()?;
-    if !has_song_extension(path) {
-        return Err("Save the song with the .mixjam extension.".into());
-    }
+    check_extension(path)?;
     let used: HashSet<_> = project.clips.iter().map(|clip| clip.sample_id).collect();
     let mut saved = project.clone();
     saved.libraries = saved
@@ -65,16 +64,32 @@ pub(super) fn save_with_library_in(
             binding.root = retain_native_provider(binding.product, files, storage)?;
         }
     }
-    save(&saved, path)
+    write(saved, path)
 }
 
 /// A saved song references its used audio, not every sound in the browser palette.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
-    if !has_song_extension(path) {
-        return Err("Save the song with the .mixjam extension.".into());
+    check_extension(path)?;
+    write(project.clone(), path)
+}
+
+fn check_extension(path: &Path) -> Result<(), String> {
+    if has_song_extension(path) {
+        Ok(())
+    } else {
+        Err("Save the song with the .mixjam extension.".into())
     }
-    let mut saved = project.clone();
+}
+
+/// Write `saved` with only the sources that its clips use. The song writer
+/// validates what is left.
+fn write(mut saved: Project, path: &Path) -> Result<(), String> {
     saved.prune_sample_conflicts();
+    let used: HashSet<_> = saved.clips.iter().map(|clip| clip.sample_id).collect();
+    saved
+        .imported_samples
+        .retain(|sample| used.contains(&sample.id));
+    // Only the imports that the song keeps are read for their rate.
     for imported in &mut saved.imported_samples {
         if imported.source_sample_rate.is_none()
             && let Ok(ready) = Library::check_import(imported)
@@ -82,10 +97,6 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
             imported.source_sample_rate = Some(ready.sample_rate);
         }
     }
-    let used: HashSet<_> = saved.clips.iter().map(|clip| clip.sample_id).collect();
-    saved
-        .imported_samples
-        .retain(|sample| used.contains(&sample.id));
     saved
         .missing_samples
         .retain(|sample| used.contains(&sample.id));

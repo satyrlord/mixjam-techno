@@ -36,8 +36,7 @@ def check_png(name: str) -> dict:
     with Image.open(path) as source:
         if source.format != "PNG" or source.size != SIZE or source.mode != "RGBA":
             raise ValueError(f"{name}: expected a 96 by 96 RGBA PNG")
-        # Pillow before 11.3 has only getdata; later versions deprecate it.
-        pixels = list(getattr(source, "get_flattened_data", source.getdata)())
+        pixels = list(source.get_flattened_data())
         visible = [pixel for pixel in pixels if pixel[3] > 0]
         opaque = [pixel for pixel in pixels if pixel[3] == 255]
         transparent = sum(pixel[3] == 0 for pixel in pixels)

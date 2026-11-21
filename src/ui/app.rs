@@ -2,6 +2,8 @@
 //! submits commands to the headless session; this module builds it, polls the
 //! session once per frame, and implements the `eframe` application trait.
 use super::*;
+#[path = "app/capture_setup.rs"]
+mod capture_setup;
 
 /// The boards of the lower panel. The tool rail chooses one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -138,6 +140,17 @@ pub(super) fn startup_status(session: &mut Session) -> (String, bool) {
         .unwrap_or_else(|| (DEFAULT_STATUS.into(), false))
 }
 
+/// The effect settings with every optional group switched on, for the capture
+/// views that show the groups open.
+fn every_effect() -> EffectsState {
+    EffectsState {
+        filter: Some(Default::default()),
+        echo: Some(Default::default()),
+        robotize: Some(Default::default()),
+        ..Default::default()
+    }
+}
+
 /// The Options window that a capture view shows, if it shows one. Two of
 /// them add unapplied edits on two pages, and one asks to discard them.
 fn options_for_capture(session: &Session, view: &str) -> Option<options::OptionsWindow> {
@@ -199,85 +212,7 @@ impl MixJamApp {
             String::new()
         };
         let status = with_import_summary(status, session.project());
-        if capture_view == "follow" {
-            session.seek(40 * TICKS_PER_BAR);
-        }
-        if !capture_view.is_empty() {
-            // Captures run in their own data folder, so the saved layout
-            // stays there. Every capture sets the whole layout, so one view
-            // never inherits another's panels.
-            let mut layout = session.layout();
-            layout.tool_names = capture_view != "rail-icons";
-            // The Mix view folds the lower panel, as it does when chosen.
-            layout.boards =
-                capture_view != "boards-folded" && !capture_view.starts_with("mix-view");
-            layout.maximised = capture_view == "maximised";
-            layout.sounds = matches!(capture_view.as_str(), "sounds-panel" | "sample-details");
-            layout.overview = capture_view != "overview-folded";
-            layout.inspector = capture_view.starts_with("inspector");
-            if let Err(error) = session.set_layout(layout) {
-                eprintln!("{error}");
-            }
-        }
-        if matches!(
-            capture_view.as_str(),
-            "master-active"
-                | "master-reordered"
-                | "master-end"
-                | "master-metering"
-                | "master-bypass"
-        ) {
-            // The Booster settings of a D4 factory song, and
-            // every mastering pedal at its default.
-            let mut chain = session.project().master;
-            for kind in PedalKind::ALL {
-                chain.set_on(kind, true);
-            }
-            chain.trim = -3.0;
-            chain.booster_eq.bands = [62, 58, 50, 44, 50, 54, 60, 64, 66, 70];
-            (
-                chain.booster_compressor.drive,
-                chain.booster_compressor.speed,
-            ) = (1000, 1000);
-            chain.booster_compressor.gain = 278;
-            chain.booster_wide.spread = 444;
-            if capture_view == "master-reordered" {
-                chain.move_pedal(9, 0);
-                chain.move_pedal(3, 5);
-                chain.booster_compressor.on = false;
-                chain.tube.on = false;
-            }
-            if capture_view == "master-bypass" {
-                chain.bypass = true;
-            }
-            let _ = session.edit(EditCommand::SetMaster(chain));
-        }
-        if matches!(capture_view.as_str(), "mixer-eq" | "mix-view-eq") {
-            // Hi-hats tamed: a low cut, a dip at the harsh band, and less top.
-            let mut tracks = session.project().tracks.clone();
-            tracks[0].eq = mixjam_techno::application::eq::ChannelEq {
-                on: true,
-                low_cut: 180.0,
-                mid_hz: 3500.0,
-                mid_db: -4.5,
-                mid_q: 1.6,
-                high_db: -9.0,
-                ..Default::default()
-            };
-            let master_gain = session.project().master_gain;
-            let _ = session.edit(EditCommand::SetMixer {
-                tracks,
-                master_gain,
-            });
-        }
-        if capture_view == "unsaved" {
-            let bpm = if session.project().bpm == 160.0 {
-                140.0
-            } else {
-                160.0
-            };
-            let _ = session.edit(EditCommand::SetTempo(bpm));
-        }
+        capture_setup::prepare_session(&mut session, &capture_view);
         let import_path = (capture_view == "import")
             .then(|| {
                 session
@@ -446,12 +381,7 @@ impl MixJamApp {
             step_synth: StepSynthBoard {
                 state: if capture_view == "step-synth-effects" {
                     StepSynthState {
-                        effects: EffectsState {
-                            filter: Some(Default::default()),
-                            echo: Some(Default::default()),
-                            robotize: Some(Default::default()),
-                            ..Default::default()
-                        },
+                        effects: every_effect(),
                         ..Default::default()
                     }
                 } else {
@@ -488,12 +418,7 @@ impl MixJamApp {
                     "effects" | "effects-expanded" | "missing-effects"
                 ),
                 state: if capture_view == "effects-expanded" {
-                    EffectsState {
-                        filter: Some(Default::default()),
-                        echo: Some(Default::default()),
-                        robotize: Some(Default::default()),
-                        ..Default::default()
-                    }
+                    every_effect()
                 } else {
                     Default::default()
                 },

@@ -73,7 +73,8 @@ fn stamp(folder: &Path) -> Stamp {
         .flatten()
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let metadata = entry.metadata().ok()?;
+            // Follow links, as `load` does, so a changed linked file is seen.
+            let metadata = std::fs::metadata(entry.path()).ok()?;
             (metadata.is_file() && name.to_ascii_lowercase().ends_with(".json"))
                 .then(|| (name, metadata.len(), metadata.modified().ok()))
         })

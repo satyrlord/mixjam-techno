@@ -290,7 +290,7 @@ impl Session {
     /// a button is held, the gesture continues through any pause, so a drag
     /// held still stays one step. Call it once per frame, before the controls.
     pub fn pointer_gesture(&mut self, pressed: bool, held: bool) {
-        if pressed {
+        if pressed && self.automation_gesture.is_none() && self.return_gesture.is_none() {
             self.gesture = None;
         } else if held && let Some((_, at)) = &mut self.gesture {
             *at = std::time::Instant::now();
@@ -302,6 +302,8 @@ impl Session {
         track: usize,
         lane: crate::automation::Lane,
     ) -> Result<(), String> {
+        // A refused drag also ends the drag before it.
+        self.end_automation_gesture();
         if track >= TRACK_COUNT {
             return Err("The track is outside the project.".into());
         }
@@ -314,10 +316,10 @@ impl Session {
     }
     /// Begin one undo step for a point drag on an FX bus's return lane.
     pub fn begin_return_gesture(&mut self, bus: usize) -> Result<(), String> {
+        self.end_automation_gesture();
         if bus >= crate::fx::BUSES {
             return Err("The FX bus does not exist.".into());
         }
-        self.end_automation_gesture();
         self.gesture = None;
         self.return_gesture = Some(bus);
         Ok(())

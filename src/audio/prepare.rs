@@ -15,22 +15,19 @@ use std::{collections::HashMap, sync::Arc};
 
 impl Mix {
     /// `samples` holds each source at each pitch that a clip plays it at, as
-    /// `load_sources` checked it.
+    /// `load_sources` checked it. The caller has validated `project`.
     pub(super) fn new(
         project: &Project,
         samples: &HashMap<SourceKey, Arc<Pcm>>,
         source_tempos: &HashMap<u32, f64>,
         quality: crate::playback_quality::PlaybackQuality,
     ) -> Result<Self, String> {
-        project.validate()?;
         let rate = Self::SAMPLE_RATE;
         let frames_per_tick = project.frames_per_tick(rate);
         let frames = (project.end_tick() as f64 * frames_per_tick).ceil() as u64;
-        let missing: std::collections::HashSet<_> = project
-            .missing_samples
-            .iter()
-            .map(|sample| sample.id)
-            .collect();
+        let missing = missing_ids(project);
+        // Each sample's playback tempo, found once for all its clips.
+        let mut playback_tempos: HashMap<u32, f64> = HashMap::new();
         let mut voices = Vec::new();
         let mut chains = Vec::new();
         let mut chain_index = [None; crate::engine::TRACK_COUNT];
@@ -80,8 +77,10 @@ impl Mix {
             if !source_bpm.is_finite() || source_bpm <= 0.0 {
                 return Err("A sample has an invalid source tempo.".into());
             }
-            let step = source.sample_rate as f64 / rate as f64 * project.bpm
-                / project.sample_playback_bpm(clip.sample_id, source_bpm);
+            let playback_bpm = *playback_tempos
+                .entry(clip.sample_id)
+                .or_insert_with(|| project.sample_playback_bpm(clip.sample_id, source_bpm));
+            let step = source.sample_rate as f64 / rate as f64 * project.bpm / playback_bpm;
             if !step.is_finite() || step <= 0.0 {
                 return Err("The source tempo cannot be represented for sample playback.".into());
             }
@@ -253,11 +252,7 @@ pub(super) fn load_sources(
     decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
     read: impl Fn(u32) -> Result<Pcm, String> + Sync,
 ) -> Result<(), String> {
-    let missing: std::collections::HashSet<_> = project
-        .missing_samples
-        .iter()
-        .map(|sample| sample.id)
-        .collect();
+    let missing = missing_ids(project);
     let used: std::collections::BTreeSet<SourceKey> = project
         .clips
         .iter()
@@ -322,6 +317,15 @@ pub(super) fn load_sources(
         }
     }
     error.map_or(Ok(()), Err)
+}
+
+/// The ids of the project's missing samples. Their clips do not play.
+fn missing_ids(project: &Project) -> std::collections::HashSet<u32> {
+    project
+        .missing_samples
+        .iter()
+        .map(|sample| sample.id)
+        .collect()
 }
 
 /// `work` applied to each item, in the items' order. The items are shared
@@ -429,6 +433,7 @@ pub(super) fn mix_with_samples_quality(
             .cloned()
             .ok_or_else(|| format!("Sample {id} is missing."))
     })?;
+    project.validate()?;
     Mix::new(project, &decoded, &source_tempos, quality)
 }
 

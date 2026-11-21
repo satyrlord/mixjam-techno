@@ -114,7 +114,8 @@ fn step_ruler(
         Pos2::new(columns.x(columns.end()), rect.bottom()),
     );
     let response = ui.interact(area, ui.id().with("step-ruler"), Sense::click_and_drag());
-    if response.clicked() || response.drag_started() {
+    let start = controls::primary_drag_start(ui, &response);
+    if response.clicked() || start.is_some() {
         response.request_focus();
     }
     if response.has_focus() {
@@ -150,23 +151,25 @@ fn step_ruler(
         });
     }
     let anchor_id = response.id.with("anchor");
-    if response.drag_started()
-        && let Some(pointer) = response.interact_pointer_pos()
-    {
-        let step = columns.at(pointer.x);
+    if let Some(origin) = start {
+        let step = columns.at(origin.x);
         editor.step = step;
         ui.ctx().data_mut(|data| data.insert_temp(anchor_id, step));
         editor.selection = Some((step, step));
     }
-    if response.dragged()
-        && let Some(pointer) = response.interact_pointer_pos()
+    let dragging = controls::primary_drag_or_stop(ui, &response);
+    if dragging
+        && let Some(pointer) = controls::drag_position(ui, &response)
         && let Some(anchor) = ui.ctx().data(|data| data.get_temp::<usize>(anchor_id))
     {
         let step = columns.at(pointer.x);
         editor.step = step;
         editor.selection = Some((anchor.min(step), anchor.max(step)));
     }
-    if response.clicked() && response.interact_pointer_pos().is_some() {
+    if !dragging
+        && controls::primary_clicked(ui, &response)
+        && response.interact_pointer_pos().is_some()
+    {
         editor.selection = None;
     }
     if ui.input(|input| input.key_pressed(egui::Key::Escape)) && editor.selection.is_some() {
@@ -207,13 +210,12 @@ fn step_ruler(
             Vec2::new(10.0, rect.height()),
         );
         let marker = ui.interact(handle, ui.id().with("length-end"), Sense::DRAG);
-        if marker.dragged()
-            && let Some(pointer) = marker.interact_pointer_pos()
-        {
+        let dragged = controls::primary_drag_or_stop(ui, &marker);
+        if dragged && let Some(pointer) = controls::drag_position(ui, &marker) {
             editor.edit("the length change");
             state.length = pattern::clamp_length(columns.boundary(pointer.x) as i64);
         }
-        let color = if marker.hovered() || marker.dragged() {
+        let color = if marker.hovered() || dragged {
             roles().legend
         } else {
             roles().coral

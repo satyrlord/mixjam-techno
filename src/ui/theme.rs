@@ -520,10 +520,14 @@ pub(super) fn configure_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+/// The segments in each corner of `rounded_outline`.
+const OUTLINE_STEPS: usize = 6;
+/// The number of points in `rounded_outline`.
+const OUTLINE_POINTS: usize = 4 * (OUTLINE_STEPS + 1);
+
 /// Points around a rounded rectangle, clockwise from its top edge, each with
 /// its outward unit normal.
-fn rounded_outline(rect: Rect, radius: f32) -> Vec<(Pos2, Vec2)> {
-    const STEPS: usize = 6;
+fn rounded_outline(rect: Rect, radius: f32) -> [(Pos2, Vec2); OUTLINE_POINTS] {
     let radius = radius
         .min(rect.width() / 2.0)
         .min(rect.height() / 2.0)
@@ -534,11 +538,12 @@ fn rounded_outline(rect: Rect, radius: f32) -> Vec<(Pos2, Vec2)> {
         (rect.left_bottom() + Vec2::new(radius, -radius), 90.0),
         (rect.left_top() + Vec2::new(radius, radius), 180.0),
     ];
-    let mut points = Vec::with_capacity(4 * (STEPS + 1));
-    for (center, start) in corners {
-        for step in 0..=STEPS {
-            let normal = Vec2::angled((start + 90.0 * step as f32 / STEPS as f32).to_radians());
-            points.push((center + normal * radius, normal));
+    let mut points = [(Pos2::ZERO, Vec2::ZERO); OUTLINE_POINTS];
+    for (corner, (center, start)) in corners.into_iter().enumerate() {
+        for step in 0..=OUTLINE_STEPS {
+            let normal =
+                Vec2::angled((start + 90.0 * step as f32 / OUTLINE_STEPS as f32).to_radians());
+            points[corner * (OUTLINE_STEPS + 1) + step] = (center + normal * radius, normal);
         }
     }
     points
@@ -564,11 +569,17 @@ pub(super) fn gradient(
             ((point.y - rect.top()) / rect.height()).clamp(0.0, 1.0),
         )
     };
-    let mut mesh = egui::Mesh::default();
+    // The fan has a centre and two vertices and three triangles per outline
+    // point, so the mesh never grows while it is filled.
+    let mut mesh = egui::Mesh {
+        vertices: Vec::with_capacity(1 + 2 * OUTLINE_POINTS),
+        indices: Vec::with_capacity(9 * OUTLINE_POINTS),
+        ..Default::default()
+    };
     mesh.colored_vertex(rect.center(), shade(rect.center()));
     let feather = 0.5 / painter.pixels_per_point();
     let outline = rounded_outline(rect, radius);
-    let count = outline.len() as u32;
+    let count = OUTLINE_POINTS as u32;
     for (point, normal) in outline {
         let inner = point - normal * feather;
         mesh.colored_vertex(inner, shade(inner));

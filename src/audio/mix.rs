@@ -96,9 +96,25 @@ impl Mix {
         &self,
         first_frame: u64,
         out: &mut [f32],
+        sends: Option<&mut [f32]>,
+        state: &mut RenderState,
+        only: Option<usize>,
+    ) {
+        self.mix_keyed(first_frame, out, sends, state, only, true);
+    }
+
+    /// `mix`, where `side` says whether `state` keeps the key audio that the
+    /// master pedals and the FX buses read. Without it, a mix of one track
+    /// measures only the key that the track's ducker hears, so the stems do
+    /// not measure every key once for each track.
+    pub(super) fn mix_keyed(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
         mut sends: Option<&mut [f32]>,
         state: &mut RenderState,
         only: Option<usize>,
+        side: bool,
     ) {
         if state.compressor_epoch.is_none() {
             state.compressor_epoch = state.live.as_ref().map(|live| live.compressor_epoch());
@@ -177,8 +193,10 @@ impl Mix {
             voice.add(first_frame, out, sends.as_deref_mut(), &levels[voice.track]);
         }
         // Chunk by chunk, so that each ducker reads its key over the same
-        // frames. The keys are measured whether or not `only` mixes them.
-        // A ducker's key level leaves out the master gain; the key audio for
+        // frames. A full mix, and a state that keeps the key audio, measure
+        // every key whether or not `only` mixes it. Any other mix of one
+        // track measures only its ducker's key: each key keeps its own
+        // history and drive, so the others need not run. A ducker's key level leaves out the master gain; the key audio for
         // the master pedals and the FX buses keeps it, as their input does.
         // The master gain glides as the track levels do, so the key stays
         // free of it while a live master gain moves.
@@ -189,7 +207,16 @@ impl Mix {
         let frames = out.len() / 2;
         let end = state.loop_region.map_or(u64::MAX, |[_, end]| end);
         let stride = 2 * self.keys.len();
-        if self.side && state.key_audio.len() < frames * stride {
+        let side = self.side && (side || only.is_none());
+        let ducked = only.and_then(|only| {
+            self.chains
+                .iter()
+                .find(|chain| chain.track == only)
+                .and_then(|chain| chain.ducker)
+                .map(|(_, slot)| slot)
+        });
+        let measured = |slot: usize| side || only.is_none() || ducked == Some(slot);
+        if side && state.key_audio.len() < frames * stride {
             state.key_audio.resize(frames * stride, 0.0);
         }
         for offset in (0..frames).step_by(TrackChain::CHUNK) {
@@ -202,6 +229,7 @@ impl Mix {
                 .zip(&mut state.keys)
                 .zip(&mut keys)
                 .enumerate()
+                .filter(|&(slot, _)| measured(slot))
             {
                 let mut buffer = [0.0_f32; TrackChain::CHUNK * 2];
                 let buffer = &mut buffer[..count * 2];
@@ -222,7 +250,7 @@ impl Mix {
                     } else {
                         0.0
                     };
-                    if self.side {
+                    if side {
                         let at = (offset + index) * stride + 2 * slot;
                         state.key_audio[at..at + 2].copy_from_slice(&[left, right]);
                     }

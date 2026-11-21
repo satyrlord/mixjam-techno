@@ -134,8 +134,11 @@ impl Voice {
                 let value = read[ch] * channel_gain * fade * level.at(frame, channel);
                 out[at * 2 + channel] += value;
                 if sending && let Some(sends) = sends.as_deref_mut() {
+                    // A bus at zero gets nothing: its sum stays as it is.
                     for (bus, send) in self.sends.iter().enumerate() {
-                        sends[at * 2 * BUSES + bus * 2 + channel] += value * send;
+                        if *send > 0.0 {
+                            sends[at * 2 * BUSES + bus * 2 + channel] += value * send;
+                        }
                     }
                 }
             }
@@ -164,10 +167,28 @@ enum SendLevel {
 }
 
 impl SendLevel {
+    /// The knob, or else the lane. A lane that never rises above zero
+    /// sends nothing, as a knob at zero.
+    fn new(knob: f32, lane: &[crate::automation::Point], frames_per_tick: f64) -> Self {
+        match Envelope::new(lane, frames_per_tick) {
+            Some(envelope) if !envelope.any_positive() => Self::Fixed(0.0),
+            Some(envelope) => Self::Moving(envelope),
+            None => Self::Fixed(knob),
+        }
+    }
+
     fn at(&self, frame: u64) -> f32 {
         match self {
             Self::Fixed(level) => *level,
             Self::Moving(envelope) => envelope.at(frame),
+        }
+    }
+
+    /// Whether the send ever rises above zero.
+    fn sends(&self) -> bool {
+        match self {
+            Self::Fixed(level) => *level > 0.0,
+            Self::Moving(_) => true,
         }
     }
 }
@@ -235,8 +256,7 @@ impl TrackChain {
             width: track.widens().then_some(track.width / 100.0),
             volume: Envelope::new(&automation.volume, frames_per_tick),
             sends: std::array::from_fn(|bus| {
-                Envelope::new(&automation.sends[bus], frames_per_tick)
-                    .map_or(SendLevel::Fixed(track.sends[bus]), SendLevel::Moving)
+                SendLevel::new(track.sends[bus], &automation.sends[bus], frames_per_tick)
             }),
             filter: Envelope::new(&automation.filter, frames_per_tick),
             pan: Envelope::new(&automation.pan, frames_per_tick),
@@ -246,16 +266,16 @@ impl TrackChain {
 
     /// Whether the track ever sends to a bus.
     pub(super) fn feeds(&self, bus: usize) -> bool {
-        match &self.sends[bus] {
-            SendLevel::Fixed(level) => *level > 0.0,
-            SendLevel::Moving(envelope) => envelope.any_positive(),
-        }
+        self.sends[bus].sends()
     }
 
     /// Fill `buffer` with the track's voices from `span.start`, as its
     /// Repeat lane reads them. Frames at or past `span.end` stay silent:
     /// a drive's lookahead must not read sound beyond the playback loop.
+    /// `buffer` holds at most `CHUNK` frames: the Repeat taps live on the
+    /// stack.
     fn sound(&self, span: Range<u64>, buffer: &mut [f32]) {
+        debug_assert!(buffer.len() / 2 <= Self::CHUNK);
         buffer.fill(0.0);
         let count = span
             .end
@@ -417,7 +437,13 @@ impl TrackChain {
         let Some(sends) = sends else {
             return;
         };
-        for (bus, send) in self.sends.iter().enumerate() {
+        // A bus that the track never sends to gets nothing: its sum stays.
+        for (bus, send) in self
+            .sends
+            .iter()
+            .enumerate()
+            .filter(|(_, send)| send.sends())
+        {
             for index in 0..count {
                 let level = send.at(at + index as u64);
                 for channel in 0..2 {

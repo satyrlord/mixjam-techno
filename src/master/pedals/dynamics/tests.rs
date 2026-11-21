@@ -1,4 +1,5 @@
 use super::*;
+use crate::master::dsp::MovingMin;
 
 #[test]
 fn moving_min_keeps_a_full_window_and_survives_timestamp_wrap() {

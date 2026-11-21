@@ -498,7 +498,7 @@ pub(crate) fn status(chain: &MasterChain) -> (String, String) {
         .iter()
         .filter(|kind| chain.is_on(**kind))
         .count();
-    let latency = chain.latency() as f32 / 44.1;
+    let latency = chain.latency_ms(MIX_SAMPLE_RATE);
     let status = if chain.bypass {
         "Bypassed: the mix plays and exports without the trim and pedals.".to_owned()
     } else if chain.is_active() {

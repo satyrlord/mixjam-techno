@@ -8,6 +8,57 @@ fn points(pairs: &[(u32, f32)]) -> Vec<Point> {
 }
 
 #[test]
+fn each_lane_snaps_values_to_its_grid_within_its_range() {
+    assert_eq!(Lane::Volume.snap(-3.3), -3.5);
+    assert_eq!(Lane::Volume.snap(40.0), VOLUME_CEILING_DB);
+    assert_eq!(Lane::Send(2).snap(0.456), 0.46);
+    assert_eq!(Lane::Pan.snap(0.03), 0.0, "the middle holds");
+    assert_eq!(Lane::Filter.snap(-0.513), -0.51);
+    assert_eq!(Lane::Repeat.snap(10.0), 8.0);
+    for value in [90.0, f32::MAX, f32::INFINITY] {
+        assert_eq!(Lane::Repeat.snap(value), 64.0, "{value}");
+    }
+    for value in [f32::MIN, f32::NEG_INFINITY] {
+        assert_eq!(Lane::Repeat.snap(value), 0.0, "{value}");
+    }
+    assert_eq!(Lane::RepeatGate.snap(42.0), 40.0);
+    assert_eq!(Lane::Pitch.snap(160.0), 200.0);
+    for lane in Lane::ALL {
+        let (low, high) = lane.range();
+        for value in [low - 10.0, low, (low + high) / 2.0, high, high + 10.0] {
+            let snapped = lane.snap(value);
+            assert!(validate_points(lane, &points(&[(0, snapped)])).is_ok());
+            assert_eq!(lane.snap(snapped), snapped, "{lane:?} snaps once");
+        }
+    }
+    assert_eq!(snap_return(1.03), 1.0, "the full return holds");
+    assert_eq!(snap_return(1.234), 1.23);
+    assert_eq!(snap_return(9.0), RETURN_CEILING);
+}
+
+#[test]
+fn set_and_moved_points_keep_one_point_per_tick_in_order() {
+    let mut lane = points(&[(100, 0.0), (300, 0.5)]);
+    assert_eq!(set_point(&mut lane, 200, 0.25), 1);
+    assert_eq!(set_point(&mut lane, 300, 0.75), 2);
+    assert_eq!(lane, points(&[(100, 0.0), (200, 0.25), (300, 0.75)]));
+    assert_eq!(
+        moved_point(&lane, 1, 900, 0.1),
+        Point {
+            tick: 299,
+            value: 0.1
+        }
+    );
+    assert_eq!(moved_point(&lane, 1, 0, 0.1).tick, 101);
+    assert_eq!(moved_point(&lane, 0, 50, 0.1).tick, 50);
+    let last = moved_point(&lane, 2, u32::MAX, 0.1).tick;
+    assert_eq!(last, crate::engine::MAX_TICKS);
+    // Without room between its neighbors, a point keeps its tick.
+    let packed = points(&[(10, 0.0), (11, 0.0), (12, 0.0)]);
+    assert_eq!(moved_point(&packed, 1, 40, 0.0).tick, 11);
+}
+
+#[test]
 fn a_lane_holds_its_ends_and_moves_in_lines_between_points() {
     let lane = points(&[(256, -12.0), (512, 0.0), (1024, 0.0)]);
     assert_eq!(value_at(&[], 10.0), None);
@@ -137,7 +188,7 @@ fn return_lanes_hold_zero_to_twice_the_full_return() {
         assert!(validate_return_points(&bad).is_err(), "{bad:?}");
     }
     assert_eq!(return_label(1.5), "150%");
-    assert!(no_returns(&Default::default()));
+    assert!(no_lanes(&Default::default()));
 }
 
 #[test]
@@ -257,4 +308,20 @@ fn pan_values_read_as_left_center_or_right() {
     assert_eq!(pan_gains(-1.0), [1.0, 0.0]);
     assert_eq!(pan_gains(1.0), [0.0, 1.0]);
     assert_eq!(pan_gains(0.25), [0.75, 1.0]);
+}
+
+#[test]
+fn nan_inputs_snap_into_range() {
+    for lane in Lane::ALL {
+        let value = lane.snap(f32::NAN);
+        assert!(
+            validate_points(lane, &points(&[(0, value)])).is_ok(),
+            "{lane:?} produced {value}"
+        );
+    }
+    let returned = snap_return(f32::NAN);
+    assert!(
+        validate_return_points(&points(&[(0, returned)])).is_ok(),
+        "return produced {returned}"
+    );
 }

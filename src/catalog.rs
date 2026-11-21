@@ -137,6 +137,7 @@ impl PcmIdentity {
     }
 }
 
+/// The PCM identity as hex text. The local catalog tools in `examples/` use it.
 pub fn pcm_identity_hex(samples: &[i16]) -> String {
     pcm_identity(samples)
         .iter()
@@ -265,7 +266,7 @@ fn load_t1(root: &Path) -> Result<Vec<NativeSample>, String> {
                 group_name: metadata.category.clone(),
                 bars: metadata.nominal_bars.unwrap_or(1).max(1),
                 source_bpm: 180.0,
-                frame_count: header.decoded_samples as u32,
+                frame_count: frame_count(&header)?,
                 audio: NativeAudio::Packed { path },
             })
         })
@@ -304,7 +305,9 @@ fn load_d1(root: &Path) -> Result<Vec<NativeSample>, String> {
             }
             samples.push(NativeSample {
                 native_id: first_id
-                    .checked_add(index as u32)
+                    .checked_add(
+                        u32::try_from(index).map_err(|_| "Native sample ID limit reached.")?,
+                    )
                     .ok_or("Native sample ID limit reached.")?,
                 code: format!("{prefix}{sample_path}"),
                 name: format!("{} {}", field(fields[4]), field(fields[5]))
@@ -313,7 +316,7 @@ fn load_d1(root: &Path) -> Result<Vec<NativeSample>, String> {
                 group_name: field(fields[2]),
                 bars,
                 source_bpm: 140.0,
-                frame_count: header.decoded_samples as u32,
+                frame_count: frame_count(&header)?,
                 audio: NativeAudio::Packed { path },
             });
         }
@@ -406,7 +409,13 @@ struct IndexRecord {
 /// The most sample records that one product index may list. Every installed
 /// index lists far fewer; the bound stops a file that is not an index, or a
 /// damaged one, from becoming a list of any size.
-const MAX_INDEX_RECORDS: usize = 100_000;
+pub(crate) const MAX_INDEX_RECORDS: usize = 100_000;
+
+/// The frame count of a packed sample header, as the 32-bit count a sample keeps.
+fn frame_count(header: &legacy_format::packed::PackedHeader) -> Result<u32, String> {
+    u32::try_from(header.decoded_samples)
+        .map_err(|_| "A native sample has too many audio frames.".to_string())
+}
 
 fn index_records(text: &str) -> Result<Vec<IndexRecord>, String> {
     let lines: Vec<_> = text.lines().collect();
@@ -457,6 +466,8 @@ fn load_index(
     let records = index_records(&read_text(index)?)?;
     let mut samples = Vec::new();
     let mut ranges: BTreeMap<PathBuf, Vec<(u64, u64)>> = BTreeMap::new();
+    // Each archive is opened and measured once, not once per record.
+    let mut archives: BTreeMap<PathBuf, (fs::File, u64)> = BTreeMap::new();
     for record in records {
         // Type 10 records are Drum Machine state, not compressed PCM. They remain
         // available in the original master index for the song adapter.
@@ -484,13 +495,21 @@ fn load_index(
             ));
         }
         let path = archive_for(record.kind)?;
-        let archive_size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+        if !archives.contains_key(&path) {
+            let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+            let size = file.metadata().map_err(|e| e.to_string())?.len();
+            archives.insert(path.clone(), (file, size));
+        }
+        let (file, archive_size) = archives
+            .get_mut(&path)
+            .expect("The archive was just opened.");
+        let archive_size = *archive_size;
         let end = record
             .offset
             .checked_add(record.length)
             .filter(|end| *end <= archive_size)
             .ok_or_else(|| format!("Native sample {} exceeds its archive.", record.id))?;
-        let header = packed_header(&path, record.offset, record.length)?;
+        let header = packed_header_from(file, &path, record.offset, record.length)?;
         let group_name = match header.metadata_fields().into_iter().nth(4) {
             Some(name) if !name.is_empty() => name,
             _ => format!("Group {}", record.group),
@@ -498,7 +517,7 @@ fn load_index(
         // One shipped D2 record (7051) has zero bars/group in its index.
         // Use measured audio length for its display length, without changing ID.
         let bars = if record.bars == 0 {
-            ((header.decoded_samples as f64 * bpm
+            ((frame_count(&header)? as f64 * bpm
                 / f64::from(legacy_format::NATIVE_SAMPLE_RATE)
                 / 240.0)
                 .ceil() as u32)
@@ -517,7 +536,7 @@ fn load_index(
             group_name,
             bars,
             source_bpm: bpm,
-            frame_count: header.decoded_samples as u32,
+            frame_count: frame_count(&header)?,
             audio: NativeAudio::Archive {
                 path,
                 offset: record.offset,
@@ -563,6 +582,16 @@ fn packed_header(
 ) -> Result<legacy_format::packed::PackedHeader, String> {
     let mut file =
         fs::File::open(path).map_err(|e| format!("Cannot open {}: {e}", path.display()))?;
+    packed_header_from(&mut file, path, offset, length)
+}
+
+/// The header of the packed sample that starts at `offset` in an open archive.
+fn packed_header_from(
+    file: &mut fs::File,
+    path: &Path,
+    offset: u64,
+    length: u64,
+) -> Result<legacy_format::packed::PackedHeader, String> {
     file.seek(SeekFrom::Start(offset))
         .map_err(|e| e.to_string())?;
     let mut prefix = vec![0; length.min(legacy_format::packed::MAX_HEADER_BYTES as u64) as usize];
@@ -582,7 +611,7 @@ fn packed_header(
 /// The largest sample index or catalog text file that is read, in bytes.
 /// Installed ones are far smaller; the bound stops a file that is not a
 /// catalog from being read whole.
-const MAX_CATALOG_TEXT_BYTES: u64 = 32 * 1024 * 1024;
+pub(crate) const MAX_CATALOG_TEXT_BYTES: u64 = 32 * 1024 * 1024;
 
 fn read_text(path: &Path) -> Result<String, String> {
     let length = fs::metadata(path).map_err(|e| e.to_string())?.len();

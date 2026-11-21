@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lanes import lane_groups, mix_down, read_meta, song_end_tick  # noqa: E402
 from mixjam import TICKS_PER_BAR, read_wav  # noqa: E402
-import render  # noqa: E402
 
 BANDS = [100 * 2 ** (k / 3) for k in range(0, 28)]  # 100 Hz .. 12.7 kHz
 DROWNED = 0.10
@@ -73,7 +73,7 @@ def lane_bars(document, tracks):
         if first < last:
             bars.update(range(first // TICKS_PER_BAR, (last - 1) // TICKS_PER_BAR + 1))
 
-    end = render.song_end_tick(document)
+    end = song_end_tick(document)
     for index in tracks:
         lane = document['lanes'][index - 1]
         clips = [(p['startTick'], p['startTick'] + p['durationTicks']) for p in lane['placements']]
@@ -157,11 +157,14 @@ def main():
     parser.add_argument('--jobs', type=int, metavar='N')
     arguments = parser.parse_args()
     song_path, out, jobs = arguments.song, arguments.out, arguments.jobs
+    import render  # render.py imports this module for its own table
     out.mkdir(parents=True, exist_ok=True)
     document = json.loads(song_path.read_text(encoding='utf-8'))
-    groups = render.lane_groups(document, render.read_meta(song_path))
+    groups = lane_groups(document, read_meta(song_path))
+    if not groups:
+        raise SystemExit('The song has no clips.')
     lanes = render.render_lanes(document, groups, out, jobs)
-    rate, premaster, _ = render.mix_down(lanes, {})
+    rate, premaster, _ = mix_down(lanes, {})
     print('\n'.join(audibility(document, groups, rate, premaster.mean(axis=1),
                                lambda name: read_wav(lanes[name])[1].mean(axis=1), jobs)))
 

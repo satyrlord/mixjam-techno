@@ -38,6 +38,149 @@ pub(super) fn arrow_key_focus(ctx: &egui::Context) -> Option<egui::Id> {
     ctx.data(|data| data.get_temp(egui::Id::new("arrow-key-focus")))
 }
 
+const POINTER_BUTTONS: [egui::PointerButton; 5] = [
+    egui::PointerButton::Primary,
+    egui::PointerButton::Secondary,
+    egui::PointerButton::Middle,
+    egui::PointerButton::Extra1,
+    egui::PointerButton::Extra2,
+];
+
+#[derive(Clone, Copy)]
+struct DragPress {
+    button: egui::PointerButton,
+    origin: Pos2,
+    frame: u64,
+    started_at: Option<u64>,
+    released: bool,
+}
+
+/// The original press on this widget. Egui's drag flags refer to the
+/// buttons down in the current frame, and any release ends egui's drag.
+fn drag_press(ui: &egui::Ui, response: &Response) -> Option<DragPress> {
+    let id = response.id.with("drag-press");
+    let (down, pressed, released, origin) = ui.input(|input| {
+        let pointer = &input.pointer;
+        (response.enabled()
+            && !input.key_pressed(egui::Key::Escape)
+            && (pointer.any_down() || pointer.any_released()))
+        .then(|| {
+            (
+                POINTER_BUTTONS.map(|button| pointer.button_down(button)),
+                POINTER_BUTTONS.map(|button| pointer.button_pressed(button)),
+                POINTER_BUTTONS.map(|button| pointer.button_released(button)),
+                pointer.press_origin(),
+            )
+        })
+    })?;
+    let frame = ui.ctx().cumulative_frame_nr();
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.data_mut(|data| {
+        let previous = data.get_temp::<DragPress>(id);
+        let mut press = previous
+            .filter(|press| {
+                let button = press.button as usize;
+                frame.saturating_sub(press.frame) <= 1
+                    && (!pressed[button] || press.frame == frame)
+                    && (down[button] || released[button])
+            })
+            .or_else(|| {
+                let mut buttons = POINTER_BUTTONS
+                    .into_iter()
+                    .filter(|&button| down[button as usize]);
+                let button = buttons.next()?;
+                if buttons.next().is_none()
+                    && pressed[button as usize]
+                    && response.is_pointer_button_down_on()
+                {
+                    Some(DragPress {
+                        button,
+                        origin: origin?,
+                        frame,
+                        started_at: None,
+                        released: false,
+                    })
+                } else {
+                    None
+                }
+            })?;
+        press.frame = frame;
+        press.released = released[press.button as usize] && !down[press.button as usize];
+        if press.started_at.is_none() && response.drag_started() && !press.released {
+            press.started_at = Some(pass);
+        }
+        data.insert_temp(id, press);
+        Some(press)
+    })
+}
+
+/// The original press if it has just begun a drag. Call before testing the
+/// response, so the press is recorded before movement reaches the threshold.
+pub(super) fn drag_start(
+    ui: &egui::Ui,
+    response: &Response,
+) -> Option<(egui::PointerButton, Pos2)> {
+    if response.is_pointer_button_down_on() || response.drag_started() {
+        let pass = ui.ctx().cumulative_pass_nr();
+        drag_press(ui, response)
+            .filter(|press| press.started_at == Some(pass))
+            .map(|press| (press.button, press.origin))
+    } else {
+        None
+    }
+}
+
+pub(super) fn primary_drag_start(ui: &egui::Ui, response: &Response) -> Option<Pos2> {
+    drag_start(ui, response)
+        .filter(|(button, _)| *button == egui::PointerButton::Primary)
+        .map(|(_, origin)| origin)
+}
+
+fn primary_press(ui: &egui::Ui, response: &Response) -> Option<DragPress> {
+    drag_press(ui, response).filter(|press| press.button == egui::PointerButton::Primary)
+}
+
+/// A primary click with no other pointer button held down. Keyboard and
+/// assistive clicks also pass because no pointer button is down.
+pub(super) fn primary_clicked(ui: &egui::Ui, response: &Response) -> bool {
+    response.clicked()
+        && !ui.input(|input| {
+            POINTER_BUTTONS[1..]
+                .iter()
+                .any(|&button| input.pointer.button_down(button))
+        })
+}
+
+/// The primary button is down on the control, and initiated the press on its
+/// own. Only that button edits a control that follows the pointer while a
+/// button is down on it.
+pub(super) fn primary_down_on(ui: &egui::Ui, response: &Response) -> bool {
+    primary_press(ui, response).is_some_and(|press| !press.released)
+}
+
+/// A drag belongs to the primary button only if that button pressed this
+/// control on its own.
+pub(super) fn primary_dragged(ui: &egui::Ui, response: &Response) -> bool {
+    primary_press(ui, response).is_some_and(|press| press.started_at.is_some() && !press.released)
+}
+
+/// Like `primary_dragged`, including the release frame so a handle drag
+/// finishes at its pointer position.
+pub(super) fn primary_drag_or_stop(ui: &egui::Ui, response: &Response) -> bool {
+    primary_press(ui, response).is_some_and(|press| press.started_at.is_some())
+}
+
+/// The pointer in the widget's layer while an owned gesture is active, also
+/// on the frames where egui no longer reports the widget as dragged.
+pub(super) fn drag_position(ui: &egui::Ui, response: &Response) -> Option<Pos2> {
+    let pos = ui.input(|input| input.pointer.latest_pos())?;
+    Some(
+        ui.ctx()
+            .layer_transform_from_global(response.layer_id)
+            .map_or(pos, |transform| transform * pos),
+    )
+}
+
 pub(super) fn contrast(a: Color32, b: Color32) -> f32 {
     let luminance = |color: Color32| {
         let linear = |value: u8| {

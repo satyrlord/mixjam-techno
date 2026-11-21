@@ -145,9 +145,7 @@ fn sequence_scan() {
         }
         let quality = session.options.playback_quality();
         // As `apply_playback_buffer` does before each playback.
-        session.master.set(&session.editor.project().master);
-        session.master.set_returns(&session.editor.project().fx);
-        session.master.set_levels(session.editor.project());
+        session.sync_master(true);
         let mut sequential = Vec::new();
         audio::play_offline(
             mix.clone(),

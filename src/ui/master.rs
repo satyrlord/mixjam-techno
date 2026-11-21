@@ -6,7 +6,9 @@
 //! brings the one chosen into view. Shared hardware controls and shell own
 //! presentation; the caller turns a changed chain into an edit.
 use super::*;
-use mixjam_techno::application::{Knob, KnobRange, MeterReading, OVER_DBTP, presets};
+use mixjam_techno::application::{
+    Knob, KnobRange, MIX_SAMPLE_RATE, MeterReading, OVER_DBTP, presets,
+};
 #[path = "master/board.rs"]
 mod board;
 #[path = "master/dials.rs"]

@@ -1,5 +1,10 @@
 //! Sample Editor body. Session owns sample processing and saving.
 use super::*;
+use mixjam_techno::application::MAX_PITCH_CENTS;
+
+/// The editor's pitch range in semitones: the engine's pitch range.
+const PITCH_SEMITONES: std::ops::RangeInclusive<f64> =
+    -(MAX_PITCH_CENTS as f64) / 100.0..=MAX_PITCH_CENTS as f64 / 100.0;
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub frames: u64,
@@ -73,16 +78,22 @@ pub(super) fn show(
                 pitch_value(ui, rect(310.0, 182.0, 112.0, 48.0), pitch);
             });
             label(&panel, at(440.0, 206.0), "Pitch (semitones)", 13.0);
-            let reason = if source.missing {
+            let reason: Option<String> = if source.missing {
                 Some(
-                    "This sound is missing and plays silence. Open Import details to inspect or resolve it.",
+                    "This sound is missing and plays silence. Open Import details to \
+                     inspect or resolve it."
+                        .into(),
                 )
             } else if !source.available || source.frames == 0 {
-                Some("Select a nonempty sound or clip before editing.")
+                Some("Select a nonempty sound or clip before editing.".into())
             } else if *start >= *end || *end > source.frames {
-                Some("End frame must be greater than Start frame and within the source.")
-            } else if !pitch.is_finite() || !(-24.0..=24.0).contains(pitch) {
-                Some("Pitch must be from -24 to 24 semitones.")
+                Some("End frame must be greater than Start frame and within the source.".into())
+            } else if !pitch.is_finite() || !PITCH_SEMITONES.contains(pitch) {
+                Some(format!(
+                    "Pitch must be from {} to {} semitones.",
+                    PITCH_SEMITONES.start(),
+                    PITCH_SEMITONES.end()
+                ))
             } else {
                 None
             };
@@ -98,7 +109,7 @@ pub(super) fn show(
                 .hover_hint(
                     "Preview the selected frames at this pitch. The source stays unchanged.",
                 )
-                .disabled_hint(reason.unwrap_or_default())
+                .disabled_hint(reason.as_deref().unwrap_or_default())
                 .clicked()
             {
                 action = Action::Listen;
@@ -114,12 +125,12 @@ pub(super) fn show(
                 .hover_hint(
                     "Save the edit as a new WAV in Wave. The original source stays unchanged.",
                 )
-                .disabled_hint(reason.unwrap_or_default())
+                .disabled_hint(reason.as_deref().unwrap_or_default())
                 .clicked()
             {
                 action = Action::Save;
             }
-            let summary = reason.map(str::to_owned).unwrap_or_else(|| {
+            let summary = reason.clone().unwrap_or_else(|| {
                 let selected = *end - *start;
                 if source.sample_rate > 0 {
                     format!(
@@ -316,7 +327,7 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
             let context = ui.ctx().clone();
             let response = ui.add(
                 egui::DragValue::new(pitch)
-                    .range(-24.0..=24.0)
+                    .range(PITCH_SEMITONES)
                     .clamp_existing_to_range(false)
                     .speed(0.1)
                     .custom_formatter(move |value, _| {
@@ -329,7 +340,7 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
                     .update_while_editing(false),
             );
             if response.changed() {
-                *pitch = pitch.clamp(-24.0, 24.0);
+                *pitch = pitch.clamp(*PITCH_SEMITONES.start(), *PITCH_SEMITONES.end());
             }
             name_control(response, "Pitch value").hover_hint(
                 "Enter semitones from -24 to +24. Pitch changes playback speed and output \
@@ -362,7 +373,7 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
                 0.1
             };
             *pitch += if up { amount } else { -amount };
-            *pitch = pitch.clamp(-24.0, 24.0);
+            *pitch = pitch.clamp(*PITCH_SEMITONES.start(), *PITCH_SEMITONES.end());
         }
     }
 }
@@ -374,7 +385,7 @@ fn pitch_rail(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
         |ui| {
             ui.spacing_mut().slider_width = rect.width();
-            controls::slider(ui, pitch, -24.0..=24.0, "Pitch (semitones)").hover_hint(
+            controls::slider(ui, pitch, PITCH_SEMITONES, "Pitch (semitones)").hover_hint(
                 "Pitch changes playback speed and sample length. +12 is one octave up and half \
                  the duration; -12 is one octave down and twice the duration. Use the numeric \
                  value for exact entry.",

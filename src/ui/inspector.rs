@@ -14,7 +14,7 @@ use super::view::{GROUPS, group_color, section_color, title_text};
 use super::*;
 use mixjam_techno::application::fx::BUSES;
 
-#[path = "inspector/clip.rs"]
+#[path = "inspector/clip/mod.rs"]
 mod clip;
 
 /// The open panel's width, and the folded strip's.
@@ -24,6 +24,21 @@ pub(super) const INSPECTOR_STRIP_WIDTH: f32 = 28.0;
 const TRACK: &str = "Inspector track";
 /// The name that every clip page control starts with.
 pub(super) const CLIP: &str = "Inspector clip";
+
+/// A sound's category as the Sounds panel names it.
+fn group_label(group: &str) -> &str {
+    GROUPS
+        .iter()
+        .find(|name| name.eq_ignore_ascii_case(group))
+        .copied()
+        .unwrap_or(group)
+}
+
+/// The first and last bar that a span of ticks touches, counted from 1.
+fn bar_span(start: u32, end: u32) -> (u32, u32) {
+    let first = start / TICKS_PER_BAR + 1;
+    (first, end.div_ceil(TICKS_PER_BAR).max(first))
+}
 
 /// What the Inspector shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -144,8 +159,7 @@ impl MixJamApp {
             &project.title,
             &[&format!("{:.0} BPM  ·  {meta}", project.bpm)],
         );
-        let clips: Vec<&Clip> = project.clips.iter().collect();
-        self.category_counts(ui, &clips);
+        self.category_counts(ui, &project.clips);
         section_heading(ui, "Sections");
         let project = self.session.project();
         if project.sections.is_empty() {
@@ -172,8 +186,7 @@ impl MixJamApp {
             })
             .collect();
         for (index, (start, next, name)) in sections.into_iter().enumerate() {
-            let first = start / TICKS_PER_BAR + 1;
-            let last = next.div_ceil(TICKS_PER_BAR).max(first);
+            let (first, last) = bar_span(start, next);
             let label = format!("Go to {name}, bar {first}");
             let (rect, response) =
                 ui.allocate_exact_size(Vec2::new(ui.available_width(), 24.0), Sense::click());
@@ -225,23 +238,28 @@ impl MixJamApp {
     }
 
     /// Clip counts per category, in the Sounds panel's category order.
-    fn category_counts(&self, ui: &mut egui::Ui, clips: &[&Clip]) {
+    fn category_counts<'a>(&self, ui: &mut egui::Ui, clips: impl IntoIterator<Item = &'a Clip>) {
         section_heading(ui, "Categories");
         let library = self.session.library();
-        let mut counts: Vec<(String, usize)> = Vec::new();
+        // Count the clips of each sound first, so a sound's category is
+        // looked up once; its place keeps the order of first appearance.
+        let mut sounds: BTreeMap<u32, (usize, usize)> = BTreeMap::new();
+        for (place, clip) in clips.into_iter().enumerate() {
+            sounds.entry(clip.sample_id).or_insert((place, 0)).1 += 1;
+        }
+        let mut sounds: Vec<(u32, (usize, usize))> = sounds.into_iter().collect();
+        sounds.sort_by_key(|(_, (place, _))| *place);
+        let mut counts: Vec<(&str, usize)> = Vec::new();
         let mut missing = 0;
-        for clip in clips {
-            let Some(sample) = library.sample_by_id(clip.sample_id) else {
-                missing += 1;
+        for (id, (_, clips)) in sounds {
+            let Some(sample) = library.sample_by_id(id) else {
+                missing += clips;
                 continue;
             };
-            let group = GROUPS
-                .iter()
-                .find(|group| group.eq_ignore_ascii_case(&sample.group_name))
-                .map_or(sample.group_name.clone(), |group| (*group).to_owned());
+            let group = group_label(&sample.group_name);
             match counts.iter_mut().find(|(name, _)| *name == group) {
-                Some((_, count)) => *count += 1,
-                None => counts.push((group, 1)),
+                Some((_, count)) => *count += clips,
+                None => counts.push((group, clips)),
             }
         }
         counts.sort_by_key(|(name, _)| {
@@ -259,11 +277,8 @@ impl MixJamApp {
         }
         let rows = counts
             .into_iter()
-            .map(|(name, count)| (group_color(&name), name, count))
-            .map(|(color, name, count)| (color, name, count, false))
-            .chain(
-                (missing > 0).then(|| (roles().raised, "Missing sound".to_owned(), missing, true)),
-            );
+            .map(|(name, count)| (group_color(name), name, count, false))
+            .chain((missing > 0).then(|| (roles().raised, "Missing sound", missing, true)));
         for (color, name, count, is_missing) in rows {
             let (rect, _) =
                 ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
@@ -284,7 +299,7 @@ impl MixJamApp {
             ui.painter().text(
                 rect.left_center() + Vec2::new(22.0, 0.0),
                 Align2::LEFT_CENTER,
-                &name,
+                name,
                 FontId::proportional(12.0),
                 roles().text,
             );
@@ -399,9 +414,7 @@ impl MixJamApp {
             ));
         }
         // A track never keys its own ducker, as in the channel EQ window.
-        if track.ducker.on && usize::from(track.ducker.key) == index + 1 {
-            track.ducker.key = if index == 0 { 2 } else { 1 };
-        }
+        track.ducker.set_key(index, f64::from(track.ducker.key));
 
         // Level, pan, and outputs share one card, a row each.
         section_heading(ui, "Channel");

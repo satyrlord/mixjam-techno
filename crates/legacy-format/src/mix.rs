@@ -135,20 +135,28 @@ impl Catalog {
         let mut entries = Vec::new();
         for line in text.lines() {
             let name = line.trim().trim_matches('"').replace('\\', "/");
-            if !name.is_empty() {
-                let p = Path::new(&name);
-                if name.contains(':')
-                    || name.starts_with('/')
-                    || p.components().any(|c| !matches!(c, Component::Normal(_)))
-                {
-                    return Err(MixError(
-                        "Catalog path must stay inside the sample root".into(),
-                    ));
-                }
-            }
+            Self::check_path(&name)?;
             entries.push(name);
         }
         Ok(Self { entries })
+    }
+    /// Check that one catalog path, with `/` separators, stays inside the sample
+    /// root. An empty path is an unused slot.
+    pub(crate) fn check_path(name: &str) -> Result<(), MixError> {
+        if name.is_empty() {
+            return Ok(());
+        }
+        if name.contains(':')
+            || name.starts_with('/')
+            || Path::new(name)
+                .components()
+                .any(|c| !matches!(c, Component::Normal(_)))
+        {
+            return Err(MixError(
+                "Catalog path must stay inside the sample root".into(),
+            ));
+        }
+        Ok(())
     }
     pub fn len(&self) -> usize {
         self.entries.len()

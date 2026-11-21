@@ -30,10 +30,15 @@ impl MixJamApp {
             self.return_lane(ui, &response, &painter, rect, visible, bus);
             return;
         }
-        if self.lane_clicks(ui, &response, rect).is_break() {
-            return;
+        if self.gestures.drag.is_none()
+            && self.gestures.handle_drag.is_none()
+            && self.gestures.marquee_origin.is_none()
+        {
+            if self.lane_clicks(ui, &response, rect).is_break() {
+                return;
+            }
+            self.clip_context_menu(&response, rect);
         }
-        self.clip_context_menu(&response, rect);
         self.lane_drags(ui, &response, &painter, rect);
     }
 
@@ -55,13 +60,7 @@ impl MixJamApp {
         // tooltip. The canvas is one widget, so it follows the pointer.
         if response.hovered()
             && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
-            && let Some(clip) = self
-                .session
-                .project()
-                .clips
-                .iter()
-                .rev()
-                .find(|clip| self.clip_rect(clip, rect).contains(pos))
+            && let Some(clip) = self.clip_at(pos, rect)
             && let Some(missing) = self.session.missing_sample(clip.sample_id)
         {
             response.clone().hover_hint_at_pointer(format!(
@@ -102,15 +101,8 @@ impl MixJamApp {
         preview.map(|clip| clip.id).or_else(|| {
             pointer
                 .filter(|_| handles && response.hovered())
-                .and_then(|pos| {
-                    self.session
-                        .project()
-                        .clips
-                        .iter()
-                        .rev()
-                        .find(|clip| self.clip_rect(clip, rect).contains(pos))
-                        .map(|clip| clip.id)
-                })
+                .and_then(|pos| self.clip_at(pos, rect))
+                .map(|clip| clip.id)
         })
     }
 
@@ -138,34 +130,26 @@ impl MixJamApp {
                         .project()
                         .sample_playback_bpm(sample.id, sample.source_bpm)
                 });
-                // A Step synth sound saved with its pattern draws notes.
-                let notes = sample.filter(|_| missing.is_none()).and_then(|sample| {
-                    let pattern = self
-                        .clip_paint
-                        .step_patterns
-                        .get(&sample.id)
-                        .cloned()
-                        .flatten()?;
-                    let frames_per_step = f64::from(sample.sample_rate) * 60.0 / pattern.bpm / 4.0;
-                    Some(waveform::ClipNotes::new(
-                        clip,
-                        &pattern,
-                        frames_per_step,
-                        frames_per_tick(sample, bpm),
-                        f64::from(sample.frame_count),
-                    ))
-                });
-                // Only clips on screen ask for their sound's peaks.
-                let wave = match (sample, missing) {
-                    _ if notes.is_some() => None,
-                    (Some(sample), None) => clip_wave(
-                        &mut self.clip_paint.waves,
-                        &self.session,
-                        clip,
-                        sample,
-                        tick_width,
-                        bpm,
-                    ),
+                // A Step synth sound saved with its pattern draws notes. Only
+                // clips on screen ask for their sound's peaks.
+                let body = match (sample, missing) {
+                    (Some(sample), None) => {
+                        if self.clip_paint.has_notes(sample.id) {
+                            self.clip_paint
+                                .clip_notes(clip, sample, bpm)
+                                .map(|notes| waveform::ClipBody::Notes(notes, tick_width))
+                        } else {
+                            clip_wave(
+                                &mut self.clip_paint.waves,
+                                &self.session,
+                                clip,
+                                sample,
+                                tick_width,
+                                bpm,
+                            )
+                            .map(waveform::ClipBody::Wave)
+                        }
+                    }
                     _ => None,
                 };
                 draw_clip(
@@ -175,10 +159,7 @@ impl MixJamApp {
                     missing,
                     self.selection.clips.contains(&clip.id),
                     clip.reverse,
-                    match &notes {
-                        Some(notes) => Some(waveform::ClipBody::Notes(notes, tick_width)),
-                        None => wave.map(waveform::ClipBody::Wave),
-                    },
+                    body,
                 );
                 draw_fades(painter, clip_rect, clip, sample, bar_width, bpm);
                 let handles = shows_handles == Some(clip.id);
@@ -191,8 +172,9 @@ impl MixJamApp {
                 }
             }
         }
-        // Forget the waveforms of deleted clips.
-        if self.clip_paint.waves.len() > self.session.project().clips.len() {
+        // Forget the waveforms and notes of deleted clips.
+        let clip_count = self.session.project().clips.len();
+        if self.clip_paint.waves.len() > clip_count || self.clip_paint.notes.len() > clip_count {
             let ids: BTreeSet<u64> = self
                 .session
                 .project()
@@ -201,6 +183,7 @@ impl MixJamApp {
                 .map(|clip| clip.id)
                 .collect();
             self.clip_paint.waves.retain(|id, _| ids.contains(id));
+            self.clip_paint.notes.retain(|id, _| ids.contains(id));
         }
     }
 
@@ -249,12 +232,7 @@ impl MixJamApp {
             && visible.contains(pos)
             && let Some(track) = self.timeline_track_at(pos)
             && let Some(length_ticks) = self.session.placement_ticks(sample.id)
-            && !self
-                .session
-                .project()
-                .clips
-                .iter()
-                .any(|clip| self.clip_rect(clip, rect).contains(pos))
+            && self.clip_at(pos, rect).is_none()
         {
             let fine = ui.input(|i| i.modifiers.ctrl);
             let ghost = self.clip_rect(
@@ -319,14 +297,7 @@ impl MixJamApp {
         if (response.clicked() || response.double_clicked())
             && let Some(pos) = response.interact_pointer_pos()
         {
-            let hit = self
-                .session
-                .project()
-                .clips
-                .iter()
-                .rev()
-                .find(|c| self.clip_rect(c, rect).contains(pos))
-                .cloned();
+            let hit = self.clip_at(pos, rect).cloned();
             if let Some(clip) = hit {
                 if self.score_tools.erase {
                     let result = self.session.delete(clip.id);
@@ -363,33 +334,21 @@ impl MixJamApp {
     /// there or at the selected clip.
     fn clip_context_menu(&mut self, response: &Response, rect: Rect) {
         if response.secondary_clicked() {
-            let hit = response.interact_pointer_pos().and_then(|pos| {
-                self.session
-                    .project()
-                    .clips
-                    .iter()
-                    .rev()
-                    .find(|clip| self.clip_rect(clip, rect).contains(pos))
-                    .map(|clip| clip.id)
-            });
+            let pointer = response.interact_pointer_pos();
+            let under = pointer.and_then(|pos| self.clip_at(pos, rect));
+            let hit = under.map(|clip| clip.id);
+            let missing = under
+                .and_then(|clip| self.session.missing_sample(clip.sample_id))
+                .map(|missing| missing.id);
             self.clip_menu.clip = hit;
-            if let Some(pos) = response.interact_pointer_pos() {
+            if let Some(pos) = pointer {
                 self.clip_menu.anchor = pos;
             }
             if let Some(id) = hit.filter(|id| !self.selection.clips.contains(id)) {
                 self.select_clip(id, false);
                 self.selection.place_on_click = false;
             }
-            self.clip_menu.missing_sample = response.interact_pointer_pos().and_then(|pos| {
-                self.session
-                    .project()
-                    .clips
-                    .iter()
-                    .rev()
-                    .find(|clip| self.clip_rect(clip, rect).contains(pos))
-                    .and_then(|clip| self.session.missing_sample(clip.sample_id))
-                    .map(|missing| missing.id)
-            });
+            self.clip_menu.missing_sample = missing;
         }
         if self.clip_menu.clip.is_some() || self.clip_menu.missing_sample.is_some() {
             // A context menu that Shift+F10 can also open at the
@@ -441,19 +400,16 @@ impl MixJamApp {
         painter: &egui::Painter,
         rect: Rect,
     ) {
-        if response.drag_started()
+        let start = controls::drag_start(ui, response);
+        if self.gestures.drag.is_none()
             && self.gestures.handle_drag.is_none()
-            && let Some(pos) = ui.input(|i| i.pointer.press_origin())
+            && self.gestures.marquee_origin.is_none()
+            && let Some((
+                button @ (egui::PointerButton::Primary | egui::PointerButton::Secondary),
+                pos,
+            )) = start
         {
-            if let Some(clip) = self
-                .session
-                .project()
-                .clips
-                .iter()
-                .rev()
-                .find(|c| self.clip_rect(c, rect).contains(pos))
-                .cloned()
-            {
+            if let Some(clip) = self.clip_at(pos, rect).cloned() {
                 let offset = self
                     .position_tick(pos.x, rect, true)
                     .saturating_sub(clip.start_tick);
@@ -464,10 +420,13 @@ impl MixJamApp {
                     id: clip.id,
                     offset,
                     copy: ui.input(|i| {
-                        i.modifiers.alt || i.modifiers.shift || i.pointer.secondary_down()
+                        i.modifiers.alt
+                            || i.modifiers.shift
+                            || button == egui::PointerButton::Secondary
                     }),
+                    button,
                 });
-            } else {
+            } else if button == egui::PointerButton::Primary {
                 self.gestures.marquee_origin = Some(pos);
                 self.gestures.marquee_base = if ui.input(|i| i.modifiers.shift) {
                     self.selection.clips.clone()
@@ -493,7 +452,7 @@ impl MixJamApp {
                 self.selection.clips.extend(hits);
                 self.selection.clip = self.selection.clips.iter().next().copied();
             }
-            if response.drag_stopped() || ui.input(|i| i.pointer.any_released()) {
+            if !ui.input(|i| i.pointer.primary_down()) {
                 self.gestures.marquee_origin = None;
             }
         }

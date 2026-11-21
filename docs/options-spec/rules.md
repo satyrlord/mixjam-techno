@@ -102,7 +102,10 @@ stopped, so no live quality crossfade is necessary.
   does not block. Do not overwrite the original file at startup. An explicit
   Restore all defaults, followed by Apply, can replace the settings that
   are not valid. A file with an unsupported future schema must stay as it is.
-  Report the incompatibility and block persistent writes.
+  Report the incompatibility and block persistent writes. The Sections toggle in
+  the toolbar still works for the session when the file is not valid, is from a
+  newer schema, or cannot be written. Only the saved choice is lost: there is no
+  write for a file that is not valid or newer, and a failed write shows an error.
 - Apply must validate the full draft and prepare all fallible resources before
   one atomic replacement of `options.json`. Adopt the active values only after
   the write is successful. A write error or a preparation error does not

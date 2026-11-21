@@ -2,12 +2,15 @@
 pub use crate::{
     APP_VERSION, agent, album_review,
     audio::Pcm,
+    compat::rejected_import_path,
     effects::{EffectsState, MIN_ECHO_BEATS},
     engine::{
-        Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_SECTION_NAME,
-        MAX_TICKS, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
-        Section, Silence, TICKS_PER_BAR, TRACK_COUNT, TRACK_WIDTH, Track, TrackMix,
-        amplitude_to_db, db_to_amplitude, playback_bpm,
+        CLIP_SILENCE_DB, Clip, Fade, FadeCurve, Fades, MAX_CLIP_GAIN, MAX_MIXER_GAIN_DB,
+        MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, MissingReference, MissingSample, PITCH_RANGE,
+        Project, SOURCE_BPM, SUPPORTED_BPMS, SampleConflict, Section, Silence, TEMPO_RANGE,
+        TICKS_PER_BAR, TICKS_PER_BEAT, TRACK_COUNT, TRACK_WIDTH, Track, TrackMix, amplitude_to_db,
+        check_pitch, clip_gain_db, clip_gain_from_db, clip_gain_max_db, db_to_amplitude,
+        frames_per_tick_at, playback_bpm, tick_seconds,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
@@ -18,6 +21,8 @@ pub use crate::{
     products::Product,
     synth::{Step, StepSynthState, Trig, pattern_beside},
 };
+/// The sample rate of the prepared mix and of export, in hertz.
+pub const MIX_SAMPLE_RATE: u32 = crate::audio::Mix::SAMPLE_RATE;
 /// The channel EQ of each track and its controls.
 pub mod eq {
     pub use crate::eq::{ChannelEq, EqParam};
@@ -47,8 +52,8 @@ pub mod ducker {
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
-        Automation, Lane, Point, REPEAT_GATE_STEP, REPEAT_STEPS, RETURN_CEILING, VOLUME_FLOOR_DB,
-        filter_cutoff, return_label, value_at,
+        Automation, Lane, Point, REPEAT_STEPS, RETURN_CEILING, VOLUME_FLOOR_DB, filter_cutoff,
+        moved_point, return_label, set_point, snap_return, value_at,
     };
 }
 /// The FX buses, their effects, and the controls of both.
@@ -116,6 +121,7 @@ pub use wave_scan::WaveScanStatus;
 /// Owns project history, sources, audio transport, rendering, recording, and persistence.
 /// No mutable project, catalog, device, or renderer is exposed to a frontend.
 pub struct Session {
+    instance_id: u64,
     library: Arc<Library>,
     catalog_revision: u64,
     wave_scan: Option<WaveScan>,
@@ -191,10 +197,12 @@ pub struct Session {
 
 impl Session {
     pub fn headless(library: Arc<Library>, project: Project) -> Result<Self, String> {
+        static NEXT_SESSION_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         project.validate()?;
         let master = MasterControl::new(&project.master);
         master.set_returns(&project.fx);
         Ok(Self {
+            instance_id: NEXT_SESSION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             library,
             catalog_revision: 0,
             wave_scan: None,
@@ -235,7 +243,7 @@ impl Session {
             unsaved: false,
             notice: None,
             record_track: 0,
-            record_bpm: 140.0,
+            record_bpm: crate::engine::SOURCE_BPM,
             recorder: None,
             record_start_tick: 0,
             record_mix_started: false,
@@ -268,6 +276,10 @@ impl Session {
     /// and history-only changes both invalidate an earlier request.
     pub fn project_change_token(&self) -> (u64, u64) {
         (self.revision, self.editor.generation())
+    }
+    /// Distinguish separate `Session` instances whose revisions start at zero.
+    pub fn instance_id(&self) -> u64 {
+        self.instance_id
     }
     pub fn cursor_tick(&self) -> u32 {
         self.cursor_tick
@@ -307,9 +319,7 @@ impl Session {
         self.gesture = None;
         self.automation_gesture = None;
         self.return_gesture = None;
-        self.master.set(&self.editor.project().master);
-        self.master.set_returns(&self.editor.project().fx);
-        self.master.set_levels(self.editor.project());
+        self.sync_master(true);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.render_dirty = true;
@@ -319,9 +329,7 @@ impl Session {
         self.unsaved = true;
         self.render_dirty = true;
         self.revision = self.revision.wrapping_add(1);
-        self.master.set(&self.editor.project().master);
-        self.master.set_returns(&self.editor.project().fx);
-        self.master.set_levels(self.editor.project());
+        self.sync_master(true);
         if self.wants_playback {
             self.start_playback();
         } else {
@@ -347,8 +355,17 @@ impl Session {
     fn master_changed(&mut self) {
         self.gesture = None;
         self.unsaved = true;
-        self.master.set(&self.editor.project().master);
-        self.master.set_returns(&self.editor.project().fx);
+        self.sync_master(false);
+    }
+    /// Give the live master the song's pedalboard and FX buses, and its
+    /// levels when `levels` is set.
+    fn sync_master(&self, levels: bool) {
+        let project = self.editor.project();
+        self.master.set(&project.master);
+        self.master.set_returns(&project.fx);
+        if levels {
+            self.master.set_levels(project);
+        }
     }
     /// Advances devices and the render queue. Returns a suggested polling delay in milliseconds.
     pub fn poll(&mut self) -> Option<u64> {

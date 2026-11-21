@@ -36,7 +36,6 @@ counts the cuts on effects and drums in its report without failing the gate;
 drum slices are a permitted device. Here --all lists those lanes too.
 """
 import json
-import math
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -44,7 +43,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mixjam import TICKS_PER_BAR, TICKS_PER_BEAT, loop_bars, playback_bpm, read_wav  # noqa: E402
+from mixjam import TICKS_PER_BAR, loop_bars, playback_bpm, read_wav, twin_base  # noqa: E402
 from pitch_clock import PitchClock  # noqa: E402
 
 # Roles whose phrase cuts fail the gate.
@@ -63,13 +62,13 @@ def movement(x, rate):
     m = (f > 60) & (f < 5000)
     band = np.round(12 * np.log2(f[m] / 440.0)).astype(int)
     band -= band.min()
+    size = band.max() + 1
     window = np.hanning(SIZE)
     frames = []
     for i in range(0, len(x) - SIZE + 1, HOP):
-        v = np.zeros(band.max() + 1)
-        np.add.at(v, band, np.abs(np.fft.rfft(x[i:i + SIZE] * window))[m] ** 2)
+        v = np.bincount(band, weights=np.abs(np.fft.rfft(x[i:i + SIZE] * window))[m] ** 2, minlength=size)
         frames.append(np.log10(v + 1e-9))
-    s = np.array(frames) if frames else np.zeros((1, band.max() + 1))
+    s = np.array(frames) if frames else np.zeros((1, size))
     return (s - s.mean(axis=0)) / (s.std(axis=0) + 1e-9)
 
 
@@ -141,12 +140,29 @@ def cuts(document, lanes, roles=None):
 
     def loop(sample_id):
         s = samples.get(sample_id)
-        if not s or not Path(s['path']).exists():
+        if not s:
             return None
         key = (s['path'], s.get('sourceBpm'), song_bpm)
         if key not in loops:
-            loops[key] = Loop(*key)
+            loops[key] = Loop(*key) if Path(s['path']).exists() else None
         return loops[key]
+
+    distances = {}  # id of a placement to its grid distance: a placement has one lane, clock and anchor
+
+    def grid_distance(q, q_clock, q_anchor):
+        """Ticks between a clip's source start and its place on the lane's phrase grid."""
+        if id(q) not in distances:
+            src = loop(q['sampleId'])
+            grid = ((q['startTick'] - (q_anchor - 1) * TICKS_PER_BAR) % src.ticks) if src.ticks else 0
+            if q_clock:
+                grid = ((q_clock.at(q_clock.frame(q['startTick']))
+                         - q_clock.at(q_clock.frame((q_anchor - 1) * TICKS_PER_BAR)))
+                        / q_clock.frames_per_tick) % src.ticks
+            if q.get('reverse', False):
+                grid = -grid % src.ticks
+            distance = abs(grid - source_span(q, src, q_clock)[0]) % src.ticks
+            distances[id(q)] = min(distance, src.ticks - distance)
+        return distances[id(q)]
 
     found = []
     for index, lane in enumerate(document['lanes']):
@@ -158,29 +174,16 @@ def cuts(document, lanes, roles=None):
         anchor = info.get('anchor', 1)
         placements = sorted(lane['placements'], key=lambda p: p['startTick'])
         clock = clock_of(index)
-        group = info.get('name', '').replace(' (twin)', '')
+        group = twin_base(info.get('name', ''))
         neighbours = [(q, clock_of(other_index), (lanes.get(str(other_index + 1)) or {}).get('anchor', 1))
                       for other_index, other in enumerate(document['lanes'])
                       if other_index == index or (group and
-                          (lanes.get(str(other_index + 1)) or {}).get('name', '').replace(' (twin)', '') == group)
+                          twin_base((lanes.get(str(other_index + 1)) or {}).get('name', '')) == group)
                       for q in other['placements']]
 
         def source(p):
             src = loop(p['sampleId'])
             return source_span(p, src, clock)
-
-        def grid_distance(q, q_clock, q_anchor):
-            """Ticks between a clip's source start and its place on the lane's phrase grid."""
-            src = loop(q['sampleId'])
-            grid = ((q['startTick'] - (q_anchor - 1) * TICKS_PER_BAR) % src.ticks) if src.ticks else 0
-            if q_clock:
-                grid = ((q_clock.at(q_clock.frame(q['startTick']))
-                         - q_clock.at(q_clock.frame((q_anchor - 1) * TICKS_PER_BAR)))
-                        / q_clock.frames_per_tick) % src.ticks
-            if q.get('reverse', False):
-                grid = -grid % src.ticks
-            distance = abs(grid - source_span(q, src, q_clock)[0]) % src.ticks
-            return min(distance, src.ticks - distance)
 
         for k, p in enumerate(placements):
             src = loop(p['sampleId'])

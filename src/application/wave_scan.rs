@@ -157,9 +157,22 @@ impl Session {
                 }
             }
         };
-        match self.start_wave_scan(&config.roots, config.source_bpm) {
+        // The same folders scan again, so a song that waits for them still
+        // opens after. Only a scan that stopped drops it.
+        let pending = self.pending_open.take();
+        let started = self.start_wave_scan(&config.roots, config.source_bpm);
+        let dropped = if self.wave_scan.is_some() {
+            self.pending_open = pending;
+            None
+        } else {
+            pending
+        };
+        match started {
             Ok(()) => true,
-            Err(error) => {
+            Err(mut error) => {
+                if let Some((path, _, _)) = dropped {
+                    error.push_str(&format!(" {} was not opened.", path.display()));
+                }
                 self.error(error);
                 false
             }
@@ -183,6 +196,31 @@ impl Session {
         } else {
             self.open(path)
         }
+    }
+
+    /// Start a window's session: scan the library folders of `scan` on
+    /// another thread, and open `song` after that scan, or now when no scan
+    /// runs. The startup status stays. Returns the errors to show with it.
+    pub fn start_up(
+        &mut self,
+        scan: Option<(&[PathBuf], f64)>,
+        song: Option<&Path>,
+    ) -> Vec<String> {
+        let mut errors = Vec::new();
+        if let Some((roots, source_bpm)) = scan
+            && let Err(error) = self.start_wave_scan(roots, source_bpm)
+        {
+            errors.push(error);
+        }
+        if let Some(path) = song {
+            // Opening stops the transport, which is no news at startup.
+            let notice = self.notice.take();
+            if let Err(error) = self.open_after_scan(path) {
+                errors.push(format!("Cannot open {}: {error}", path.display()));
+            }
+            self.notice = notice;
+        }
+        errors
     }
 
     pub(super) fn poll_wave_scan(&mut self) -> Option<u64> {

@@ -767,3 +767,42 @@ fn score_toolbar_controls_fit_with_the_inspector_open() {
         }
     });
 }
+
+#[test]
+fn a_secondary_press_on_the_tempo_slider_keeps_the_tempo() {
+    for add_primary in [false, true] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let slider = effects_control_rect(&output, "Project BPM");
+        let low = slider.left_center() + Vec2::new(8.0, 0.0);
+        let aside = low + Vec2::new(2.0, 0.0);
+        let before = app.session.project().bpm;
+        if add_primary {
+            button_at(&ctx, &mut app, low, egui::PointerButton::Secondary, true);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(aside)],
+                egui::Modifiers::NONE,
+            );
+            pointer(&ctx, &mut app, aside, true, egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, aside, false, egui::Modifiers::NONE);
+            button_at(&ctx, &mut app, aside, egui::PointerButton::Secondary, false);
+        } else {
+            secondary_drag(&ctx, &mut app, low, aside);
+        }
+        assert_eq!(
+            app.session.project().bpm,
+            before,
+            "Only the primary button moves a slider (add_primary={add_primary})."
+        );
+        drag(&ctx, &mut app, low, aside, egui::Modifiers::NONE);
+        assert_ne!(
+            app.session.project().bpm,
+            before,
+            "The primary button must still move the slider."
+        );
+    }
+}

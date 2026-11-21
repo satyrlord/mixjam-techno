@@ -1,5 +1,14 @@
 //! Time Stretcher body. Rendering and file operations stay in Session.
 use super::*;
+
+/// The original tempos that the Time Stretcher offers, in BPM: a view range
+/// inside the engine's `TEMPO_RANGE`.
+const STRETCH_BPM: std::ops::RangeInclusive<f64> = 30.0..=300.0;
+
+/// A tempo held to the Time Stretcher's range.
+pub(super) fn clamp_bpm(bpm: f64) -> f64 {
+    bpm.clamp(*STRETCH_BPM.start(), *STRETCH_BPM.end())
+}
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub id: Option<u32>,
@@ -194,8 +203,8 @@ pub(super) fn show(
                 original,
                 controls::RotarySpec {
                     name: "Original BPM knob",
-                    low: 30.0,
-                    high: 300.0,
+                    low: *STRETCH_BPM.start(),
+                    high: *STRETCH_BPM.end(),
                     reset: source.bpm,
                     step: 1.0,
                     decimals: 0,
@@ -220,9 +229,7 @@ pub(super) fn show(
                 controls::value_style(ui);
                 let value = ui.put(
                     rect(110.0, 166.0, 104.0, 26.0),
-                    egui::DragValue::new(original)
-                        .range(30.0..=300.0)
-                        .speed(1.0),
+                    egui::DragValue::new(original).range(STRETCH_BPM).speed(1.0),
                 );
                 name_control(value, "Original BPM")
                     .hover_hint("Original BPM: drag, or click to enter a value.");

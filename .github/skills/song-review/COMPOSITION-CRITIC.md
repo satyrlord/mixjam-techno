@@ -24,7 +24,7 @@ when there is no profile:
 
 ## Evidence
 
-Read your inputs in [Role inputs](REFERENCE.md#role-inputs).
+Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs).
 
 Use the tools to check a claim: `midichords.py` and `fit.py` for harmony,
 `barnotes.py` for the notes that a WAV plays after varispeed and pitch, and
@@ -33,10 +33,10 @@ is not a finding.
 
 The profile's form habits (section lengths, drumless starts and ends,
 breakdown lengths, a change every few bars) are habits. Apply the
-[reference test](REFERENCE.md#reference-test) to each of them. Repetition
+[reference test](REFERENCE-NOTES.md#reference-test) to each of them. Repetition
 alone is not a fault.
 
 ## Output
 
-Use the [finding format](REFERENCE.md#finding-format): at most 8 findings, then
-at most 5 things to keep. Give no score.
+Use the [finding format](REFERENCE-FINDINGS.md#finding-format): at most 8
+findings, then at most 5 things to keep. Give no score.

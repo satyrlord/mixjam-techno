@@ -10,6 +10,7 @@ mod pcm;
 mod player;
 mod prepare;
 mod resample;
+mod schedule;
 mod source;
 mod track;
 

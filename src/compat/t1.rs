@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     fs,
     io::Read,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 const PACKED_BYTE_LIMIT: usize = legacy_format::packed::MAX_PACKED_BYTES as usize;
@@ -124,23 +124,35 @@ fn convert_with_catalog<'a>(
     let base = mix_path.parent().unwrap_or_else(|| Path::new("."));
     let mut sources = HashMap::new();
     for record in &footer.imports {
-        let saved_path = import_reference_path(&record.path, base)?;
-        let resolved =
-            resolve_import_path(&record.path, base, library).and_then(|(path, candidates)| {
-                let bytes = read_bounded(&path, WAV_BYTE_LIMIT, "T1 imported WAV")?;
-                FileSample::from_wave(PathBuf::from("import.wav"), &bytes).map_err(|error| {
-                    format!(
-                        "Cannot use T1 imported sample {} at {}: {error}",
-                        record.source_id,
-                        path.display()
-                    )
-                })?;
-                let duration = legacy_format::playback::wave_duration_bytes(&bytes)
-                    .map_err(|error| format!("Cannot read T1 imported WAV timing: {error}"))?;
-                let bars = imports::imported_nominal_bars(duration)
-                    .map_err(|error| format!("Cannot schedule T1 imported WAV: {error}"))?;
-                Ok((path, bars, candidates))
-            });
+        let saved = import_reference_path(&record.path, base);
+        let rejected = saved.is_err();
+        let (saved_path, resolved) = match saved {
+            Ok(saved) => {
+                let resolved = resolve_import_path(&saved, &record.path, library).and_then(
+                    |(path, candidates)| {
+                        let bytes = read_bounded(&path, WAV_BYTE_LIMIT, "T1 imported WAV")?;
+                        legacy_format::playback::check_wave(Path::new("import.wav"), &bytes)
+                            .map_err(|error| {
+                                format!(
+                                    "Cannot use T1 imported sample {} at {}: {error}",
+                                    record.source_id,
+                                    path.display()
+                                )
+                            })?;
+                        let duration = legacy_format::playback::wave_duration_bytes(&bytes)
+                            .map_err(|error| {
+                                format!("Cannot read T1 imported WAV timing: {error}")
+                            })?;
+                        let bars = imports::imported_nominal_bars(duration)
+                            .map_err(|error| format!("Cannot schedule T1 imported WAV: {error}"))?;
+                        Ok((path, bars, candidates))
+                    },
+                );
+                (saved, resolved)
+            }
+            // A bad saved path makes one placeholder, not a failed import.
+            Err(reason) => (PathBuf::from(decode_1252(&record.path.0)), Err(reason)),
+        };
         let id = project.next_import_id()?;
         let name = record
             .labels
@@ -151,10 +163,11 @@ fn convert_with_catalog<'a>(
             .trim()
             .to_owned();
         let name = if name.is_empty() {
-            saved_path.file_stem().map_or_else(
-                || format!("Sample {}", record.source_id),
-                |stem| stem.to_string_lossy().into_owned(),
-            )
+            saved_path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().trim().to_owned())
+                .filter(|stem| !stem.is_empty() && !stem.chars().any(char::is_control))
+                .unwrap_or_else(|| format!("Sample {}", record.source_id))
         } else {
             name
         };
@@ -183,11 +196,19 @@ fn convert_with_catalog<'a>(
             Err(reason) => {
                 let bars = inferred_bars(mix, record.source_id);
                 let mut missing = MissingSample::external(&imported, bars * TICKS_PER_BAR, reason);
+                let raw_path = decode_1252(&record.path.0);
+                if rejected {
+                    missing.reference = super::import_support::rejected_reference(
+                        Product::T1,
+                        &raw_path,
+                        record.source_id,
+                    );
+                }
                 for (key, value) in [
                     ("source_id", record.source_id.to_string()),
                     ("label_1", decode_1252(&record.labels[0].0)),
                     ("label_2", decode_1252(&record.labels[1].0)),
-                    ("saved_path", decode_1252(&record.path.0)),
+                    ("saved_path", raw_path),
                     ("category", decode_1252(&record.category.0)),
                 ] {
                     missing.metadata.insert(key.into(), value);
@@ -293,15 +314,11 @@ fn convert_with_catalog<'a>(
 }
 
 fn inferred_bars(mix: &Mix, source_id: u16) -> u32 {
-    mix.events()
-        .filter(|event| event.sample_id == source_id)
-        .map(|event| {
-            mix.events()
-                .find(|next| next.track == event.track && next.row > event.row)
-                .map_or(1, |next| (next.row - event.row) as u32)
-        })
-        .max()
-        .unwrap_or(1)
+    let events: Vec<_> = mix
+        .events()
+        .map(|event| (event.row, event.track, event.sample_id))
+        .collect();
+    super::import_support::inferred_bars(&events, source_id)
 }
 
 fn frame_to_tick(frame: u64) -> Result<u32, String> {
@@ -319,48 +336,28 @@ fn import_reference_path(raw: &ByteText, base: &Path) -> Result<PathBuf, String>
     if raw.0.is_empty() || raw.0.iter().any(|byte| *byte < 32 || *byte == 127) {
         return Err("The T1 imported sample path is empty or contains a control byte.".into());
     }
-    let reference = decode_1252(&raw.0).replace('\\', "/");
-    let path = PathBuf::from(&reference);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        if path.has_root()
-            || path
-                .components()
-                .any(|part| matches!(part, Component::Prefix(_)))
-        {
-            return Err(
-                "The T1 imported sample needs an absolute drive or a relative project path.".into(),
-            );
-        }
-        let base = if base.is_absolute() {
-            base.to_path_buf()
-        } else {
-            std::env::current_dir()
-                .map_err(|error| format!("Cannot resolve the T1 project folder: {error}"))?
-                .join(base)
-        };
-        base.join(path)
-    };
-    Ok(path)
+    super::import_support::saved_path(
+        &decode_1252(&raw.0),
+        || {
+            if base.is_absolute() {
+                Ok(base.to_path_buf())
+            } else {
+                std::env::current_dir()
+                    .map(|dir| dir.join(base))
+                    .map_err(|error| format!("Cannot resolve the T1 project folder: {error}"))
+            }
+        },
+        "The T1 imported sample needs an absolute drive or a relative project path.",
+    )
 }
 
 fn resolve_import_path(
+    path: &Path,
     raw: &ByteText,
-    base: &Path,
     library: &Library,
 ) -> Result<(PathBuf, Vec<PathBuf>), String> {
-    let path = import_reference_path(raw, base)?;
     let reference = decode_1252(&raw.0).replace('\\', "/");
-    if path.is_file() {
-        return Ok((path, Vec::new()));
-    }
-    let candidates = library.find_wav_candidates(&reference)?;
-    let path = candidates
-        .first()
-        .cloned()
-        .ok_or_else(|| format!("WAV sample {reference} is missing from the selected folder."))?;
-    Ok((path, candidates))
+    super::import_support::find_file(path, &reference, library)
 }
 
 fn read_bounded(path: &Path, limit: usize, kind: &str) -> Result<Vec<u8>, String> {
@@ -656,6 +653,141 @@ mod tests {
     }
 
     #[test]
+    fn a_bad_saved_path_makes_one_placeholder_and_never_reaches_the_file_system() {
+        let paths = [
+            r"\\attacker\share\a.wav",
+            "//attacker/share/b.wav",
+            r"\\.\pipe\c.wav",
+            r"\\?\UNC\attacker\share\d.wav",
+            r"\root-relative.wav",
+            "bad\u{7}byte.wav",
+            r"C:\music\COM1",
+            "nul",
+        ];
+        let mut mix = Mix::default();
+        let mut saved = MixFooter::new(text("Hostile song"), [0; 8]);
+        for (index, path) in paths.iter().enumerate() {
+            let id = 1880 + index as u16;
+            mix.set_cell(index * 2, 0, id, 0).unwrap();
+            saved.imports.push(NativeImport {
+                source_id: id,
+                labels: [text("Recorded"), text("take")],
+                path: text(path),
+                category: text("voice"),
+            });
+        }
+        mix.trailer = saved.to_bytes(&mix).unwrap();
+        let project = convert(
+            &mix,
+            Path::new("d:/songs/hostile.mix"),
+            &Library::empty(),
+            resolve,
+        )
+        .unwrap();
+        assert!(project.imported_samples.is_empty());
+        assert_eq!(project.missing_samples.len(), paths.len());
+        assert_eq!(project.clips.len(), paths.len());
+        for (missing, path) in project.missing_samples.iter().zip(paths) {
+            // A rejected path never becomes a "missing file" or "cannot open" reason.
+            assert!(
+                missing.reason.contains("needs an absolute drive")
+                    || missing.reason.contains("control byte"),
+                "{path}: {}",
+                missing.reason
+            );
+            assert_eq!(missing.metadata["saved_path"], path);
+        }
+    }
+
+    #[test]
+    fn empty_saved_paths_make_distinct_missing_sources() {
+        let mut mix = Mix::default();
+        mix.set_cell(0, 0, 1880, 0).unwrap();
+        mix.set_cell(2, 0, 1881, 0).unwrap();
+        // The writer cannot make this fixture because it requires a path.
+        // The title and both import records use empty wrapped text fields.
+        let empty_text = [2, 0, 0, 1];
+        mix.trailer.extend([8, 10, 1, 0]);
+        mix.trailer.extend(empty_text);
+        mix.trailer.extend([2, 0]);
+        for _ in 0..2 {
+            mix.trailer.extend([8, 0]);
+            for _ in 0..4 {
+                mix.trailer.extend(empty_text);
+            }
+        }
+        mix.trailer.extend([8, 0]);
+        mix.trailer.extend([0; 16]);
+
+        let project = convert(&mix, Path::new("song.mix"), &Library::empty(), resolve).unwrap();
+        assert!(project.imported_samples.is_empty());
+        assert_eq!(project.clips.len(), 2);
+        assert_eq!(project.missing_samples.len(), 2);
+        for (clip, (missing, source)) in project
+            .clips
+            .iter()
+            .zip(project.missing_samples.iter().zip([1880, 1881]))
+        {
+            assert_eq!(clip.sample_id, missing.id);
+            assert_eq!(
+                super::super::rejected_import_path(&missing.reference),
+                Some(("", Some(source)))
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_rejected_path_stays_missing_on_open_and_reopen() {
+        let fixture = Fixture::new();
+        let wave_path = fixture.0.join("take.wav");
+        let bytes = legacy_format::wav::PcmWave {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![1000; 44_100],
+        }
+        .encode()
+        .unwrap();
+        fs::write(&wave_path, bytes).unwrap();
+        let library = Library::open_wav_folder(&fixture.0, 180.0).unwrap();
+
+        let mut mix = Mix::default();
+        mix.set_cell(0, 0, 1880, 0).unwrap();
+        let mut saved = MixFooter::new(text("Saved song"), [0; 8]);
+        let reference = r"\take.wav";
+        saved.imports.push(NativeImport {
+            source_id: 1880,
+            labels: [text("Recorded"), text("sample")],
+            path: text(reference),
+            category: text("voice"),
+        });
+        mix.trailer = saved.to_bytes(&mix).unwrap();
+        let mix_path = fixture.0.join("song.mix");
+        fs::write(&mix_path, mix.to_bytes()).unwrap();
+
+        let (opened, _) = crate::project_io::open(&mix_path, &library).unwrap();
+        let id = opened.clips[0].sample_id;
+        let missing = opened
+            .missing_sample(id)
+            .expect("the rejected path stays missing");
+        assert_eq!(missing.metadata["saved_path"], reference);
+        assert!(missing.reason.contains("needs an absolute drive"));
+
+        let song_path = fixture.0.join("song.mixjam");
+        crate::project_io::save(&opened, &song_path).unwrap();
+        let (reopened, library) = crate::project_io::open(&song_path, &library).unwrap();
+        assert_eq!(reopened.missing_sample(id), Some(missing));
+
+        let mut session =
+            crate::application::Session::headless(std::sync::Arc::new(library), reopened)
+                .unwrap()
+                .with_settings_root(fixture.0.join("settings"));
+        session.resolve_missing_sample(id, &wave_path).unwrap();
+        assert!(session.missing_sample(id).is_none());
+        assert_eq!(session.project().clips[0].sample_id, id);
+    }
+
+    #[test]
     fn preserves_relative_wav_references_distinct_ids_and_native_origin() {
         let fixture = Fixture::new();
         let wave_path = fixture.0.join("take.wav");
@@ -794,6 +926,41 @@ mod tests {
         assert_eq!(project.clips[2].length_ticks, 7 * TICKS_PER_BAR);
         assert_eq!(project.missing_samples[0].nominal_ticks, 7 * TICKS_PER_BAR);
         assert!(project.missing_samples[0].length_inferred);
+    }
+
+    #[test]
+    fn rejected_import_path_with_blank_or_control_stem_becomes_a_valid_placeholder() {
+        let mut mix = Mix::default();
+        let mut saved = MixFooter::new(text("Blank stem"), [0; 8]);
+        for (slot, (source_id, raw_path)) in [
+            (1880, "\t.wav"),
+            (1881, "   .wav"),
+            (1882, "bad\x07byte.wav"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            mix.set_cell(slot, 0, source_id, 0).unwrap();
+            saved.imports.push(NativeImport {
+                source_id,
+                labels: [text(""), text("")],
+                path: text(raw_path),
+                category: text("voice"),
+            });
+        }
+        mix.trailer = saved.to_bytes(&mix).unwrap();
+        let project = convert(
+            &mix,
+            Path::new("blank-stem.mix"),
+            &Library::empty(),
+            resolve,
+        )
+        .expect("rejected paths with blank or control stems must make placeholders");
+        project.validate().unwrap();
+        assert_eq!(project.missing_samples.len(), 3);
+        assert_eq!(project.missing_samples[0].name, "Sample 1880");
+        assert_eq!(project.missing_samples[1].name, "Sample 1881");
+        assert_eq!(project.missing_samples[2].name, "Sample 1882");
     }
 
     #[test]

@@ -62,18 +62,21 @@ impl Session {
         self.unsaved = false;
         Ok(())
     }
+    /// Playback's mix, when it is current and an export can use it.
+    fn reusable_render(&self) -> Option<Arc<audio::Mix>> {
+        self.render.clone().filter(|mix| {
+            !self.render_dirty
+                && mix.has_levels(self.project())
+                && mix.quality() == crate::playback_quality::PlaybackQuality::FULL
+        })
+    }
+
     /// The mix prepared for the project as it is now: playback's, when it
     /// is current, or a new one.
     pub(super) fn current_mix(&self) -> Result<Arc<audio::Mix>, String> {
-        match &self.render {
-            Some(mix)
-                if !self.render_dirty
-                    && mix.has_levels(self.project())
-                    && mix.quality() == crate::playback_quality::PlaybackQuality::FULL =>
-            {
-                Ok(Arc::clone(mix))
-            }
-            _ => audio::prepare_project(self.project(), &self.library).map(Arc::new),
+        match self.reusable_render() {
+            Some(mix) => Ok(mix),
+            None => audio::prepare_project(self.project(), &self.library).map(Arc::new),
         }
     }
 
@@ -86,13 +89,14 @@ impl Session {
     }
 
     /// Export each track and each FX return as its own WAV file in
-    /// `folder`, on this thread, and give the status line that reports it.
-    /// The files are the premaster: the master pedalboard is skipped.
-    pub fn export_tracks(&self, folder: &Path) -> Result<String, String> {
-        let stems =
-            self.current_mix()?
-                .write_stems(folder, &self.project().title, &self.project().fx)?;
-        Ok(tracks_exported(stems, folder))
+    /// `folder`, on this thread, and count the files. The folder is made
+    /// when it does not exist. The files are the premaster: the master
+    /// pedalboard is skipped.
+    pub fn export_tracks(&self, folder: &Path) -> Result<audio::Stems, String> {
+        let mix = self.current_mix()?;
+        std::fs::create_dir_all(folder)
+            .map_err(|error| format!("Cannot create {}: {error}", folder.display()))?;
+        mix.write_stems(folder, &self.project().title, &self.project().fx)
     }
 
     /// Export the mix as it is now on another thread. `poll` reports the
@@ -131,11 +135,7 @@ impl Session {
         if self.export.is_some() {
             return Err("Wait for the current export to finish.".into());
         }
-        let rendered = self.render.clone().filter(|mix| {
-            !self.render_dirty
-                && mix.has_levels(self.project())
-                && mix.quality() == crate::playback_quality::PlaybackQuality::FULL
-        });
+        let rendered = self.reusable_render();
         let project = self.project().clone();
         let library = self.library.clone();
         let (sender, receiver) = mpsc::channel();

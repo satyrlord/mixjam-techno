@@ -248,7 +248,7 @@ fn pattern_section(
         } else {
             response.disabled_hint(disabled)
         };
-        if response.clicked() {
+        if controls::primary_clicked(ui, &response) {
             if double {
                 pattern::double_length(state);
             } else {

@@ -13,11 +13,15 @@ their original audio.
 import argparse
 import math
 import os
+import sys
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import wave
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wavio import unpack_pcm24  # noqa: E402
 
 
 def read(path):
@@ -26,9 +30,7 @@ def read(path):
         raw = w.readframes(params.nframes)
     width, channels = params.sampwidth, params.nchannels
     if width == 3:
-        b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
-        ints = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
-        ints = np.where(ints >= 1 << 23, ints - (1 << 24), ints)
+        ints = unpack_pcm24(raw)
     elif width in (2, 4):
         ints = np.frombuffer(raw, '<i2' if width == 2 else '<i4')
     else:

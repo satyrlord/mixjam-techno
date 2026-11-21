@@ -81,8 +81,8 @@ impl Default for StretchWindow {
     fn default() -> Self {
         Self {
             open: false,
-            source_bpm: 140.0,
-            target_bpm: 140.0,
+            source_bpm: SOURCE_BPM,
+            target_bpm: SOURCE_BPM,
             feedback: StretchFeedback::default(),
         }
     }
@@ -106,7 +106,7 @@ impl Default for SampleImport {
     fn default() -> Self {
         Self {
             path: None,
-            bpm: 140.0,
+            bpm: SOURCE_BPM,
             details_open: false,
         }
     }
@@ -310,7 +310,7 @@ impl MixJamApp {
                     .hover_hint(display_paths(&path.to_string_lossy()));
                 ui.horizontal(|ui| {
                     ui.label("Source BPM");
-                    controls::number(ui, &mut self.sample_import.bpm, 7.5..=1200.0, "Source BPM")
+                    controls::number(ui, &mut self.sample_import.bpm, TEMPO_RANGE, "Source BPM")
                         .hover_hint("The sound's original tempo, separate from project BPM.");
                 });
                 ui.horizontal(|ui| {
@@ -503,7 +503,7 @@ impl MixJamApp {
             ) {
                 stretch::Action::Select(id) => {
                     self.selection.sample = Some(id);
-                    self.stretch.source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                    self.stretch.source_bpm = stretch::clamp_bpm(self.source_bpm());
                     self.stretch.feedback.saved = None;
                     self.stretch.feedback.message = None;
                     self.stretch.feedback.error = false;

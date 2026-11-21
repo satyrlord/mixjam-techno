@@ -66,8 +66,7 @@ pub(super) fn each_theme(mut body: impl FnMut(theme::Theme)) {
 /// test can apply options or adopt library folders without touching another
 /// test's files. Pass the folder to `remove_settings` at the end.
 pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let root = settings_fixture_dir(&std::env::temp_dir(), &NEXT);
+    let root = reserve_settings_folder();
     let session = Session::headless(Arc::new(Library::empty()), Project::default())
         .unwrap()
         .with_settings_root(root.clone());
@@ -82,6 +81,12 @@ pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
     app.libraries.close_after_scan = false;
     app.capture.path = None;
     (ctx, app, root)
+}
+
+/// Reserve a directory for a test that needs isolated settings on disk.
+pub(super) fn reserve_settings_folder() -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    settings_fixture_dir(&std::env::temp_dir(), &NEXT)
 }
 
 fn settings_fixture_dir(root: &std::path::Path, next: &std::sync::atomic::AtomicU64) -> PathBuf {
@@ -422,4 +427,80 @@ pub(super) fn named_count(output: &egui::FullOutput, name: &str) -> usize {
 /// Whether a frame painted `text` anywhere.
 pub(super) fn shows_text(output: &egui::FullOutput, text: &str) -> bool {
     screen(output).shows(text)
+}
+
+/// The fixture's library with 40 more sounds after its own, so the sound
+/// list has rows to move among and to scroll.
+pub(super) fn with_more_sounds(app: &mut MixJamApp) {
+    let library = &app.session.library().samples;
+    let base = library[0].clone();
+    let mut samples = library.to_vec();
+    samples.extend((0..40).map(|index| {
+        let mut sample = base.clone();
+        sample.id = 1000 + index;
+        sample.name = format!("Extra sound {index}");
+        sample
+    }));
+    app.session = Session::headless(
+        Arc::new(Library::fixture(samples)),
+        app.session.project().clone(),
+    )
+    .unwrap();
+}
+
+/// Press or release `button` at `pos`, in one frame.
+pub(super) fn button_at(
+    ctx: &egui::Context,
+    app: &mut MixJamApp,
+    pos: Pos2,
+    button: egui::PointerButton,
+    pressed: bool,
+) {
+    let none = egui::Modifiers::NONE;
+    frame(
+        ctx,
+        app,
+        vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button,
+                pressed,
+                modifiers: none,
+            },
+        ],
+        none,
+    );
+}
+
+/// Press the secondary button at `from`, move to `to` over a few frames, and
+/// release it.
+pub(super) fn secondary_drag(ctx: &egui::Context, app: &mut MixJamApp, from: Pos2, to: Pos2) {
+    button_at(ctx, app, from, egui::PointerButton::Secondary, true);
+    for step in 1..=4 {
+        frame(
+            ctx,
+            app,
+            vec![egui::Event::PointerMoved(
+                from + (to - from) * step as f32 / 4.0,
+            )],
+            egui::Modifiers::NONE,
+        );
+    }
+    button_at(ctx, app, to, egui::PointerButton::Secondary, false);
+}
+
+/// Press the primary button during a secondary press, before the drag starts.
+pub(super) fn secondary_then_primary_drag(
+    ctx: &egui::Context,
+    app: &mut MixJamApp,
+    from: Pos2,
+    to: Pos2,
+) {
+    let none = egui::Modifiers::NONE;
+    button_at(ctx, app, from, egui::PointerButton::Secondary, true);
+    pointer(ctx, app, from, true, none);
+    frame(ctx, app, vec![egui::Event::PointerMoved(to)], none);
+    pointer(ctx, app, to, false, none);
+    button_at(ctx, app, to, egui::PointerButton::Secondary, false);
 }

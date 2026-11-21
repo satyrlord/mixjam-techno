@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cli import pop_option  # noqa: E402
 from harmony import NOTES  # noqa: E402
 from mixjam import playback_bpm, read_wav  # noqa: E402
 
@@ -46,11 +47,7 @@ def bar_notes(segment, rate, shift):
 
 def main():
     args = sys.argv[1:]
-    song_bpm = 140.0
-    if '--song-bpm' in args:
-        i = args.index('--song-bpm')
-        song_bpm = float(args[i + 1])
-        del args[i:i + 2]
+    song_bpm = pop_option(args, '--song-bpm', float, 140.0)
     if not args or len(args) % 3:
         raise SystemExit(__doc__)
     for path, bpm, cents in zip(args[::3], args[1::3], args[2::3]):

@@ -17,7 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harmony import clash_cost, parse_chord  # noqa: E402
-from midichords import number_of, shift_for  # noqa: E402
+from cli import options, pop_option  # noqa: E402
+from midichords import midi_loops  # noqa: E402
 from midinotes import notes, per_bar, pitch_classes  # noqa: E402
 
 WORST = 0.40
@@ -50,28 +51,25 @@ def main():
     args = sys.argv[1:]
     key = 'A minor'
     progressions = {}
-    folders = []
-    i = 0
-    while i < len(args):
-        if args[i] == '--key':
-            key = args[i + 1]
-            i += 2
-        elif args[i] == '--progression':
-            chords = args[i + 1].split()
-            progressions[' '.join(chords)] = chords
-            i += 2
-        else:
-            folders.append(Path(args[i]))
-            i += 1
+    keys = options(args, '--key')
+    progs = options(args, '--progression')
+    if keys:  # the last one counts
+        key = keys[-1]
+    for raw in progs:
+        chords = raw.split()
+        if not chords:
+            raise SystemExit('--progression needs a value.')
+        progressions[' '.join(chords)] = chords
+    while '--key' in args:
+        pop_option(args, '--key')
+    while '--progression' in args:
+        pop_option(args, '--progression')
+    folders = [Path(arg) for arg in args]
     if not progressions or not folders:
         raise SystemExit(__doc__)
     for folder in folders:
-        wav_names = [p.stem for p in folder.parent.glob('*.wav')]
         print(f'== {folder.name}')
-        for path in sorted(folder.glob('*.mid'), key=number_of):
-            shift, file_key = shift_for(path.stem, wav_names, key)
-            if shift is None:
-                continue
+        for path, shift, file_key in midi_loops(folder, key):
             bars = bars_of(path, shift)
             found = [f'{name}@{start}:{mean * 100:.0f}%' for name, start, mean in fits(bars, progressions, key)]
             print(f'  {path.stem:26s} ({file_key:>3s} {shift:+d}, {len(bars)} bars)  {", ".join(found) or "-"}')

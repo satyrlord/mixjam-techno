@@ -93,6 +93,7 @@ impl MixJamApp {
             pressed
         });
         if capture {
+            // The session puts the result in the status line, error or not.
             let _ = self.session.save_playback_capture("Saved with F12");
         }
     }
@@ -262,6 +263,8 @@ impl MixJamApp {
             self.gestures.drag = None;
             self.gestures.handle_drag = None;
             self.gestures.automation_drag = None;
+            self.gestures.marquee_origin = None;
+            self.score.loop_start = None;
             self.session.end_automation_gesture();
             self.score_tools.erase = false;
             self.selection.place_on_click = false;

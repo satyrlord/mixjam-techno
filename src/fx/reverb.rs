@@ -17,9 +17,9 @@
 //! 60 dB at the high cut in a fixed share of the decay and in the decay
 //! below it. Size, model, and pre-delay changes crossfade between old and
 //! new read positions, never glide, so the pitch never bends.
-use super::parts::{AllPass, Ducker, Glide, Lfo, Line, OnePole, Tone, bound, drive, widen};
+use super::parts::{AllPass, Ducker, Lfo, Line, OnePole, Tone, bound, drive, widen};
 use super::{Aetherform, ReverbCharacter, SpaceModel};
-use crate::master::dsp::{RATE, db_to_gain, flush};
+use crate::master::dsp::{RATE, Smoothed, db_to_gain, flush};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 const LINES: usize = 8;
@@ -237,29 +237,29 @@ pub(super) struct Core {
     ratio: f64,
     target_ratio: f64,
     shimmer_send: f64,
-    shimmer_level: Glide,
+    shimmer_level: Smoothed,
     ducker: Ducker,
     mod_rate: f64,
     /// The requested swing, before the active delay lengths bound it.
     requested_depth: f64,
-    depth: Glide,
-    diffusion: Glide,
-    density: Glide,
-    late_norm: Glide,
-    early_gain: Glide,
-    late_gain: Glide,
-    width: Glide,
-    output: Glide,
-    drive: Glide,
-    duck: Glide,
-    vintage: Glide,
-    bloomy: Glide,
+    depth: Smoothed,
+    diffusion: Smoothed,
+    density: Smoothed,
+    late_norm: Smoothed,
+    early_gain: Smoothed,
+    late_gain: Smoothed,
+    width: Smoothed,
+    output: Smoothed,
+    drive: Smoothed,
+    duck: Smoothed,
+    vintage: Smoothed,
+    bloomy: Smoothed,
     high_cut: f64,
 }
 impl Core {
     pub(super) fn new() -> Self {
         let line = |ms: f64| Line::new((ms / 1000.0 * RATE) as usize);
-        let smooth = |value| Glide::new(value, 0.005);
+        let smooth = |value| Smoothed::with_time(value, 0.005);
         let diffusers = |times: [f64; 4]| times.map(|ms| AllPass::new(ms / 1000.0));
         Self {
             activity: 0.0,
@@ -300,7 +300,7 @@ impl Core {
             ratio: 2.0,
             target_ratio: 2.0,
             shimmer_send: 0.0,
-            shimmer_level: Glide::new(0.0, 0.04),
+            shimmer_level: Smoothed::with_time(0.0, 0.04),
             ducker: Ducker::new(),
             mod_rate: 0.0,
             requested_depth: 0.0,
@@ -314,8 +314,8 @@ impl Core {
             output: smooth(0.0),
             drive: smooth(0.0),
             duck: smooth(0.0),
-            vintage: Glide::new(0.0, 0.02),
-            bloomy: Glide::new(0.0, 0.02),
+            vintage: Smoothed::with_time(0.0, 0.02),
+            bloomy: Smoothed::with_time(0.0, 0.02),
             high_cut: 20_000.0,
         }
     }

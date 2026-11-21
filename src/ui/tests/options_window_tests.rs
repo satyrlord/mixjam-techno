@@ -86,6 +86,22 @@ fn expanded_device_details_tabs_from_its_header_into_its_body() {
 }
 
 #[test]
+fn saving_an_audio_capture_from_options_reports_a_failure_in_the_status_line() {
+    let (ctx, mut app, root) = isolated_fixture();
+    open_on(&ctx, &mut app, Page::Audio);
+    click_named(&ctx, &mut app, DEVICE_DETAILS);
+    click_named(&ctx, &mut app, SAVE_CAPTURE);
+    frame(&ctx, &mut app, vec![], NONE);
+    assert!(
+        app.status.contains("Cannot save an audio capture"),
+        "the status line must report the failed capture, not {:?}",
+        app.status
+    );
+    assert!(app.status_error);
+    remove_settings(&root);
+}
+
+#[test]
 fn options_escape_respects_a_higher_utility_window() {
     let (ctx, mut app, root) = isolated_fixture();
     app.open_options(&ctx);
@@ -222,29 +238,41 @@ fn options_arrows_walk_the_pages_without_changing_preferences() {
 
 #[test]
 fn options_keyboard_cancel_restores_focus_and_keeps_draft_out_of_song() {
-    let (ctx, mut app, root) = isolated_fixture();
-    focus(&ctx, &mut app, "Follow");
-    let previous_focus = ctx.memory(|memory| memory.focused());
-    assert!(previous_focus.is_some());
-    let project = app.session.project().clone();
-    let revision = app.session.options_revision();
-    press(&ctx, &mut app, egui::Key::Comma, egui::Modifiers::COMMAND);
-    assert!(app.options.is_some());
-    press(&ctx, &mut app, egui::Key::ArrowDown, NONE);
-    assert_eq!(draft(&app).page, Page::Workspace);
-    app.options.as_mut().unwrap().values.follow_on_startup = false;
-    press(&ctx, &mut app, egui::Key::Escape, NONE);
-    assert!(draft(&app).confirm_discard);
-    focus(&ctx, &mut app, DISCARD_CHANGES);
-    press(&ctx, &mut app, egui::Key::Space, NONE);
-    assert!(app.options.is_none());
-    assert_eq!(ctx.memory(|memory| memory.focused()), previous_focus);
-    assert!(app.session.options().follow_on_startup);
-    assert_eq!(app.session.options_revision(), revision);
-    assert_eq!(app.session.project(), &project);
-    assert!(!app.session.has_history_step(false));
-    assert!(!root.join("options.json").exists());
-    remove_settings(&root);
+    for discard in [false, true] {
+        let (ctx, mut app, root) = isolated_fixture();
+        focus(&ctx, &mut app, "Project BPM");
+        let previous_focus = ctx.memory(|memory| memory.focused());
+        assert!(previous_focus.is_some());
+        let project = app.session.project().clone();
+        let revision = app.session.options_revision();
+        press(&ctx, &mut app, egui::Key::Comma, egui::Modifiers::COMMAND);
+        assert!(app.options.is_some());
+        if discard {
+            press(&ctx, &mut app, egui::Key::ArrowDown, NONE);
+            assert_eq!(draft(&app).page, Page::Workspace);
+            app.options.as_mut().unwrap().values.follow_on_startup = false;
+        }
+        press(&ctx, &mut app, egui::Key::Escape, NONE);
+        if discard {
+            assert!(draft(&app).confirm_discard);
+            focus(&ctx, &mut app, DISCARD_CHANGES);
+            press(&ctx, &mut app, egui::Key::Space, NONE);
+        }
+        assert!(app.options.is_none());
+        // The previous pass's modal layer still blocks the first frame.
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], NONE);
+        assert_eq!(ctx.memory(|memory| memory.focused()), previous_focus);
+        assert_eq!(focused_label(&output), Some("Project BPM"));
+        assert!(app.session.options().follow_on_startup);
+        assert_eq!(app.session.options_revision(), revision);
+        assert_eq!(app.session.project(), &project);
+        assert!(!app.session.has_history_step(false));
+        assert!(!root.join("options.json").exists());
+        remove_settings(&root);
+    }
 }
 
 #[test]
@@ -550,5 +578,40 @@ fn hiding_tooltips_keeps_accessible_control_descriptions() {
         screen(&output).node("Follow").node().description(),
         Some("Keep the playhead in view during playback and seeking.")
     );
+    remove_settings(&root);
+}
+
+#[test]
+fn choosing_a_fixed_folder_clears_a_cached_error_immediately() {
+    use mixjam_techno::application::options::SongFolderMode;
+    let (ctx, mut app, root) = isolated_fixture();
+    let folder = root.join("chosen-songs");
+    open_on(&ctx, &mut app, Page::Files);
+    app.options.as_mut().unwrap().values.song_folder_mode = SongFolderMode::Fixed;
+    app.options.as_mut().unwrap().values.fixed_song_folder = Some(folder.clone());
+    let output = frame(&ctx, &mut app, vec![], NONE);
+    assert!(screen(&output).node(APPLY).node().is_disabled());
+    std::fs::create_dir(&folder).unwrap();
+    app.finish_path(FileRequest::OptionsFolder, Some(folder));
+    let output = frame(&ctx, &mut app, vec![], NONE);
+    assert!(!screen(&output).node(APPLY).node().is_disabled());
+    remove_settings(&root);
+}
+
+#[test]
+fn cancelling_options_expands_a_collapsed_discard_prompt() {
+    let (ctx, mut app, root) = isolated_fixture();
+    open_on(&ctx, &mut app, Page::Workspace);
+    click_named(&ctx, &mut app, SECTION_BOOKMARKS);
+    click_named(&ctx, &mut app, CANCEL);
+    assert_eq!(app.blocking_modal(&ctx), Some(DISCARD));
+    click_named(&ctx, &mut app, &format!("Collapse {DISCARD}"));
+    frame(&ctx, &mut app, vec![], NONE);
+    assert!(dialog::is_collapsed(&ctx, DISCARD));
+    assert_eq!(app.blocking_modal(&ctx), None);
+    click_named(&ctx, &mut app, CANCEL);
+    frame(&ctx, &mut app, vec![], NONE);
+    assert!(!dialog::is_collapsed(&ctx, DISCARD));
+    assert_eq!(app.blocking_modal(&ctx), Some(DISCARD));
     remove_settings(&root);
 }

@@ -31,6 +31,14 @@ class EnvTests(unittest.TestCase):
         values = env.parse('# comment\nA="x y"\nB=plain\nexport C=\'z\'\n\nnot a pair\n')
         self.assertEqual(values, {'A': 'x y', 'B': 'plain', 'C': 'z'})
 
+    def test_a_byte_order_mark_does_not_hide_the_first_key(self):
+        (self.root / '.env.local').write_bytes(b'\xef\xbb\xbfSAMPLES_FOLDER="first"\nARTIST_PROFILE="second"\n')
+        self.assertEqual(env.get('SAMPLES_FOLDER', self.root), 'first')
+        self.assertEqual(env.get('ARTIST_PROFILE', self.root), 'second')
+
+    def test_songs_folder_is_in_local_data(self):
+        self.assertEqual(env.songs_folder(self.root), self.root / 'local-data' / 'songs')
+
     def test_environment_overrides_the_file(self):
         self.write('SAMPLES_FOLDER="from-file"\n')
         self.assertEqual(env.get('SAMPLES_FOLDER', self.root), 'from-file')

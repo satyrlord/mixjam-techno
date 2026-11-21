@@ -695,3 +695,41 @@ fn effects_save_feedback_preserves_source_tempo_and_selects_the_saved_effect() {
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn a_secondary_drag_turns_no_knob() {
+    for add_primary in [false, true] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.effects.open = true;
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let origin = effects_control_rect(&output, "Output volume").center();
+        let aside = origin + Vec2::new(30.0, 0.0);
+        if add_primary {
+            button_at(&ctx, &mut app, origin, egui::PointerButton::Secondary, true);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(aside)],
+                egui::Modifiers::NONE,
+            );
+            pointer(&ctx, &mut app, aside, true, egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, aside, false, egui::Modifiers::NONE);
+            button_at(&ctx, &mut app, aside, egui::PointerButton::Secondary, false);
+        } else {
+            secondary_drag(&ctx, &mut app, origin, aside);
+        }
+        assert_eq!(
+            app.effects.state.volume, 1.0,
+            "Only the primary button turns a knob (add_primary={add_primary})."
+        );
+        drag(&ctx, &mut app, origin, aside, egui::Modifiers::NONE);
+        assert!(
+            app.effects.state.volume > 1.0,
+            "The primary button must still turn the knob."
+        );
+    }
+}

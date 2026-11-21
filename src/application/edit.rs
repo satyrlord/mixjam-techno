@@ -1,8 +1,8 @@
 //! Typed edit commands and how a session applies them, with undo and redo.
 use super::gesture::Gesture;
 use super::{
-    Fades, MAX_PITCH_CENTS, MasterChain, Product, Project, Section, Session, TICKS_PER_BAR,
-    TRACK_COUNT, Track, TrackMix, duration_ticks,
+    Fades, MasterChain, Product, Project, Section, Session, TICKS_PER_BAR, TRACK_COUNT, Track,
+    TrackMix, check_pitch, duration_ticks,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -135,11 +135,118 @@ impl TrackSwitch {
 /// Whether `new` differs from `old` only in level, pan, and polarity, which
 /// playback takes live without a new render.
 fn levels_differ_only(old: &Track, new: &Track) -> bool {
-    let mut same = new.clone();
-    same.gain = old.gain;
-    same.pan = old.pan;
-    same.polarity_inverted = old.polarity_inverted;
-    same == *old
+    // Name every field, so that a new one is compared too.
+    let Track {
+        gain: _,
+        polarity_inverted: _,
+        pan: _,
+        left_enabled,
+        right_enabled,
+        muted,
+        solo,
+        sends,
+        automation,
+        eq,
+        drive,
+        compressor,
+        width,
+        ducker,
+    } = old;
+    *left_enabled == new.left_enabled
+        && *right_enabled == new.right_enabled
+        && *muted == new.muted
+        && *solo == new.solo
+        && *sends == new.sends
+        && *width == new.width
+        && *eq == new.eq
+        && *drive == new.drive
+        && *compressor == new.compressor
+        && *ducker == new.ducker
+        && *automation == new.automation
+}
+
+/// A part of the song that playback takes live, without a new render.
+#[derive(Clone, Copy, PartialEq)]
+enum LivePart {
+    /// The master pedalboard and the FX buses.
+    MasterAndFx,
+    Sections,
+    /// The master gain, and each track's level, pan, and polarity.
+    Levels,
+}
+
+/// Whether `a` and `b` are the same song apart from `part`.
+fn same_apart_from(a: &Project, b: &Project, part: LivePart) -> bool {
+    // Name every field, so that a new one is compared too.
+    let Project {
+        schema_version,
+        title,
+        author,
+        bpm,
+        master_gain,
+        pitch_ratio,
+        tracks,
+        clips,
+        loop_region,
+        sections,
+        imported_samples,
+        missing_samples,
+        sample_conflicts,
+        import_notices,
+        source_notices,
+        source_settings,
+        libraries,
+        master,
+        fx,
+        return_automation,
+    } = a;
+    let tracks_same = if part == LivePart::Levels {
+        tracks.len() == b.tracks.len()
+            && tracks
+                .iter()
+                .zip(&b.tracks)
+                .all(|(a, b)| levels_differ_only(a, b))
+    } else {
+        *tracks == b.tracks
+    };
+    *schema_version == b.schema_version
+        && *bpm == b.bpm
+        && *pitch_ratio == b.pitch_ratio
+        && *loop_region == b.loop_region
+        && (part == LivePart::Levels || *master_gain == b.master_gain)
+        && (part == LivePart::MasterAndFx || (*master == b.master && *fx == b.fx))
+        && (part == LivePart::Sections || *sections == b.sections)
+        && *title == b.title
+        && *author == b.author
+        && *return_automation == b.return_automation
+        && *libraries == b.libraries
+        && *source_settings == b.source_settings
+        && *import_notices == b.import_notices
+        && *source_notices == b.source_notices
+        && *sample_conflicts == b.sample_conflicts
+        && *missing_samples == b.missing_samples
+        && *imported_samples == b.imported_samples
+        && tracks_same
+        && *clips == b.clips
+}
+
+/// The one part that a history step from `before` to `after` changed, when
+/// playback can take it live. The pedals and the buses must keep their keys.
+fn live_step(before: &Project, after: &Project) -> Option<LivePart> {
+    if (before.master != after.master || before.fx != after.fx)
+        && before.side_keys() == after.side_keys()
+        && same_apart_from(before, after, LivePart::MasterAndFx)
+    {
+        Some(LivePart::MasterAndFx)
+    } else if before.sections != after.sections
+        && same_apart_from(before, after, LivePart::Sections)
+    {
+        Some(LivePart::Sections)
+    } else if same_apart_from(before, after, LivePart::Levels) {
+        Some(LivePart::Levels)
+    } else {
+        None
+    }
 }
 
 /// Resolve the clip indices in the order of the requested edits.
@@ -149,9 +256,7 @@ fn clip_sound_indices(project: &Project, sounds: &[ClipSound]) -> Result<Vec<usi
         if requests.insert(sound.id, index).is_some() {
             return Err("A selected clip appears more than once.".into());
         }
-        if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(&sound.pitch_cents) {
-            return Err("Clip pitch must be from -24 to 24 semitones.".into());
-        }
+        check_pitch(sound.pitch_cents, "Clip pitch")?;
     }
     let mut indices = vec![None; sounds.len()];
     for (index, clip) in project.clips.iter().enumerate() {
@@ -212,9 +317,7 @@ impl Session {
                 pitch_cents,
                 ..
             } => {
-                if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(pitch_cents) {
-                    return Err("Clip pitch must be from -24 to 24 semitones.".into());
-                }
+                check_pitch(*pitch_cents, "Clip pitch")?;
                 let clip = self
                     .project()
                     .clips
@@ -472,7 +575,6 @@ impl Session {
             return Err("Stop recording before you undo or redo.".into());
         }
         self.end_automation_gesture();
-        let before = self.project().clone();
         let changed = if redo {
             self.editor.redo()
         } else {
@@ -482,40 +584,27 @@ impl Session {
             return Ok(false);
         }
         // A step of the master pedalboard or the FX buses alone leaves the
-        // mix and playback running.
-        let master_only = (before.master != self.project().master
-            || before.fx != self.project().fx)
-            && before.side_keys() == self.project().side_keys()
-            && Project {
-                master: self.project().master,
-                fx: self.project().fx,
-                ..before.clone()
-            } == *self.project();
-        if master_only {
-            self.master_changed();
-            return Ok(true);
-        }
-        let sections_only = before.sections != self.project().sections
-            && (Project {
-                sections: self.project().sections.clone(),
-                ..before.clone()
-            }) == *self.project();
-        if sections_only {
-            self.sections_changed();
-            return Ok(true);
-        }
-        // Level history uses the same live path as the original edit. A
-        // render replacement would reset filters, FX tails, and meters.
-        let mut without_level_change = self.project().clone();
-        without_level_change.master_gain = before.master_gain;
-        for (track, old) in without_level_change.tracks.iter_mut().zip(&before.tracks) {
-            track.gain = old.gain;
-            track.pan = old.pan;
-            track.polarity_inverted = old.polarity_inverted;
-        }
-        if without_level_change == before {
-            self.levels_changed();
-            return Ok(true);
+        // mix and playback running. Level history uses the same live path as
+        // the original edit: a render replacement would reset filters, FX
+        // tails, and meters.
+        match self
+            .editor
+            .replaced_by_step(redo)
+            .and_then(|before| live_step(before, self.project()))
+        {
+            Some(LivePart::MasterAndFx) => {
+                self.master_changed();
+                return Ok(true);
+            }
+            Some(LivePart::Sections) => {
+                self.sections_changed();
+                return Ok(true);
+            }
+            Some(LivePart::Levels) => {
+                self.levels_changed();
+                return Ok(true);
+            }
+            None => {}
         }
         // Most steps leave the imported sources as they are. Rebuild the
         // catalog only for a step that adds, removes, or relinks one.

@@ -308,7 +308,7 @@ fn a_soloed_empty_track_stays_visible_so_its_solo_can_be_cleared() {
             on: true,
         })
         .unwrap();
-    assert!(occupied_tracks(app.session.project()).contains(&40));
+    assert!(app.session.project().occupied_tracks().contains(&40));
     ctx.enable_accesskit();
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -326,7 +326,7 @@ fn a_soloed_empty_track_stays_visible_so_its_solo_can_be_cleared() {
         egui::Modifiers::NONE,
     );
     assert!(!app.session.project().any_solo());
-    assert!(!occupied_tracks(app.session.project()).contains(&40));
+    assert!(!app.session.project().occupied_tracks().contains(&40));
 }
 
 #[test]
@@ -730,4 +730,56 @@ fn mixer_sends_and_the_effects_module_edit_the_fx_buses() {
         panic!("FX 2 holds the reverb")
     };
     assert_eq!(reverb.duck_key, 4);
+}
+
+/// Each drag runs again with the primary button, which must move the
+/// control: that shows the drag is on the control.
+#[test]
+fn a_secondary_drag_moves_no_fader_and_no_send() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mixer;
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let rail = effects_control_rect(&output, "Track 1 gain").center();
+    let send = effects_control_rect(&output, "Track 1 send FX 1").center();
+    let lane = effects_control_rect(&output, "Arrangement track 1 gain").center();
+    let drags = [
+        ("the Mixer fader", rail, rail + Vec2::new(0.0, 20.0)),
+        ("the send knob", send, send + Vec2::new(30.0, 0.0)),
+        ("the lane fader", lane, lane - Vec2::new(10.0, 0.0)),
+    ];
+    let mix = |app: &MixJamApp| {
+        let track = &app.session.project().tracks[0];
+        (track.gain, track.sends[0])
+    };
+    let mut moved = Vec::new();
+    for add_primary in [false, true] {
+        for (name, from, to) in drags {
+            let before = mix(&app);
+            if add_primary {
+                button_at(&ctx, &mut app, from, egui::PointerButton::Secondary, true);
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![egui::Event::PointerMoved(to)],
+                    egui::Modifiers::NONE,
+                );
+                pointer(&ctx, &mut app, to, true, egui::Modifiers::NONE);
+                pointer(&ctx, &mut app, to, false, egui::Modifiers::NONE);
+                button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, false);
+            } else {
+                secondary_drag(&ctx, &mut app, from, to);
+            }
+            if mix(&app) != before {
+                moved.push((add_primary, name));
+            }
+        }
+    }
+    assert!(moved.is_empty(), "A secondary drag moved {moved:?}.");
+    for (name, from, to) in drags {
+        let before = mix(&app);
+        drag(&ctx, &mut app, from, to, egui::Modifiers::NONE);
+        assert_ne!(mix(&app), before, "The primary button must move {name}.");
+    }
 }

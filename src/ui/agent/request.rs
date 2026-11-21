@@ -85,7 +85,7 @@ pub(super) fn clip_edit(clip: &Clip, request: Request) -> Result<EditCommand, St
         return Err("The request does not change a clip.".into());
     };
     let gain = match gain_db {
-        Some(db) if db.is_finite() && (-60.0..=clip_gain_db(2.0)).contains(&db) => {
+        Some(db) if db.is_finite() && (CLIP_SILENCE_DB..=clip_gain_max_db()).contains(&db) => {
             clip_gain_from_db(db)
         }
         Some(_) => return Err("gain_db must be from -60 (silence) to 6.".into()),

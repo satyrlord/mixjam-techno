@@ -71,10 +71,13 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
     let used = prune_unused_samples(&mut project);
     let saved_supplements = register_saved_providers(&project, &mut candidate, &used);
     let checked_imports = {
+        let data_root = data_root();
         let mut restoration = Restoration {
             candidate: &candidate,
             references: crate::mixjam::ReferenceResolver::new(&candidate),
             checked_imports: HashMap::new(),
+            canonical_data_root: fs::canonicalize(&data_root).ok(),
+            data_root,
         };
         restore_imports(&mut project, library, &mut restoration)?;
         restore_missing_samples(&mut project, &mut restoration)?;
@@ -94,11 +97,14 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
 }
 
 /// What the restoration of a song's samples shares: the library copy with the
-/// song's providers, the resolver of song references, and each import that reads.
+/// song's providers, the resolver of song references, each import that reads,
+/// and the data folder that holds retained sounds, as given and canonical.
 struct Restoration<'a> {
     candidate: &'a Library,
     references: crate::mixjam::ReferenceResolver<'a>,
     checked_imports: HashMap<u32, crate::library::Sample>,
+    data_root: PathBuf,
+    canonical_data_root: Option<PathBuf>,
 }
 
 /// Drop imported and missing samples that no clip uses, and return the used IDs.
@@ -199,12 +205,7 @@ fn restore_imports(
     for imported in imports {
         let mut resolved = imported.clone();
         let selected = conflict_selection(project, imported.id);
-        let rebased = rebase_asset(
-            &mut resolved,
-            restoration.candidate,
-            &mut restoration.references,
-            selected.as_deref(),
-        );
+        let rebased = rebase_asset(&mut resolved, restoration, selected.as_deref());
         if let Ok(paths) = &rebased {
             crate::library::record_wav_conflict(
                 project,
@@ -395,12 +396,7 @@ fn restore_external(
         source_sample_rate: None,
         origin,
     });
-    let paths = rebase_asset(
-        &mut imported,
-        restoration.candidate,
-        &mut restoration.references,
-        selected,
-    )?;
+    let paths = rebase_asset(&mut imported, restoration, selected)?;
     crate::library::record_wav_conflict(project, &path.to_string_lossy(), sample.id, paths);
     if sample
         .metadata
@@ -569,13 +565,13 @@ fn conflict_selection(project: &Project, sample_id: u32) -> Option<PathBuf> {
 /// looked up in the library.
 fn rebase_asset(
     imported: &mut ImportedSample,
-    library: &Library,
-    mixjam_references: &mut crate::mixjam::ReferenceResolver<'_>,
+    restoration: &mut Restoration<'_>,
     selected: Option<&Path>,
 ) -> Result<Vec<PathBuf>, String> {
-    let data_root = data_root();
-    let canonical_data_root = fs::canonicalize(&data_root).ok();
-    let is_retained = imported.path.starts_with(&data_root)
+    let (library, mixjam_references) = (restoration.candidate, &mut restoration.references);
+    let (data_root, canonical_data_root) =
+        (&restoration.data_root, &restoration.canonical_data_root);
+    let is_retained = imported.path.starts_with(data_root)
         || canonical_data_root
             .as_ref()
             .is_some_and(|root| imported.path.starts_with(root));

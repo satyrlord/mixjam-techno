@@ -1,6 +1,7 @@
 //! Deterministic DSP reconstruction of the controls described by the installed
 //! Effect Studio manual. These are new algorithms, not recovered original DSP.
 use crate::audio::Pcm;
+use crate::master::dsp::Coefficients;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -190,7 +191,7 @@ fn process_validated(
     looped: bool,
 ) -> Result<Pcm, String> {
     state.validate()?;
-    if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
+    if !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(&bpm) {
         return Err("Source tempo must be from 7.5 to 1200 BPM.".into());
     }
     // The result is saved as a WAV, so it can be no longer than one holds.
@@ -200,6 +201,15 @@ fn process_validated(
     let mut output = input.clone();
     let channels = input.channels as usize;
     let frames = input.frames() as usize;
+    let rate = f64::from(input.sample_rate);
+    let robotize = state.robotize.as_ref().map(|settings| {
+        let frequency = robotize_frequency(
+            f64::from(settings.frequency_hz),
+            rate,
+            looped.then_some(frames),
+        );
+        (frequency, settings.wet)
+    });
     for channel in 0..channels {
         let mut noise_state = 0x6d2b79f5u32.wrapping_add(channel as u32);
         for frame in 0..frames {
@@ -215,19 +225,13 @@ fn process_validated(
         if let Some(filter) = &state.filter
             && filter.wet > 0.0
         {
-            let omega = 2.0
-                * std::f64::consts::PI
-                * (filter.cutoff_hz as f64).min(input.sample_rate as f64 * 0.45)
-                / input.sample_rate as f64;
-            let cosine = omega.cos();
-            let q = 0.5 + 15.0 * filter.resonance as f64;
-            let alpha = omega.sin() / (2.0 * q);
-            let a0 = 1.0 + alpha;
-            let b0 = (1.0 - cosine) / 2.0 / a0;
-            let b1 = (1.0 - cosine) / a0;
-            let b2 = b0;
-            let a1 = -2.0 * cosine / a0;
-            let a2 = (1.0 - alpha) / a0;
+            let rate = input.sample_rate as f64;
+            let [b0, b1, b2, a1, a2] = Coefficients::low_pass_at(
+                (filter.cutoff_hz as f64).min(rate * 0.45),
+                0.5 + 15.0 * filter.resonance as f64,
+                rate,
+            )
+            .values();
             let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
             let drive = 1.0 + 20.0 * filter.drive as f64;
             // Low cutoffs with high resonance can ring across several
@@ -286,12 +290,10 @@ fn process_validated(
         for frame in 0..frames {
             let index = frame * channels + channel;
             let mut value = output.samples[index];
-            if let Some(robot) = &state.robotize {
-                let frequency = (robot.frequency_hz as f64).min(input.sample_rate as f64 * 0.45);
-                let carrier = (2.0 * std::f64::consts::PI * frequency * frame as f64
-                    / input.sample_rate as f64)
-                    .sin() as f32;
-                value += (value * carrier - value) * robot.wet;
+            if let Some((frequency, wet)) = robotize {
+                let carrier =
+                    (std::f64::consts::TAU * frequency * frame as f64 / rate).sin() as f32;
+                value += (value * carrier - value) * wet;
             }
             if state.dirty > 0.0 {
                 let drive = 1.0 + 40.0 * state.dirty;
@@ -301,6 +303,24 @@ fn process_validated(
         }
     }
     Ok(output)
+}
+
+/// The Robotize carrier frequency. Fit whole cycles into a loop when a cycle
+/// fits below the rate limit, so the carrier has no phase step at the seam.
+fn robotize_frequency(hz: f64, sample_rate: f64, loop_frames: Option<usize>) -> f64 {
+    const RATE_FRACTION: f64 = 0.45;
+    let frequency = hz.min(sample_rate * RATE_FRACTION);
+    let Some(frames) = loop_frames else {
+        return frequency;
+    };
+    let max_cycles = (frames as f64 * RATE_FRACTION).floor();
+    if max_cycles < 1.0 {
+        return frequency;
+    }
+    let cycles = (frequency * frames as f64 / sample_rate)
+        .round()
+        .clamp(1.0, max_cycles);
+    cycles * sample_rate / frames as f64
 }
 
 /// The low-pass poles have radius `sqrt(a2)` for the supported Q >= 0.5.
@@ -336,6 +356,26 @@ fn echo_warm_passes(looped: bool, feedback: f32, frames: usize, delay_frames: us
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_looped_robotize_carrier_runs_whole_cycles_per_loop() {
+        // A two-second loop: 30.3 Hz would leave 0.6 of a cycle at the seam.
+        let looped = robotize_frequency(30.3, 44_100.0, Some(88_200));
+        assert!((looped - 30.5).abs() < 1e-9, "{looped}");
+        assert_eq!(robotize_frequency(30.3, 44_100.0, None), 30.3);
+        // A carrier slower than the loop still runs one whole cycle.
+        assert!((robotize_frequency(0.1, 44_100.0, Some(88_200)) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_looped_robotize_carrier_stays_below_the_rate_limit() {
+        let rate = 8_000.0;
+        let frames = 1477;
+        let frequency = robotize_frequency(20_000.0, rate, Some(frames));
+        assert!(frequency <= rate * 0.45, "{frequency} Hz");
+        let cycles = frequency * frames as f64 / rate;
+        assert!((cycles - 664.0).abs() < 1e-9, "{cycles} cycles");
+    }
 
     #[test]
     fn a_looped_resonant_filter_settles_before_the_render() {

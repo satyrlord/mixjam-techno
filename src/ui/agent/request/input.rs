@@ -124,7 +124,7 @@ impl MixJamApp {
                     ms.unwrap_or(0)
                 };
                 Start::run(vec![Step::Until {
-                    at: Instant::now() + Duration::from_millis(wait),
+                    at: wait_deadline(Instant::now(), wait)?,
                     idle,
                 }])
             }
@@ -219,6 +219,13 @@ impl MixJamApp {
     }
 }
 
+/// The moment a wait of `wait_ms` milliseconds from `now` ends. A wait that
+/// the clock cannot hold is an error, not a panic of the window.
+fn wait_deadline(now: Instant, wait_ms: u64) -> Result<Instant, String> {
+    now.checked_add(Duration::from_millis(wait_ms))
+        .ok_or_else(|| "Wait is too long.".to_owned())
+}
+
 /// Where a pointer click on `node` lands: the middle of the part that takes
 /// the pointer. A scroll area clips its controls, but their accessibility
 /// bounds are not clipped, so the middle of the bounds can be on another
@@ -311,4 +318,24 @@ fn pointer_steps(
             .collect()
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_wait_ends_at_its_deadline_and_an_unholdable_wait_is_an_error() {
+        let now = Instant::now();
+        assert_eq!(wait_deadline(now, 0), Ok(now));
+        assert_eq!(
+            wait_deadline(now, 1_500),
+            Ok(now + Duration::from_millis(1_500))
+        );
+        // The longest wait a request can name must never panic the window.
+        match wait_deadline(now, u64::MAX) {
+            Ok(at) => assert!(at > now),
+            Err(error) => assert_eq!(error, "Wait is too long."),
+        }
+    }
 }

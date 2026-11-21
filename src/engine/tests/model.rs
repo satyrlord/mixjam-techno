@@ -72,6 +72,97 @@ fn a_section_lasts_until_the_next_one_starts() {
 }
 
 #[test]
+fn section_edits_keep_start_order_and_unique_default_names() {
+    let mut project = Project::default();
+    let bar = |n: u32| n * TICKS_PER_BAR;
+    project.sections = project.sections_with_new(bar(8)).unwrap();
+    project.sections = project.sections_with_new(bar(2)).unwrap();
+    let names: Vec<_> = project.sections.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Section 2", "Section 1"], "ordered by start");
+    assert_eq!(project.sections_with_new(bar(8)), None, "one per start");
+    project.sections = project.sections_without(bar(2));
+    project.sections = project.sections_with_new(bar(16)).unwrap();
+    assert_eq!(
+        project.sections[1].name, "Section 2",
+        "the first free number"
+    );
+    assert_eq!(project.validate(), Ok(()));
+    let renamed = project.sections_renamed(bar(8), "  Drop ").unwrap();
+    assert_eq!(renamed[0].name, "Drop");
+    assert_eq!(project.sections_renamed(bar(8), "Section 1"), None);
+    assert_eq!(project.sections_renamed(bar(8), "   "), None);
+    assert_eq!(project.sections_renamed(bar(3), "Drop"), None);
+}
+
+#[test]
+fn the_song_span_covers_the_song_and_at_least_one_bar() {
+    let mut project = Project::default();
+    assert_eq!(project.song_span(), [0, 4 * TICKS_PER_BAR]);
+    project.clips.push(Clip {
+        id: 1,
+        sample_id: 1,
+        track: 3,
+        start_tick: 0,
+        length_ticks: TICKS_PER_BAR / 4,
+        offset_frames: 0,
+        gain: 1.0,
+        fades: Fades::default(),
+        pitch_cents: 0,
+        reverse: false,
+    });
+    assert_eq!(project.song_span(), [0, TICKS_PER_BAR]);
+    project.tracks[7].solo = true;
+    assert_eq!(project.occupied_tracks(), [3, 7], "clips and solos");
+}
+
+#[test]
+fn clip_room_is_the_space_that_covers_no_neighbor() {
+    let clip = |id: u64, track: usize, bar: u32, bars: u32| Clip {
+        id,
+        sample_id: 1,
+        track,
+        start_tick: bar * TICKS_PER_BAR,
+        length_ticks: bars * TICKS_PER_BAR,
+        offset_frames: 0,
+        gain: 1.0,
+        fades: Fades::default(),
+        pitch_cents: 0,
+        reverse: false,
+    };
+    let project = Project {
+        clips: vec![
+            clip(1, 0, 0, 2),
+            clip(2, 0, 4, 2),
+            clip(3, 0, 9, 1),
+            clip(4, 1, 6, 2),
+        ],
+        ..Project::default()
+    };
+    let middle = project.clips[1].clone();
+    let [first, last] = project.clip_room(&middle);
+    assert_eq!([first, last], [2 * TICKS_PER_BAR, 9 * TICKS_PER_BAR]);
+    let fits =
+        |start: u32, end: u32| ensure_space(&project, Some(2), 0, start, end - start).is_ok();
+    assert!(fits(first, last), "the whole room is free");
+    assert!(!fits(first - 1, last) && !fits(first, last + 1));
+    // The last clip on a track can grow to the timeline's end.
+    let last_clip = project.clips[2].clone();
+    assert_eq!(project.clip_room(&last_clip)[1], MAX_TICKS);
+
+    // An imported overlap prevents expansion at either edge, even when
+    // the two clips start together.
+    for neighbor in [clip(5, 0, 3, 2), clip(5, 0, 4, 1), clip(5, 0, 5, 3)] {
+        let mut overlapping = project.clone();
+        overlapping.clips.push(neighbor);
+        overlapping.validate().unwrap();
+        assert_eq!(
+            overlapping.clip_room(&middle),
+            [4 * TICKS_PER_BAR, 6 * TICKS_PER_BAR]
+        );
+    }
+}
+
+#[test]
 fn missing_sample_group_reads_the_key_of_each_importer() {
     let mut missing = MissingSample::native(
         crate::products::Product::D2,

@@ -15,6 +15,67 @@ pub(in super::super) struct ClipPaintCache {
     /// when it has none, read once per catalog revision.
     pub(in super::super) step_patterns: std::collections::HashMap<u32, Option<Arc<StepSynthState>>>,
     pub(in super::super) step_patterns_revision: u64,
+    /// The project and catalog that `step_patterns` was last checked against.
+    step_patterns_checked: Option<((u64, u64), u64)>,
+    /// Each Step synth clip's notes, with what they were built from.
+    pub(in super::super) notes: std::collections::HashMap<u64, (NotesKey, waveform::ClipNotes)>,
+}
+
+/// What a clip's notes depend on: its length, trim, and direction, its sound,
+/// and the source frames per sixteenth, per tick, and in all, as bit patterns.
+type NotesKey = (u32, u32, bool, u32, u64, u64, u64);
+
+impl ClipPaintCache {
+    /// Drop cached Step synth patterns and note layouts so they reload on the
+    /// next frame.
+    pub(in super::super) fn clear_step_patterns(&mut self) {
+        self.step_patterns.clear();
+        self.notes.clear();
+        self.step_patterns_checked = None;
+    }
+
+    /// Whether `sound` was saved with a Step synth pattern.
+    pub(in super::super) fn has_notes(&self, sound: u32) -> bool {
+        matches!(self.step_patterns.get(&sound), Some(Some(_)))
+    }
+
+    /// The notes that `clip` draws for `sample`, built once for as long as
+    /// the clip, its sound, its pattern, and the tempo stay as they are.
+    /// The cache ends with the catalog's patterns, which this clears with it.
+    /// None for a sound without a pattern.
+    pub(in super::super) fn clip_notes(
+        &mut self,
+        clip: &Clip,
+        sample: &Sample,
+        bpm: f64,
+    ) -> Option<&waveform::ClipNotes> {
+        let pattern = self.step_patterns.get(&sample.id)?.as_ref()?;
+        let frames_per_step = f64::from(sample.sample_rate) * 60.0 / pattern.bpm / 4.0;
+        let frames_per_tick = frames_per_tick(sample, bpm);
+        let frames = f64::from(sample.frame_count);
+        let key = (
+            clip.length_ticks,
+            clip.offset_frames,
+            clip.reverse,
+            sample.id,
+            frames_per_step.to_bits(),
+            frames_per_tick.to_bits(),
+            frames.to_bits(),
+        );
+        let entry = self.notes.entry(clip.id);
+        let (stored, notes) = entry.or_insert_with(|| {
+            (
+                key,
+                waveform::ClipNotes::new(clip, pattern, frames_per_step, frames_per_tick, frames),
+            )
+        });
+        if *stored != key {
+            *stored = key;
+            *notes =
+                waveform::ClipNotes::new(clip, pattern, frames_per_step, frames_per_tick, frames);
+        }
+        Some(notes)
+    }
 }
 
 impl MixJamApp {
@@ -23,8 +84,15 @@ impl MixJamApp {
     /// a pattern that cannot be read says so once in the status line.
     pub(in super::super) fn load_step_patterns(&mut self) {
         let revision = self.session.catalog_revision();
+        // Only a change of the song or the catalog can add a sound to look up.
+        let checked = (self.session.project_change_token(), revision);
+        if self.clip_paint.step_patterns_checked == Some(checked) {
+            return;
+        }
+        self.clip_paint.step_patterns_checked = Some(checked);
         if revision != self.clip_paint.step_patterns_revision {
             self.clip_paint.step_patterns.clear();
+            self.clip_paint.notes.clear();
             self.clip_paint.step_patterns_revision = revision;
         }
         let wanted: BTreeSet<u32> = self
@@ -146,7 +214,7 @@ pub(in super::super) fn draw_fades(
 
 /// Source frames in one tick at the project's effective source tempo.
 pub(in super::super) fn frames_per_tick(sample: &Sample, bpm: f64) -> f64 {
-    f64::from(sample.sample_rate) * 240.0 / bpm / f64::from(TICKS_PER_BAR)
+    mixjam_techno::application::frames_per_tick_at(sample.sample_rate, bpm)
 }
 
 /// The ticks from a clip's start to where its sound ends, at most its length.
@@ -161,7 +229,7 @@ pub(in super::super) fn sound_ticks(clip: &Clip, sample: &Sample, bpm: f64) -> u
 
 /// The height of a clip's gain line: unity in the middle, +6 dB at the top.
 fn gain_y(rect: Rect, gain: f32) -> f32 {
-    rect.bottom() - (gain.min(2.0) / 2.0 * rect.height()).max(2.0)
+    rect.bottom() - (gain.min(MAX_CLIP_GAIN) / MAX_CLIP_GAIN * rect.height()).max(2.0)
 }
 
 /// The centers of a clip's fade handles on its top edge: where the fade in
@@ -469,12 +537,15 @@ pub(in super::super) fn missing_clip_details(clip: &Clip) -> String {
 }
 
 pub(in super::super) fn missing_sample_details(missing: &MissingSample) -> String {
+    use mixjam_techno::application::rejected_import_path;
+
     let mut rows = vec![
         format!("Missing: {}", missing.name),
         "Playback: silence".into(),
         format!("Reason: {}", missing.reason),
         format!("Project sample ID: {}", missing.id),
     ];
+    let mut rejected_path = None;
     match &missing.reference {
         MissingReference::Native { product, native_id } => {
             rows.push(format!("Original product: {}", product.label()));
@@ -492,8 +563,15 @@ pub(in super::super) fn missing_sample_details(missing: &MissingSample) -> Strin
             data,
         } => {
             rows.push(format!("Original product: {}", product.label()));
-            rows.push(format!("Generator: {kind}"));
-            rows.push(format!("Generator data: {data}"));
+            if let Some((path, source_id)) = rejected_import_path(&missing.reference) {
+                if let Some(source_id) = source_id {
+                    rows.push(format!("Original source ID: {source_id}"));
+                }
+                rejected_path = Some(path);
+            } else {
+                rows.push(format!("Generator: {kind}"));
+                rows.push(format!("Generator data: {data}"));
+            }
         }
     }
     rows.push(format!("Source tempo: {} BPM", missing.source_bpm));
@@ -509,9 +587,17 @@ pub(in super::super) fn missing_sample_details(missing: &MissingSample) -> Strin
         }
     ));
     for (name, value) in &missing.metadata {
-        rows.push(format!("{name}: {value}"));
+        if name != "saved_path" || rejected_path.is_none() {
+            rows.push(format!("{name}: {value}"));
+        }
     }
-    display_paths(&rows.join("\n"))
+    let mut details = display_paths(&rows.join("\n"));
+    if let Some(path) = rejected_path {
+        // Preserve the saved spelling so the user can identify the bad path.
+        details.push_str("\nOriginal path: ");
+        details.push_str(if path.is_empty() { "(empty)" } else { path });
+    }
+    details
 }
 
 /// A clip shows its name on one line below 38 points of height, else on two.

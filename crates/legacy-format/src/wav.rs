@@ -1,7 +1,7 @@
 //! RIFF/WAVE PCM container I/O. Audio processing belongs to the mixer.
 //! This module uses the standard container; its validation rules are new Rust
 //! bounds checks, not a reproduction of the original's malformed-file behavior.
-use std::fmt;
+use std::{fmt, ops::Range};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WaveError(pub String);
@@ -18,8 +18,38 @@ pub struct PcmWave {
     pub channels: u16,
     pub samples: Vec<i16>,
 }
+/// The format of a PCM WAVE and where its audio lies in the file. It holds no
+/// samples, so a caller that only checks a file does not convert its audio.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WaveInfo {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub bits: u16,
+    /// The byte range of the audio inside the file.
+    pub audio: Range<usize>,
+}
 impl PcmWave {
     pub fn parse(data: &[u8]) -> Result<Self, WaveError> {
+        let info = Self::probe(data)?;
+        let audio = &data[info.audio];
+        let samples = if info.bits == 16 {
+            audio
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|b| i16::from_le_bytes([b[0], b[1]]))
+                .collect()
+        } else {
+            audio.iter().map(|&b| (i16::from(b) - 128) * 256).collect()
+        };
+        Ok(Self {
+            sample_rate: info.sample_rate,
+            channels: info.channels,
+            samples,
+        })
+    }
+    /// Check the container exactly as `parse` does, without converting the audio.
+    pub fn probe(data: &[u8]) -> Result<WaveInfo, WaveError> {
         let error = |s: &str| WaveError(s.into());
         if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WAVE" {
             return Err(error("Expected RIFF/WAVE audio"));
@@ -76,7 +106,7 @@ impl PcmWave {
                 b"data" if audio.is_some() => {
                     return Err(error("Multiple WAVE data chunks are unsupported"));
                 }
-                b"data" => audio = Some(chunk),
+                b"data" => audio = Some(start..limit),
                 _ => {}
             }
             position = limit
@@ -90,20 +120,11 @@ impl PcmWave {
         if audio.len() % usize::from(align) != 0 {
             return Err(error("Incomplete WAVE sample frame"));
         }
-        let samples = if bits == 16 {
-            audio
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|b| i16::from_le_bytes([b[0], b[1]]))
-                .collect()
-        } else {
-            audio.iter().map(|&b| (i16::from(b) - 128) * 256).collect()
-        };
-        Ok(Self {
+        Ok(WaveInfo {
             sample_rate,
             channels,
-            samples,
+            bits,
+            audio,
         })
     }
     pub fn encode(&self) -> Result<Vec<u8>, WaveError> {
@@ -187,6 +208,26 @@ mod tests {
         let len = b.len() as u32 - 8;
         b[4..8].copy_from_slice(&len.to_le_bytes());
         assert_eq!(PcmWave::parse(&b).unwrap().samples, [-32768, 0, 32512]);
+    }
+    #[test]
+    fn probe_reports_the_format_and_audio_range_that_parse_uses() {
+        let w = PcmWave {
+            sample_rate: 22050,
+            channels: 2,
+            samples: vec![1, 2, 3, 4],
+        };
+        let bytes = w.encode().unwrap();
+        let info = PcmWave::probe(&bytes).unwrap();
+        assert_eq!(
+            (info.sample_rate, info.channels, info.bits, info.audio),
+            (22050, 2, 16, 44..52)
+        );
+        let mut truncated = bytes.clone();
+        truncated.pop();
+        assert_eq!(
+            PcmWave::probe(&truncated).unwrap_err(),
+            PcmWave::parse(&truncated).unwrap_err()
+        );
     }
     #[test]
     fn truncated_chunks_and_partial_frames_are_errors() {

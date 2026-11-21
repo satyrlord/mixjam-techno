@@ -22,7 +22,7 @@ pub(super) mod state;
 
 use super::mixer::{
     Look, bus_switches, bypass_button, center_button, edit_button, eq_button, gain_value_in,
-    pan_slider, polarity_button, return_state, row_surface, row_surface_on, send_knob,
+    pan_slider, polarity_button, return_state, row_surface, row_surface_each, send_knob,
     switch_button, track_state, unity_button,
 };
 use super::*;

@@ -1,6 +1,9 @@
 use super::*;
 #[path = "view/boards.rs"]
 mod boards;
+/// The id of the lower panel. egui keeps the panel's height under it, so the
+/// value stays the name that the panel had when it held only the Sounds list.
+pub(super) const LOWER_PANEL_ID: &str = "sounds";
 /// Only the library's UI tests use it.
 #[cfg(test)]
 #[allow(unused_imports)]
@@ -47,18 +50,33 @@ pub(super) trait HoverHints {
     fn disabled_hint(self, text: impl Into<egui::WidgetText>) -> Self;
     fn hover_details(self, contents: impl FnOnce(&mut egui::Ui)) -> Self;
 }
+/// Where the frame keeps whether hover hints show.
+fn hover_hints_id() -> egui::Id {
+    egui::Id::new("show-hover-hints")
+}
+
+/// Whether hover hints show: the Options page can hide them.
+fn hints_shown(response: &Response) -> bool {
+    response
+        .ctx
+        .data(|data| data.get_temp::<bool>(hover_hints_id()))
+        .unwrap_or(true)
+}
+
+/// Give the control `text` as its accessible description, unless it has one.
+fn describe_once(response: &Response, text: &egui::WidgetText) {
+    response.ctx.accesskit_node_builder(response.id, |node| {
+        if node.description().is_none() {
+            node.set_description(text.text());
+        }
+    });
+}
+
 impl HoverHints for Response {
     fn hover_hint_at_pointer(self, text: impl Into<egui::WidgetText>) -> Self {
         let text = text.into();
-        self.ctx.accesskit_node_builder(self.id, |node| {
-            if node.description().is_none() {
-                node.set_description(text.text());
-            }
-        });
-        if self.ctx.data(|data| {
-            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
-                .unwrap_or(true)
-        }) {
+        describe_once(&self, &text);
+        if hints_shown(&self) {
             self.on_hover_text_at_pointer(text)
         } else {
             self
@@ -66,15 +84,8 @@ impl HoverHints for Response {
     }
     fn hover_hint(self, text: impl Into<egui::WidgetText>) -> Self {
         let text = text.into();
-        self.ctx.accesskit_node_builder(self.id, |node| {
-            if node.description().is_none() {
-                node.set_description(text.text());
-            }
-        });
-        if self.ctx.data(|data| {
-            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
-                .unwrap_or(true)
-        }) {
+        describe_once(&self, &text);
+        if hints_shown(&self) {
             self.on_hover_text(text)
         } else {
             self
@@ -86,20 +97,14 @@ impl HoverHints for Response {
             self.ctx
                 .accesskit_node_builder(self.id, |node| node.set_description(text.text()));
         }
-        if self.ctx.data(|data| {
-            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
-                .unwrap_or(true)
-        }) {
+        if hints_shown(&self) {
             self.on_disabled_hover_text(text)
         } else {
             self
         }
     }
     fn hover_details(self, contents: impl FnOnce(&mut egui::Ui)) -> Self {
-        if self.ctx.data(|data| {
-            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
-                .unwrap_or(true)
-        }) {
+        if hints_shown(&self) {
             self.on_hover_ui(contents)
         } else {
             self
@@ -283,8 +288,10 @@ fn name_open_menus(ctx: &egui::Context) {
 /// taller list would cut its last rows and scroll. The window still limits
 /// the menu.
 pub(super) fn tall_menu<R>(ctx: &egui::Context, show: impl FnOnce() -> R) -> R {
-    let height = ctx.style().spacing.default_area_size.y;
-    ctx.style_mut(|style| style.spacing.default_area_size.y = f32::INFINITY);
+    let mut height = f32::INFINITY;
+    ctx.style_mut(|style| {
+        std::mem::swap(&mut style.spacing.default_area_size.y, &mut height);
+    });
     let shown = show();
     ctx.style_mut(|style| style.spacing.default_area_size.y = height);
     shown
@@ -314,17 +321,19 @@ pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
 impl MixJamApp {
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
         self.poll_application(ctx);
-        let (pressed, held) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_down()));
+        let (pressed, held) = ctx.input(|i| {
+            (
+                i.pointer.button_pressed(egui::PointerButton::Primary),
+                i.pointer.primary_down(),
+            )
+        });
         self.session.pointer_gesture(pressed, held);
         // An applied theme repaints the next frame; songs, history, and audio
         // are untouched.
         theme::adopt(ctx, self.session.options().theme);
         self.sections.bookmarks = self.session.options().show_section_bookmarks;
         ctx.data_mut(|data| {
-            data.insert_temp(
-                egui::Id::new("show-hover-hints"),
-                self.session.options().show_tooltips,
-            )
+            data.insert_temp(hover_hints_id(), self.session.options().show_tooltips)
         });
         if ctx.input(|i| i.viewport().close_requested())
             && !self.files.allow_close

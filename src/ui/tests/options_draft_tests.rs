@@ -1,5 +1,5 @@
 //! The Options draft as a plain controller: facts written by hand, actions
-//! in, effects out. No egui, no Session, no files.
+//! in, effects out. Files are used for folder validation.
 
 use super::*;
 use mixjam_techno::application::options::{
@@ -223,4 +223,46 @@ fn a_new_unavailable_fixed_folder_blocks_apply_but_an_accepted_one_keeps_its_fal
         draft.update(Action::Apply, &facts),
         Some(Effect::Apply { .. })
     ));
+}
+
+#[test]
+fn a_fixed_folder_is_checked_once_a_second_and_again_at_apply() {
+    let facts = facts();
+    let root = reserve_settings_folder();
+    let folder = root.join("songs");
+    let mut draft = OptionsDraft::new(&facts, Page::Files);
+    draft.values.song_folder_mode = SongFolderMode::Fixed;
+    draft.values.fixed_song_folder = Some(folder.clone());
+    let missing = draft.invalid(&facts).expect("The folder does not exist.");
+    // The window asks every frame. The answer holds, so a slow folder is not
+    // asked about each time.
+    std::fs::create_dir(&folder).unwrap();
+    assert_eq!(draft.invalid(&facts), Some(missing));
+    assert!(draft.apply_blocked(&facts).is_some());
+    // Apply asks the file system again, and finds the folder.
+    assert!(matches!(
+        draft.update(Action::Apply, &facts),
+        Some(Effect::Apply { .. })
+    ));
+    assert_eq!(draft.invalid(&facts), None);
+    remove_settings(&root);
+}
+
+#[test]
+fn applying_a_missing_fixed_folder_records_the_error_and_closes_the_prompt() {
+    let facts = facts();
+    let root = reserve_settings_folder();
+    let folder = root.join("songs");
+    std::fs::create_dir(&folder).unwrap();
+    let mut draft = OptionsDraft::new(&facts, Page::Files);
+    draft.values.song_folder_mode = SongFolderMode::Fixed;
+    draft.values.fixed_song_folder = Some(folder.clone());
+    assert_eq!(draft.apply_blocked(&facts), None);
+    draft.update(Action::Close, &facts);
+    assert!(draft.confirm_discard);
+    std::fs::remove_dir(&folder).unwrap();
+    assert_eq!(draft.update(Action::ApplyAndClose, &facts), None);
+    assert!(!draft.confirm_discard);
+    assert!(draft.error.is_some());
+    remove_settings(&root);
 }

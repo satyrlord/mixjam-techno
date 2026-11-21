@@ -50,7 +50,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
-from mixjam import Song, read_wav  # noqa: E402
+from cli import option, options  # noqa: E402
+from measure import db  # noqa: E402
+from mixjam import Song, atomic_write_text, read_wav  # noqa: E402
 from render import run as run_render  # noqa: E402
 
 BLOCK_BARS = 8
@@ -70,10 +72,6 @@ ROWS = [('loudest block RMS dB', 'loudest', '{:.1f}'), ('loud blocks RMS dB', 'l
         ('loud-to-quiet spread dB', 'spread', '{:.1f}')]
 
 
-def db(x):
-    return 20 * math.log10(x) if x > 1e-12 else -120.0
-
-
 def load_profile():
     """The reference profile and its path; (None, path or None) when there is none."""
     path = env.reference_profile()
@@ -85,6 +83,8 @@ def load_profile():
 def render_board(premaster, board, out, bpm):
     """Write OUT/board.mixjam with the premaster as one clip under the board, render OUT/master.wav."""
     out.mkdir(parents=True, exist_ok=True)
+    # The renderer resolves a linked sample by its stored path, not by this folder.
+    premaster = Path(premaster).resolve()
     song = Song('board check', bpm=bpm)
     sound = song.sound(str(premaster))
     song.clip(1, str(premaster), 0, int(math.ceil(sound.ticks)))
@@ -361,12 +361,12 @@ def album(args):
     position = args.index('--album')
     given = args[position + 1] if position + 1 < len(args) and not args[position + 1].startswith('--') else None
     folder = Path(given) if given else env.path('REFERENCE_ALBUM_FOLDER')
-    tracks = [args[i + 1] for i, a in enumerate(args) if a == '--track']
-    out = Path(args[args.index('--out') + 1]) if '--out' in args else env.reference_profile()
+    tracks = options(args, '--track')
+    out = option(args, '--out', Path) or env.reference_profile()
     if out is None:
         raise SystemExit('Set REFERENCE_PROFILE or ARTIST_PROFILE in .env.local, or pass --out. '
                          'See .env.example.')
-    bpm = float(args[args.index('--bpm') + 1]) if '--bpm' in args else DEFAULT_BPM
+    bpm = option(args, '--bpm', float, DEFAULT_BPM)
     results = {}
     for path in sorted(folder.glob('*.wav')):
         rate, audio = read_wav(path)
@@ -378,7 +378,7 @@ def album(args):
     profile = album_profile(results, tracks, old)
     profile['block_bars'], profile['bpm'] = BLOCK_BARS, bpm
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(profile, indent=1), encoding='utf-8')
+    atomic_write_text(out, json.dumps(profile, indent=1))
     print(f'reference profile written to {out}')
 
 
@@ -423,13 +423,13 @@ def main():
     if len(args) < 3 or args[0].startswith('-'):
         raise SystemExit(__doc__)
     premaster, board_path, out = Path(args[0]), Path(args[1]), Path(args[2])
-    song = args[args.index('--song') + 1] if '--song' in args else None
+    song = option(args, '--song')
     board = json.loads(board_path.read_text(encoding='utf-8'))
     from_song = song_tempo(song) if song else None
     meta, meta_path = find_meta(premaster, song)
     sections = meta.get('sections') if meta else None
     if '--bpm' in args:
-        bpm = tempo(args[args.index('--bpm') + 1], '--bpm')
+        bpm = tempo(option(args, '--bpm'), '--bpm')
     elif song:
         bpm = from_song
     else:
@@ -441,16 +441,16 @@ def main():
     rate, pre_audio = read_wav(premaster)
     pre = measure(pre_audio, rate, bpm, sections)
     if '--fit' in args:
-        board, post = fit(premaster, board, out, float(args[args.index('--fit') + 1]), bpm, sections)
+        board, post = fit(premaster, board, out, option(args, '--fit', float), bpm, sections)
         (out / 'board.json').write_text(json.dumps(board, indent=1), encoding='utf-8')
         print(f"fitted limiter gain {board['limiter']['gain']:.1f} dB; board saved to {out / 'board.json'}")
+        rate, post_audio = read_wav(out / 'master.wav')
     else:
         master = out / 'master.wav' if '--no-render' in args else render_board(premaster, board, out, bpm)
         if not master.exists():
             raise SystemExit(f'{master} does not exist. Run without --no-render first.')
         rate, post_audio = read_wav(master)
         post = measure(post_audio, rate, bpm, sections)
-    rate, post_audio = read_wav(out / 'master.wav')
     post['drums'] = drums(pre_audio, post_audio[:len(pre_audio)], rate, post['loud_blocks_index'], bpm)
     (out / 'measure.json').write_text(json.dumps(dict(board=board, premaster=pre, master=post), indent=1),
                                       encoding='utf-8')

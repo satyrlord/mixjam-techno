@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cli import pop_option  # noqa: E402
 from mixjam import read_wav  # noqa: E402
 
 
@@ -33,11 +34,7 @@ def profile(data, rate):
 
 def main():
     args = sys.argv[1:]
-    bpm = 140.0
-    if '--bpm' in args:
-        i = args.index('--bpm')
-        bpm = float(args[i + 1])
-        del args[i:i + 2]
+    bpm = pop_option(args, '--bpm', float, 140.0)
     if not args:
         raise SystemExit(__doc__)
     for path in args:

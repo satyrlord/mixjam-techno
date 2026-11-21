@@ -29,6 +29,7 @@ import unicodedata
 import uuid
 import urllib.parse
 import urllib.request
+from typing import NamedTuple
 
 USER_AGENT = "MixJamTechnoAlbumReview/1.0 (https://github.com/satyrlord/mixjam-techno)"
 MUSICBRAINZ = "https://musicbrainz.org/ws/2"
@@ -177,8 +178,14 @@ def describes_album(summary, artist):
     return record and any(name and name in text for name in names)
 
 
+class PageCover(NamedTuple):
+    summary: dict  # the page summary, which describes_album reads
+    cover: dict    # coverUrl, coverSource and page, as the review stores them
+
+
 def page_cover(page):
-    """The cover image and address of one Wikipedia page, or None."""
+    """The PageCover of one Wikipedia page (its summary and its cover fields), or None when the page
+    has no usable summary or no image."""
     summary = wiki_summary(page)
     if not summary or summary.get("type") == "disambiguation":
         return None
@@ -191,8 +198,8 @@ def page_cover(page):
         summary.get("content_urls", {}).get("desktop", {}).get("page")
         or "https://en.wikipedia.org/wiki/" + urllib.parse.quote(page.replace(" ", "_"))
     )
-    return summary, {"coverUrl": clean_url(image), "coverSource": source,
-                     "page": summary.get("title", page)}
+    return PageCover(summary, {"coverUrl": clean_url(image), "coverSource": source,
+                               "page": summary.get("title", page)})
 
 
 def cover(artist, title, page=None):
@@ -204,25 +211,25 @@ def cover(artist, title, page=None):
     empty = {"coverUrl": "", "coverSource": "", "page": ""}
     if page:
         found = page_cover(page)
-        return found[1] if found else empty
+        return found.cover if found else empty
     candidates = {}
 
-    def add(page, bonus=0):
-        score = page_score(page, title, artist) + bonus
-        candidates[page] = max(score, candidates.get(page, score))
+    def add(candidate, bonus=0):
+        score = page_score(candidate, title, artist) + bonus
+        candidates[candidate] = max(score, candidates.get(candidate, score))
 
-    for page in (title, f"{title} (album)", f"{title} ({artist} album)",
-                 f"{title} (soundtrack)"):
-        add(page, 2)
+    for candidate in (title, f"{title} (album)", f"{title} ({artist} album)",
+                      f"{title} (soundtrack)"):
+        add(candidate, 2)
     for query in (f"{artist} {title} album", f'"{artist}" "{title}" album',
                   f'"{title}" album', f"{title} {artist}"):
-        for page in wiki_search(query):
-            add(page)
-    ordered = sorted(candidates, key=lambda page: -candidates[page])[:8]
-    for page in ordered:
-        found = page_cover(page)
-        if found and describes_album(found[0], artist):
-            return found[1]
+        for candidate in wiki_search(query):
+            add(candidate)
+    ordered = sorted(candidates, key=lambda name: -candidates[name])[:8]
+    for candidate in ordered:
+        found = page_cover(candidate)
+        if found and describes_album(found.summary, artist):
+            return found.cover
     return empty
 
 

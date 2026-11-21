@@ -111,17 +111,18 @@ pub(in super::super) fn edge_fade(
         return;
     }
     let steps = EDGE_FADE as usize;
-    for step in 0..steps {
+    let slices = (0..steps).filter_map(|step| {
         let left = surface.right() - EDGE_FADE + step as f32;
         let slice =
             Rect::from_x_y_ranges(left..=left + 1.0, surface.y_range()).intersect(ui.clip_rect());
         if slice.width() <= 0.0 {
-            continue;
+            return None;
         }
         let mut painter = ui.painter().with_clip_rect(slice);
         painter.multiply_opacity((step + 1) as f32 / steps as f32);
-        row_surface_on(&painter, surface, is_return);
-    }
+        Some(painter)
+    });
+    row_surface_each(ui, slices, surface, is_return);
 }
 
 /// The header of the Mix view's drop row: a Muted "+" under the track

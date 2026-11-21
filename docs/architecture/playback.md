@@ -1,5 +1,15 @@
 # Playback and the prepared mix
 
+## Contents
+
+These parts have their own page,
+[Voices and sample reading](voices-and-sample-reading.md):
+
+- [Voices, reversal, and the Pitch
+  lane](voices-and-sample-reading.md#voices-reversal-and-the-pitch-lane)
+- [Band-limited sample
+  reading](voices-and-sample-reading.md#band-limited-sample-reading)
+
 ## Playback preferences
 
 Before an Apply of the Audio preferences, playback, pending playback, previews,
@@ -69,7 +79,10 @@ plays the device mixer of the application (`src/audio/device_mixer.rs`).
 Options select Automatic, 20 ms, or 40 ms (the default). A fixed target
 requests the related frame count at the current device rate. A known
 unsupported range rejects the target. If a target fails at startup, the
-startup can use the system default and gives an explicit fallback reason.
+startup can use the system default and gives an explicit fallback reason. If
+that buffer also fails, the error keeps both causes. If the default output
+device does not open, the fallback tries the other devices, not the failed
+default again. Its reason names the failure and the device in use.
 Apply opens a silent replacement on the same device and format while playback
 is stopped. It keeps the old stream until the settings persistence succeeds,
 and it rejects opening failures. The output status shows the requested frames
@@ -101,9 +114,11 @@ short blocks of `PlaybackSource::BLOCK_FRAMES` (256 frames, 5.8 ms), and a
 callback renders one or more blocks for each device request. Export uses its
 own 65,536-frame blocks.
 
-No audible result depends on the playback block size. The level glides, the FX
-tails, and the meters keep their own 1024-frame timing. Thus playback in
-blocks of any size gives the same samples as export.
+The level glides, FX tails, and meters keep their own 1024-frame timing.
+Playback uses the same block schedule as export (`src/audio/schedule.rs`), so
+changing the block size leaves the tail boundaries and samples intact.
+Playback from the start at full quality, with fixed settings and no loop,
+matches the export samples before PCM16 encoding and device conversion.
 
 On its first read on a thread, a playback source asks the system one time for
 each thread to run that thread as the "Pro Audio" task of the multimedia class
@@ -154,92 +169,3 @@ playback, live edits of the board, the buses, and the levels, a replacement, a
 loop, a pause, the end of a song, and the silence after it, into float and
 16-bit buffers. A scan of the callback modules asserts that they hold no lock,
 wait, or channel, and that the master control holds no `try_lock`.
-
-## Voices, reversal, and the Pitch lane
-
-`Frames::read_block` with a sends buffer gives the dry sum together with the
-feeds of the four FX buses, eight interleaved channels for each frame. Each
-voice adds its sample, after the gains and pan of the track, multiplied by the
-send of the track. A voice applies the fades of its clip for each frame.
-
-A reversed clip's voice reads, for each output frame, the source position of
-the mirror frame in the clip (`start + end - 1 - frame`). Thus it plays the
-forward slice backwards, as a pure function of the frame and never of what
-played. Its fades, its gain, and its pitched copy apply in the clip's own
-time, and its sound ends with the clip. Because the reversal is in the voice,
-it comes before each track stage, the Repeat lane included.
-
-The Pitch lane is also in the voice. `automation::Varispeed` turns the lane of
-the track into a clock. The clock is the integral of the speed
-`2^(cents / 1200)` over the output frames, with a closed form on each straight
-segment in cents. A voice of that track reads its source at the clock's
-distance from the start of the clip, multiplied by the tempo step. A reversed
-voice reads back from the last frame of the clip. Thus the read moves at the
-lane's speed without a jump, and it is still a pure function of the frame.
-
-Preparation finds where the clock has gone through the source, and ends the
-sound and the fade out of the clip there. The lane scales the read rate of
-the pitched copy of the clip, so the clip pitch and the lane add in cents. The
-lane comes before the Repeat lane, which replays the slowed sound.
-
-## Band-limited sample reading
-
-A voice reads its source between frames when it plays off the sample rate or
-the tempo of its source, or under a Pitch lane. `src/audio/resample.rs` reads
-there band-limited, with a Kaiser-windowed sinc kernel: beta 8.5, cutoff 0.49
-of the source rate, and 48 taps at speeds up to 1. The kernel is one table of
-128 points for each source frame, from its centre to its edge. Each point
-holds the step to the next point, so a tap is a straight-line read of the
-kernel. The table position of each tap steps outwards from the read in fixed
-point.
-
-At a speed above 1, the cutoff falls by the speed and the span becomes wider
-by the same factor. Thus the content above the Nyquist frequency of the output
-is removed before it can fold back. The gain uses that same rounded tap
-spacing. Tap sums use double precision to keep steady levels during long
-reads. Preparation rejects a speed when its tap spacing rounds to zero, the
-maximum saved Pitch value included. Very high speeds that the format can hold
-can still need much CPU. The spectral and cost measurements at usual rates do
-not cover those workloads.
-
-The spectral tests cover 44.1 kHz and 48 kHz sources at steps 1.047, 1.088,
-0.9, and 1.14. For the test tones in the pass band of the kernel, residual
-images and aliases stay a minimum of 80 dB down, and the gain is within
-0.01 dB up to 17 kHz. These bounds do not cover the transition band near the
-source Nyquist frequency, all source rates, or all playback speeds. When
-playback slows near-Nyquist content, its attenuation and its residual images
-can move into the audible band. WAVs with a low rate can show this at lower
-frequencies.
-
-The kernel is symmetric and centred on the read, so it adds no delay. Each
-frame reads the same position as the straight-line read, and a clip that
-starts at frame N sounds at N. The read uses only the slice of the source that
-the clip plays, from its offset. Before the slice, it holds the first frame of
-the slice. After the source, it holds the last frame of the source, as the
-straight-line read does. The start, trim, end, and fades of the clip keep their
-frames, and no read goes past the source.
-
-Under a Pitch lane, the cutoff follows the mean speed of the lane over the 32
-frames on each side of the frame. That mean is a function of the frame only.
-Thus a jump in speed moves the cutoff over 64 frames, not immediately, and
-playback from any frame and in any block size reads the same as export. A
-reversed voice reads the same positions backwards, so it is still a pure
-function of the source. A voice at the rate and tempo of its source, without a
-Pitch lane, reads whole frames and copies them. `Mix::new` builds the table
-with `resample::prepare` before playback gets to the audio thread. The audio
-thread only reads the table.
-
-On 2026-11-03, the optimized `sample_read_cost` test measured 172 to 189 ns
-for each frame with the kernel, and 21 ns with the straight-line read. Under a
-Pitch lane, which also reads the lane clock three times for each frame, it
-measured 306 to 307 ns against 66 to 67 ns. The test conditions were:
-
-- Windows, an Intel Core i7-11700, and 44.1 kHz output.
-- Bright mono and stereo sources, three fixed rate-to-tempo ratios, and a -3
-  to +3 semitone Pitch lane.
-- 20 seconds of reading for each case, in 512-frame blocks.
-
-These voice costs do not establish a deadline for a full song or a physical
-device. Live playback can use the straight-line read when the Sample playback
-quality option is Low. Exports, track exports, and song-tool renders prepare
-at `PlaybackQuality::FULL` and always read band-limited.

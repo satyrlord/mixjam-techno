@@ -118,12 +118,13 @@ impl MixJamApp {
         };
         // The open board's height: as last resized, and at least its board's
         // minimum.
-        let board = egui::containers::panel::PanelState::load(ctx, egui::Id::new("sounds"))
-            .map_or_else(
-                || (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0),
-                |state| state.rect.height(),
-            )
-            .max(self.board_minimum(self.boards.module, available.height()));
+        let board =
+            egui::containers::panel::PanelState::load(ctx, egui::Id::new(view::LOWER_PANEL_ID))
+                .map_or_else(
+                    || (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0),
+                    |state| state.rect.height(),
+                )
+                .max(self.board_minimum(self.boards.module, available.height()));
         let space = Space {
             width: available.width() - rail,
             height: available.height(),

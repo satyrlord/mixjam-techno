@@ -364,12 +364,19 @@ impl PeakStore {
                 }
             }
         }
+        let pending = |sample: &u32| matches!(self.entries.get(sample), Some(PeakState::Pending));
         let asked: Vec<u32> = std::mem::take(&mut self.asked)
             .into_iter()
-            .filter(|sample| matches!(self.entries.get(sample), Some(PeakState::Pending)))
+            .filter(pending)
             .collect();
         self.asked_set.clear();
-        if asked != self.sent {
+        // The worker has answered the sounds of its list that are no longer
+        // pending, and holds the rest in order. The list changes only when
+        // the screen does: sent again, it would read its current sound twice.
+        if !asked
+            .iter()
+            .eq(self.sent.iter().filter(|&sample| pending(sample)))
+        {
             // Sounds that left the screen before the worker reached them are
             // forgotten, so they are asked for again when they return.
             let keep: HashSet<u32> = asked.iter().copied().collect();
@@ -608,6 +615,42 @@ mod tests {
         assert_eq!(cancelled.revision, 2);
         assert!(cancelled.samples.is_empty());
         let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn an_answer_does_not_send_the_worker_its_list_again() {
+        let library = Arc::new(Library::fixture(Vec::new()));
+        let mut store = PeakStore::default();
+        let (sender, requests) = mpsc::channel();
+        let (replies, receiver) = mpsc::channel();
+        store.worker = Some(Worker { sender, receiver });
+        for sample in [6, 7, 8] {
+            store.get(1, sample, &library);
+        }
+        assert!(store.poll());
+        assert_eq!(requests.try_recv().unwrap().samples, vec![6, 7, 8]);
+        // The worker answers the first sound and goes on with the next, while
+        // the screen still shows all three.
+        replies
+            .send(Reply {
+                revision: 1,
+                sample: 6,
+                key: None,
+                peaks: None,
+            })
+            .unwrap();
+        for sample in [6, 7, 8] {
+            store.get(1, sample, &library);
+        }
+        assert!(store.poll());
+        assert!(matches!(store.get(1, 6, &library), PeakState::Unavailable));
+        // The worker still holds the rest. The same list again would replace
+        // its queue and make it read sound 7 twice.
+        assert!(requests.try_recv().is_err());
+        // A sound that leaves the screen still changes the list.
+        store.get(1, 8, &library);
+        assert!(store.poll());
+        assert_eq!(requests.try_recv().unwrap().samples, vec![8]);
     }
 
     #[test]

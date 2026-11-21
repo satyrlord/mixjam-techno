@@ -120,10 +120,15 @@ fn value_lane(
         let cell = ui
             .interact(cell, row_id.with(step), Sense::click_and_drag())
             .hover_hint(hint);
-        if cell.clicked() || cell.drag_started() {
+        let start = controls::primary_drag_start(ui, &cell);
+        if cell.clicked() || start.is_some() {
             response.request_focus();
         }
-        if cell.is_pointer_button_down_on() || cell.clicked() {
+        if controls::primary_down_on(ui, &cell) {
+            if let Some(pointer) = controls::drag_position(ui, &cell) {
+                active = Some((Some(pointer), step));
+            }
+        } else if controls::primary_clicked(ui, &cell) {
             active = Some((cell.interact_pointer_pos(), step));
         }
         step_cell(ui, &cell, lane, step, state, editor);

@@ -42,6 +42,12 @@ def fade(position: float) -> float:
     return 1.0 - t * t * (3.0 - 2.0 * t)
 
 
+def enter(distance: float, unit: float) -> float:
+    """The smooth rise from zero to one over the 4 to 8 units that follow the outline."""
+    t = max(0.0, min(1.0, (distance / unit - 4.0) / 4.0))
+    return t * t * (3.0 - 2.0 * t)
+
+
 def prepare(image: Image.Image, color: tuple[int, int, int], baseline: float,
             horizontal: bool, vertical: bool, unit: float,
             reverse_x=False, reverse_y=False) -> Image.Image:
@@ -64,13 +70,10 @@ def prepare(image: Image.Image, color: tuple[int, int, int], baseline: float,
             # Suppress the source silhouette and its fringe before introducing
             # material inside it. This also makes every corner/strip join fade
             # through the identical solid chassis color instead of a hard cut.
-            def enter(distance: float) -> float:
-                t = max(0.0, min(1.0, (distance / unit - 4.0) / 4.0))
-                return t * t * (3.0 - 2.0 * t)
             if horizontal:
-                opacity *= enter((image.width - 1 - x) if reverse_x else x)
+                opacity *= enter((image.width - 1 - x) if reverse_x else x, unit)
             if vertical:
-                opacity *= enter((image.height - 1 - y) if reverse_y else y)
+                opacity *= enter((image.height - 1 - y) if reverse_y else y, unit)
             if horizontal != vertical:
                 # A repeated strip also fades at both ends, so consecutive
                 # native-size tiles cannot expose a discontinuous source seam.
@@ -189,8 +192,8 @@ def render(check: bool) -> None:
     text = json.dumps(manifest, indent=2) + "\n"
     path = OUTPUT / "provenance.json"
     if check:
-        if path.read_text() != text: raise ValueError("Folded Metal provenance differs.")
-    else: path.write_text(text)
+        if path.read_text(encoding="utf-8") != text: raise ValueError("Folded Metal provenance differs.")
+    else: path.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":

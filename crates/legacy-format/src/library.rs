@@ -75,7 +75,8 @@ fn validate_relative_path(path: &str) -> Result<(), LibraryError> {
     if path.is_empty() {
         return Err(LibraryError("Sample path is empty".into()));
     }
-    Catalog::parse(path.as_bytes()).map_err(|e| LibraryError(e.to_string()))?;
+    Catalog::check_path(&path.trim().trim_matches('"').replace('\\', "/"))
+        .map_err(|e| LibraryError(e.to_string()))?;
     if path.contains(['\r', '\n', '\0']) {
         return Err(LibraryError("Sample path contains a control byte".into()));
     }

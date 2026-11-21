@@ -35,11 +35,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
+from harmony import NOTES  # noqa: E402
 
 DEFAULT_INDEX = 'local-data/samples/index.tsv'
 COLUMNS = ['root', 'path', 'type', 'bytes', 'mtime', 'channels', 'rate', 'bits', 'seconds', 'bpm', 'bpm_from',
            'key', 'key_from', 'note', 'chord', 'beats', 'bars', 'kind', 'pack']
-NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 FLATS = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B', 'Fb': 'E', 'E#': 'F', 'B#': 'C'}
 # Kind keywords, matched against the file name first and then the folders; the first kind wins.
 KINDS = [

@@ -328,6 +328,18 @@ fn missing_metadata_keeps_original_reference_raw_fields_and_length_confidence() 
         data: serde_json::json!({"pattern": [1, 0, 1]}),
     };
     assert!(missing_sample_details(&missing).contains("\"pattern\":[1,0,1]"));
+    let raw = r"\\?\UNC\saved-server\sounds\Lost lead.wav";
+    missing.reference = MissingReference::Generated {
+        product: Product::D1,
+        kind: "unresolved-import-path".into(),
+        data: serde_json::json!({"saved_path": raw}),
+    };
+    missing.metadata.insert("saved_path".into(), raw.into());
+    let details = missing_sample_details(&missing);
+    assert!(details.contains(&format!("Original product: {}", Product::D1.label())));
+    assert!(details.contains(&format!("Original path: {raw}")));
+    assert!(!details.contains("Generator"));
+    assert_eq!(details.matches(raw).count(), 1);
     let clip = missing_clip_details(&app.session.project().clips[0]);
     assert!(clip.contains("Track 3") && clip.contains("150 frames") && clip.contains("gain 0.75"));
 }

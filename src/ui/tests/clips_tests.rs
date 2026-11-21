@@ -335,6 +335,16 @@ fn a_step_synth_sound_saved_with_its_pattern_draws_notes_instead_of_a_waveform()
         Some(false),
         "A sound without one keeps its waveform."
     );
+    app.clip_paint.clear_step_patterns();
+    assert!(app.clip_paint.step_patterns.is_empty());
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(
+        app.clip_paint
+            .step_patterns
+            .get(&1)
+            .is_some_and(Option::is_some),
+        "Clearing step patterns forces a reload at the same catalog revision."
+    );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let clip = app.clip_rect(&app.session.project().clips[0], app.score.rect.unwrap());
     let category = group_color("Step synth");

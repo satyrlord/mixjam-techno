@@ -128,6 +128,10 @@ impl MasterChain {
             .map(|kind| kind.latency())
             .sum()
     }
+    /// The same delay in milliseconds at a sample rate.
+    pub fn latency_ms(&self, sample_rate: u32) -> f32 {
+        (self.latency() as f64 * 1000.0 / f64::from(sample_rate)) as f32
+    }
     /// Move the pedal at `from` to position `to`; the pedals between shift
     /// one place. Positions outside the board change nothing.
     /// The limiter stays last, so a move from or to its place changes nothing.
@@ -179,10 +183,7 @@ impl MasterChain {
         if self.order.last() != Some(&PedalKind::Limiter) {
             return Err("The limiter must be the last master pedal.".into());
         }
-        if Knob::all().any(|knob| {
-            let (value, range) = (knob.get(self), knob.range());
-            !(value.is_finite() && (range.low..=range.high).contains(&value))
-        }) {
+        if !Knob::all().all(|knob| knob.range().contains(knob.get(self))) {
             return Err("A master pedal setting is out of range.".into());
         }
         if ![15, 30].contains(&self.tape.speed) {

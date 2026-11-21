@@ -157,6 +157,30 @@ impl Lane {
         }
     }
 
+    /// `value` on the lane's grid and within its range: Volume in half
+    /// decibels; Send, Filter, and Pan in hundredths, with Filter and Pan
+    /// held at the middle within 0.04 of it; the nearest Repeat step; the
+    /// gate in `REPEAT_GATE_STEP`s; and Pitch in whole semitones.
+    pub fn snap(self, value: f32) -> f32 {
+        let (low, high) = self.range();
+        if value.is_nan() {
+            return self.before_first().clamp(low, high);
+        }
+        let value = value.clamp(low, high);
+        let value = match self {
+            Self::Volume => (value * 2.0).round() / 2.0,
+            Self::Filter | Self::Pan if value.abs() < 0.04 => 0.0,
+            Self::Send(_) | Self::Filter | Self::Pan => (value * 100.0).round() / 100.0,
+            Self::Repeat => REPEAT_STEPS
+                .into_iter()
+                .min_by(|a, b| (a - value).abs().total_cmp(&(b - value).abs()))
+                .unwrap_or(0.0),
+            Self::RepeatGate => (value / REPEAT_GATE_STEP).round() * REPEAT_GATE_STEP,
+            Self::Pitch => (value / 100.0).round() * 100.0,
+        };
+        value.clamp(low, high)
+    }
+
     /// A value as the lane shows it.
     pub fn format(self, value: f32) -> String {
         match self {
@@ -214,7 +238,7 @@ pub fn pan_gains(pan: f32) -> [f32; 2] {
 pub struct Automation {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub volume: Vec<Point>,
-    #[serde(default, skip_serializing_if = "no_sends")]
+    #[serde(default, skip_serializing_if = "no_lanes")]
     pub sends: [Vec<Point>; crate::fx::BUSES],
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<Point>,
@@ -228,14 +252,10 @@ pub struct Automation {
     pub pitch: Vec<Point>,
 }
 
-fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
-    sends.iter().all(Vec::is_empty)
-}
-
 impl Automation {
     pub fn is_empty(&self) -> bool {
         self.volume.is_empty()
-            && no_sends(&self.sends)
+            && no_lanes(&self.sends)
             && self.filter.is_empty()
             && self.pan.is_empty()
             && self.repeat.is_empty()
@@ -314,13 +334,63 @@ pub fn validate_return_points(points: &[Point]) -> Result<(), String> {
     check_points("FX return", (0.0, RETURN_CEILING), points)
 }
 
+/// A return lane value in whole percent, from 0 to `RETURN_CEILING`. The full
+/// return, 100%, holds values within 4% of it.
+pub fn snap_return(value: f32) -> f32 {
+    if value.is_nan() {
+        return 1.0;
+    }
+    let value = if (value - 1.0).abs() < 0.04 {
+        1.0
+    } else {
+        (value * 100.0).round() / 100.0
+    };
+    value.clamp(0.0, RETURN_CEILING)
+}
+
+/// Set the value at `tick` in `points`, which are in tick order: the point at
+/// `tick` takes `value`, or a new point goes in its place. Returns the
+/// point's index.
+pub fn set_point(points: &mut Vec<Point>, tick: u32, value: f32) -> usize {
+    let index = points.partition_point(|point| point.tick < tick);
+    if points.get(index).is_some_and(|point| point.tick == tick) {
+        points[index].value = value;
+    } else {
+        points.insert(index, Point { tick, value });
+    }
+    index
+}
+
+/// Point `index` of `points` moved to `tick` with `value`. Its tick stays
+/// between its neighbors' ticks, so the order holds; without room between
+/// them it keeps its tick.
+pub fn moved_point(points: &[Point], index: usize, tick: u32, value: f32) -> Point {
+    let low = index
+        .checked_sub(1)
+        .map_or(0, |before| points[before].tick.saturating_add(1));
+    let high = points
+        .get(index + 1)
+        .map_or(crate::engine::MAX_TICKS, |after| {
+            after.tick.saturating_sub(1)
+        });
+    Point {
+        tick: if low <= high {
+            tick.clamp(low, high)
+        } else {
+            points[index].tick
+        },
+        value,
+    }
+}
+
 /// A return lane value as the arrangement shows it, in percent of the full
 /// return: "150%".
 pub fn return_label(value: f32) -> String {
     format!("{:.0}%", value * 100.0)
 }
 
-/// Whether none of the four FX buses has a return lane with points.
-pub fn no_returns(lanes: &[Vec<Point>; crate::fx::BUSES]) -> bool {
+/// Whether none of the lanes of the four FX buses, a track's send lanes or
+/// the return lanes, has points.
+pub fn no_lanes(lanes: &[Vec<Point>; crate::fx::BUSES]) -> bool {
     lanes.iter().all(Vec::is_empty)
 }

@@ -7,6 +7,8 @@ pub(super) const TITLE: &str = "Sample libraries";
 
 /// The tempo for WAVs whose own tempo cannot be recognized.
 const FALLBACK_TEMPO: &str = "Tempo for files without one";
+/// The fallback tempos that the window and the agent channel take, in BPM.
+pub(super) const FALLBACK_BPM: std::ops::RangeInclusive<f64> = 1.0..=999.0;
 
 /// The sample libraries window: whether it is open, the provider to add,
 /// the scan tempo, and the scan's status line.
@@ -27,7 +29,7 @@ impl Default for LibrariesState {
         Self {
             open: false,
             product: Product::T1,
-            fallback_bpm: 140.0,
+            fallback_bpm: SOURCE_BPM,
             close_after_scan: false,
             scan_status: None,
         }
@@ -157,7 +159,7 @@ impl MixJamApp {
             let fallback = controls::number(
                 ui,
                 &mut self.libraries.fallback_bpm,
-                1.0..=999.0,
+                FALLBACK_BPM,
                 FALLBACK_TEMPO,
             )
             .hover_hint(

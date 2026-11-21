@@ -30,6 +30,25 @@ A mixer view edits a `TrackMix`, not a whole `Track`, and sends it as
 `EditCommand::SetTrackMix`. Domain rules such as `TrackMix::silence` and
 `Track::processing_on` are in the backend, so a view only shows them.
 
+The backend also owns these rules. A view uses them and does not restate
+them:
+
+- Ranges and units: `TEMPO_RANGE`, `SOURCE_BPM`, `MAX_PITCH_CENTS`,
+  `MAX_CLIP_GAIN` with the clip gain decibel functions, `TICKS_PER_BEAT`,
+  `frames_per_tick_at`, `tick_seconds`, and `MIX_SAMPLE_RATE`.
+- Sections: `Project::sections_with_new`, `sections_without`, and
+  `sections_renamed` give the list for `EditCommand::SetSections`.
+  `Project::song_span` is the whole-song loop.
+- Clip edges: `Project::clip_room` is the space that a clip can grow into
+  without covering a neighbor, by the rule that `SetClip` checks.
+- Rows: `Project::occupied_tracks` gives the tracks that the views show.
+- Automation: `Lane::snap` and `automation::snap_return` give the value grid.
+  `automation::set_point` and `moved_point` keep one point for each tick, in
+  order.
+- FX presets: `FxBus::load_preset` and `FxBus::matching_preset`.
+- Duckers: `Ducker::set_key` keeps a ducker from keying its own track.
+- The board delay: `MasterChain::latency_ms`.
+
 If a design needs new application behavior, add a typed operation in
 `application.rs`. Do not expose a mutable project. Do not add a callback that
 can change arbitrary application state.
@@ -87,9 +106,10 @@ painter applies to the glyphs.
 ## Captures
 
 To check the built window, use `tools/verify-ui.ps1` as
-[UI verification](../DEVELOPMENT.md#ui-verification) tells. Native egui tests
-check control input and the accessibility semantics that the controls emit.
-They do not replace a screen reader check of the built executable.
+[UI verification](../development/verification.md#ui-verification) tells.
+Native egui tests check control input and the accessibility semantics that the
+controls emit. They do not replace a screen reader check of the built
+executable.
 
 ## Fonts and titles
 

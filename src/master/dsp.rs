@@ -79,6 +79,92 @@ impl<const N: usize> MovingMin<N> {
     }
 }
 
+/// The type a lookahead gain keeps its held gain in.
+pub(crate) trait Held: Copy + PartialOrd + Into<f64> {
+    const ONE: Self;
+    /// A need that the moving minimum gives back. It holds the needs as
+    /// pushed, so the conversion is exact.
+    fn from_need(need: f64) -> Self;
+    /// The held gain one frame of release closer to `lowest`.
+    fn release(lowest: Self, held: Self, pole: Self) -> Self;
+}
+impl Held for f64 {
+    const ONE: Self = 1.0;
+    fn from_need(need: f64) -> Self {
+        need
+    }
+    #[inline]
+    fn release(lowest: Self, held: Self, pole: Self) -> Self {
+        flush(lowest + (held - lowest) * pole)
+    }
+}
+/// The master limiter's gain, which has always released without a flush.
+impl Held for f32 {
+    const ONE: Self = 1.0;
+    fn from_need(need: f64) -> Self {
+        need as f32
+    }
+    #[inline]
+    fn release(lowest: Self, held: Self, pole: Self) -> Self {
+        lowest + (held - lowest) * pole
+    }
+}
+
+/// The gain of a stereo-linked lookahead limiter. Each frame brings the
+/// gain it needs; the gain takes the lowest need of the last `span` frames,
+/// recovers after it with a one-pole release, and ramps over the last
+/// `LOOKAHEAD` frames, so it is already down when a peak arrives. The
+/// limiter delays its sound by `LOOKAHEAD` frames itself.
+#[derive(Clone, Copy)]
+pub(crate) struct LookaheadGain<T, const LOOKAHEAD: usize, const SPAN: usize> {
+    needs: MovingMin<SPAN>,
+    span: usize,
+    held: T,
+    release: T,
+    ramp: [f64; LOOKAHEAD],
+    ramp_at: usize,
+    ramp_sum: f64,
+}
+impl<T: Held, const LOOKAHEAD: usize, const SPAN: usize> LookaheadGain<T, LOOKAHEAD, SPAN> {
+    /// `span` is at most `SPAN`, and `release` is the release's pole.
+    pub(crate) fn new(span: usize, release: T) -> Self {
+        Self {
+            needs: MovingMin::EMPTY,
+            span,
+            held: T::ONE,
+            release,
+            ramp: [1.0; LOOKAHEAD],
+            ramp_at: 0,
+            ramp_sum: LOOKAHEAD as f64,
+        }
+    }
+    /// Forget every need, and keep the span and the release.
+    pub(crate) fn clear(&mut self) {
+        *self = Self::new(self.span, self.release);
+    }
+    /// Take a frame's need and return the gain, at most 1, for the frame
+    /// `LOOKAHEAD` frames ago.
+    #[inline]
+    pub(crate) fn push(&mut self, need: T) -> f64 {
+        let lowest = T::from_need(self.needs.push(need.into(), self.span));
+        self.held = if lowest < self.held {
+            lowest
+        } else {
+            T::release(lowest, self.held, self.release)
+        };
+        let held: f64 = self.held.into();
+        self.ramp_sum += held - self.ramp[self.ramp_at];
+        self.ramp[self.ramp_at] = held;
+        self.ramp_at += 1;
+        if self.ramp_at == LOOKAHEAD {
+            // Recount now and then, so rounding cannot build up.
+            self.ramp_at = 0;
+            self.ramp_sum = self.ramp.iter().sum();
+        }
+        (self.ramp_sum / LOOKAHEAD as f64).min(1.0)
+    }
+}
+
 /// The feedback coefficient of a one-pole filter with this time constant.
 pub(crate) fn pole(seconds: f64) -> f64 {
     (-1.0 / (seconds * RATE)).exp()
@@ -133,31 +219,88 @@ fn dot<const N: usize>(a: &[f32; N], b: &[f32; N]) -> f32 {
     a.iter().zip(b).map(|(a, b)| a * b).sum()
 }
 
+/// The last `N` samples of a filter's input, newest first. Each sample is
+/// written twice, `N` apart, so the last `N` are always one slice and no
+/// sample moves.
+#[derive(Clone, Copy)]
+struct History<const N: usize> {
+    samples: [[f32; N]; 2],
+    /// Where the newest sample is.
+    at: usize,
+}
+impl<const N: usize> History<N> {
+    const ZERO: Self = Self {
+        samples: [[0.0; N]; 2],
+        at: 0,
+    };
+
+    /// Take a sample and return the last `N`: entry `i` is the sample `i`
+    /// pushes ago.
+    #[inline]
+    fn push(&mut self, sample: f32) -> &[f32; N] {
+        self.at = if self.at == 0 { N - 1 } else { self.at - 1 };
+        let at = self.at;
+        let samples = self.samples.as_flattened_mut();
+        samples[at] = sample;
+        samples[at + N] = sample;
+        samples[at..at + N]
+            .first_chunk()
+            .expect("the history holds two copies")
+    }
+}
+
 // Smoothing -------------------------------------------------------------------
 
-/// A setting that glides to its target with a 5 ms time constant, so a knob
-/// turn reaches the sound within about 20 ms without zipper noise.
+/// A setting that glides to its target along a one-pole curve, so a knob
+/// turn reaches the sound without zipper noise. The master pedals' settings
+/// glide with a 5 ms time constant, so a turn arrives within about 20 ms;
+/// the FX settings each have their own.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Smoothed {
     value: f64,
     target: f64,
+    /// The share of the gap that each sample closes.
+    step: f64,
+    /// The value snaps to the target when the gap is this small, relative
+    /// to the target.
+    snap: f64,
 }
 impl Smoothed {
     /// `1 - e^(-1 / (5 ms × 44.1 kHz))`.
     const STEP: f64 = 0.004_524_879;
 
+    /// A setting with a 5 ms glide.
     pub(crate) fn new(value: f64) -> Self {
         Self {
             value,
             target: value,
+            step: Self::STEP,
+            snap: 1e-6,
+        }
+    }
+    /// A setting with its own time constant, which glides closer to the
+    /// target before it snaps.
+    pub(crate) fn with_time(value: f64, seconds: f64) -> Self {
+        Self {
+            value,
+            target: value,
+            step: 1.0 - pole(seconds),
+            snap: 1e-9,
         }
     }
     pub(crate) fn set(&mut self, target: f64) {
         self.target = target;
     }
+    pub(crate) fn set_time(&mut self, seconds: f64) {
+        self.step = 1.0 - pole(seconds);
+    }
     /// Move straight to the target.
     pub(crate) fn settle(&mut self) {
         self.value = self.target;
+    }
+    /// Set the value, keeping the target: the glide goes on from there.
+    pub(crate) fn hold(&mut self, value: f64) {
+        self.value = value;
     }
     pub(crate) fn settled(&self) -> bool {
         self.value == self.target
@@ -165,14 +308,17 @@ impl Smoothed {
     pub(crate) fn value(&self) -> f64 {
         self.value
     }
+    pub(crate) fn target(&self) -> f64 {
+        self.target
+    }
     #[inline]
     pub(crate) fn next(&mut self) -> f64 {
         if self.value != self.target {
             let gap = self.target - self.value;
-            self.value = if gap.abs() <= 1e-6 * (1.0 + self.target.abs()) {
+            self.value = if gap.abs() <= self.snap * (1.0 + self.target.abs()) {
                 self.target
             } else {
-                self.value + gap * Self::STEP
+                self.value + gap * self.step
             };
         }
         self.value
@@ -214,7 +360,11 @@ impl Coefficients {
         (2.0 * PI * hz / RATE).sin_cos()
     }
     pub(crate) fn low_pass(hz: f64, q: f64) -> Self {
-        let (sin, cos) = Self::angle(hz);
+        Self::low_pass_at(hz, q, RATE)
+    }
+    /// A low-pass at any sample rate, for a sound that is not at the mix rate.
+    pub(crate) fn low_pass_at(hz: f64, q: f64, rate: f64) -> Self {
+        let (sin, cos) = (2.0 * PI * hz / rate).sin_cos();
         let alpha = sin / (2.0 * q);
         let side = (1.0 - cos) / 2.0;
         Self::new(
@@ -248,8 +398,10 @@ impl Coefficients {
             [1.0 + alpha / a, -2.0 * cos, 1.0 - alpha / a],
         )
     }
-    /// A shelf's `alpha` term and `A` for a slope and gain.
+    /// A shelf's `alpha` term and `A` for a slope and gain. The slope is held
+    /// to at most 1: above it, a high gain makes the square root negative.
     fn shelf(sin: f64, slope: f64, db: f64) -> (f64, f64) {
+        let slope = slope.clamp(f64::EPSILON, 1.0);
         let a = 10f64.powf(db / 40.0);
         let alpha = sin / 2.0 * ((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0).sqrt();
         (a, 2.0 * a.sqrt() * alpha)
@@ -290,7 +442,7 @@ impl Coefficients {
     pub(crate) fn raw(b: [f64; 3], a: [f64; 3]) -> Self {
         Self::new(b, a)
     }
-    #[cfg(test)]
+    /// `[b0, b1, b2, a1, a2]`, for a filter that runs its own loop.
     pub(crate) fn values(&self) -> [f64; 5] {
         [self.b0, self.b1, self.b2, self.a1, self.a2]
     }
@@ -339,6 +491,41 @@ impl Biquad {
     }
 }
 
+/// One channel's sample through biquads in a row.
+#[inline]
+pub(crate) fn cascade(filters: &mut [Biquad], channel: usize, sample: f64) -> f64 {
+    filters
+        .iter_mut()
+        .fold(sample, |sample, filter| filter.process(channel, sample))
+}
+
+// Saturation helpers ------------------------------------------------------------------
+
+/// A power far below hearing, so that silence divides by nothing.
+pub(crate) const POWER_FLOOR: f64 = 1e-12;
+
+/// `ln cosh u`, the antiderivative of `tanh`, without overflow.
+#[inline]
+pub(crate) fn log_cosh(u: f64) -> f64 {
+    let size = u.abs();
+    size + (-2.0 * size).exp().ln_1p() - std::f64::consts::LN_2
+}
+
+/// A power detector: two one-pole stages in a row, which smooth the ripple
+/// of a low note far better than one stage with the same response time.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct PowerDetector([f64; 2]);
+
+impl PowerDetector {
+    #[inline]
+    pub(crate) fn follow(&mut self, power: f64, pole: f64) -> f64 {
+        let [first, second] = &mut self.0;
+        *first = flush(power + (*first - power) * pole);
+        *second = flush(*first + (*second - *first) * pole);
+        *second
+    }
+}
+
 // Oversampling -------------------------------------------------------------------
 
 /// The taps at odd offsets from the centre of a Kaiser-windowed halfband
@@ -372,32 +559,29 @@ static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| {
 /// every tap that the polyphase sums use is nonzero.
 #[derive(Clone, Copy)]
 struct Halfband<const TAPS: usize> {
-    input: [f32; TAPS],
-    even: [f32; TAPS],
-    odd: [f32; TAPS],
+    input: History<TAPS>,
+    even: History<TAPS>,
+    odd: History<TAPS>,
 }
 impl<const TAPS: usize> Halfband<TAPS> {
     const ZERO: Self = Self {
-        input: [0.0; TAPS],
-        even: [0.0; TAPS],
-        odd: [0.0; TAPS],
+        input: History::ZERO,
+        even: History::ZERO,
+        odd: History::ZERO,
     };
 
     /// Two output samples for one input sample.
     #[inline]
     fn up(&mut self, taps: &[f32; TAPS], sample: f32) -> [f32; 2] {
-        self.input.copy_within(..TAPS - 1, 1);
-        self.input[0] = sample;
-        [2.0 * dot(taps, &self.input), self.input[TAPS / 2 - 1]]
+        let input = self.input.push(sample);
+        [2.0 * dot(taps, input), input[TAPS / 2 - 1]]
     }
     /// One output sample for two input samples.
     #[inline]
     fn down(&mut self, taps: &[f32; TAPS], [even, odd]: [f32; 2]) -> f32 {
-        self.even.copy_within(..TAPS - 1, 1);
-        self.even[0] = even;
-        self.odd.copy_within(..TAPS - 1, 1);
-        self.odd[0] = odd;
-        dot(taps, &self.even) + 0.5 * self.odd[TAPS / 2]
+        let even = self.even.push(even);
+        let odd = self.odd.push(odd);
+        dot(taps, even) + 0.5 * odd[TAPS / 2]
     }
 }
 
@@ -535,24 +719,25 @@ static PHASES: LazyLock<[[f32; 32]; 3]> = LazyLock::new(|| {
 /// manner of ITU-R BS.1770: the peak of each interval between samples.
 #[derive(Clone, Copy)]
 pub(crate) struct TruePeak {
-    history: [f32; 32],
+    history: History<32>,
 }
 impl TruePeak {
     /// The interval that `push` measures starts this many frames before
     /// the sample it takes.
     pub(crate) const DELAY: usize = 16;
-    pub(crate) const ZERO: Self = Self { history: [0.0; 32] };
+    pub(crate) const ZERO: Self = Self {
+        history: History::ZERO,
+    };
 
     /// Take the next sample and return the peak of the interval from the
     /// sample `DELAY` frames ago to the next one, both samples included.
     #[inline]
     pub(crate) fn push(&mut self, sample: f32) -> f32 {
-        self.history.copy_within(..31, 1);
-        self.history[0] = sample;
+        let history = self.history.push(sample);
         PHASES
             .iter()
-            .map(|taps| dot(taps, &self.history).abs())
-            .fold(self.history[15].abs().max(self.history[16].abs()), f32::max)
+            .map(|taps| dot(taps, history).abs())
+            .fold(history[15].abs().max(history[16].abs()), f32::max)
     }
 }
 
@@ -627,196 +812,4 @@ pub(crate) fn program(frames: usize) -> Vec<(f32, f32)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn master_construction_prepares_tables_before_the_first_callback() {
-        const CHILD: &str = "MIXJAM_DSP_TABLE_INIT_TEST";
-        const CHECKED: &str = "DSP tables are ready before processing.";
-        if std::env::var_os(CHILD).is_some() {
-            use std::sync::atomic::Ordering;
-            assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 0);
-            let chain = crate::master::MasterChain::default();
-            let _processor = crate::master::MasterProcessor::new(&chain);
-            assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 3);
-            println!("{CHECKED}");
-            return;
-        }
-        // A fresh test process proves constructor ownership without depending
-        // on which other DSP tests initialized the process-wide tables first.
-        let result = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "master::dsp::tests::master_construction_prepares_tables_before_the_first_callback",
-                "--nocapture",
-            ])
-            .env(CHILD, "1")
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success() && String::from_utf8_lossy(&result.stdout).contains(CHECKED),
-            "{}{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        );
-    }
-
-    fn sine(hz: f64, amplitude: f64, frames: usize) -> Vec<f32> {
-        (0..frames)
-            .map(|i| (amplitude * (2.0 * PI * hz * i as f64 / RATE).sin()) as f32)
-            .collect()
-    }
-
-    fn rms(samples: &[f32]) -> f64 {
-        (samples.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / samples.len() as f64).sqrt()
-    }
-
-    #[test]
-    fn paired_oversampling_matches_independent_histories_bit_for_bit() {
-        let mut input = sine(55.0, 0.8, 4000);
-        input.extend(sine(17_000.0, 0.9, 4000));
-        let mut seed = 0x1234_5678_u32;
-        input.extend((0..4000).map(|_| {
-            seed ^= seed << 13;
-            seed ^= seed >> 17;
-            seed ^= seed << 5;
-            (f64::from(seed) / f64::from(u32::MAX) * 2.0 - 1.0) as f32
-        }));
-        input.extend(std::iter::repeat_n(0.0, 4000));
-        let (mut driven, mut reference) = (Oversampler::ZERO, Oversampler::ZERO);
-        let (mut paired, mut paired_reference) = (Oversampler::ZERO, Oversampler::ZERO);
-        let (mut last, mut paired_last) = ([0.0_f32; 2], [0.0_f32; 2]);
-        // Stateful curves exercise the order of the four inputs. The
-        // histories carry through arbitrary block boundaries and silence.
-        let shape = |sample: f32, previous: &mut f32, nonlinear: bool| {
-            let mean = 0.5 * (sample + *previous);
-            *previous = sample;
-            if nonlinear { (mean * 8.0).tanh() } else { mean }
-        };
-        let mut start = 0;
-        for size in [1, 3, 128, 441, 69, 2049].into_iter().cycle() {
-            let end = (start + size).min(input.len());
-            for (offset, sample) in input[start..end].iter().copied().enumerate() {
-                let expected = [
-                    driven.process(sample, |x| shape(x, &mut last[0], true)),
-                    reference.process(sample, |x| shape(x, &mut last[1], false)),
-                ];
-                let actual = paired.process_pair(&mut paired_reference, sample, |x| {
-                    [
-                        shape(x, &mut paired_last[0], true),
-                        shape(x, &mut paired_last[1], false),
-                    ]
-                });
-                assert_eq!(
-                    actual.map(f32::to_bits),
-                    expected.map(f32::to_bits),
-                    "frame {}",
-                    start + offset
-                );
-            }
-            start = end;
-            if start == input.len() {
-                break;
-            }
-        }
-    }
-
-    #[test]
-    fn oversampling_delays_audible_sound_by_whole_frames_without_coloring_it() {
-        for hz in [40.0, 1000.0, 10_000.0, 19_000.0] {
-            let input = sine(hz, 0.8, 8000);
-            let mut oversampler = Oversampler::ZERO;
-            let output: Vec<f32> = input
-                .iter()
-                .map(|v| oversampler.process(*v, |x| x))
-                .collect();
-            let tail = &output[2000..];
-            let error: Vec<f32> = tail
-                .iter()
-                .zip(&input[2000 - Oversampler::LATENCY..])
-                .map(|(out, inp)| out - inp)
-                .collect();
-            let level = gain_to_db(rms(&error) / rms(tail));
-            assert!(level < -80.0, "{hz} Hz differs by {level:.1} dB");
-        }
-    }
-
-    #[test]
-    fn oversampling_keeps_curve_harmonics_from_folding_into_the_band() {
-        // A hard clip of 15 kHz makes 45 kHz and 75 kHz, which would fold
-        // to 0.9 kHz and 13.2 kHz at the mix rate. The analysis spans whole
-        // cycles of every tone involved, so none leaks into another's bin.
-        let input = sine(15_000.0, 1.0, 4096 + 11_760);
-        let mut oversampler = Oversampler::ZERO;
-        let output: Vec<f64> = input
-            .iter()
-            .map(|v| f64::from(oversampler.process(*v, |x| x.clamp(-0.5, 0.5))))
-            .collect();
-        let tail = &output[4096..];
-        let amplitude = |hz: f64| {
-            let (mut re, mut im) = (0.0, 0.0);
-            for (i, v) in tail.iter().enumerate() {
-                let angle = 2.0 * PI * hz * i as f64 / RATE;
-                re += v * angle.cos();
-                im += v * angle.sin();
-            }
-            2.0 * re.hypot(im) / tail.len() as f64
-        };
-        let fundamental = amplitude(15_000.0);
-        for alias in [900.0, 13_200.0] {
-            let level = gain_to_db(amplitude(alias) / fundamental);
-            assert!(level < -70.0, "Alias at {alias} Hz is {level:.1} dB");
-        }
-    }
-
-    #[test]
-    fn filters_follow_the_cookbook_shapes() {
-        let close = |a: f64, b: f64| (a - b).abs() < 0.01;
-        let peak = Coefficients::peaking(250.0, 2.5, -3.0);
-        assert!(close(gain_to_db(peak.magnitude(250.0)), -3.0));
-        assert!(close(gain_to_db(peak.magnitude(5000.0)), 0.0));
-        let high = Coefficients::high_pass(20.0, std::f64::consts::FRAC_1_SQRT_2);
-        assert!(close(gain_to_db(high.magnitude(20.0)), -3.01));
-        let shelf = Coefficients::high_shelf(12_000.0, 0.6, 2.0);
-        assert!(close(gain_to_db(shelf.magnitude(20.0)), 0.0));
-        assert!(gain_to_db(shelf.magnitude(20_000.0)) > 1.5);
-        // A shelf and its opposite cancel.
-        let back = Coefficients::high_shelf(12_000.0, 0.6, -2.0);
-        for hz in [100.0, 5000.0, 15_000.0] {
-            assert!((shelf.magnitude(hz) * back.magnitude(hz) - 1.0).abs() < 1e-9);
-        }
-        // Linkwitz-Riley low and high halves sum to an all-pass.
-        let q = std::f64::consts::FRAC_1_SQRT_2;
-        let (mut low, mut high) = (
-            [Biquad::new(Coefficients::low_pass(500.0, q)); 2],
-            [Biquad::new(Coefficients::high_pass(500.0, q)); 2],
-        );
-        let mut all = Biquad::new(Coefficients::all_pass(500.0, q));
-        for i in 0..4000 {
-            let x = if i == 0 { 1.0 } else { 0.0 };
-            let (a, b) = (low[0].process(0, x), high[0].process(0, x));
-            let sum = low[1].process(0, a) + high[1].process(0, b);
-            assert!((sum - all.process(0, x)).abs() < 1e-12);
-        }
-    }
-
-    #[test]
-    fn true_peaks_see_between_the_samples() {
-        // A quarter-rate sine sampled at 45 degrees peaks between samples, 3 dB
-        // above them.
-        let input: Vec<f32> = (0..400)
-            .map(|i| (0.5 * (PI / 2.0 * i as f64 + PI / 4.0).sin()) as f32)
-            .collect();
-        let sample_peak = input.iter().fold(0.0_f32, |a, v| a.max(v.abs()));
-        let mut meter = TruePeak::ZERO;
-        // Skip the tone's abrupt start, which rings like any step.
-        let true_peak = input
-            .iter()
-            .map(|v| meter.push(*v))
-            .skip(2 * TruePeak::DELAY)
-            .fold(0.0_f32, f32::max);
-        let lift = gain_to_db(f64::from(true_peak / sample_peak));
-        assert!((lift - 3.01).abs() < 0.02, "{lift}");
-    }
-}
+mod tests;

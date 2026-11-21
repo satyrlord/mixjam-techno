@@ -31,6 +31,15 @@ pub(in super::super) struct BoardsState {
     pub(in super::super) master_view_generation: u64,
     /// An FX bus that the FX returns board brings into view on its next frame.
     pub(in super::super) fx_reveal: Option<usize>,
+    /// Each track's sound summary, kept until the song or the catalog changes.
+    pub(in super::super) summaries: SummaryCache,
+}
+
+/// The sound summaries of every track with what they were built from.
+#[derive(Default)]
+pub(in super::super) struct SummaryCache {
+    key: Option<((u64, u64), u64, u64)>,
+    summaries: Arc<Vec<(String, String)>>,
 }
 
 /// The Step synth board: its pattern with its source, the bar it shows, and the
@@ -133,6 +142,9 @@ impl MixJamApp {
         let before = self.session.layout();
         let mut layout = before;
         change(&mut layout);
+        if layout == before {
+            return;
+        }
         if layout.boards != before.boards {
             // The lower panel was opened or folded by hand, so leaving the
             // Mix view keeps it as it is.
@@ -183,7 +195,7 @@ impl MixJamApp {
             // a drag never folds one of them.
             max_height = max_height.min((available - room::SOUNDS_MIN_HEIGHT).max(min_height));
         }
-        let sounds = egui::TopBottomPanel::bottom("sounds")
+        let sounds = egui::TopBottomPanel::bottom(LOWER_PANEL_ID)
             .default_height(height)
             .height_range(min_height..=max_height)
             .resizable(true)
@@ -208,7 +220,7 @@ impl MixJamApp {
             });
         help::note_board_rect(ctx, sounds.response.rect);
         // egui makes the panel's drag edge a Tab stop and leaves it unnamed.
-        let edge = egui::Id::new("sounds").with("__resize");
+        let edge = egui::Id::new(LOWER_PANEL_ID).with("__resize");
         if ctx.read_response(edge).is_some() {
             ctx.accesskit_node_builder(edge, |node| {
                 node.set_role(egui::accesskit::Role::Splitter);
@@ -578,7 +590,29 @@ impl MixJamApp {
         }
     }
 
+    /// Each track's sound summary and the list of its sounds, in one pass
+    /// over the clips for as long as the song and the catalog stay as they are.
+    pub(in super::super) fn sample_summaries(&mut self) -> Arc<Vec<(String, String)>> {
+        let key = (
+            self.session.project_change_token(),
+            self.session.catalog_revision(),
+            // A replacement session starts again from revision 0.
+            self.session.instance_id(),
+        );
+        if self.boards.summaries.key != Some(key) {
+            self.boards.summaries = SummaryCache {
+                key: Some(key),
+                summaries: Arc::new(mixer_sample_summaries(
+                    self.session.project(),
+                    self.session.library(),
+                )),
+            };
+        }
+        self.boards.summaries.summaries.clone()
+    }
+
     pub(in super::super) fn mixer(&mut self, ui: &mut egui::Ui) {
+        let summaries = self.sample_summaries();
         let mut master = self.session.project().master_gain;
         let mut buses = self.session.project().fx;
         let mut board = self.session.project().master;
@@ -587,7 +621,7 @@ impl MixJamApp {
                 mixer::show(
                     ui,
                     self.session.project(),
-                    self.session.library(),
+                    &summaries,
                     &mut master,
                     &mut buses,
                     &mut board.bypass,
@@ -754,43 +788,6 @@ impl MixJamApp {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn step_synth_audition_marker_follows_swing_and_preview_identity() {
-        let mut heard = StepSynthAudition {
-            start: std::time::Instant::now(),
-            bpm: 120.0,
-            length: 3,
-            swing: 75,
-            preview_revision: 7,
-        };
-        let step = |heard: &StepSynthAudition, ms| heard.step(std::time::Duration::from_millis(ms));
-        assert_eq!(
-            step(&heard, 125),
-            0,
-            "The swung second step has not started."
-        );
-        assert_eq!(step(&heard, 188), 1);
-        assert_eq!(step(&heard, 250), 2);
-        assert_eq!(step(&heard, 375), 2, "Swing uses the full render clock.");
-        assert_eq!(step(&heard, 438), 0, "The pattern wraps after three steps.");
-        heard.swing = 50;
-        assert_eq!(step(&heard, 125), 1);
-        assert!(heard.is_current(true, 7));
-        assert!(
-            !heard.is_current(true, 8),
-            "A replacement preview has no marker."
-        );
-        assert!(
-            !heard.is_current(false, 7),
-            "A stopped preview has no marker."
-        );
-    }
-}
-
 /// What the master meters show. A reduced display rate holds a reading
 /// between draws, and keeps every peak that happened in between.
 #[derive(Default)]
@@ -840,5 +837,42 @@ impl MeterDisplay {
             self.next = now + 1.0 / 15.0;
         }
         self.shown
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn step_synth_audition_marker_follows_swing_and_preview_identity() {
+        let mut heard = StepSynthAudition {
+            start: std::time::Instant::now(),
+            bpm: 120.0,
+            length: 3,
+            swing: 75,
+            preview_revision: 7,
+        };
+        let step = |heard: &StepSynthAudition, ms| heard.step(std::time::Duration::from_millis(ms));
+        assert_eq!(
+            step(&heard, 125),
+            0,
+            "The swung second step has not started."
+        );
+        assert_eq!(step(&heard, 188), 1);
+        assert_eq!(step(&heard, 250), 2);
+        assert_eq!(step(&heard, 375), 2, "Swing uses the full render clock.");
+        assert_eq!(step(&heard, 438), 0, "The pattern wraps after three steps.");
+        heard.swing = 50;
+        assert_eq!(step(&heard, 125), 1);
+        assert!(heard.is_current(true, 7));
+        assert!(
+            !heard.is_current(true, 8),
+            "A replacement preview has no marker."
+        );
+        assert!(
+            !heard.is_current(false, 7),
+            "A stopped preview has no marker."
+        );
     }
 }

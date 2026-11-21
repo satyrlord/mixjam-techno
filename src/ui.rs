@@ -95,6 +95,6 @@ use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
     Clip, EQ_BAND_MAX, EQ_FREQUENCIES, EditCommand, EffectsState, LibraryView, MAX_LIBRARY_FOLDERS,
     MasterChain, MeterReading, MissingReference, MissingSample, Pcm, PedalKind, Product, Project,
-    SUPPORTED_BPMS, Sample, Session, Step, StepSynthState, StretchSettings, TICKS_PER_BAR,
-    TRACK_COUNT, TrackMix, TrackSwitch, Trig, automation,
+    SOURCE_BPM, SUPPORTED_BPMS, Sample, Session, Step, StepSynthState, StretchSettings,
+    TEMPO_RANGE, TICKS_PER_BAR, TRACK_COUNT, TrackMix, TrackSwitch, Trig, automation,
 };

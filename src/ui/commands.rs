@@ -156,10 +156,29 @@ impl Command {
 
     /// The command's name in the list. A rail tool keeps its rail name.
     pub(super) fn name(self) -> String {
-        if let Some(icon) = self.icon() {
-            return icon.label().to_owned();
-        }
         match self {
+            Self::New
+            | Self::Open
+            | Self::Save
+            | Self::SaveAs
+            | Self::Import
+            | Self::Export
+            | Self::Erase
+            | Self::Delete
+            | Self::Mixer
+            | Self::Mastering
+            | Self::FxReturns
+            | Self::Effects
+            | Self::StepSynth
+            | Self::Edit
+            | Self::Stretch
+            | Self::AlbumReview
+            | Self::Options
+            | Self::Help
+            | Self::Undo
+            | Self::Redo => self
+                .icon()
+                .map_or_else(String::new, |icon| icon.label().to_owned()),
             Self::PlayPause => "Play or pause".into(),
             Self::StepSynthListen => "Listen to the Step synth pattern".into(),
             Self::Duplicate => "Duplicate selection".into(),
@@ -174,7 +193,6 @@ impl Command {
             Self::Lane(None, None) => "Off: edit clips".into(),
             Self::Lane(Some(lane), _) => format!("{} lane", lane.label()),
             Self::Lane(None, Some(bus)) => format!("{} lane", view::return_lane_label(bus)),
-            _ => unreachable!("every rail command has an icon"),
         }
     }
 
@@ -259,15 +277,29 @@ impl CommandList {
     }
 }
 
+/// Every command with the lowercase text that a typed word is looked up in: its
+/// name and its group. A command's name and group never change, so the list is
+/// made once.
+fn searchable() -> &'static [(Command, String)] {
+    static SEARCHABLE: std::sync::OnceLock<Vec<(Command, String)>> = std::sync::OnceLock::new();
+    SEARCHABLE.get_or_init(|| {
+        Command::all()
+            .into_iter()
+            .map(|command| {
+                let text = format!("{} {}", command.name(), command.group()).to_lowercase();
+                (command, text)
+            })
+            .collect()
+    })
+}
+
 /// The commands whose name or group holds every typed word, in list order.
 pub(super) fn matching(query: &str) -> Vec<Command> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-    Command::all()
-        .into_iter()
-        .filter(|command| {
-            let text = format!("{} {}", command.name(), command.group()).to_lowercase();
-            words.iter().all(|word| text.contains(word))
-        })
+    searchable()
+        .iter()
+        .filter(|(_, text)| words.iter().all(|word| text.contains(word)))
+        .map(|(command, _)| *command)
         .collect()
 }
 
@@ -304,7 +336,7 @@ impl MixJamApp {
             Command::Stretch => {
                 self.stretch.open = !self.stretch.open;
                 if self.stretch.open {
-                    self.stretch.source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                    self.stretch.source_bpm = stretch::clamp_bpm(self.source_bpm());
                 } else {
                     self.close_stretch_request();
                 }

@@ -40,7 +40,8 @@ impl MixJamApp {
                         "The library folders cannot change while the {modal} modal is open."
                     ));
                 }
-                if fallback_bpm.is_some_and(|bpm| !bpm.is_finite() || !(1.0..=999.0).contains(&bpm))
+                if fallback_bpm
+                    .is_some_and(|bpm| !bpm.is_finite() || !libraries::FALLBACK_BPM.contains(&bpm))
                 {
                     return Err("The fallback BPM is 1 to 999.".into());
                 }

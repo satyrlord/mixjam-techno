@@ -25,7 +25,7 @@ Do not challenge the decisions of the owner. These are hard limits:
   and the round log);
 - the owner's explicit rules, recorded as the owner's words in the artist
   profile, the round log, or the handoff;
-- each note in the song's [standing notes](REFERENCE.md#standing-notes);
+- each note in the song's [standing notes](REFERENCE-NOTES.md#standing-notes);
 - the rule that the owner picks every new element by ear. Propose new
   elements as auditions only.
 
@@ -34,9 +34,10 @@ critic or a composer wrote, treat it as the owner's decision and say so.
 
 ## Evidence
 
-Read your inputs in [Role inputs](REFERENCE.md#role-inputs). The critiques of
-the current round are the consensus that you argue against. The round log, the
-handoff, and the owner verdicts file tell you what the owner decided.
+Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). The
+critiques of the current round are the consensus that you argue against. The
+round log, the handoff, and the owner verdicts file tell you what the owner
+decided.
 
 Read the statements of the artist profile on the identity of the artist. The
 strongest argument for a bold move is that it brings the song closer to that
@@ -115,7 +116,7 @@ the original.
    with its source.
    **Where**: bars A-B, mm:ss, track numbers with their sound names.
    **The bold move**: the change in the tool's terms (see the
-   [finding format](REFERENCE.md#finding-format) fix line).
+   [finding format](REFERENCE-FINDINGS.md#finding-format) fix line).
    **Why it can be better**: the argument, with the evidence and the link to
    the artist's identity.
    **The risk**: what can go wrong, said plainly.

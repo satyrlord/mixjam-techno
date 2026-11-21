@@ -136,6 +136,21 @@ pub(super) fn note_grid(
             let covers = pattern::covers(&state.steps);
             let modifiers = ui.input(|input| input.modifiers);
             let drag_id = ui.id().with("tie-drag");
+            let (held, reset, pointer) = ui.input(|input| {
+                use egui::PointerButton::Primary;
+                let reset = input.key_pressed(egui::Key::Escape);
+                let pointer = (input.pointer.primary_down()
+                    || input.pointer.button_released(Primary))
+                .then(|| input.pointer.latest_pos())
+                .flatten();
+                (
+                    input.pointer.primary_down(),
+                    reset || input.pointer.button_pressed(Primary),
+                    pointer,
+                )
+            });
+            let previous = ui.data_mut(|data| data.remove_temp::<(usize, Vec<Step>)>(drag_id));
+            let mut tying = previous.filter(|_| !reset);
             let mut edit = None;
             for note in (rows.bottom_note..=rows.top_note).rev() {
                 let y = rows.row_top(note);
@@ -196,32 +211,16 @@ pub(super) fn note_grid(
                         ui.scroll_to_rect(cell, None);
                     }
                     // A drag that starts on a note's last step ties it on.
-                    if response.drag_started()
+                    let start = controls::primary_drag_start(ui, &response);
+                    if tying.is_none()
+                        && start.is_some()
                         && let Some((head, _)) = held
                         && pattern::note_end(&state.steps, head) == step
                     {
-                        ui.ctx().data_mut(|data| {
-                            data.insert_temp(drag_id, (head, state.steps.clone()))
-                        });
+                        tying = Some((head, state.steps.clone()));
                     }
-                    if response.dragged()
-                        && let Some(pointer) = response.interact_pointer_pos()
-                        && let Some((head, snapshot)) = ui
-                            .ctx()
-                            .data(|data| data.get_temp::<(usize, Vec<Step>)>(drag_id))
-                    {
-                        let end = columns.at(pointer.x).max(head);
-                        edit = Some(pattern::NoteEdit::Tie {
-                            snapshot,
-                            head,
-                            end,
-                        });
-                    }
-                    if response.drag_stopped() {
-                        ui.ctx()
-                            .data_mut(|data| data.remove::<(usize, Vec<Step>)>(drag_id));
-                    }
-                    let clicked = response.hover_hint(label).clicked() || (current && keys.toggle);
+                    let clicked = controls::primary_clicked(ui, &response.hover_hint(label))
+                        || (current && keys.toggle);
                     if clicked {
                         edit = Some(match held {
                             Some((head, _)) if modifiers.alt => pattern::NoteEdit::Slide(head),
@@ -231,6 +230,16 @@ pub(super) fn note_grid(
                         });
                     }
                 }
+            }
+            if let Some((head, snapshot)) = tying {
+                if held {
+                    ui.data_mut(|data| data.insert_temp(drag_id, (head, snapshot.clone())));
+                }
+                edit = pointer.map(|pointer| pattern::NoteEdit::Tie {
+                    snapshot,
+                    head,
+                    end: columns.at(pointer.x).max(head),
+                });
             }
             paint_notes(ui, &painter, content, state, rows, columns, editor);
             if let Some(edit) = edit {

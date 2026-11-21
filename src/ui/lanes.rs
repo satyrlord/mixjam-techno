@@ -120,12 +120,17 @@ fn fader_in(
         Sense::click_and_drag(),
     );
     let rail = rect.shrink2(Vec2::new(4.0, 0.0));
-    let pointer = response
-        .interact_pointer_pos()
-        .filter(|_| response.clicked() || response.dragged());
+    let dragged = controls::primary_dragged(ui, &response);
+    let pointer = if dragged {
+        controls::drag_position(ui, &response)
+    } else {
+        response
+            .interact_pointer_pos()
+            .filter(|_| controls::primary_clicked(ui, &response))
+    };
     if let Some(pos) = pointer {
         let fine = ui.input(|input| input.modifiers.shift);
-        let fraction = if fine && response.dragged() {
+        let fraction = if fine && dragged {
             range.fraction(*gain) + ui.input(|input| input.pointer.delta().x) / rail.width() * 0.1
         } else {
             (pos.x - rail.left()) / rail.width()
@@ -141,7 +146,7 @@ fn fader_in(
     painter.rect_filled(
         Rect::from_min_max(slot.min, Pos2::new(x, slot.bottom())),
         2.0,
-        if response.hovered() || response.dragged() {
+        if response.hovered() || dragged {
             active
         } else {
             fill

@@ -1,12 +1,10 @@
 //! Editing a clip in the arrangement: its property fields, the context menu,
 //! the handle drags that reshape it, and the keys of the focused lanes.
 use super::*;
-use mixjam_techno::application::{
-    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_TICKS, amplitude_to_db, db_to_amplitude,
+pub(in super::super) use mixjam_techno::application::{
+    CLIP_SILENCE_DB, MAX_CLIP_GAIN, clip_gain_db, clip_gain_from_db, clip_gain_max_db,
 };
-
-/// A clip gain at or below this level is silence.
-pub(in super::super) const CLIP_SILENCE_DB: f32 = -60.0;
+use mixjam_techno::application::{Fade, FadeCurve, MAX_PITCH_CENTS, MAX_TICKS};
 
 /// The lane context menu: what it was opened on, and where.
 #[derive(Default)]
@@ -18,24 +16,6 @@ pub(in super::super) struct ClipMenu {
     pub(in super::super) anchor: Pos2,
     /// Shift+F10 asked for the selected clip's menu; the lanes open it.
     pub(in super::super) by_key: bool,
-}
-
-/// A clip's gain in dB, from `CLIP_SILENCE_DB` for silence to +6 dB.
-pub(in super::super) fn clip_gain_db(gain: f32) -> f32 {
-    if gain > 0.0 {
-        amplitude_to_db(gain).max(CLIP_SILENCE_DB)
-    } else {
-        CLIP_SILENCE_DB
-    }
-}
-
-/// A clip's gain amplitude from dB. `CLIP_SILENCE_DB` and below are silence.
-pub(in super::super) fn clip_gain_from_db(db: f32) -> f32 {
-    if db <= CLIP_SILENCE_DB {
-        0.0
-    } else {
-        db_to_amplitude(db).min(2.0)
-    }
 }
 
 impl MixJamApp {
@@ -83,7 +63,7 @@ impl MixJamApp {
                 if name_control(
                     ui.add(
                         egui::DragValue::new(&mut db)
-                            .range(CLIP_SILENCE_DB..=amplitude_to_db(2.0))
+                            .range(CLIP_SILENCE_DB..=clip_gain_max_db())
                             .speed(0.1)
                             .custom_formatter(|value, _| {
                                 if value <= f64::from(CLIP_SILENCE_DB) {
@@ -201,19 +181,23 @@ impl MixJamApp {
         egui::Popup::open_id(ctx, egui::Popup::default_response_id(response));
     }
 
+    /// The topmost clip whose rectangle holds `pos`.
+    pub(in super::super) fn clip_at(&self, pos: Pos2, rect: Rect) -> Option<&Clip> {
+        self.session
+            .project()
+            .clips
+            .iter()
+            .rev()
+            .find(|clip| self.clip_rect(clip, rect).contains(pos))
+    }
+
     /// The clip and handle under `pos`. A clip whose sound is missing has none.
     pub(in super::super) fn clip_handle_at(
         &self,
         pos: Pos2,
         rect: Rect,
     ) -> Option<(u64, ClipHandle)> {
-        let clip = self
-            .session
-            .project()
-            .clips
-            .iter()
-            .rev()
-            .find(|clip| self.clip_rect(clip, rect).contains(pos))?;
+        let clip = self.clip_at(pos, rect)?;
         let sample = self.session.library().sample_by_id(clip.sample_id)?;
         let handle = handle_at(
             pos,
@@ -232,10 +216,10 @@ impl MixJamApp {
     /// Start, follow, and finish a drag of a clip handle. The clip shows the
     /// change during the drag, and the release makes one edit.
     pub(super) fn handle_drag_step(&mut self, ui: &egui::Ui, response: &Response, rect: Rect) {
+        let start = controls::primary_drag_start(ui, response);
         if self.gestures.handle_drag.is_none()
-            && response.drag_started_by(egui::PointerButton::Primary)
             && !ui.input(|i| i.modifiers.alt || i.modifiers.shift)
-            && let Some(pos) = ui.input(|i| i.pointer.press_origin())
+            && let Some(pos) = start
             && let Some((id, handle)) = self.clip_handle_at(pos, rect)
             && let Some(clip) = self
                 .session
@@ -266,7 +250,7 @@ impl MixJamApp {
                 drag.preview = preview;
             }
         }
-        if (response.drag_stopped() || ui.input(|i| i.pointer.any_released()))
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary))
             && let Some(HandleDrag { clip, preview, .. }) = self.gestures.handle_drag.take()
             && preview != clip
         {
@@ -305,14 +289,9 @@ impl MixJamApp {
         };
         let end = clip.start_tick + clip.length_ticks;
         let shortest = (TICKS_PER_BAR / 16).min(clip.length_ticks);
-        let others = self
-            .session
-            .project()
-            .clips
-            .iter()
-            .filter(|other| other.track == clip.track && other.id != clip.id);
         match drag.handle {
             ClipHandle::Start => {
+                let [previous_end, _] = self.session.project().clip_room(clip);
                 // The left edge can reveal the trimmed start of the sound.
                 let frames_per_tick = frames_per_tick(
                     sample,
@@ -325,12 +304,6 @@ impl MixJamApp {
                 } else {
                     0
                 };
-                let previous_end = others
-                    .filter(|other| other.start_tick < clip.start_tick)
-                    .map(|other| other.start_tick + other.length_ticks)
-                    .max()
-                    .unwrap_or(0)
-                    .min(clip.start_tick);
                 let first = previous_end.max(clip.start_tick.saturating_sub(revealable));
                 let remaining = sample
                     .frame_count
@@ -353,11 +326,7 @@ impl MixJamApp {
                 shaped.fades = clip.fades.fit(shaped.length_ticks);
             }
             ClipHandle::End => {
-                let next_start = others
-                    .filter(|other| other.start_tick > clip.start_tick)
-                    .map(|other| other.start_tick.max(end))
-                    .min()
-                    .unwrap_or(MAX_TICKS);
+                let [_, next_start] = self.session.project().clip_room(clip);
                 let new_end = snap(tick, edge_step).clamp(clip.start_tick + shortest, next_start);
                 shaped.length_ticks = new_end - clip.start_tick;
                 shaped.fades = clip.fades.fit(shaped.length_ticks);
@@ -385,7 +354,8 @@ impl MixJamApp {
                 if steps != 0.0 {
                     let step = if fine { 0.1 } else { 1.0 };
                     shaped.gain = clip_gain_from_db(
-                        (clip_gain_db(clip.gain) + steps * step).clamp(CLIP_SILENCE_DB, 6.0),
+                        (clip_gain_db(clip.gain) + steps * step)
+                            .clamp(CLIP_SILENCE_DB, clip_gain_max_db()),
                     );
                 }
             }
@@ -470,7 +440,7 @@ impl MixJamApp {
 }
 
 /// Ticks in one beat, the unit of the fade controls.
-pub(in super::super) const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
+pub(in super::super) use mixjam_techno::application::TICKS_PER_BEAT;
 
 /// A clip fade's length in beats, at most `room` ticks, and its curve: one
 /// row of the clip properties grid.
@@ -535,7 +505,7 @@ fn pitch_controls(ui: &mut egui::Ui, prefix: &str, cents: &mut i32) -> bool {
             let semitone_change = name_control(
                 ui.add(
                     egui::DragValue::new(&mut semitones)
-                        .range(-24..=24)
+                        .range(-MAX_PITCH_CENTS / 100..=MAX_PITCH_CENTS / 100)
                         .speed(0.1)
                         .suffix(" st"),
                 ),

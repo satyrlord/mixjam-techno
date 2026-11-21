@@ -15,6 +15,7 @@ pub struct Player {
 }
 
 impl Player {
+    #[cfg(test)]
     pub fn new() -> Result<Self, String> {
         Self::new_with_buffer(crate::options::PlaybackBufferTarget::Ms40)
     }

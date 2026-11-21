@@ -68,14 +68,15 @@ pub fn wave_duration_bytes(bytes: &[u8]) -> Result<i32, PlaybackError> {
     Ok(length)
 }
 
-/// Canonical PCM WAV within the native byte range, at an original rate.
-fn admit_wave(bytes: &[u8]) -> Result<crate::wav::PcmWave, PlaybackError> {
+/// Canonical PCM WAV within the native byte range, at an original rate. It
+/// reads the headers only and converts no audio.
+fn admit_wave(bytes: &[u8]) -> Result<crate::wav::WaveInfo, PlaybackError> {
     if bytes.len() as u64 > NATIVE_FILE_BYTES {
         return Err(PlaybackError(
             "WAV file exceeds the native signed byte range".into(),
         ));
     }
-    let wave = crate::wav::PcmWave::parse(bytes).map_err(|e| PlaybackError(e.to_string()))?;
+    let wave = crate::wav::PcmWave::probe(bytes).map_err(|e| PlaybackError(e.to_string()))?;
     if !matches!(wave.sample_rate, 11025 | 22050 | crate::NATIVE_SAMPLE_RATE) {
         return Err(PlaybackError(
             "WAV playback supports 11025, 22050, or 44100 Hz".into(),
@@ -104,6 +105,73 @@ fn admit_path(path: &Path) -> Result<(), PlaybackError> {
         ));
     }
     Ok(())
+}
+
+/// Where the native file loader reads a canonical WAV, and how it expands it.
+struct WaveLayout {
+    bits: u16,
+    /// The byte size of one source frame.
+    align: usize,
+    /// The end of the audio the loader reads.
+    effective: usize,
+    /// How often each source frame is held to reach the native rate.
+    repeat: usize,
+    /// The number of native frames the file yields.
+    total: usize,
+}
+
+/// Admit a canonical PCM WAV for file playback and find its loader layout. It
+/// reads the headers only, so it holds no converted audio.
+fn wave_layout(path: &Path, bytes: &[u8]) -> Result<WaveLayout, PlaybackError> {
+    let wave = admit_wave(bytes)?;
+    admit_path(path)?;
+    let physical = i64::try_from(bytes.len())
+        .map_err(|_| PlaybackError("WAV file exceeds the native signed byte range".into()))?;
+    let riff = i64::from(u32::from_le_bytes(bytes[4..8].try_into().unwrap()));
+    let data = i64::from(u32::from_le_bytes(bytes[40..44].try_into().unwrap()));
+    let mut effective = physical;
+    if riff + riff / 9 > effective && riff > effective / 4 && riff - riff / 9 < effective {
+        effective = riff;
+    }
+    if data * 3 > effective && data > 1000 && data + 9000 > effective && data < effective {
+        effective = data + 44;
+    }
+    if effective < 44 || effective > physical {
+        return Err(PlaybackError(
+            "Native WAV length heuristic exceeds the source file".into(),
+        ));
+    }
+    let bits = u16::from_le_bytes(bytes[34..36].try_into().unwrap());
+    let align = usize::from(wave.channels * (bits / 8));
+    let input_len = effective as usize - 44;
+    if !input_len.is_multiple_of(align) {
+        return Err(PlaybackError(
+            "Native WAV length leaves an incomplete source frame".into(),
+        ));
+    }
+    let repeat = (crate::NATIVE_SAMPLE_RATE / wave.sample_rate) as usize;
+    let count = input_len / align;
+    let total = count
+        .checked_mul(repeat)
+        .ok_or_else(|| PlaybackError("The converted WAV has too many frames.".into()))?;
+    if total == 0 {
+        return Err(PlaybackError(
+            "WAV source has no native playable frames".into(),
+        ));
+    }
+    Ok(WaveLayout {
+        bits,
+        align,
+        effective: effective as usize,
+        repeat,
+        total,
+    })
+}
+
+/// Check a canonical PCM WAV exactly as `FileSample::from_wave` does, without
+/// converting its audio. It returns the same errors.
+pub fn check_wave(path: &Path, bytes: &[u8]) -> Result<(), PlaybackError> {
+    wave_layout(path, bytes).map(drop)
 }
 
 #[derive(Debug)]
@@ -145,50 +213,16 @@ impl FileSample {
     /// Original canonical PCM WAV path: first source lane, half gain, and
     /// nearest sample hold at the admitted 11.025/22.05/44.1 kHz rates.
     pub fn from_wave(path: PathBuf, bytes: &[u8]) -> Result<Self, PlaybackError> {
-        let wave = admit_wave(bytes)?;
-        admit_path(&path)?;
-        let physical = i64::try_from(bytes.len())
-            .map_err(|_| PlaybackError("WAV file exceeds the native signed byte range".into()))?;
-        let riff = i64::from(u32::from_le_bytes(bytes[4..8].try_into().unwrap()));
-        let data = i64::from(u32::from_le_bytes(bytes[40..44].try_into().unwrap()));
-        let mut effective = physical;
-        if riff + riff / 9 > effective && riff > effective / 4 && riff - riff / 9 < effective {
-            effective = riff;
-        }
-        if data * 3 > effective && data > 1000 && data + 9000 > effective && data < effective {
-            effective = data + 44;
-        }
-        if effective < 44 || effective > physical {
-            return Err(PlaybackError(
-                "Native WAV length heuristic exceeds the source file".into(),
-            ));
-        }
-        let bits = u16::from_le_bytes(bytes[34..36].try_into().unwrap());
-        let align = usize::from(wave.channels * (bits / 8));
-        let input = &bytes[44..effective as usize];
-        if !input.len().is_multiple_of(align) {
-            return Err(PlaybackError(
-                "Native WAV length leaves an incomplete source frame".into(),
-            ));
-        }
-        let repeat = (crate::NATIVE_SAMPLE_RATE / wave.sample_rate) as usize;
-        let count = input.len() / align;
-        let total = count
-            .checked_mul(repeat)
-            .ok_or_else(|| PlaybackError("The converted WAV has too many frames.".into()))?;
-        if total == 0 {
-            return Err(PlaybackError(
-                "WAV source has no native playable frames".into(),
-            ));
-        }
-        let mut pcm = Vec::with_capacity(total);
-        for frame in input.chunks_exact(align) {
-            let sample = if bits == 8 {
+        let layout = wave_layout(&path, bytes)?;
+        let input = &bytes[44..layout.effective];
+        let mut pcm = Vec::with_capacity(layout.total);
+        for frame in input.chunks_exact(layout.align) {
+            let sample = if layout.bits == 8 {
                 (i16::from(frame[0]) - 128) * 128
             } else {
                 i16::from_le_bytes(frame[..2].try_into().unwrap()) >> 1
             };
-            pcm.extend(std::iter::repeat_n(sample, repeat));
+            pcm.extend(std::iter::repeat_n(sample, layout.repeat));
         }
         Ok(Self { pcm })
     }
@@ -289,5 +323,42 @@ mod tests {
         let sample = FileSample::from_wave("long.wav".into(), &wav).unwrap();
         assert_eq!(sample.samples().len(), data_bytes as usize / 2);
         assert!(wave_duration_bytes(&wav).unwrap() > 0);
+    }
+
+    #[test]
+    fn check_wave_returns_the_errors_of_from_wave_without_converting() {
+        let wave = |rate: u32, channels: u16, frames: usize| {
+            crate::wav::PcmWave {
+                sample_rate: rate,
+                channels,
+                samples: vec![300; frames * usize::from(channels)],
+            }
+            .encode()
+            .unwrap()
+        };
+        let mut cut = wave(22050, 2, 4);
+        cut.truncate(cut.len() - 3);
+        let mut headless = wave(44100, 1, 4);
+        headless[12..16].copy_from_slice(b"junk");
+        let cases = [
+            wave(44100, 1, 8),
+            wave(22050, 2, 8),
+            wave(11025, 1, 0),
+            wave(48000, 1, 8),
+            wave(44100, 1, 8)[..30].to_vec(),
+            cut,
+            headless,
+            b"RIFF".to_vec(),
+        ];
+        for bytes in cases {
+            let checked = check_wave(Path::new("a.wav"), &bytes);
+            let loaded = FileSample::from_wave("a.wav".into(), &bytes);
+            assert_eq!(
+                checked.map_err(|error| error.0),
+                loaded.map(drop).map_err(|error| error.0)
+            );
+        }
+        let long_path = "x".repeat(200);
+        assert!(check_wave(Path::new(&long_path), &wave(44100, 1, 8)).is_err());
     }
 }

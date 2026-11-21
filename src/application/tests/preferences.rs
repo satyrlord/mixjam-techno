@@ -92,6 +92,31 @@ fn invalid_options_require_explicit_restore_and_future_options_block_writes() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn sections_toggle_works_for_the_session_when_the_options_file_cannot_take_it() {
+    let root = manual_fixture_dir();
+    let path = root.join("options.json");
+    for bytes in ["broken", "{\"schemaVersion\":999}"] {
+        std::fs::write(&path, bytes).unwrap();
+        let mut session = fixture().with_settings_root(root.clone());
+        let shown = session.section_bookmarks_setting();
+        session.remember_section_bookmarks(!shown).unwrap();
+        assert_eq!(session.section_bookmarks_setting(), !shown, "{bytes}");
+        // An open Options window must reload before it applies.
+        assert_eq!(session.options_revision(), 1);
+        // The file waits for Restore all defaults, or for its newer version.
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), bytes);
+    }
+    // A failed write reports the error but keeps the choice for this session.
+    std::fs::remove_file(&path).unwrap();
+    let mut session = fixture().with_settings_root(root.clone());
+    std::fs::create_dir(&path).unwrap();
+    let shown = session.section_bookmarks_setting();
+    assert!(session.remember_section_bookmarks(!shown).is_err());
+    assert_eq!(session.section_bookmarks_setting(), !shown);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(windows)]
 #[test]
 fn options_write_failure_retains_existing_file_and_active_values() {

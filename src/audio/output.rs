@@ -150,33 +150,105 @@ fn requested_buffer(
     Ok(BufferSize::Fixed(frames))
 }
 
+/// Open with the buffer that `target` requests. A fixed target that fails
+/// falls back to the system default buffer, and the reason comes with the
+/// output. When the default buffer fails too, the error keeps both causes.
+fn open_buffered<O>(
+    rate: u32,
+    supported: &SupportedBufferSize,
+    target: PlaybackBufferTarget,
+    mut open: impl FnMut(BufferSize) -> Result<O, String>,
+) -> Result<(O, Option<String>), String> {
+    let error = match requested_buffer(rate, supported, target).and_then(&mut open) {
+        Ok(output) => return Ok((output, None)),
+        Err(error) if target == PlaybackBufferTarget::Automatic => return Err(error),
+        Err(error) => error,
+    };
+    let output = open(BufferSize::Default)
+        .map_err(|second| format!("{error} The system default buffer also failed: {second}"))?;
+    Ok((
+        output,
+        Some(format!(
+            "The requested buffer is unavailable: {error} Using the system default buffer."
+        )),
+    ))
+}
+
+/// Open the first working device in `devices` after the default output,
+/// named `default`, failed with `original`. The output comes with a reason
+/// that names the failure. When no device opens, the error is `original`.
+fn open_other<D, O>(
+    default: Option<&str>,
+    original: String,
+    devices: impl IntoIterator<Item = D>,
+    is_default: impl Fn(&D) -> bool,
+    name: impl Fn(&D) -> Option<String>,
+    mut open: impl FnMut(&D) -> Result<O, String>,
+) -> Result<(O, String), String> {
+    let opened = devices.into_iter().find_map(|device| {
+        if is_default(&device) {
+            return None;
+        }
+        Some((open(&device).ok()?, name(&device)))
+    });
+    let Some((output, other)) = opened else {
+        return Err(original);
+    };
+    let default = default.map_or_else(String::new, |name| format!(" {name}"));
+    let other = other.as_deref().unwrap_or("an unnamed device");
+    Ok((
+        output,
+        format!("The default output{default} did not open: {original} Using {other}."),
+    ))
+}
+
 impl Output {
-    /// Startup can fall back to the system default, with a visible reason.
+    /// Startup can fall back to another device or to the system default
+    /// buffer, with a visible reason.
     pub(crate) fn open_with_target(target: PlaybackBufferTarget) -> Result<Self, String> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
             .ok_or("There is no default audio output device.")?;
-        match Self::open_device(&device, target) {
-            Ok(output) => Ok(output),
-            Err(original) => {
-                flight::log(
-                    "fallback",
-                    format!(
-                        "The default output {} did not open: {original}",
-                        device.name().unwrap_or_default()
-                    ),
-                );
-                host.output_devices()
-                    .ok()
-                    .and_then(|mut devices| {
-                        devices.find_map(|device| Self::open_device(&device, target).ok())
-                    })
-                    .ok_or(original)
-            }
-        }
+        let original = match Self::open_device(&device, target) {
+            Ok(output) => return Ok(output.watched("open")),
+            Err(original) => original,
+        };
+        let default = device.name().ok();
+        flight::log(
+            "fallback",
+            format!(
+                "The default output {} did not open: {original}",
+                default.as_deref().unwrap_or_default()
+            ),
+        );
+        // WASAPI device equality uses endpoint IDs. Several endpoints can
+        // have the same display name.
+        #[cfg(windows)]
+        let is_default = |other: &cpal::Device| {
+            use cpal::platform::DeviceInner::Wasapi;
+            let (Wasapi(current), Wasapi(other)) = (device.as_inner(), other.as_inner());
+            current == other
+        };
+        #[cfg(not(windows))]
+        let is_default = |_: &cpal::Device| false;
+        let (mut output, reason) = open_other(
+            default.as_deref(),
+            original,
+            host.output_devices().into_iter().flatten(),
+            is_default,
+            |device| device.name().ok(),
+            |device| Self::open_device(device, target),
+        )?;
+        output.fallback_reason = Some(match output.fallback_reason.take() {
+            Some(buffer) => format!("{reason} {buffer}"),
+            None => reason,
+        });
+        Ok(output.watched("open"))
     }
 
+    /// Open `device` in its default format, or else in another it supports.
+    /// The caller starts watching the output.
     fn open_device(device: &cpal::Device, target: PlaybackBufferTarget) -> Result<Self, String> {
         let default = device.default_output_config().map_err(|e| e.to_string())?;
         let original = match Self::open_supported(device, default, target) {
@@ -218,23 +290,15 @@ impl Output {
         format: SupportedStreamConfig,
         target: PlaybackBufferTarget,
     ) -> Result<Self, String> {
-        let attempt = requested_buffer(format.sample_rate().0, format.buffer_size(), target)
-            .and_then(|requested| Self::open_format(device, &format, requested));
-        match attempt {
-            Ok(mut output) => {
-                output.target = target;
-                Ok(output.watched("open"))
-            }
-            Err(error) if target != PlaybackBufferTarget::Automatic => {
-                let mut output = Self::open_format(device, &format, BufferSize::Default)?;
-                output.target = target;
-                output.fallback_reason = Some(format!(
-                    "The requested buffer is unavailable: {error} Using the system default buffer."
-                ));
-                Ok(output.watched("open"))
-            }
-            Err(error) => Err(error),
-        }
+        let (mut output, reason) = open_buffered(
+            format.sample_rate().0,
+            format.buffer_size(),
+            target,
+            |buffer| Self::open_format(device, &format, buffer),
+        )?;
+        output.target = target;
+        output.fallback_reason = reason;
+        Ok(output)
     }
 
     fn described(&self) -> Described {
@@ -601,6 +665,143 @@ mod tests {
         assert_eq!(
             requested_buffer(48_000, &supported, PlaybackBufferTarget::Ms40),
             Ok(BufferSize::Fixed(1920))
+        );
+    }
+
+    #[test]
+    fn a_failed_default_buffer_keeps_the_requested_buffers_error() {
+        let refuse = |buffer: BufferSize| Err::<(), _>(format!("{buffer:?} refused."));
+        let error = open_buffered(
+            48_000,
+            &SupportedBufferSize::Unknown,
+            PlaybackBufferTarget::Ms40,
+            refuse,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "Fixed(1920) refused. The system default buffer also failed: Default refused."
+        );
+        // The default buffer opens, and the output says why it has it.
+        let (opened, reason) = open_buffered(
+            48_000,
+            &SupportedBufferSize::Unknown,
+            PlaybackBufferTarget::Ms20,
+            |buffer| match buffer {
+                BufferSize::Default => Ok(buffer),
+                BufferSize::Fixed(_) => Err("The device is busy.".to_owned()),
+            },
+        )
+        .unwrap();
+        assert_eq!(opened, BufferSize::Default);
+        assert_eq!(
+            reason.as_deref(),
+            Some(
+                "The requested buffer is unavailable: The device is busy. \
+                 Using the system default buffer."
+            )
+        );
+        // A known range rejects the target without an attempt.
+        let mut asked = Vec::new();
+        let (_, reason) = open_buffered(
+            48_000,
+            &SupportedBufferSize::Range { min: 128, max: 512 },
+            PlaybackBufferTarget::Ms40,
+            |buffer| {
+                asked.push(buffer);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(asked, [BufferSize::Default]);
+        assert!(reason.unwrap().contains("128 to 512 frames"));
+        // Automatic asks for the default buffer once, and keeps its error.
+        let mut asked = Vec::new();
+        let error = open_buffered(
+            48_000,
+            &SupportedBufferSize::Unknown,
+            PlaybackBufferTarget::Automatic,
+            |buffer| {
+                asked.push(buffer);
+                Err::<(), _>("The device is gone.".to_owned())
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, "The device is gone.");
+        assert_eq!(asked, [BufferSize::Default]);
+        // A target that opens has no reason.
+        let (opened, reason) = open_buffered(
+            48_000,
+            &SupportedBufferSize::Unknown,
+            PlaybackBufferTarget::Ms40,
+            Ok::<_, String>,
+        )
+        .unwrap();
+        assert_eq!((opened, reason), (BufferSize::Fixed(1920), None));
+    }
+
+    #[test]
+    fn the_fallback_skips_the_failed_default_and_names_its_failure() {
+        let devices = [(1, "Speakers"), (2, "Headphones"), (3, "Speakers")];
+        let is_default = |device: &(i32, &str)| device.0 == 1;
+        let name = |device: &(i32, &str)| Some(device.1.to_owned());
+        let mut tried = Vec::new();
+        let (opened, reason) = open_other(
+            Some("Speakers"),
+            "The device is in use.".to_owned(),
+            devices,
+            is_default,
+            name,
+            |device| {
+                tried.push(device.0);
+                if device.0 == 3 {
+                    Ok(device.0)
+                } else {
+                    Err("Refused.".to_owned())
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(opened, 3);
+        assert_eq!(tried, [2, 3]);
+        assert_eq!(
+            reason,
+            "The default output Speakers did not open: The device is in use. Using Speakers."
+        );
+        // No other device opens: the error is the default's.
+        let mut tried = Vec::new();
+        let error = open_other(
+            Some("Speakers"),
+            "The device is in use.".to_owned(),
+            devices,
+            is_default,
+            name,
+            |device| {
+                tried.push(device.0);
+                Err::<(), _>("Refused.".to_owned())
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, "The device is in use.");
+        assert_eq!(tried, [2, 3]);
+        // An unnamed default is skipped by identity too.
+        let mut tried = Vec::new();
+        let (_, reason) = open_other(
+            None,
+            "No name.".to_owned(),
+            devices,
+            is_default,
+            |_| None,
+            |device| {
+                tried.push(device.0);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(tried, [2]);
+        assert_eq!(
+            reason,
+            "The default output did not open: No name. Using an unnamed device."
         );
     }
 

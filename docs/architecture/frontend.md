@@ -141,7 +141,7 @@ are wanted. The measured window tells which fit together. If there is a tie,
 the order in which they were opened decides. `src/ui/room.rs` never changes the
 saved layout.
 
-`src/ui/inspector.rs` draws the Inspector, and `src/ui/inspector/clip.rs` its
+`src/ui/inspector.rs` draws the Inspector, and `src/ui/inspector/clip/` its
 clip pages. Its page follows the clip and track selection. Its fields use the
 Mixer controls and the clip painting under their own names, and edit through
 `SetTrack`, `SetClip`, and `SetClipSounds`, which sets the gain, fades, pitch,
@@ -179,4 +179,5 @@ When a new fixed song folder is applied, it must be an absolute folder that
 exists. If a configured folder later becomes unavailable, it stays configured.
 The song dialogs report it and use the last-used or default location. While
 that folder is unavailable, unrelated preferences and an Apply that changes
-nothing stay available.
+nothing stay available. The draft checks the typed folder a maximum of once
+each second for the same values. Apply always checks it again.

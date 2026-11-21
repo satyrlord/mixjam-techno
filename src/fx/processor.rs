@@ -7,9 +7,10 @@
 //! limiter's lookahead, so their sound arrives in time. A drive has no delay
 //! to shorten, and its return sums with the dry sound it came from, so the
 //! drive's bus adds no latency: an instant ceiling replaces the lookahead.
-use super::parts::{Glide, SafetyLimiter, ceiling};
+use super::parts::{SafetyLimiter, ceiling};
 use super::{BUSES, FxBus, FxBuses, Module, delay, distortion, reverb};
 use crate::master::MasterControl;
+use crate::master::dsp::Smoothed;
 use std::sync::Arc;
 
 /// The safety limiters' lookahead: 5 ms. A delay's or a reverb's return is
@@ -59,8 +60,8 @@ struct Bus {
     kind: Kind,
     settings: FxBus,
     /// The input switch, gliding so a switch does not click.
-    input: Glide,
-    level: Glide,
+    input: Smoothed,
+    level: Smoothed,
     limiter: SafetyLimiter,
     awake: bool,
     quiet: usize,
@@ -80,8 +81,8 @@ impl Bus {
             drive: distortion::Core::new(),
             kind: Kind::Empty,
             settings: FxBus::default(),
-            input: Glide::new(1.0, 0.003),
-            level: Glide::new(0.0, 0.005),
+            input: Smoothed::with_time(1.0, 0.003),
+            level: Smoothed::with_time(0.0, 0.005),
             limiter: SafetyLimiter::new(),
             awake: false,
             quiet: 0,
@@ -146,6 +147,15 @@ impl Bus {
         self.quiet = 0;
         self.slept = 0;
     }
+    /// Sleep, end any cut, and take the effect that waited for the cut. A
+    /// cut left running would fade the next input after the bus wakes.
+    fn sleep(&mut self, bpm: f64) {
+        self.cut = 0;
+        self.silence();
+        if let Some(settings) = self.pending.take() {
+            self.apply(&settings, bpm, false);
+        }
+    }
     fn clear_tail(&mut self) {
         if self.awake && self.cut == 0 {
             self.cut = CUT;
@@ -194,30 +204,29 @@ impl Bus {
         // The lane moves at every frame, in straight lines, so it has no
         // steps. The level's glide starts from the lane's value when a new
         // lane leaves it.
-        let mut level = match lane {
+        let level = match lane {
             Some(value) => {
                 self.level.hold(value);
                 value
             }
             None => self.level.next(),
         };
-        if self.cut > 0 {
-            level *= self.cut as f64 / CUT as f64;
-            self.cut -= 1;
-            if self.cut == 0 {
-                self.silence();
-                if let Some(settings) = self.pending.take() {
-                    self.apply(&settings, bpm, false);
-                }
-                return (0.0, 0.0);
-            }
-        }
-        let out = if self.kind == Kind::Drive {
+        let mut out = if self.kind == Kind::Drive {
             ceiling(wet_l * level, wet_r * level, self.settings.limiter)
         } else {
             self.limiter
                 .process(wet_l * level, wet_r * level, self.settings.limiter)
         };
+        if self.cut > 0 {
+            self.cut -= 1;
+            if self.cut == 0 {
+                self.sleep(bpm);
+                return (0.0, 0.0);
+            }
+            let scale = self.cut as f64 / CUT as f64;
+            out.0 *= scale;
+            out.1 *= scale;
+        }
         let (activity, wait) = match self.kind {
             Kind::Delay => (self.delay.activity(), SLEEP_AFTER + self.delay.silent_gap()),
             Kind::Reverb => (self.reverb.activity(), SLEEP_AFTER),
@@ -229,7 +238,7 @@ impl Bus {
         } else {
             self.quiet += 1;
             if self.quiet > wait {
-                self.silence();
+                self.sleep(bpm);
             }
         }
         out
@@ -364,18 +373,10 @@ impl ReturnsProcessor {
     ) {
         self.poll();
         if sends.is_some() || self.ringing() {
-            let bpm = self.bpm;
             let mut slots = self.key_slots(&keys);
             for (frame, out) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                 let mut sum = (0.0, 0.0);
-                for (index, bus) in self.buses.iter_mut().enumerate() {
-                    let (left, right) = sends.map_or((0.0, 0.0), |sends| {
-                        let at = frame * 2 * BUSES + index * 2;
-                        (f64::from(sends[at]), f64::from(sends[at + 1]))
-                    });
-                    let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                    let lane = lane_at(lanes, index, frame, bus.kind.latency());
-                    let (l, r) = bus.process(left, right, key, lane, bpm);
+                for (l, r) in self.frame(frame, sends, &keys, &mut slots, lanes) {
                     sum.0 += l;
                     sum.1 += r;
                 }
@@ -385,6 +386,29 @@ impl ReturnsProcessor {
         } else {
             self.sleep_through(block.len() / 2);
         }
+    }
+    /// Each bus's return for one frame of the block, in bus order.
+    #[inline]
+    fn frame(
+        &mut self,
+        frame: usize,
+        sends: Option<&[f32]>,
+        keys: &crate::ducker::Keys,
+        slots: &mut [KeySlot; BUSES],
+        lanes: Lanes,
+    ) -> [(f64, f64); BUSES] {
+        let bpm = self.bpm;
+        let mut returns = [(0.0, 0.0); BUSES];
+        for (index, (bus, out)) in self.buses.iter_mut().zip(&mut returns).enumerate() {
+            let (left, right) = sends.map_or((0.0, 0.0), |sends| {
+                let at = frame * 2 * BUSES + index * 2;
+                (f64::from(sends[at]), f64::from(sends[at + 1]))
+            });
+            let key = slots[index].frame(keys, bus.duck_key(), frame);
+            let lane = lane_at(lanes, index, frame, bus.kind.latency());
+            *out = bus.process(left, right, key, lane, bpm);
+        }
+        returns
     }
     /// Every bus sleeps through a block that no bus processes.
     fn sleep_through(&mut self, frames: usize) {
@@ -409,7 +433,6 @@ impl ReturnsProcessor {
             self.sleep_through(returns.len() / (2 * BUSES));
             return;
         }
-        let bpm = self.bpm;
         let mut slots = self.key_slots(&keys);
         for (frame, out) in returns
             .as_chunks_mut::<{ 2 * BUSES }>()
@@ -417,16 +440,9 @@ impl ReturnsProcessor {
             .iter_mut()
             .enumerate()
         {
-            for (index, bus) in self.buses.iter_mut().enumerate() {
-                let (left, right) = sends.map_or((0.0, 0.0), |sends| {
-                    let at = frame * 2 * BUSES + index * 2;
-                    (f64::from(sends[at]), f64::from(sends[at + 1]))
-                });
-                let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                let lane = lane_at(lanes, index, frame, bus.kind.latency());
-                let (l, r) = bus.process(left, right, key, lane, bpm);
-                out[index * 2] = l as f32;
-                out[index * 2 + 1] = r as f32;
+            let frame = self.frame(frame, sends, &keys, &mut slots, lanes);
+            for (out, (l, r)) in out.as_chunks_mut::<2>().0.iter_mut().zip(frame) {
+                *out = [l as f32, r as f32];
             }
         }
     }
@@ -848,6 +864,43 @@ mod tests {
         );
     }
 
+    /// A bus that falls asleep during a cut ends the cut and takes the
+    /// effect that waited for it, so the next input starts at full level.
+    #[test]
+    fn a_bus_that_sleeps_during_a_cut_wakes_without_it() {
+        let drive = FxBus {
+            module: Module::EmberformDrive(crate::fx::Emberform::default()),
+            ..FxBus::default()
+        };
+        let reverb = FxBus {
+            module: Module::AetherformReverb(Aetherform::default()),
+            ..FxBus::default()
+        };
+        for change in [false, true] {
+            let mut bus = Bus::new();
+            bus.apply(&drive, 120.0, true);
+            for _ in 0..64 {
+                bus.process(0.5, 0.5, None, None, 120.0);
+            }
+            while bus.awake && bus.quiet < SLEEP_AFTER {
+                bus.process(0.0, 0.0, None, None, 120.0);
+            }
+            assert!(bus.awake, "the drive has gone quiet but still wakes");
+            if change {
+                bus.apply(&reverb, 120.0, false);
+            } else {
+                bus.clear_tail();
+            }
+            assert_eq!(bus.cut, CUT);
+            bus.process(0.0, 0.0, None, None, 120.0);
+            assert!(!bus.awake, "the bus sleeps on its quiet timeout");
+            assert_eq!(bus.cut, 0, "a sleeping bus has no cut left");
+            assert!(bus.pending.is_none());
+            let expected = if change { Kind::Reverb } else { Kind::Drive };
+            assert!(bus.kind == expected, "the waiting effect is taken");
+        }
+    }
+
     #[test]
     fn clear_tail_and_a_change_of_effect_cut_the_tail_quickly() {
         let control = MasterControl::new(&crate::master::MasterChain::default());
@@ -867,5 +920,44 @@ mod tests {
         let out = feed(&mut processor, 4096, |_| 0.0);
         let after = out[2 * 1500..].iter().fold(0.0_f32, |a, v| a.max(v.abs()));
         assert_eq!(after, 0.0);
+    }
+
+    #[test]
+    fn clear_tail_and_effect_changes_fade_to_zero_without_a_jump() {
+        for swap in [false, true] {
+            let control = MasterControl::new(&crate::master::MasterChain::default());
+            let reverb = Aetherform {
+                decay_seconds: 20.0,
+                ..Aetherform::default()
+            };
+            control.set_returns(&buses(Module::AetherformReverb(reverb)));
+            let mut processor = ReturnsProcessor::live(control.clone(), 120.0);
+            feed(&mut processor, 8000, |i| {
+                if i < 4000 {
+                    (i as f32 * 0.05).sin() * 0.8
+                } else {
+                    0.0
+                }
+            });
+            if swap {
+                control.set_returns(&FxBuses::default());
+            } else {
+                control.clear_tail(0);
+            }
+            let out = feed(&mut processor, 1024, |_| 0.0);
+            let last_non_zero = out
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .rposition(|frame| frame[0] != 0.0 || frame[1] != 0.0)
+                .expect("the tail must fade out over the cut window");
+            let end_peak = out[last_non_zero * 2]
+                .abs()
+                .max(out[last_non_zero * 2 + 1].abs());
+            assert!(
+                end_peak < 0.01,
+                "swap={swap}: last frame before silence was {end_peak}"
+            );
+        }
     }
 }

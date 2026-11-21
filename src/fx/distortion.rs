@@ -15,9 +15,11 @@
 //! delay of its own. The curve means lag half a frame, and the filters
 //! shift the phase as an analog stage would. The bus replaces its safety
 //! limiter's lookahead with an instant ceiling.
-use super::parts::{Ducker, Glide, OnePole, widen};
+use super::parts::{Ducker, OnePole, widen};
 use super::{DistortionShape, Emberform};
-use crate::master::dsp::{DcBlocker, RATE, db_to_gain, flush, pole};
+use crate::master::dsp::{
+    DcBlocker, POWER_FLOOR, PowerDetector, RATE, Smoothed, db_to_gain, log_cosh, pole,
+};
 use std::f64::consts::PI;
 
 /// A shape change crossfades between the old and new curves over 10 ms.
@@ -26,17 +28,8 @@ const FADE: usize = 441;
 const LEVEL_TIME: f64 = 0.1;
 /// How far the level match may move the result, either way, in dB.
 const MATCH_DB: f64 = 18.0;
-/// A power far below hearing, so that silence divides by nothing.
-const FLOOR: f64 = 1e-12;
 /// The offset at full asymmetry, in the curve's units.
 const FULL_BIAS: f64 = 0.6;
-
-/// `ln cosh x`, the antiderivative of `tanh`, without overflow.
-#[inline]
-fn log_cosh(x: f64) -> f64 {
-    let size = x.abs();
-    size + (-2.0 * size).exp().ln_1p() - std::f64::consts::LN_2
-}
 
 impl DistortionShape {
     /// The extra gain the shape puts before its curve.
@@ -123,20 +116,6 @@ impl DistortionShape {
     }
 }
 
-/// A power detector: two one-pole stages in a row, which smooth the ripple
-/// of a low note far better than one stage with the same response time.
-#[derive(Clone, Copy, Default)]
-struct Detector([f64; 2]);
-impl Detector {
-    #[inline]
-    fn follow(&mut self, power: f64, pole: f64) -> f64 {
-        let [first, second] = &mut self.0;
-        *first = flush(power + (*first - power) * pole);
-        *second = flush(*first + (*second - *first) * pole);
-        *second
-    }
-}
-
 /// One channel's history.
 #[derive(Clone, Copy)]
 struct Side {
@@ -175,22 +154,22 @@ pub(super) struct Core {
     step: f64,
     /// The crusher's steps on each side of zero.
     levels: f64,
-    tape: Glide,
-    gain: Glide,
-    bias: Glide,
-    width: Glide,
-    output: Glide,
-    duck: Glide,
+    tape: Smoothed,
+    gain: Smoothed,
+    bias: Smoothed,
+    width: Smoothed,
+    output: Smoothed,
+    duck: Smoothed,
     ducker: Ducker,
     dc_pole: f64,
     level_pole: f64,
-    detectors: [Detector; 2],
+    detectors: [PowerDetector; 2],
     activity: f64,
 }
 
 impl Core {
     pub(super) fn new() -> Self {
-        let smooth = |value| Glide::new(value, 0.005);
+        let smooth = |value| Smoothed::with_time(value, 0.005);
         Self {
             sides: [Side::default(); 2],
             shape: DistortionShape::Tube,
@@ -199,7 +178,7 @@ impl Core {
             phase: 0.0,
             step: 1.0,
             levels: 128.0,
-            tape: Glide::new(0.0, 0.01),
+            tape: Smoothed::with_time(0.0, 0.01),
             gain: smooth(1.0),
             bias: smooth(0.0),
             width: smooth(1.0),
@@ -208,7 +187,7 @@ impl Core {
             ducker: Ducker::new(),
             dc_pole: pole(1.0 / (2.0 * PI * 5.0)),
             level_pole: pole(LEVEL_TIME),
-            detectors: [Detector::default(); 2],
+            detectors: [PowerDetector::default(); 2],
             activity: 0.0,
         }
     }
@@ -277,7 +256,7 @@ impl Core {
         }
         self.phase = 0.0;
         self.ducker.clear();
-        self.detectors = [Detector::default(); 2];
+        self.detectors = [PowerDetector::default(); 2];
         self.activity = 0.0;
         self.rest();
     }
@@ -378,7 +357,7 @@ impl Core {
             wet_power.follow(power(wet), self.level_pole),
         );
         let limit = db_to_gain(MATCH_DB);
-        let matched = ((heard + FLOOR) / (made + FLOOR))
+        let matched = ((heard + POWER_FLOOR) / (made + POWER_FLOOR))
             .sqrt()
             .clamp(1.0 / limit, limit);
         let mut out = [0.0; 2];

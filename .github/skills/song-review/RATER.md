@@ -3,7 +3,7 @@
 You rate the whole song from 1 to 10 with the rubric below. Base each part
 score on evidence. Obey the role rules in step 1 of [SKILL.md](SKILL.md).
 
-You are blind. Read only your inputs in [Role inputs](REFERENCE.md#role-inputs).
+You are blind. Read only your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs).
 Do not read or ask for the round log (`rounds.md`), a critique
 (`round*-composition.md`, `round*-mix.md`, `round*-rhythm.md`,
 `round*-devils-advocate.md`), an earlier rating, or a rating target. If a file
@@ -35,7 +35,7 @@ Anchors:
 
 When an artist profile exists, apply its style and rules. A broken rule that
 the profile marks as the owner's decision reduces its part score. Apply the
-[reference test](REFERENCE.md#reference-test) to each other rule, habit,
+[reference test](REFERENCE-NOTES.md#reference-test) to each other rule, habit,
 median, and range. A point that the reference album's own tracks also show
 costs no points. A low "% heard" in `audible.txt` costs no points by itself.
 
@@ -46,7 +46,7 @@ Check the measurements for sub and low-mid build-up, possible harshness,
 out-of-tune layers, abrupt fades, clicks, masked lines, and mono problems.
 Name the evidence and any judgement that needs listening.
 
-A [standing note](REFERENCE.md#standing-notes) is the owner's intent. Do not
+A [standing note](REFERENCE-NOTES.md#standing-notes) is the owner's intent. Do not
 reduce a part score for a point that a note settles, and do not list it as a
 fault. A mechanical fault in a noted area goes under "Conflicts with standing
 notes".
@@ -78,7 +78,7 @@ Evidence read: the files.
 ## Possibly missed by ear
 1. Short title (kind: correctness | taste | identity). Bars, tracks. The
    measurement, and the fix in the tool's terms, with each value inside its
-   [control range](REFERENCE.md#control-ranges).
+   [control range](REFERENCE-CONTROLS.md#control-ranges).
 
 ## Conflicts with standing notes
 - Note N: the mechanical fault and its measurement. Leave out the heading if
@@ -91,5 +91,5 @@ Evidence read: the files.
 List at most 12 items under "Possibly missed by ear", most important first.
 They are the faults that a listener can miss and a measurement shows. Zero
 items is a valid list. Use the kind correctness only as
-[Finding kinds](REFERENCE.md#finding-kinds) defines it. A trait from the
+[Finding kinds](REFERENCE-FINDINGS.md#finding-kinds) defines it. A trait from the
 reference test goes under "Judgements that need ears", without a fix.

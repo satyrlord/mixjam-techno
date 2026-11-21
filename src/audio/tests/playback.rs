@@ -281,7 +281,7 @@ fn playback_quality_keeps_key_alignment_seeks_loops_and_export_boundary() {
 /// compressor, and a ducker keyed by another lane, a narrowed lane with
 /// filter automation, a lane with volume automation, sends to a delay
 /// whose tail dies and to a reverb, and master pedals, one of them keyed.
-fn busy_song() -> (Project, HashMap<u32, Pcm>) {
+pub(super) fn busy_song() -> (Project, HashMap<u32, Pcm>) {
     let mut editor = crate::engine::Editor::new(Project::default());
     editor.place(1, 0, 0, 256).unwrap();
     editor.place(2, 1, 64, 192).unwrap();

@@ -335,7 +335,7 @@ impl Library {
         Ok(library)
     }
 
-    fn open_archive(
+    pub(super) fn open_archive(
         product: Product,
         root: &Path,
         samples_root: &Path,
@@ -345,7 +345,14 @@ impl Library {
         let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
         let packed = packed_folder(&root);
         let archive_path = packed.join(archive_name);
-        let index = fs::read(packed.join(format!("{archive_name}.inf")))
+        let index_path = packed.join(format!("{archive_name}.inf"));
+        let index_length = fs::metadata(&index_path)
+            .map_err(|e| format!("Cannot read the original sample index: {e}"))?
+            .len();
+        if index_length > crate::catalog::MAX_CATALOG_TEXT_BYTES {
+            return Err("The sample index exceeds its size limit.".into());
+        }
+        let index = fs::read(index_path)
             .map_err(|e| format!("Cannot read the original sample index: {e}"))?;
         let text = decode_1252(&index);
         let lines: Vec<_> = text.lines().collect();
@@ -356,6 +363,9 @@ impl Library {
             + 1;
         if (lines.len() - start) % 12 != 0 {
             return Err("The sample index has an incomplete record.".into());
+        }
+        if (lines.len() - start) / 12 > crate::catalog::MAX_INDEX_RECORDS {
+            return Err("The sample index lists too many records.".into());
         }
         let mut archive = fs::File::open(&archive_path)
             .map_err(|e| format!("Cannot read the original sample archive: {e}"))?;
@@ -500,6 +510,9 @@ fn map_waves(samples: &mut [Sample], embedded_names: &[String], root: &Path) -> 
         }) else {
             continue;
         };
+        let Ok(frames) = u32::try_from(layout.frames()) else {
+            continue;
+        };
         let spec = layout.spec;
         let key = (canonical_group(&entry.channel), compact_name(&entry.alias));
         lookup.entry(key).or_default().push((
@@ -507,7 +520,7 @@ fn map_waves(samples: &mut [Sample], embedded_names: &[String], root: &Path) -> 
             slug(&entry.alias),
             spec.sample_rate,
             spec.channels,
-            layout.frames() as u32,
+            frames,
         ));
     }
     let mut used_paths = HashSet::new();

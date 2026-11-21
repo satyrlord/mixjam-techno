@@ -1,7 +1,6 @@
 //! Automation lanes and FX return lanes in the arrangement: their points,
 //! their line, and the gestures that add, move, and delete a point.
 use super::*;
-use mixjam_techno::application::MAX_TICKS;
 
 impl MixJamApp {
     /// Draw FX bus `bus`'s return lane across the visible rows and edit its
@@ -21,8 +20,9 @@ impl MixJamApp {
         let row = return_row(rect, visible);
         let bar_width = self.score.bar_width;
         let x = |tick: u32| rect.left() + tick as f32 / TICKS_PER_BAR as f32 * bar_width;
-        let points = self.session.project().return_automation[bus].clone();
-        let knob = self.session.project().fx.buses[bus].return_level;
+        let project = self.session.project();
+        let points = &project.return_automation[bus];
+        let knob = project.fx.buses[bus].return_level;
         painter.text(
             Pos2::new(visible.left() + 8.0, visible.top() + 4.0),
             Align2::LEFT_TOP,
@@ -60,19 +60,9 @@ impl MixJamApp {
                 line,
                 Stroke::new(1.6_f32, roles().accent),
             ));
-            for (index, point) in markers.iter().enumerate() {
-                let active = self.gestures.automation_drag == Some((bus, index));
-                let hovered = pointer.is_some_and(|pos| point.distance(pos) <= AUTOMATION_REACH);
-                if hovered {
-                    hit = Some(index);
-                }
-                painter.circle(
-                    *point,
-                    if active || hovered { 4.5 } else { 3.5 },
-                    if active { roles().text } else { roles().accent },
-                    Stroke::new(1.0_f32, roles().canvas),
-                );
-            }
+            hit = draw_markers(painter, &markers, pointer, |index| {
+                self.gestures.automation_drag == Some((bus, index))
+            });
         }
         if let Some(index) = self
             .gestures
@@ -95,13 +85,16 @@ impl MixJamApp {
                     <= AUTOMATION_REACH
             })
         };
+        let grabbed =
+            |app: &Self, pos: Pos2| hit_at(pos, &app.session.project().return_automation[bus]);
         // A click adds a point; a drag from the lane adds one and moves it.
-        if response.drag_started()
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        let start = controls::primary_drag_start(ui, response);
+        if self.gestures.automation_drag.is_none()
+            && let Some(origin) = start
         {
             match self.session.begin_return_gesture(bus) {
                 Ok(()) => {
-                    self.gestures.automation_drag = hit_at(origin, &points)
+                    self.gestures.automation_drag = grabbed(self, origin)
                         .or_else(|| self.return_add(origin, rect, row, bus, free))
                         .map(|index| (bus, index));
                     if self.gestures.automation_drag.is_none() {
@@ -112,26 +105,14 @@ impl MixJamApp {
             }
         }
         if let Some((_, index)) = self.gestures.automation_drag {
-            if response.dragged()
+            if ui.input(|i| i.pointer.primary_down())
                 && let Some(pos) = pointer
             {
                 let mut points = self.session.project().return_automation[bus].clone();
                 if index < points.len() {
-                    let low = index
-                        .checked_sub(1)
-                        .map_or(0, |before| points[before].tick + 1);
-                    let high = points
-                        .get(index + 1)
-                        .map_or(MAX_TICKS, |after| after.tick - 1);
                     let tick = self.automation_tick(pos.x, rect, free);
-                    let point = automation::Point {
-                        tick: if low <= high {
-                            tick.clamp(low, high)
-                        } else {
-                            points[index].tick
-                        },
-                        value: return_value(pos.y, row),
-                    };
+                    let point =
+                        automation::moved_point(&points, index, tick, return_value(pos.y, row));
                     if points[index] != point {
                         points[index] = point;
                         let result = self
@@ -141,17 +122,18 @@ impl MixJamApp {
                     }
                 }
             }
-            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            if !ui.input(|i| i.pointer.primary_down()) {
                 self.gestures.automation_drag = None;
                 self.session.end_automation_gesture();
             }
         }
-        if let Some(pos) = response.interact_pointer_pos() {
-            let points = self.session.project().return_automation[bus].clone();
-            let hit = hit_at(pos, &points);
+        if self.gestures.automation_drag.is_none()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let hit = grabbed(self, pos);
             if response.double_clicked() || response.secondary_clicked() {
                 if let Some(index) = hit {
-                    let mut points = points;
+                    let mut points = self.session.project().return_automation[bus].clone();
                     points.remove(index);
                     let result = self
                         .session
@@ -180,12 +162,7 @@ impl MixJamApp {
         let tick = self.automation_tick(pos.x, rect, free);
         let value = return_value(pos.y, row);
         let mut points = self.session.project().return_automation[bus].clone();
-        let index = points.partition_point(|point| point.tick < tick);
-        if points.get(index).is_some_and(|point| point.tick == tick) {
-            points[index].value = value;
-        } else {
-            points.insert(index, automation::Point { tick, value });
-        }
+        let index = automation::set_point(&mut points, tick, value);
         let result = self
             .session
             .edit(EditCommand::SetReturnAutomation { bus, points });
@@ -228,7 +205,6 @@ impl MixJamApp {
         let project = self.session.project();
         let mut hit = None;
         let pointer = ui.input(|i| i.pointer.latest_pos());
-        let near = |a: Pos2, b: Pos2| a.distance(b) <= AUTOMATION_REACH;
         for &track in tracks {
             let Some(row) = self.automation_row(track, rect) else {
                 continue;
@@ -280,18 +256,10 @@ impl MixJamApp {
                 line,
                 Stroke::new(1.6_f32, roles().accent),
             ));
-            for (index, point) in markers.iter().enumerate() {
-                let active = self.gestures.automation_drag == Some((track, index));
-                let hovered = pointer.is_some_and(|pos| near(*point, pos));
-                if hovered {
-                    hit = Some((track, index));
-                }
-                painter.circle(
-                    *point,
-                    if active || hovered { 4.5 } else { 3.5 },
-                    if active { roles().text } else { roles().accent },
-                    Stroke::new(1.0_f32, roles().canvas),
-                );
+            if let Some(index) = draw_markers(painter, &markers, pointer, |index| {
+                self.gestures.automation_drag == Some((track, index))
+            }) {
+                hit = Some((track, index));
             }
         }
         if let Some((track, index)) = self.gestures.automation_drag.or(hit)
@@ -306,8 +274,9 @@ impl MixJamApp {
         }
         let free = ui.input(|i| i.modifiers.ctrl);
         // A click on a lane adds a point; a drag from a lane adds one and moves it.
-        if response.drag_started()
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        let start = controls::primary_drag_start(ui, response);
+        if self.gestures.automation_drag.is_none()
+            && let Some(origin) = start
         {
             let hit = self.automation_hit(origin, rect, lane, tracks);
             let track = hit.map(|(track, _)| track).or_else(|| {
@@ -328,7 +297,7 @@ impl MixJamApp {
             }
         }
         if let Some((track, index)) = self.gestures.automation_drag {
-            if response.dragged()
+            if ui.input(|i| i.pointer.primary_down())
                 && let Some(pos) = pointer
                 && let Some(row) = self.automation_row(track, rect)
             {
@@ -337,21 +306,13 @@ impl MixJamApp {
                     .lane(lane)
                     .to_vec();
                 if index < points.len() {
-                    let low = index
-                        .checked_sub(1)
-                        .map_or(0, |before| points[before].tick + 1);
-                    let high = points
-                        .get(index + 1)
-                        .map_or(MAX_TICKS, |after| after.tick - 1);
                     let tick = self.automation_tick(pos.x, rect, free);
-                    let point = automation::Point {
-                        tick: if low <= high {
-                            tick.clamp(low, high)
-                        } else {
-                            points[index].tick
-                        },
-                        value: automation_value(lane, pos.y, row),
-                    };
+                    let point = automation::moved_point(
+                        &points,
+                        index,
+                        tick,
+                        automation_value(lane, pos.y, row),
+                    );
                     if points[index] != point {
                         points[index] = point;
                         let result = self.session.edit(EditCommand::SetAutomation {
@@ -363,12 +324,14 @@ impl MixJamApp {
                     }
                 }
             }
-            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            if !ui.input(|i| i.pointer.primary_down()) {
                 self.gestures.automation_drag = None;
                 self.session.end_automation_gesture();
             }
         }
-        if let Some(pos) = response.interact_pointer_pos() {
+        if self.gestures.automation_drag.is_none()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
             let hit = self.automation_hit(pos, rect, lane, tracks);
             if response.double_clicked() || response.secondary_clicked() {
                 if let Some((track, index)) = hit {
@@ -436,12 +399,7 @@ impl MixJamApp {
             .automation
             .lane(lane)
             .to_vec();
-        let index = points.partition_point(|point| point.tick < tick);
-        if points.get(index).is_some_and(|point| point.tick == tick) {
-            points[index].value = value;
-        } else {
-            points.insert(index, automation::Point { tick, value });
-        }
+        let index = automation::set_point(&mut points, tick, value);
         let result = self.session.edit(EditCommand::SetAutomation {
             track,
             lane,
@@ -455,6 +413,31 @@ impl MixJamApp {
 
 /// How far from a point, in points, the pointer still takes it.
 const AUTOMATION_REACH: f32 = 7.0;
+
+/// Draw a lane's point markers, bigger under the pointer or while dragged,
+/// and return the last one under the pointer.
+fn draw_markers(
+    painter: &egui::Painter,
+    markers: &[Pos2],
+    pointer: Option<Pos2>,
+    dragged: impl Fn(usize) -> bool,
+) -> Option<usize> {
+    let mut hit = None;
+    for (index, point) in markers.iter().enumerate() {
+        let active = dragged(index);
+        let hovered = pointer.is_some_and(|pos| point.distance(pos) <= AUTOMATION_REACH);
+        if hovered {
+            hit = Some(index);
+        }
+        painter.circle(
+            *point,
+            if active || hovered { 4.5 } else { 3.5 },
+            if active { roles().text } else { roles().accent },
+            Stroke::new(1.0_f32, roles().canvas),
+        );
+    }
+    hit
+}
 
 /// Where a lane value sits in a track row, 4 points in from its edges. The
 /// Repeat lane's values sit at even heights, from Off at the bottom to 1/64
@@ -472,32 +455,20 @@ fn automation_y(lane: automation::Lane, value: f32, row: Rect) -> f32 {
     inner.bottom() - along * inner.height()
 }
 
-/// The lane value at a height in a track row, rounded to the lane's steps.
+/// The lane value at a height in a track row, on the lane's grid. The Repeat
+/// steps sit at even heights, so the nearest height picks the step.
 fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
     let (low, high) = lane.range();
     let inner = row.shrink2(Vec2::new(0.0, 4.0));
     let along = (inner.bottom() - y) / inner.height();
-    let value = low + along * (high - low);
-    let value = match lane {
-        automation::Lane::Volume => (value * 2.0).round() / 2.0,
-        automation::Lane::Send(_) => (value * 100.0).round() / 100.0,
-        // The middle opens the filter, or centers the pan.
-        automation::Lane::Filter | automation::Lane::Pan if value.abs() < 0.04 => 0.0,
-        automation::Lane::Filter | automation::Lane::Pan => (value * 100.0).round() / 100.0,
-        // The nearest of the evenly spaced steps.
-        automation::Lane::Repeat => {
-            let steps = &automation::REPEAT_STEPS;
-            let last = (steps.len() - 1) as f32;
-            steps[(along * last).round().clamp(0.0, last) as usize]
-        }
-        // Whole steps of 5%.
-        automation::Lane::RepeatGate => {
-            (value / automation::REPEAT_GATE_STEP).round() * automation::REPEAT_GATE_STEP
-        }
-        // Whole semitones.
-        automation::Lane::Pitch => (value / 100.0).round() * 100.0,
+    let value = if lane == automation::Lane::Repeat {
+        let steps = &automation::REPEAT_STEPS;
+        let last = (steps.len() - 1) as f32;
+        steps[(along * last).round().clamp(0.0, last) as usize]
+    } else {
+        low + along * (high - low)
     };
-    value.clamp(low, high)
+    lane.snap(value)
 }
 
 /// The name of FX bus `bus`'s return lane in the lane menu: "FX 1 return".
@@ -521,11 +492,5 @@ pub(in super::super) fn return_y(value: f32, row: Rect) -> f32 {
 /// The return lane value at a height in its row, in whole percent. The
 /// full return, 100%, holds the pointer near it.
 fn return_value(y: f32, row: Rect) -> f32 {
-    let value = (row.bottom() - y) / row.height() * automation::RETURN_CEILING;
-    let value = if (value - 1.0).abs() < 0.04 {
-        1.0
-    } else {
-        (value * 100.0).round() / 100.0
-    };
-    value.clamp(0.0, automation::RETURN_CEILING)
+    automation::snap_return((row.bottom() - y) / row.height() * automation::RETURN_CEILING)
 }

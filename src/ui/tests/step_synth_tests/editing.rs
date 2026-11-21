@@ -168,3 +168,164 @@ fn step_synth_grid_opens_on_the_notes() {
         );
     }
 }
+
+/// Each drag runs again with the primary button, which must edit: that
+/// shows the drag is on the control.
+#[test]
+fn step_synth_secondary_drags_edit_nothing() {
+    let (ctx, mut app) = board_fixture();
+    app.step_synth.state.steps.fill(Step::default());
+    app.step_synth.state.steps[0] = Step::note(12);
+    app.step_synth.state.length = 8;
+    let before = app.step_synth.state.clone();
+    let output = settle(&ctx, &mut app, 4);
+    let rect = |label: &str| step_synth_control_rect(&output, label);
+    let note = rect("Step 1, +12 semitones").center();
+    let sixth = rect("Step 6, +12 semitones").center();
+    let ruler = rect("Step ruler").center().y;
+    // The end marker sits on the boundary after the last step.
+    let end = (rect("Step 8, +12 semitones").right() + rect("Step 9, +12 semitones").left()) / 2.0;
+    let length = rect("Length").center();
+    let accent = Pos2::new(note.x, rect("Accent lane").center().y);
+    let velocity = Pos2::new(note.x, rect("Velocity lane").center().y);
+    let drags = [
+        ("a note's tie", note, sixth),
+        (
+            "the step ruler",
+            Pos2::new(note.x, ruler),
+            Pos2::new(sixth.x, ruler),
+        ),
+        (
+            "the end marker",
+            Pos2::new(end, ruler),
+            Pos2::new(sixth.x, ruler),
+        ),
+        ("the Length well", length, length + Vec2::new(30.0, 0.0)),
+        ("the Accent lane", accent, accent),
+        (
+            "the Velocity lane",
+            velocity,
+            velocity - Vec2::new(0.0, 6.0),
+        ),
+    ];
+    let mut edited = Vec::new();
+    for mode in [0, 1, 2, 3] {
+        for (name, from, to) in drags {
+            match mode {
+                0 => secondary_drag(&ctx, &mut app, from, to),
+                1 => {
+                    button_at(&ctx, &mut app, from, egui::PointerButton::Secondary, true);
+                    frame(
+                        &ctx,
+                        &mut app,
+                        vec![egui::Event::PointerMoved(to)],
+                        egui::Modifiers::NONE,
+                    );
+                    pointer(&ctx, &mut app, to, true, egui::Modifiers::NONE);
+                    pointer(&ctx, &mut app, to, false, egui::Modifiers::NONE);
+                    button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, false);
+                }
+                2 => secondary_then_primary_drag(&ctx, &mut app, from, to),
+                _ => drag(&ctx, &mut app, from, to, egui::Modifiers::NONE),
+            }
+            let changed = app.step_synth.state != before || app.step_synth.grid.selection.is_some();
+            if mode == 3 {
+                assert!(changed, "The primary button must edit {name}.");
+            } else if changed {
+                edited.push((mode, name));
+            }
+            app.step_synth.state = before.clone();
+            app.step_synth.grid.selection = None;
+            settle(&ctx, &mut app, 1);
+        }
+        assert!(edited.is_empty(), "A secondary drag edited {edited:?}.");
+    }
+}
+
+#[test]
+fn step_synth_edits_continue_after_an_unrelated_release() {
+    for control in ["tie", "ruler", "length", "end marker", "accent", "velocity"] {
+        let (ctx, mut app) = board_fixture();
+        app.step_synth.state.steps.fill(Step::default());
+        app.step_synth.state.steps[0] = Step::note(12);
+        if matches!(control, "accent" | "velocity") {
+            app.step_synth.state.steps[1..6].fill(Step::note(12));
+        }
+        app.step_synth.state.length = 8;
+        let output = settle(&ctx, &mut app, 4);
+        let at = |step: usize| {
+            step_synth_control_rect(&output, &format!("Step {step}, +12 semitones")).center()
+        };
+        let ruler = step_synth_control_rect(&output, "Step ruler").center().y;
+        let length = step_synth_control_rect(&output, "Length").center();
+        let accent = step_synth_control_rect(&output, "Accent lane").center().y;
+        let velocity = step_synth_control_rect(&output, "Velocity lane").center().y;
+        let (from, middle, to) = match control {
+            "tie" => (at(1), at(3), at(6)),
+            "ruler" => (
+                Pos2::new(at(1).x, ruler),
+                Pos2::new(at(3).x, ruler),
+                Pos2::new(at(6).x, ruler),
+            ),
+            "length" => (
+                length,
+                length + Vec2::new(12.0, 0.0),
+                length + Vec2::new(30.0, 0.0),
+            ),
+            "accent" => (
+                Pos2::new(at(1).x, accent),
+                Pos2::new(at(3).x, accent),
+                Pos2::new(at(6).x, accent),
+            ),
+            "velocity" => (
+                Pos2::new(at(1).x, velocity),
+                Pos2::new(at(3).x, velocity),
+                Pos2::new(at(6).x, velocity + 4.0),
+            ),
+            _ => (
+                Pos2::new((at(8).x + at(9).x) / 2.0, ruler),
+                Pos2::new((at(9).x + at(10).x) / 2.0, ruler),
+                Pos2::new((at(11).x + at(12).x) / 2.0, ruler),
+            ),
+        };
+        let none = egui::Modifiers::NONE;
+        pointer(&ctx, &mut app, from, true, none);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(middle)],
+            none,
+        );
+        let middle_length = app.step_synth.state.length;
+        for pressed in [true, false] {
+            button_at(
+                &ctx,
+                &mut app,
+                middle,
+                egui::PointerButton::Secondary,
+                pressed,
+            );
+        }
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], none);
+        if control == "ruler" {
+            button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, true);
+        }
+        pointer(&ctx, &mut app, to, false, none);
+        if control == "ruler" {
+            button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, false);
+        }
+        match control {
+            "tie" => assert_eq!(app.step_synth.state.steps[5].trig, Trig::Tie),
+            "ruler" => assert_eq!(app.step_synth.grid.selection, Some((0, 5))),
+            "accent" => assert!(
+                app.step_synth.state.steps[..6]
+                    .iter()
+                    .all(|step| step.accent)
+            ),
+            "velocity" => assert!(
+                app.step_synth.state.steps[5].velocity < app.step_synth.state.steps[2].velocity
+            ),
+            _ => assert!(app.step_synth.state.length > middle_length, "{control}"),
+        }
+    }
+}

@@ -1,7 +1,7 @@
 //! What a project must satisfy to be played, saved, or opened.
 use super::{
-    MAX_CLIPS, MAX_KEYS, MAX_PITCH_CENTS, MAX_TICKS, PROJECT_SCHEMA_VERSION, Project,
-    SUPPORTED_BPMS, TRACK_COUNT, TRACK_WIDTH, sections_error, validate_import_metadata,
+    MAX_CLIPS, MAX_KEYS, MAX_TICKS, PROJECT_SCHEMA_VERSION, Project, SUPPORTED_BPMS, TRACK_COUNT,
+    TRACK_WIDTH, check_pitch, sections_error, validate_import_metadata,
 };
 use std::collections::HashSet;
 
@@ -181,12 +181,7 @@ impl Project {
             if c.fades.fit(c.length_ticks) != c.fades {
                 return Err(format!("Clip {} has fades longer than the clip.", c.id));
             }
-            if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(&c.pitch_cents) {
-                return Err(format!(
-                    "Clip {} pitch must be from -24 to 24 semitones.",
-                    c.id
-                ));
-            }
+            check_pitch(c.pitch_cents, format_args!("Clip {} pitch", c.id))?;
         }
         if let Some([a, b]) = self.loop_region
             && (a >= b || b > MAX_TICKS)
@@ -200,8 +195,9 @@ impl Project {
     }
 }
 
+/// A clip gain, or the master gain of a schema 3 or older song.
 pub(super) fn valid_gain(g: f32) -> bool {
-    g.is_finite() && (0.0..=2.0).contains(&g)
+    g.is_finite() && (0.0..=super::MAX_CLIP_GAIN).contains(&g)
 }
 
 fn valid_mixer_gain(g: f32) -> bool {

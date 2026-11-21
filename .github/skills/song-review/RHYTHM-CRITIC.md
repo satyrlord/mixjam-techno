@@ -23,7 +23,7 @@ when there is no profile:
 
 ## Evidence
 
-Read your inputs in [Role inputs](REFERENCE.md#role-inputs). Also read:
+Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). Also read:
 
 - the rules of the profile on rhythm, glitches, and transitions;
 - the current tools of the application, in
@@ -38,9 +38,9 @@ loops.
 
 ## Output
 
-1. Findings in the [finding format](REFERENCE.md#finding-format): at most 8,
-   ranked, each with bars, mm:ss, track numbers with their sound names, and a
-   concrete fix.
+1. Findings in the [finding format](REFERENCE-FINDINGS.md#finding-format): at
+   most 8, ranked, each with bars, mm:ss, track numbers with their sound names,
+   and a concrete fix.
 2. A table with one row for each glitch and ratchet: its bar and time, a
    verdict (keep, change, move, or remove), and 2-3 alternative treatments.
    Directions to consider:

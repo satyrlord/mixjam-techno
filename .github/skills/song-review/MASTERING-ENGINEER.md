@@ -6,7 +6,7 @@ choices need ears. Obey the role rules in step 1 of [SKILL.md](SKILL.md).
 
 ## Evidence
 
-Read your inputs in [Role inputs](REFERENCE.md#role-inputs). Also read:
+Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). Also read:
 
 - the board rules of the artist profile;
 - the factory presets of the application, in `src/master/presets.rs`. A preset
@@ -20,7 +20,7 @@ the target for each measure in this order:
 1. the target of the artist profile;
 2. the target of the reference profile that `master.py` reads;
 3. if there is no artist profile, the
-   [generic target](REFERENCE.md#generic-targets).
+   [generic target](REFERENCE-ROUNDS.md#generic-targets).
 
 If no source gives a target, report the missing target. Name the source of
 each target.
@@ -32,7 +32,7 @@ for each board. The tool renders the board over the premaster. It measures the
 loud blocks, the sections, the 1/3-octave balance against the references, and
 the drums: how far the board pushes the hits down, and the kick and hat attack
 against the premaster. Report the limits of `master.py` in
-[Measurement limits](REFERENCE.md#measurement-limits).
+[Measurement limits](REFERENCE-INPUTS.md#measurement-limits).
 
 1. Measure the premaster and the current board.
    Completion criterion: You know where the mix stands against each target.

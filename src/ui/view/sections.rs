@@ -90,20 +90,11 @@ pub(in super::super) struct SectionRename {
     pub(in super::super) focused: bool,
 }
 
-/// The first "Section N" name that no section of `sections` has.
-fn new_section_name(sections: &[Section]) -> String {
-    (1..)
-        .map(|n| format!("Section {n}"))
-        .find(|name| sections.iter().all(|section| section.name != *name))
-        .unwrap_or_default()
-}
-
 impl MixJamApp {
     /// Double-click the bar ruler to add a section at that bar, or a tag to
     /// rename it; right-click for the same choices and Delete.
     pub(super) fn section_gestures(
         &mut self,
-        ui: &mut egui::Ui,
         ruler_response: &Response,
         ruler: Rect,
         tags: &[(u32, Rect)],
@@ -140,8 +131,7 @@ impl MixJamApp {
                     ui.close();
                 }
                 if ui.button("Delete section").clicked() {
-                    let mut sections = self.session.project().sections.clone();
-                    sections.retain(|section| section.start_tick != tick);
+                    let sections = self.session.project().sections_without(tick);
                     let result = self.session.edit(EditCommand::SetSections(sections));
                     self.apply(result);
                     ui.close();
@@ -154,20 +144,12 @@ impl MixJamApp {
                 }
             }
         });
-        self.section_rename_editor(ui, ruler);
     }
 
     /// Add a section named "Section N" at `tick` and edit its name. A section
     /// that already starts there is renamed instead.
     pub(in super::super) fn add_section(&mut self, tick: u32) {
-        let sections = &self.session.project().sections;
-        if !sections.iter().any(|section| section.start_tick == tick) {
-            let mut sections = sections.clone();
-            sections.push(Section {
-                start_tick: tick,
-                name: new_section_name(&sections),
-            });
-            sections.sort_by_key(|section| section.start_tick);
+        if let Some(sections) = self.session.project().sections_with_new(tick) {
             let result = self.session.edit(EditCommand::SetSections(sections));
             if result.is_err() {
                 self.apply(result);
@@ -195,7 +177,7 @@ impl MixJamApp {
 
     /// The name editor over a section's tag. Enter or a click elsewhere keeps
     /// the name; Escape or an empty name keeps the old one.
-    fn section_rename_editor(&mut self, ui: &mut egui::Ui, ruler: Rect) {
+    pub(super) fn section_rename_editor(&mut self, ui: &mut egui::Ui, ruler: Rect) {
         let Some(rename) = &mut self.sections.rename else {
             return;
         };
@@ -229,17 +211,14 @@ impl MixJamApp {
         let Some(rename) = self.sections.rename.take() else {
             return;
         };
-        let name = rename.name.trim();
-        if !keep || name.is_empty() {
+        if !keep {
             return;
         }
-        let mut sections = self.session.project().sections.clone();
-        if let Some(section) = sections
-            .iter_mut()
-            .find(|section| section.start_tick == rename.start_tick)
-            && section.name != name
+        if let Some(sections) = self
+            .session
+            .project()
+            .sections_renamed(rename.start_tick, &rename.name)
         {
-            section.name = name.into();
             let result = self.session.edit(EditCommand::SetSections(sections));
             self.apply(result);
         }

@@ -136,6 +136,15 @@ impl Editor {
             false
         }
     }
+    /// The project that the last undo (`redo == false`) or redo replaced.
+    /// The opposite step brings it back.
+    pub(crate) fn replaced_by_step(&self, redo: bool) -> Option<&Project> {
+        if redo {
+            self.undo.last()
+        } else {
+            self.redo.last()
+        }
+    }
     pub fn place(
         &mut self,
         sample_id: u32,

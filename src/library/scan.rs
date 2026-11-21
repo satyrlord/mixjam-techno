@@ -27,17 +27,19 @@ pub fn check_library_folders(roots: &[PathBuf]) -> Result<(), String> {
         .iter()
         .map(|root| library_folder_identity(root))
         .collect::<Result<_, _>>()?;
+    let keys: Vec<PathBuf> = resolved.iter().map(|root| comparison_key(root)).collect();
     for (index, root) in resolved.iter().enumerate() {
-        for other in &resolved[index + 1..] {
-            if root == other {
+        let root_key = &keys[index];
+        for (other, other_key) in resolved[index + 1..].iter().zip(&keys[index + 1..]) {
+            if root_key == other_key {
                 return Err(format!(
                     "{} is already a library folder.",
                     roots[index].display()
                 ));
             }
-            let (inner, outer) = if other.starts_with(root) {
+            let (inner, outer) = if other_key.starts_with(root_key) {
                 (other, root)
-            } else if root.starts_with(other) {
+            } else if root_key.starts_with(other_key) {
                 (root, other)
             } else {
                 continue;
@@ -50,6 +52,17 @@ pub fn check_library_folders(roots: &[PathBuf]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The form of a folder identity that two folders are compared in. A Windows
+/// path ignores case, so an offline folder, which cannot be canonicalized and
+/// keeps its typed spelling, still matches another spelling of itself.
+fn comparison_key(path: &Path) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(path.to_string_lossy().to_lowercase())
+    } else {
+        path.to_path_buf()
+    }
 }
 
 fn library_folder_identity(root: &Path) -> Result<PathBuf, String> {
@@ -307,7 +320,7 @@ pub(super) fn list_wav_folder(
                     return Ok(Some(kind));
                 }
                 path = fs::canonicalize(&path)?;
-                // A link that leaves the selected folder is refused below.
+                // A link that leaves the selected folder is skipped below.
                 if !path.starts_with(&root) {
                     return Ok(None);
                 }
@@ -316,7 +329,11 @@ pub(super) fn list_wav_folder(
             let kind = match kind {
                 Ok(Some(kind)) => kind,
                 Ok(None) => {
-                    return Err("A WAV folder link points outside the selected folder.".into());
+                    skipped.push((
+                        entry.path(),
+                        "The link points outside the library folder.".into(),
+                    ));
+                    continue;
                 }
                 Err(e) => {
                     skipped.push((entry.path(), e.to_string()));

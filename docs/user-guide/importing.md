@@ -26,6 +26,13 @@ not known, the placeholder shows that its length is inferred. To see the
 original metadata and the reason, put the pointer on a placeholder, or open
 **Import details**.
 
+A saved sample path in a `t1` or `d1` song must resolve to a drive. It can be a
+full drive path or a path relative to the folder of the song. The application
+refuses an empty path, a network path, a device path, and a path with a reserved
+device name before it reads the sample. That sample shows as a placeholder for
+a missing sample, and the song opens. The placeholder keeps the original path
+for Import details. To replace it, use Resolve manually and choose a WAV.
+
 To select a WAV file for a missing sample:
 
 1. Right-click the placeholder.

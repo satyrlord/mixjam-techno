@@ -141,9 +141,8 @@ impl MixFooter {
                     "Imported record payload length differs from its four strings".into(),
                 ));
             }
-            if record.path.0.is_empty() {
-                return Err(ImportError("Imported sample path is empty".into()));
-            }
+            // An empty path is a complete text field. Importers can retain
+            // its source as a missing sample.
             imports.push(record);
         }
         if input.word()? != 8 {

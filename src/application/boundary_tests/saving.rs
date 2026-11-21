@@ -72,14 +72,14 @@ fn track_export_writes_each_track_on_another_thread_and_reports_the_counts() {
     let source = session.register_file(&wave, "Wave", 140.0).unwrap();
     session.place(source, 0, 0).unwrap();
     session.place(source, 9, 0).unwrap();
+    // The headless export makes its folder, as the render command needs.
     let folder = dir.join("tracks");
-    std::fs::create_dir_all(&folder).unwrap();
     assert_eq!(
         session.export_tracks(&folder).unwrap(),
-        format!(
-            "Exported 2 tracks and 0 FX returns to {}.",
-            folder.display()
-        )
+        audio::Stems {
+            tracks: 2,
+            returns: 0
+        }
     );
     session.start_track_export(&folder).unwrap();
     assert!(session.is_exporting());

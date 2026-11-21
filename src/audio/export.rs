@@ -1,5 +1,8 @@
 //! Rendering a prepared mix: to memory, to a WAV file, or to stems.
-use super::{Frames, Mix, Pcm, RenderState, float_to_i16};
+use super::{
+    Frames, Mix, Pcm, RenderState, float_to_i16,
+    schedule::{Phase, Schedule},
+};
 use crate::{
     fx::{BUSES, FxBuses, ReturnsProcessor},
     master::{MasterChain, MasterProcessor},
@@ -43,8 +46,9 @@ impl Mix {
     /// The block that export mixes at a time during the song.
     pub(super) const EXPORT_BLOCK: u64 = 65_536;
     /// Tails go in short blocks, so an export ends soon after they die.
-    /// Playback asks whether the buses still ring once a tail block too, so
-    /// it ends at the same frame.
+    /// Export, stem export, and playback share the `Schedule` that asks
+    /// whether the buses still ring once a tail block, so they end at the
+    /// same frame.
     pub(super) const TAIL_BLOCK: u64 = 1024;
 
     /// An empty stereo sample buffer with room for `frames`, or an error if
@@ -99,67 +103,65 @@ impl Mix {
         fx: &FxBuses,
         mut write: impl FnMut(&[f32]) -> Result<(), String>,
     ) -> Result<(), String> {
-        const BLOCK_FRAMES: u64 = Mix::EXPORT_BLOCK;
-        const TAIL_BLOCK: u64 = Mix::TAIL_BLOCK;
         let mut returns =
             (self.sends && fx.is_active()).then(|| ReturnsProcessor::new(fx, self.bpm));
         let mut master = MasterProcessor::new(master);
         // The pedals run on past the end by their delay, which is cut
         // from the start.
-        let latency = master.latency() as u64;
-        let mut block = vec![0.0; BLOCK_FRAMES as usize * 2];
-        let mut sends = vec![0.0; BLOCK_FRAMES as usize * 2 * BUSES];
-        // Frames fed into the board so far, and of them the tail's.
-        let (mut position, mut tail) = (0, 0);
+        let latency = master.latency();
+        let mut schedule = Schedule::new(Self::EXPORT_BLOCK as usize, latency);
+        let mut block = vec![0.0; Self::EXPORT_BLOCK as usize * 2];
+        let mut sends = vec![0.0; Self::EXPORT_BLOCK as usize * 2 * BUSES];
+        // Frames fed into the board so far.
+        let mut position = 0;
         let mut state = RenderState::default();
-        loop {
-            let ringing = returns.as_ref().is_some_and(ReturnsProcessor::ringing)
-                && tail < crate::fx::TAIL_LIMIT;
-            let count = if position < self.frames {
-                (self.frames - position).min(BLOCK_FRAMES)
-            } else if ringing {
-                (crate::fx::TAIL_LIMIT - tail).min(TAIL_BLOCK)
-            } else if position < self.frames + tail + latency {
-                (self.frames + tail + latency - position).min(BLOCK_FRAMES)
-            } else {
-                return Ok(());
-            } as usize;
+        while let Some((phase, count)) = schedule.next(self.frames.saturating_sub(position), || {
+            returns.as_ref().is_some_and(ReturnsProcessor::ringing)
+        }) {
             let samples = &mut block[..count * 2];
-            let keyed = if position < self.frames {
-                match &mut returns {
-                    Some(returns) => {
-                        let sends = &mut sends[..count * 2 * BUSES];
-                        let sending = self.read_block(position, samples, Some(sends), &mut state);
+            let keyed = match phase {
+                Phase::Song => {
+                    match &mut returns {
+                        Some(returns) => {
+                            let sends = &mut sends[..count * 2 * BUSES];
+                            let sending =
+                                self.read_block(position, samples, Some(sends), &mut state);
+                            returns.process_at(
+                                samples,
+                                sending.then_some(&*sends),
+                                self.key_block(&state, count),
+                                self.lanes(position),
+                            );
+                        }
+                        None => {
+                            self.read_block(position, samples, None, &mut state);
+                        }
+                    }
+                    count
+                }
+                Phase::Tail { .. } => {
+                    samples.fill(0.0);
+                    if let Some(returns) = &mut returns {
                         returns.process_at(
                             samples,
-                            sending.then_some(&*sends),
-                            self.key_block(&state, count),
+                            None,
+                            crate::ducker::Keys::NONE,
                             self.lanes(position),
                         );
                     }
-                    None => {
-                        self.read_block(position, samples, None, &mut state);
-                    }
+                    0
                 }
-                count
-            } else {
-                samples.fill(0.0);
-                if let Some(returns) = returns.as_mut().filter(|_| ringing) {
-                    returns.process_at(
-                        samples,
-                        None,
-                        crate::ducker::Keys::NONE,
-                        self.lanes(position),
-                    );
-                    tail += count as u64;
+                Phase::Flush => {
+                    samples.fill(0.0);
+                    0
                 }
-                0
             };
             master.process_keyed(samples, self.key_block(&state, keyed));
-            let skip = latency.saturating_sub(position).min(count as u64) as usize;
+            let skip = (latency as u64).saturating_sub(position).min(count as u64) as usize;
             write(&samples[skip * 2..])?;
             position += count as u64;
         }
+        Ok(())
     }
 
     /// Every exported file: stereo PCM16 at the mix rate.
@@ -307,7 +309,7 @@ impl Mix {
     /// Render the parts of `write_stems` block by block, in the blocks of
     /// `render`, and hand each to `write` with its part: the index of its
     /// track in `tracks`, then of its bus in `buses` after them.
-    fn render_stems(
+    pub(super) fn render_stems(
         &self,
         fx: &FxBuses,
         tracks: &[usize],
@@ -324,31 +326,29 @@ impl Mix {
         let mut part = vec![0.0; block_frames * 2];
         // Each track keeps its own filter histories, as a playback would.
         let mut states: Vec<RenderState> = tracks.iter().map(|_| RenderState::default()).collect();
-        let (mut position, mut tail) = (0, 0);
-        loop {
-            let ringing = returns.as_ref().is_some_and(ReturnsProcessor::ringing)
-                && tail < crate::fx::TAIL_LIMIT;
-            let count = if position < self.frames {
-                (self.frames - position).min(Self::EXPORT_BLOCK)
-            } else if ringing {
-                (crate::fx::TAIL_LIMIT - tail).min(Self::TAIL_BLOCK)
-            } else {
-                return Ok(());
-            } as usize;
+        // No pedals delay the parts, so they end with the buses' tails.
+        let mut schedule = Schedule::new(block_frames, 0);
+        let mut position = 0;
+        while let Some((phase, count)) = schedule.next(self.frames.saturating_sub(position), || {
+            returns.as_ref().is_some_and(ReturnsProcessor::ringing)
+        }) {
             let dry = &mut dry[..count * 2];
             let wet = &mut wet[..count * 2 * BUSES];
-            if position < self.frames {
+            if phase == Phase::Song {
                 let sends = &mut sends[..count * 2 * BUSES];
                 sends.fill(0.0);
                 for (index, (&track, state)) in tracks.iter().zip(&mut states).enumerate() {
+                    // The first track's state keeps the key audio that the
+                    // buses read.
+                    let side = index == 0;
                     if returns.is_some() {
                         let feed = &mut feed[..count * 2 * BUSES];
-                        self.mix(position, dry, Some(feed), state, Some(track));
+                        self.mix_keyed(position, dry, Some(feed), state, Some(track), side);
                         for (sum, value) in sends.iter_mut().zip(feed.iter()) {
                             *sum += value;
                         }
                     } else {
-                        self.mix(position, dry, None, state, Some(track));
+                        self.mix_keyed(position, dry, None, state, Some(track), side);
                     }
                     write(index, dry)?;
                 }
@@ -367,7 +367,6 @@ impl Mix {
                 }
                 if let Some(returns) = &mut returns {
                     returns.split(wet, None, crate::ducker::Keys::NONE, self.lanes(position));
-                    tail += count as u64;
                 }
             }
             let part = &mut part[..count * 2];
@@ -380,6 +379,7 @@ impl Mix {
             }
             position += count as u64;
         }
+        Ok(())
     }
 }
 

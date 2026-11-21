@@ -8,7 +8,10 @@ mod tests;
 mod waves;
 pub(crate) use assets::restore_missing;
 pub(super) use layout::native_fader_gain;
-pub(crate) use layout::{Event, Header, Reference, Timeline, WaveReference};
+pub(crate) use layout::{
+    Event, Header, Reference, Timeline, WaveReference, checked_clip_gain, clip_gain,
+    native_position, native_tick_count,
+};
 pub(crate) use project::build_project;
 pub(super) use project::native_source;
 pub(crate) use waves::embedded_wave_ranges;

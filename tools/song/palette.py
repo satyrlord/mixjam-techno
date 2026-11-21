@@ -56,7 +56,7 @@ OWNER_OUT = {'rejected', 'out-of-tune', 'cheesy'}
 # A family this large is a bank of different sounds that share a name, not one sound's variations: a palette
 # made from a song keeps only the files the song uses from it.
 BIG_FAMILY = 12
-CENSUS_DEFAULT = ['local-data/songs/review/album-mix/*.mixjam']
+CENSUS_DEFAULT = ['review/album-mix/*.mixjam']  # patterns in the songs folder (env.songs_folder)
 
 
 def roots():
@@ -100,6 +100,7 @@ PRODUCT_SLOTS = {'t2': 0, 't1': 1, 'd1': 2, 'd2': 3, 'd3': 4, 'd4': 5, 'h1': 6, 
 PRODUCT_STRIDE = 100_000
 _catalog = None
 _codes = None  # archive code to [(frame count, name, PCM digest)], filled with _catalog
+_catalog_source = None  # the (catalog folder, name folder) that _catalog was read from
 
 
 def catalog_object(pairs):
@@ -180,11 +181,21 @@ def same_catalog_sound(first, other):
     return a.lower() == b.lower() if a is not None and b is not None else first['code'].lower() == other['code'].lower()
 
 
+def names_folder():
+    """The folder of the private catalog name files (SAMPLE_CATALOG_NAMES)."""
+    return Path(env.path('SAMPLE_CATALOG_NAMES', required=False) or env.ROOT / 'local-data' / 'catalog-names')
+
+
+def catalogs_folder():
+    """The folder of the product catalogs (SAMPLE_CATALOGS)."""
+    return Path(env.path('SAMPLE_CATALOGS', required=False) or env.ROOT / 'assets' / 'catalog')
+
+
 def catalog_names():
     """{(product, release, native id): name} from the private files that the catalog generator writes
     (SAMPLE_CATALOG_NAMES, default local-data/catalog-names). Catalogs hold no names; without these
     files a sound is named by its archive code."""
-    folder = Path(env.path('SAMPLE_CATALOG_NAMES', required=False) or env.ROOT / 'local-data' / 'catalog-names')
+    folder = names_folder()
     names = {}
     for path in sorted(folder.glob('*.json'), key=lambda path: path.name) if folder.is_dir() else []:
         try:
@@ -222,13 +233,13 @@ def code_name(code):
 def product_catalog():
     """{song sample id: (product, group, name)} from the product catalogs (SAMPLE_CATALOGS, default
     assets/catalog), for the products' own sounds that songs place by id; empty without them."""
-    global _catalog, _codes
-    if _catalog is None:
+    global _catalog, _codes, _catalog_source
+    folder = catalogs_folder()
+    if _catalog is None or _catalog_source != (folder, names_folder()):
         _catalog, _codes = {}, {}
-        folder = env.path('SAMPLE_CATALOGS', required=False) or env.ROOT / 'assets' / 'catalog'
+        _catalog_source = (folder, names_folder())
         identities, releases = {}, set()
         names = catalog_names()
-        folder = Path(folder)
         # By name with case, as the application orders them: of two conflicting releases, the same one loads.
         for path in sorted(folder.iterdir(), key=lambda path: path.name) if folder.is_dir() else []:
             if not path.is_file() or path.suffix.lower() != '.json' or path.name.lower() == 'source-tempos.json':
@@ -298,10 +309,10 @@ def placed_samples(song_path):
 def song_files(arguments):
     if arguments:
         return [Path(a) for a in arguments]
-    files = []
+    files, songs = [], env.songs_folder()
     for pattern in CENSUS_DEFAULT:
-        files += sorted(env.ROOT.glob(pattern))
-    passes = sorted(env.ROOT.glob('local-data/songs/melancholia/reality/pass*/reality.mixjam'),
+        files += sorted(songs.glob(pattern))
+    passes = sorted(songs.glob('melancholia/reality/pass*/reality.mixjam'),
                     key=lambda p: int(p.parent.name[4:]) if p.parent.name[4:].isdigit() else -1)
     return files + passes[-1:]
 
@@ -470,40 +481,50 @@ def show(path):
 
 
 _owner_rules = None
+_owner_path = None  # the file that _owner_rules was read from
 
 
 def owner_out(path):
     """Whether the owner rejected the file, or judged it out of tune or cheesy."""
-    global _owner_rules
-    if _owner_rules is None:
-        _owner_rules = verdicts.load_owner()
+    global _owner_rules, _owner_path
+    current = verdicts.owner_path()
+    if _owner_rules is None or (_owner_path is not None and _owner_path != current):
+        _owner_rules, _owner_path = verdicts.load_owner(), current
     rule = verdicts.owner_verdict(_owner_rules, '', path)
     return bool(rule) and rule['verdict'] in OWNER_OUT
 
 
-def allowed(palette, path, library_roots=None):
+def palette_keys(palette):
+    """The comparable file keys and family keys of a palette: pass them to `allowed` when a caller
+    asks about many files, so that it builds them once."""
+    return ({file_key(f) for f in palette.get('files', [])}, {family_key(f) for f in palette['families']})
+
+
+def allowed(palette, path, library_roots=None, keys=None):
     """Whether a file on disk belongs to the palette (its family, or the file itself). A file that the owner
-    rejected, or judged out of tune or cheesy, never does."""
+    rejected, or judged out of tune or cheesy, never does. `keys` is palette_keys(palette)."""
     normal = windows_path(Path(path))
     if library_roots is None:
         library_roots = roots()
     if owner_out(normal):
         return False
-    if file_key(normal) in {file_key(f) for f in palette.get('files', [])}:
+    file_keys, family_keys = keys or palette_keys(palette)
+    if file_key(normal) in file_keys:
         return True
     family = family_of_path(normal, library_roots)
-    return family is not None and family_key(family) in {family_key(f) for f in palette['families']}
+    return family is not None and family_key(family) in family_keys
 
 
 def check(song_path, palette_path):
     palette = load_palette(palette_path)
     library_roots = roots()
     outside, used = [], set()
+    keys = palette_keys(palette)
     for sample in placed_samples(song_path):
         native = not sample['path'] and sample['id'] in palette.get('native_samples', [])
-        path_allowed = sample['path'] and allowed(palette, sample['path'], library_roots)
+        path_allowed = sample['path'] and allowed(palette, sample['path'], library_roots, keys)
         family_allowed = (not sample['path'] and sample['family'] is not None and
-                          family_key(sample['family']) in {family_key(f) for f in palette['families']})
+                          family_key(sample['family']) in keys[1])
         if native or path_allowed or family_allowed:
             family = sample['family']
             match = next((f for f in palette['families'] if family and family_key(f) == family_key(family)), None)

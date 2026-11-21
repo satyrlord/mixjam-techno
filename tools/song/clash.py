@@ -27,16 +27,18 @@ import json
 import math
 import sys
 import wave
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cli import option  # noqa: E402
 from harmony import NOTES  # noqa: E402
+from lanes import lane_groups  # noqa: E402
 from mixjam import TICKS_PER_BAR, loop_bars, playback_bpm, read_wav  # noqa: E402
-from render import lane_groups  # noqa: E402
+from phrase import GATED as TONAL  # noqa: E402  (the roles with a phrase; field recordings are skipped)
 
-TONAL = {'lead', 'keys', 'arp', 'bass', 'pad', 'vocal', 'atmos'}  # field recordings are skipped
 SIZE, HOP = 8192, 4096
 LOW, HIGH = 150.0, 4000.0
 DROP = 0.15
@@ -45,7 +47,9 @@ BETTER = 0.1  # a family file at the same phrase place must fit this much better
 BED = 0.3 # a bar where the rest of the mix has under 0.3 of the lane's power in the chroma band does not count
 
 
+@lru_cache(maxsize=256)
 def _bins(rate, cents=0.0):
+    """The chroma band's mask and one-hot pitch-class matrix. Callers must not change them."""
     f = np.fft.rfftfreq(SIZE, 1 / rate)
     m = (f > LOW) & (f < HIGH)
     pc = np.round(69 + 12 * np.log2(f[m] / 440.0) + cents / 100).astype(int) % 12
@@ -193,14 +197,16 @@ class Sources:
         """Chroma of one song bar of a source from `position` ticks into it (wrapping), with the clip pitch."""
         rate, x, fpt, varispeed, _ = self.get(sample_id)
         a = int(position * fpt) % len(x)
-        seg = np.roll(x, -a)[:int(TICKS_PER_BAR * fpt)]
-        m, onehot = _bins(rate, cents + varispeed)
+        # The bar from `a`, wrapping at the end of the source.
+        seg = np.take(x, (np.arange(min(len(x), int(TICKS_PER_BAR * fpt))) + a) % len(x))
+        _, onehot = _bins(rate, cents + varispeed)
         spec = spectra(seg, rate)
         return chroma((np.abs(spec) ** 2).sum(axis=0), onehot)
 
 
 def alternatives(document, track, bar, rest, sources):
-    """[(fit, name, bars into the file)] of the lane's family at the place in the phrase of the clip at `bar`."""
+    """[(fit, name, bars into the file, is the clip's own file)] of the lane's family at the place in the
+    phrase of the clip at `bar`, best fit first."""
     tracks = next((tracks for tracks in sources.groups.values() if track in tracks), [track])
     tick = (bar - 1) * TICKS_PER_BAR
     active = [(document['lanes'][t - 1], p) for t in tracks for p in document['lanes'][t - 1]['placements']
@@ -292,9 +298,8 @@ def main():
     document = json.loads(song.read_text(encoding='utf-8'))
     meta_path = song.with_suffix('.meta.json')
     lanes = json.loads(meta_path.read_text(encoding='utf-8'))['lanes'] if meta_path.exists() else {}
-    drop = float(args[args.index('--drop') + 1]) if '--drop' in args else DROP
-    tracks = [int(t) for t in args[args.index('--lanes') + 1].split(',')] if '--lanes' in args \
-        else tonal_tracks(document, lanes)
+    drop = option(args, '--drop', float, DROP)
+    tracks = option(args, '--lanes', lambda text: [int(t) for t in text.split(',')]) or tonal_tracks(document, lanes)
     owners = {track: min(group) for group in rendered_groups(document, lanes).values() for track in group}
     tracks = list(dict.fromkeys(owners.get(track, track) for track in tracks))
     mix = Mix(args[1], document['song']['bpm'])

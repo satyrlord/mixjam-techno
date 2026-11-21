@@ -1,6 +1,9 @@
 //! The playback source that the output device reads in blocks, and the
 //! priority of the thread that reads it.
-use super::{Frames, Mix, RenderState, hold_to_full_scale};
+use super::{
+    Frames, RenderState, hold_to_full_scale,
+    schedule::{Phase, Schedule},
+};
 use crate::{
     fx::{BUSES, ReturnsProcessor},
     master::{MasterControl, MasterProcessor},
@@ -22,8 +25,6 @@ pub(super) struct PlaybackSource {
     /// The frame where a loop resumes.
     loop_start: Option<u64>,
     pub(super) block: Vec<f32>,
-    /// The frames of a whole block: `BLOCK_FRAMES` but in tests.
-    block_frames: usize,
     /// The next sample in `block`, and the count of valid samples in it.
     pub(super) cursor: usize,
     pub(super) filled: usize,
@@ -33,14 +34,12 @@ pub(super) struct PlaybackSource {
     /// tails ring on after the song, as in export.
     returns: Option<ReturnsProcessor>,
     sends: Vec<f32>,
-    /// Frames of the buses' tail played after the end, and of them those
-    /// left of the current `Mix::TAIL_BLOCK`.
-    ringing: u64,
-    ringing_block: u64,
+    /// The blocks, as in export: of a whole block `BLOCK_FRAMES` but in
+    /// tests, through the song, the buses' tail, and the pedals' delay.
+    schedule: Schedule,
     /// Frames of the pedals' delay still to drop at the start, so the song
-    /// starts on time, and still to play out after the end.
+    /// starts on time.
     pub(super) lead: usize,
-    tail: usize,
     /// Frames of the block that the key tracks cover: none after the song.
     keyed: usize,
     /// Whether the thread that reads this source has been asked to run at
@@ -129,19 +128,16 @@ impl PlaybackSource {
             state,
             returns,
             sends,
-            ringing: 0,
-            ringing_block: 0,
+            schedule: Schedule::new(block_frames, latency),
             channels,
             frame: start,
             end: loop_region.map_or(audio.frames(), |[_, b]| b),
             loop_start: loop_region.map(|[a, _]| a),
             block: vec![0.0; block_frames * channels],
-            block_frames,
             cursor: 0,
             filled: 0,
             master,
             lead: latency,
-            tail: latency,
             keyed: 0,
             raised: false,
             finished: false,
@@ -152,66 +148,32 @@ impl PlaybackSource {
     /// nothing is left.
     pub(super) fn fill(&mut self) -> bool {
         loop {
-            if self.frame >= self.end {
-                if let Some(start) = self.loop_start {
-                    self.frame = start;
-                } else if let Some(returns) = self.returns.as_mut().filter(|returns| {
-                    // As in export, whether the buses still ring is asked
-                    // once a tail block, so playback ends at its frame.
-                    self.ringing_block > 0
-                        || returns.ringing() && self.ringing < crate::fx::TAIL_LIMIT
-                }) {
-                    if self.ringing_block == 0 {
-                        self.ringing_block =
-                            Mix::TAIL_BLOCK.min(crate::fx::TAIL_LIMIT - self.ringing);
-                    }
-                    let count = self.block_frames.min(self.ringing_block as usize);
-                    // The song's frames go on through the tail, as in export.
-                    let lanes = self
-                        .audio
-                        .return_lanes()
-                        .map(|lanes| (lanes, self.end + self.ringing, None));
-                    self.ringing += count as u64;
-                    self.ringing_block -= count as u64;
-                    self.filled = count * self.channels;
-                    self.keyed = 0;
-                    self.block[..self.filled].fill(0.0);
-                    returns.process_at(
-                        &mut self.block[..self.filled],
-                        None,
-                        crate::ducker::Keys::NONE,
-                        lanes,
-                    );
-                    if self.process() {
-                        return true;
-                    }
-                    continue;
-                } else if self.tail > 0 {
-                    let count = self.tail.min(self.block_frames);
-                    self.tail -= count;
-                    self.filled = count * self.channels;
-                    self.keyed = 0;
-                    self.block[..self.filled].fill(0.0);
-                    if self.process() {
-                        return true;
-                    }
-                    continue;
-                } else {
-                    if let Some(master) = self.master.as_mut().filter(|_| !self.finished) {
-                        master.finish();
-                    }
-                    self.finished = true;
+            if self.frame >= self.end
+                && let Some(start) = self.loop_start
+            {
+                self.frame = start;
+                if self.frame >= self.end {
                     return false;
                 }
             }
-            let count = ((self.end - self.frame) as usize).min(self.block_frames);
-            if count == 0 {
+            // As in export: the song's frames, then the buses' tail, then
+            // the pedals' delay.
+            let Some((phase, count)) =
+                self.schedule.next(self.end.saturating_sub(self.frame), || {
+                    self.returns.as_ref().is_some_and(ReturnsProcessor::ringing)
+                })
+            else {
+                if let Some(master) = self.master.as_mut().filter(|_| !self.finished) {
+                    master.finish();
+                }
+                self.finished = true;
                 return false;
-            }
+            };
             self.filled = count * self.channels;
-            self.keyed = count;
-            match &mut self.returns {
-                Some(returns) => {
+            // The key tracks cover only the song's frames.
+            self.keyed = if phase == Phase::Song { count } else { 0 };
+            match (phase, &mut self.returns) {
+                (Phase::Song, Some(returns)) => {
                     let sends = &mut self.sends[..count * 2 * BUSES];
                     let sending = self.audio.read_block(
                         self.frame,
@@ -232,7 +194,7 @@ impl PlaybackSource {
                         }),
                     );
                 }
-                None => {
+                (Phase::Song, None) => {
                     self.audio.read_block(
                         self.frame,
                         &mut self.block[..self.filled],
@@ -240,8 +202,27 @@ impl PlaybackSource {
                         &mut self.state,
                     );
                 }
+                (Phase::Tail { after }, returns) => {
+                    self.block[..self.filled].fill(0.0);
+                    if let Some(returns) = returns {
+                        // The song's frames go on through the tail, as in export.
+                        let lanes = self
+                            .audio
+                            .return_lanes()
+                            .map(|lanes| (lanes, self.end + after, None));
+                        returns.process_at(
+                            &mut self.block[..self.filled],
+                            None,
+                            crate::ducker::Keys::NONE,
+                            lanes,
+                        );
+                    }
+                }
+                (Phase::Flush, _) => self.block[..self.filled].fill(0.0),
             }
-            self.frame += count as u64;
+            if phase == Phase::Song {
+                self.frame += count as u64;
+            }
             if self.process() {
                 return true;
             }
@@ -287,6 +268,9 @@ impl PlaybackSource {
         Some([left, right])
     }
 }
+/// Tests read a source sample by sample. The device mixer reads frames
+/// through `next_frame`.
+#[cfg(test)]
 impl Iterator for PlaybackSource {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {

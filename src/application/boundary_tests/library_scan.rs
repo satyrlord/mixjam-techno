@@ -227,6 +227,54 @@ fn cancelled_catalog_rescans_remain_pending_and_use_the_active_scan_folders() {
 }
 
 #[test]
+fn a_catalog_rescan_keeps_the_song_that_waits_for_the_scan() {
+    let dir = fixture_dir();
+    let root = dir.join("samples");
+    std::fs::create_dir_all(&root).unwrap();
+    Pcm {
+        sample_rate: 44_100,
+        channels: 1,
+        samples: vec![0.25; 1000],
+    }
+    .write_wav(&root.join("sound.wav"))
+    .unwrap();
+    let song = dir.join("queued.json");
+    Project {
+        title: "Queued song".into(),
+        ..Project::default()
+    }
+    .save(&song)
+    .unwrap();
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+        .unwrap()
+        .with_settings_root(dir.join("settings"));
+    let (_sender, receiver) = mpsc::channel();
+    session.wave_scan = Some(WaveScan {
+        roots: vec![root.clone()],
+        source_bpm: 140.0,
+        progress: Arc::new(crate::library::ScanProgress::default()),
+        receiver,
+    });
+    session.open_after_scan(&song).unwrap();
+    // A changed catalog restarts the scan of the same folders.
+    assert!(session.rescan_changed_catalogs(true));
+    assert!(
+        session
+            .take_notice()
+            .is_none_or(|(notice, _)| !notice.contains("was not opened"))
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while session.wave_scan().is_some() {
+        session.poll();
+        assert!(std::time::Instant::now() < deadline, "scan timed out");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(session.take_opened_after_scan(), Some(song));
+    assert_eq!(session.project().title, "Queued song");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn deferred_scan_open_preserves_intervening_work() {
     let dir = fixture_dir();
     let song = dir.join("queued.json");
@@ -302,6 +350,72 @@ fn deferred_scan_open_preserves_intervening_work() {
         );
         assert_eq!(session.has_recorded_take(), action == "take");
     }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_playback_quality_apply_keeps_the_song_queued_for_the_scan() {
+    let dir = fixture_dir();
+    let song = dir.join("queued.json");
+    Project {
+        title: "Queued song".into(),
+        ..Project::default()
+    }
+    .save(&song)
+    .unwrap();
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+        .unwrap()
+        .with_settings_root(dir.join("settings"));
+    let (sender, receiver) = mpsc::channel();
+    session.wave_scan = Some(WaveScan {
+        roots: vec![dir.clone()],
+        source_bpm: 140.0,
+        progress: Arc::new(crate::library::ScanProgress::default()),
+        receiver,
+    });
+    session.open_after_scan(&song).unwrap();
+    let mut options = session.options().clone();
+    options.sample_playback_quality = crate::options::SampleQuality::Low;
+    assert_ne!(
+        options.playback_quality(),
+        session.options().playback_quality()
+    );
+    assert!(
+        session
+            .apply_options(options, session.options_revision(), false)
+            .unwrap()
+    );
+    sender.send(Ok(Library::empty())).unwrap();
+    session.poll();
+    assert_eq!(session.project().title, "Queued song");
+    assert_eq!(session.take_opened_after_scan(), Some(song));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_startup_song_without_a_scan_opens_in_place_and_keeps_the_startup_status() {
+    let dir = fixture_dir();
+    let song = dir.join("startup.mixjam");
+    let project = Project {
+        title: "Startup song".into(),
+        ..Project::default()
+    };
+    crate::project_io::save_with_library(&project, &Library::empty(), &song).unwrap();
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+        .unwrap()
+        .with_settings_root(dir.join("settings"));
+    assert!(session.start_up(None, Some(&song)).is_empty());
+    assert_eq!(session.project().title, "Startup song");
+    // Save replaces the song that the window started with.
+    assert_eq!(session.file(), Some(song.as_path()));
+    assert!(session.take_notice().is_none());
+    // A song that cannot open is an error in the window, not a failed start.
+    let broken = dir.join("broken.mixjam");
+    std::fs::write(&broken, "broken").unwrap();
+    let errors = session.start_up(None, Some(&broken));
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].starts_with("Cannot open"), "{}", errors[0]);
+    assert_eq!(session.project().title, "Startup song");
     std::fs::remove_dir_all(dir).unwrap();
 }
 #[test]

@@ -1,6 +1,7 @@
 //! The top bar: the brand, the song name, the transport buttons, and the
 //! position readout, packed tighter in a compact window.
 use super::*;
+use mixjam_techno::application::tick_seconds;
 
 /// The song name's size at the left of the transport, and the floor that it
 /// shrinks to before an absurdly long name goes below it.
@@ -146,7 +147,7 @@ impl MixJamApp {
             } else if sections {
                 project.section_span(self.session.cursor_tick())
             } else {
-                Some([0, project.end_tick().max(TICKS_PER_BAR)])
+                Some(project.song_span())
             };
             let result = self.session.edit(EditCommand::SetLoop(region));
             self.apply(result);
@@ -216,7 +217,7 @@ impl MixJamApp {
                 if compact { 18.0 } else { 24.0 },
             );
         }
-        let occupied = occupied_tracks(self.session.project());
+        let occupied = self.session.project().occupied_tracks();
         recording_destination(ui, &mut self.recording.track, &occupied);
         ui.add_space(if compact { 2.0 } else { 10.0 });
         transport_position(
@@ -294,8 +295,8 @@ fn transport_position(
     bar_and_beat: bool,
 ) -> Response {
     let bars = tick / TICKS_PER_BAR + 1;
-    let beat = (tick % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
-    let seconds = (tick as f64 * 240.0 / bpm / TICKS_PER_BAR as f64) as u64;
+    let beat = (tick % TICKS_PER_BAR) / TICKS_PER_BEAT + 1;
+    let seconds = tick_seconds(tick, bpm) as u64;
     let text = format!("{:02} : {:02}", seconds / 60, seconds % 60);
     let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     // Vintage reads time from an amber display window; the other themes from
@@ -346,10 +347,15 @@ fn transport_position(
 /// How the song name is laid out at the left of the transport.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TitleFit {
-    pub(super) size: f32,
-    pub(super) rows: usize,
-    pub(super) break_anywhere: bool,
+    size: f32,
+    rows: usize,
+    break_anywhere: bool,
 }
+
+/// The fits kept from the last frames: the transport asks for two widths in a
+/// compact window, and the answer only changes with the name, the width, the
+/// theme, or the display scale.
+const TITLE_FIT_KEPT: usize = 4;
 
 fn transport_title_galley(
     ui: &egui::Ui,
@@ -381,6 +387,29 @@ fn transport_title_font(size: f32) -> FontId {
 /// long for that goes below the floor, breaking words if it must, so the name
 /// is never clipped.
 fn transport_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
+    let memory = egui::Id::new("transport-title-fits");
+    let key = egui::Id::new((
+        text,
+        width.to_bits(),
+        theme::current(),
+        ui.ctx().pixels_per_point().to_bits(),
+    ));
+    let kept = ui
+        .ctx()
+        .data(|data| data.get_temp::<Vec<(egui::Id, TitleFit)>>(memory))
+        .unwrap_or_default();
+    if let Some((_, fit)) = kept.iter().find(|(id, _)| *id == key) {
+        return *fit;
+    }
+    let fit = measure_title_fit(ui, text, width);
+    let mut kept = kept;
+    kept.insert(0, (key, fit));
+    kept.truncate(TITLE_FIT_KEPT);
+    ui.ctx().data_mut(|data| data.insert_temp(memory, kept));
+    fit
+}
+
+fn measure_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
     let fits = |fit: TitleFit| {
         let galley = transport_title_galley(ui, text, fit, width);
         !galley.elided && galley.size().x <= width + 0.5 && galley.size().y <= TRANSPORT_ROW_HEIGHT
@@ -477,7 +506,7 @@ pub(in super::super) fn song_meta(project: &Project) -> Option<String> {
         return None;
     }
     let bars = end.div_ceil(TICKS_PER_BAR);
-    let seconds = (f64::from(end) * 240.0 / project.bpm / f64::from(TICKS_PER_BAR)).round() as u64;
+    let seconds = tick_seconds(end, project.bpm).round() as u64;
     Some(format!(
         "{bars} {}  ·  {}:{:02}",
         if bars == 1 { "bar" } else { "bars" },

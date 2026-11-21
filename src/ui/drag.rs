@@ -5,7 +5,21 @@ use super::*;
 
 pub(super) enum DragItem {
     Sample(u32),
-    Clip { id: u64, offset: u32, copy: bool },
+    Clip {
+        id: u64,
+        offset: u32,
+        copy: bool,
+        button: egui::PointerButton,
+    },
+}
+
+impl DragItem {
+    fn button(&self) -> egui::PointerButton {
+        match *self {
+            Self::Sample(_) => egui::PointerButton::Primary,
+            Self::Clip { button, .. } => button,
+        }
+    }
 }
 
 /// The part of a clip that a drag reshapes.
@@ -205,9 +219,11 @@ impl MixJamApp {
     }
 
     pub(super) fn finish_drag(&mut self, ctx: &egui::Context) {
-        if self.gestures.automation_drag.is_some() && !ctx.input(|i| i.pointer.primary_down()) {
-            self.gestures.automation_drag = None;
-            self.session.end_automation_gesture();
+        if !ctx.input(|i| i.pointer.primary_down()) {
+            self.gestures.marquee_origin = None;
+            if self.gestures.automation_drag.take().is_some() {
+                self.session.end_automation_gesture();
+            }
         }
         let Some(drag) = &self.gestures.drag else {
             return;
@@ -244,7 +260,7 @@ impl MixJamApp {
                 drag_label(ctx, pos, &reason);
             }
         }
-        if !ctx.input(|i| i.pointer.any_released()) {
+        if !ctx.input(|i| i.pointer.button_released(drag.button())) {
             return;
         }
         let Some(item) = self.gestures.drag.take() else {
@@ -264,7 +280,9 @@ impl MixJamApp {
                 DragItem::Sample(id) => {
                     self.place(id, track, self.position_tick(pos.x, rect, fine))
                 }
-                DragItem::Clip { id, offset, copy } => {
+                DragItem::Clip {
+                    id, offset, copy, ..
+                } => {
                     // Shift or Alt held at the drop copies too, as in the original.
                     let copy = copy || ctx.input(|i| i.modifiers.shift || i.modifiers.alt);
                     let Some((track_delta, tick_delta)) =
@@ -314,20 +332,4 @@ pub(super) fn drag_label(ctx: &egui::Context, pos: Pos2, label: &str) {
         FontId::proportional(12.0),
         roles().on_light,
     );
-}
-
-/// Tracks with clips, and soloed tracks: a solo silences the other tracks, so
-/// its switch must stay visible even on an empty track.
-/// Several views ask for it each frame, so it is one pass with a flag per
-/// track, not a sorted set.
-pub(super) fn occupied_tracks(project: &Project) -> Vec<usize> {
-    let mut occupied: Vec<bool> = project.tracks.iter().map(|track| track.solo).collect();
-    for clip in &project.clips {
-        if let Some(flag) = occupied.get_mut(clip.track) {
-            *flag = true;
-        }
-    }
-    (0..occupied.len())
-        .filter(|&track| occupied[track])
-        .collect()
 }

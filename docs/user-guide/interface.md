@@ -9,7 +9,7 @@ The application has three themes:
 - **Vintage**: worn painted metal with ivory mixer strips.
 
 To change the theme, use **Theme** on the **Workspace** page of
-[Options](libraries-and-options.md#options). All themes have the same layout,
+[Options](options.md#options). All themes have the same layout,
 controls, and keyboard order. Only the colors, materials, control shapes, and
 typefaces change. Titles are uppercase in all themes.
 [DESIGN.md](../DESIGN.md) is the visual contract.

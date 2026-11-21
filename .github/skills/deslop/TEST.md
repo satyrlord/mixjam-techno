@@ -103,6 +103,6 @@ If context proves one of these values, keep the test:
 
 For a native UI check, build the release executable and run the capture
 procedure in the
-[UI verification](../../../docs/DEVELOPMENT.md#ui-verification) section of
-`docs/DEVELOPMENT.md`. Inspect the images. The captures do not verify physical
-audio, file pickers, or screen readers.
+[UI verification](../../../docs/development/verification.md#ui-verification)
+section of `docs/development/verification.md`. Inspect the images. The captures
+do not verify physical audio, file pickers, or screen readers.

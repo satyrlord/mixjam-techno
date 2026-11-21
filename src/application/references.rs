@@ -29,15 +29,7 @@ impl Session {
             .candidates
             .get(candidate_index)
             .ok_or("The selected sample choice no longer exists.")?;
-        let path = std::fs::canonicalize(path).map_err(|error| {
-            format!(
-                "Cannot open the selected sample {}. {}",
-                path.file_name()
-                    .unwrap_or(path.as_os_str())
-                    .to_string_lossy(),
-                crate::atomic_file::error_text(error)
-            )
-        })?;
+        let path = canonical_choice(path)?;
         let mut project = self.project().clone();
         let mut next_id = last_imported_id(&project, &self.library);
         for id in &conflict.sample_ids {
@@ -137,14 +129,7 @@ impl Session {
         }
         project.sample_conflicts[conflict_index].selected = candidate_index;
         project.sample_conflicts[conflict_index].confirmed = true;
-        project.validate()?;
-        let mut library = (*self.library).clone();
-        library.apply_imports(&project.imported_samples)?;
-        library.reserve_missing_samples(&project.missing_samples);
-        self.editor.transact(|current| *current = project)?;
-        self.set_library(library);
-        self.changed();
-        Ok(())
+        self.commit_resolved(project)
     }
     /// Accept the current choices as one undoable action.
     pub fn confirm_sample_conflicts(&mut self) -> Result<(), String> {
@@ -172,15 +157,7 @@ impl Session {
             .missing_sample(id)
             .ok_or("The missing sample no longer exists.")?
             .clone();
-        let path = std::fs::canonicalize(path).map_err(|error| {
-            format!(
-                "Cannot open the selected sample {}. {}",
-                path.file_name()
-                    .unwrap_or(path.as_os_str())
-                    .to_string_lossy(),
-                crate::atomic_file::error_text(error)
-            )
-        })?;
+        let path = canonical_choice(path)?;
         let path = crate::project_io::retain_manual_wave(&path, &self.settings_root)?;
         let mut project = self.project().clone();
         let matched: Vec<_> = project
@@ -238,6 +215,13 @@ impl Session {
         project
             .sample_conflicts
             .retain(|conflict| !conflict.sample_ids.is_empty());
+        self.commit_resolved(project)
+    }
+    /// Take `project` with its resolved sources as one undoable edit, and
+    /// give the library its imports.
+    fn commit_resolved(&mut self, project: Project) -> Result<(), String> {
+        // The library takes the imports before the edit validates, so an
+        // invalid song must fail with the song's reason first.
         project.validate()?;
         let mut library = (*self.library).clone();
         library.apply_imports(&project.imported_samples)?;
@@ -247,6 +231,19 @@ impl Session {
         self.changed();
         Ok(())
     }
+}
+
+/// The full path of a WAV that the user chose to resolve a reference.
+fn canonical_choice(path: &Path) -> Result<std::path::PathBuf, String> {
+    std::fs::canonicalize(path).map_err(|error| {
+        format!(
+            "Cannot open the selected sample {}. {}",
+            path.file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy(),
+            crate::atomic_file::error_text(error)
+        )
+    })
 }
 
 /// The highest imported sample ID in use; new imports follow it.
@@ -263,25 +260,53 @@ fn last_imported_id(project: &Project, library: &Library) -> u32 {
 }
 
 pub(super) fn same_missing_reference(left: &MissingReference, right: &MissingReference) -> bool {
-    match (left, right) {
-        (
-            MissingReference::External { path: left, .. },
-            MissingReference::External { path: right, .. },
-        ) => {
+    fn saved_path(reference: &MissingReference) -> Option<&Path> {
+        match reference {
+            MissingReference::External { path, .. } => Some(path),
+            _ => crate::compat::rejected_import_path(reference)
+                .map(|(path, _)| path)
+                .filter(|path| !path.is_empty())
+                .map(Path::new),
+        }
+    }
+
+    match (saved_path(left), saved_path(right)) {
+        (Some(left_path), Some(right_path)) => {
             let normalized = |path: &Path| {
                 let path = path.to_string_lossy().replace('\\', "/").to_lowercase();
-                let path = if let Some(unc) = path.strip_prefix("//?/unc/") {
-                    format!("//{unc}")
+                let (kind, rest) = if let Some(rest) = path.strip_prefix("//?/unc/") {
+                    ("unc", rest)
+                } else if let Some(rest) = path.strip_prefix("//?/") {
+                    let bytes = rest.as_bytes();
+                    if bytes.first().is_some_and(u8::is_ascii_alphabetic)
+                        && bytes.get(1..3) == Some(b":/")
+                    {
+                        ("plain", rest)
+                    } else {
+                        ("verbatim", rest)
+                    }
+                } else if let Some(rest) = path.strip_prefix("//./") {
+                    ("device", rest)
+                } else if let Some(rest) = path.strip_prefix("//") {
+                    ("unc", rest)
+                } else if let Some(rest) = path.strip_prefix('/') {
+                    ("root", rest)
                 } else {
-                    path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+                    ("plain", path.as_str())
                 };
-                path.split('/')
+                let body = rest
+                    .split('/')
                     .filter(|part| !part.is_empty() && *part != ".")
                     .collect::<Vec<_>>()
-                    .join("/")
+                    .join("/");
+                (!body.is_empty()).then_some((kind, body))
             };
-            normalized(left) == normalized(right)
+            match (normalized(left_path), normalized(right_path)) {
+                (Some(a), Some(b)) => a == b,
+                _ => left == right,
+            }
         }
+        // An empty rejected path identifies its source by its saved ID.
         _ => left == right,
     }
 }

@@ -2,6 +2,19 @@
 //! frames per tick, and the tempo at which a sound plays.
 use super::{MAX_TICKS, Project, SUPPORTED_BPMS, TICKS_PER_BAR};
 
+/// Ticks in one beat. A bar holds four beats.
+pub const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
+
+/// Frames in one tick at `sample_rate` and `bpm`.
+pub fn frames_per_tick_at(sample_rate: u32, bpm: f64) -> f64 {
+    sample_rate as f64 * 240.0 / bpm / TICKS_PER_BAR as f64
+}
+
+/// Seconds from the start of the song to `tick` at `bpm`.
+pub fn tick_seconds(tick: u32, bpm: f64) -> f64 {
+    f64::from(tick) * 240.0 / bpm / f64::from(TICKS_PER_BAR)
+}
+
 impl Project {
     pub fn end_tick(&self) -> u32 {
         self.clips
@@ -38,8 +51,14 @@ impl Project {
         Some([start, end.min(MAX_TICKS)])
     }
 
+    /// The whole song as a loop region: from the start to the song's end, and
+    /// at least one bar.
+    pub fn song_span(&self) -> [u32; 2] {
+        [0, self.end_tick().max(TICKS_PER_BAR)]
+    }
+
     pub fn frames_per_tick(&self, sample_rate: u32) -> f64 {
-        sample_rate as f64 * 240.0 / self.bpm / TICKS_PER_BAR as f64
+        frames_per_tick_at(sample_rate, self.bpm)
     }
 
     /// MixJam v7 stores an exact source span, represented by a derived tempo.

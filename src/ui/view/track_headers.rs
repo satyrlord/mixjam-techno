@@ -38,9 +38,8 @@ impl MixJamApp {
         if frame.mix {
             let (summary, detail) = headers
                 .summaries
-                .get_mut(index)
-                .map(std::mem::take)
-                .unwrap_or_default();
+                .get(index)
+                .map_or(("", ""), |(summary, detail)| (summary, detail));
             let track = &self.session.project().tracks[index];
             let category = first_sound
                 .and_then(|id| self.session.library().sample_by_id(id))
@@ -53,7 +52,7 @@ impl MixJamApp {
                 rect,
                 frame.mix_offset,
                 index,
-                (&summary, &detail),
+                (summary, detail),
                 &facts,
                 &mut mix,
             );

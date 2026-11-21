@@ -69,6 +69,29 @@ fn automation_drags_include_additions_and_pauses_but_end_on_release() {
 }
 
 #[test]
+fn a_track_point_drag_ends_a_return_point_drag() {
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    let set_return = |session: &mut Session, value| {
+        session
+            .edit(EditCommand::SetReturnAutomation {
+                bus: 0,
+                points: vec![crate::automation::Point { tick: 0, value }],
+            })
+            .unwrap();
+    };
+    session.begin_return_gesture(0).unwrap();
+    set_return(&mut session, 0.25);
+    // The return drag did not get its end before a track drag began.
+    session
+        .begin_automation_gesture(0, crate::automation::Lane::Volume)
+        .unwrap();
+    set_return(&mut session, 0.5);
+    set_return(&mut session, 0.75);
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project().return_automation[0][0].value, 0.5);
+}
+
+#[test]
 fn separate_automation_edits_are_separate_undo_steps() {
     let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
     let set = |session: &mut Session, value| {
@@ -730,4 +753,16 @@ fn each_clip_control_drag_is_its_own_undo_step() {
     assert!(session.history_step(false).unwrap());
     assert_eq!(session.project().clips[0].gain, 1.0);
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_refused_point_drag_ends_the_point_drag_before_it() {
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    let lane = crate::automation::Lane::Volume;
+    session.begin_return_gesture(0).unwrap();
+    assert!(session.begin_automation_gesture(TRACK_COUNT, lane).is_err());
+    assert!(session.return_gesture.is_none());
+    session.begin_automation_gesture(0, lane).unwrap();
+    assert!(session.begin_return_gesture(crate::fx::BUSES).is_err());
+    assert!(session.automation_gesture.is_none());
 }

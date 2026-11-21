@@ -509,3 +509,47 @@ fn library_folder_lists_reject_missing_children() {
             .contains("inside")
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn library_folder_lists_ignore_case_for_offline_folders() {
+    let folder = Folder::new();
+    let upper = folder.0.join("Unavailable/Samples");
+    let lower = folder.0.join("unavailable/samples");
+    assert!(!upper.exists());
+    assert!(
+        check_library_folders(&[upper.clone(), lower])
+            .unwrap_err()
+            .contains("already")
+    );
+    let child = folder.0.join("UNAVAILABLE/SAMPLES/Drums");
+    assert!(
+        check_library_folders(&[upper, child])
+            .unwrap_err()
+            .contains("inside")
+    );
+}
+
+#[test]
+fn a_link_out_of_the_folder_is_skipped_and_the_rest_loads() {
+    let folder = Folder::new();
+    folder.wave("Kept/kick.wav", 44_100, 300);
+    let outside = Folder::new();
+    outside.wave("snare.wav", 44_100, 300);
+    // Windows allows links only with Developer Mode.
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_dir(&outside.0, folder.0.join("Shared"));
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&outside.0, folder.0.join("Shared"));
+    if linked.is_err() {
+        eprintln!("skipped: this system does not allow links");
+        return;
+    }
+    let library = Library::open_wav_folder(&folder.0, 140.0).unwrap();
+    assert_eq!(library.samples.len(), 1);
+    assert!(library.unloaded_roots().is_empty());
+    let skipped = library.skipped_waves();
+    assert_eq!(skipped.len(), 1);
+    assert!(skipped[0].0.ends_with("Shared"), "{:?}", skipped[0]);
+    assert!(skipped[0].1.contains("outside"), "{:?}", skipped[0]);
+}

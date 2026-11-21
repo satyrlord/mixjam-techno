@@ -50,6 +50,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
 import samples  # noqa: E402
+import wavio  # noqa: E402
 
 COLUMNS = ['root', 'path', 'bytes', 'mtime', 'measure_version', 'rms_db', 'peak_db', 'lead_ms', 'low', 'bright', 'centroid',
            'flatness', 'attack_ms', 'width_db', 'key', 'key_fit', 'tuning', 'chroma', 'end_db', 'end_spike',
@@ -125,9 +126,7 @@ def decode(raw, tag, channels, bits):
     if tag == 1 and bits == 16:
         x = np.frombuffer(raw, '<i2').astype(np.float32) / 32768
     elif tag == 1 and bits == 24:
-        b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
-        ints = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
-        x = np.where(ints >= 1 << 23, ints - (1 << 24), ints).astype(np.float32) / (1 << 23)
+        x = wavio.unpack_pcm24(raw).astype(np.float32) / (1 << 23)
     elif tag == 1 and bits == 32:
         x = np.frombuffer(raw, '<i4').astype(np.float32) / (1 << 31)
     elif tag == 1 and bits == 8:

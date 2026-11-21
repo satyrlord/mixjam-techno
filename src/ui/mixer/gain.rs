@@ -32,14 +32,17 @@ impl FaderRange {
     fn maximum_db(self) -> f32 {
         match self {
             Self::Mixer => MAX_MIXER_GAIN_DB,
-            Self::Clip => amplitude_to_db(2.0),
+            Self::Clip => super::super::view::clip_gain_max_db(),
         }
     }
 
     fn travel(self) -> std::ops::RangeInclusive<f32> {
         match self {
             Self::Mixer => 0.0..=1.0,
-            Self::Clip => gain_fraction(db_to_amplitude(self.silence_db()))..=gain_fraction(2.0),
+            Self::Clip => {
+                gain_fraction(db_to_amplitude(self.silence_db()))
+                    ..=gain_fraction(super::super::view::MAX_CLIP_GAIN)
+            }
         }
     }
 
@@ -52,7 +55,7 @@ impl FaderRange {
         if fraction <= 0.0 {
             0.0
         } else if matches!(self, Self::Clip) && fraction >= 1.0 {
-            2.0
+            super::super::view::MAX_CLIP_GAIN
         } else {
             fraction_gain(egui::lerp(self.travel(), fraction.clamp(0.0, 1.0)))
         }
@@ -319,11 +322,17 @@ pub(super) fn gain_rail(
     );
     // A pointer edit leaves keyboard focus unchanged. Tab focuses the rail
     // for key adjustments.
-    if (response.clicked() || response.dragged())
-        && let Some(pos) = response.interact_pointer_pos()
-    {
+    let dragged = controls::primary_dragged(ui, &response);
+    let pointer = if dragged {
+        controls::drag_position(ui, &response)
+    } else {
+        response
+            .interact_pointer_pos()
+            .filter(|_| controls::primary_clicked(ui, &response))
+    };
+    if let Some(pos) = pointer {
         let fine = ui.input(|input| input.modifiers.shift);
-        let fraction = if fine && response.dragged() {
+        let fraction = if fine && dragged {
             gain_fraction(*gain) - ui.input(|input| input.pointer.delta().y) / rect.height() * 0.1
         } else {
             (rect.bottom() - pos.y) / rect.height()

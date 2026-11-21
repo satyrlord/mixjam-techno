@@ -32,6 +32,8 @@ def notes(path):
     if data[:4] != b'MThd':
         raise ValueError(f'The file {path} is not a MIDI file.')
     _, _, tracks, ppq = struct.unpack('>IHHH', data[4:14])
+    if ppq & 0x8000:
+        raise ValueError(f'The file {path} uses SMPTE time, not pulses per quarter note.')
     i, found = 14, []
     for _ in range(tracks):
         if data[i:i + 4] != b'MTrk':
@@ -59,6 +61,9 @@ def notes(path):
                 j += 2
                 voice = (status & 0x0F, note)
                 if kind == 0x90 and velocity > 0:
+                    if voice in held:
+                        # A new note-on of a sounding note ends the earlier one.
+                        found.append((held[voice], tick, note))
                     held[voice] = tick
                 elif voice in held:
                     found.append((held.pop(voice), tick, note))
@@ -66,6 +71,8 @@ def notes(path):
                 j += 1
             else:
                 j += 2
+        # A note with no note-off sounds until the track ends.
+        found.extend((start, tick, note) for (_, note), start in held.items())
         i = end
     return found, ppq
 

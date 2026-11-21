@@ -314,8 +314,10 @@ impl MixJamApp {
         };
         match request {
             FileRequest::OptionsFolder => {
+                options::draft::forget_folder_check();
                 if let Some(draft) = &mut self.options {
                     draft.values.fixed_song_folder = Some(path);
+                    draft.error = None;
                 }
             }
             FileRequest::OpenSong => {
@@ -391,7 +393,7 @@ impl MixJamApp {
                                 ),
                                 false,
                             );
-                            self.clip_paint.step_patterns.clear();
+                            self.clip_paint.clear_step_patterns();
                         }
                     }
                 }

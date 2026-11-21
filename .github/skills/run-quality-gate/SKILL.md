@@ -63,8 +63,8 @@ invent a pass.
    Completion criterion: Each prepared asset matches, or the report names the
    missing private input.
 5. For UI changes, run the capture procedure in the
-   [UI verification](../../../docs/DEVELOPMENT.md#ui-verification) section of
-   `docs/DEVELOPMENT.md` against the release build.
+   [UI verification](../../../docs/development/verification.md#ui-verification)
+   section of `docs/development/verification.md` against the release build.
    Completion criterion: The capture procedure has a current result.
 6. For UI changes, inspect the captures at each size in that section.
    Completion criterion: Each capture has a recorded visual result.

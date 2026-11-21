@@ -93,12 +93,7 @@ impl DuckerParam {
 
     /// Set the control, held to its range.
     pub fn set(self, ducker: &mut Ducker, value: f32) {
-        let range = self.range();
-        let value = if value.is_nan() {
-            range.default
-        } else {
-            value.clamp(range.low, range.high)
-        };
+        let value = self.range().hold(value);
         match self {
             Self::Threshold => ducker.threshold = value,
             Self::Depth => ducker.depth = value,
@@ -112,19 +107,51 @@ impl Ducker {
     /// `track` is the ducker's own track, from 0. A ducker that is on needs
     /// another track as its key; one that is off keeps any key.
     pub fn validate(&self, track: usize) -> Result<(), String> {
-        if DuckerParam::ALL.into_iter().any(|param| {
-            let (value, range) = (param.get(self), param.range());
-            !(value.is_finite() && (range.low..=range.high).contains(&value))
-        }) {
+        if !DuckerParam::ALL
+            .into_iter()
+            .all(|param| param.range().contains(param.get(self)))
+        {
             return Err("A ducker setting is out of range.".into());
         }
         if !(1..=crate::engine::TRACK_COUNT).contains(&usize::from(self.key)) {
             return Err("The ducker's key must be a track from 1 to 64.".into());
         }
-        if self.on && usize::from(self.key) == track + 1 {
+        if self.keys_itself(track) {
             return Err("The ducker's key must be another track.".into());
         }
         Ok(())
+    }
+
+    /// Whether the ducker is on and keyed by its own track, from 0.
+    fn keys_itself(&self, track: usize) -> bool {
+        self.on && usize::from(self.key) == track + 1
+    }
+
+    /// Set the key from a dial's value for the ducker of `track`, from 0.
+    /// The value is rounded and held to tracks 1 to 64; a value that is not
+    /// a number keeps the key. A track never keys its own ducker. A new key
+    /// on the own track steps past it in the direction of the change, or
+    /// keeps the old key at the end of the range. A ducker that is on and
+    /// still keyed by its own track takes track 2 on track 1, else track 1.
+    /// After the switch turns on, call it with the current key.
+    pub fn set_key(&mut self, track: usize, key: f64) {
+        let tracks = 1.0..=crate::engine::TRACK_COUNT as f64;
+        let (own, before) = (track as f64 + 1.0, f64::from(self.key));
+        let mut key = if key.is_nan() {
+            before
+        } else {
+            key.round().clamp(*tracks.start(), *tracks.end())
+        };
+        if key != before && key == own {
+            key = if key > before { own + 1.0 } else { own - 1.0 };
+            if !tracks.contains(&key) {
+                key = before;
+            }
+        }
+        self.key = key as u8;
+        if self.keys_itself(track) {
+            self.key = if track == 0 { 2 } else { 1 };
+        }
     }
 
     /// The settings and the switch as a new track has them.
@@ -312,5 +339,47 @@ mod tests {
         DuckerParam::Depth.set(&mut ducker, 30.0);
         assert_eq!(ducker.depth, 24.0);
         assert!(Ducker::default().is_default());
+    }
+
+    #[test]
+    fn a_ducker_never_takes_its_own_track_as_its_key() {
+        let keyed = |on: bool, key: u8, track: usize, value: f64| {
+            let mut ducker = Ducker {
+                on,
+                key,
+                ..Ducker::default()
+            };
+            ducker.set_key(track, value);
+            ducker.key
+        };
+        // Values round and stay on tracks 1 to 64; not a number keeps the key.
+        assert_eq!(keyed(true, 3, 9, 7.4), 7);
+        assert_eq!(keyed(true, 3, 9, -5.0), 1);
+        assert_eq!(keyed(true, 3, 9, 200.0), 64);
+        assert_eq!(keyed(true, 3, 9, f64::NAN), 3);
+        // A new key on the own track steps past it in the direction of the change.
+        assert_eq!(keyed(true, 3, 4, 5.0), 6);
+        assert_eq!(keyed(true, 8, 4, 5.0), 4);
+        assert_eq!(keyed(false, 8, 4, 5.0), 4);
+        // At the end of the range it keeps the old key.
+        assert_eq!(keyed(true, 3, 0, 1.0), 3);
+        assert_eq!(keyed(true, 60, 63, 64.0), 60);
+        // A ducker switched on with its own track as the key takes another one.
+        assert_eq!(keyed(true, 1, 0, 1.0), 2);
+        assert_eq!(keyed(true, 5, 4, 5.0), 1);
+        assert_eq!(keyed(false, 5, 4, 5.0), 5);
+        for track in 0..crate::engine::TRACK_COUNT {
+            for key in 1..=crate::engine::TRACK_COUNT as u8 {
+                for value in [0.0, f64::from(key), 33.0, 65.0] {
+                    let mut ducker = Ducker {
+                        on: true,
+                        key,
+                        ..Ducker::default()
+                    };
+                    ducker.set_key(track, value);
+                    assert!(ducker.validate(track).is_ok(), "{track} {key} {value}");
+                }
+            }
+        }
     }
 }

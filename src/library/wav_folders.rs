@@ -23,7 +23,8 @@ impl Library {
     }
 
     /// Open a WAV folder as a library, with progress reporting, cancellation,
-    /// and a probe cache, for a scan that runs on another thread.
+    /// and a probe cache, for a scan that runs on another thread. The local
+    /// corpus tools in `examples/` use it.
     pub fn open_wav_folder_with(
         root: &Path,
         source_bpm: f64,
@@ -231,6 +232,7 @@ impl Library {
     /// Fill the identities that this product's provider lacks from another
     /// library folder's WAVs. The provider and its folder stay the same, and
     /// identities the library already has keep their files.
+    #[cfg(test)]
     pub fn supplement_wav_product(
         &mut self,
         product: Product,
@@ -246,6 +248,7 @@ impl Library {
     /// Identify one product in library folders, in list order: the first
     /// folder that identifies any of its samples becomes its provider, and
     /// each later folder fills only the identities still missing.
+    #[cfg(test)]
     pub fn register_wav_folders(
         &mut self,
         product: Product,

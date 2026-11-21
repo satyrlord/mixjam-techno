@@ -54,12 +54,26 @@ impl Session {
     pub fn section_bookmarks_setting(&self) -> bool {
         self.options.show_section_bookmarks
     }
-    /// Keep the bookmark choice for later sessions. A failed write only loses that convenience.
+    /// Show or hide section bookmarks, and keep the choice for later sessions.
+    /// A failed write only loses that convenience. An invalid or newer
+    /// options file stays as it is, and the choice lasts for this session.
     pub fn remember_section_bookmarks(&mut self, visible: bool) -> Result<(), String> {
-        let mut options = self.options.clone();
-        options.show_section_bookmarks = visible;
-        self.apply_options(options, self.options_revision, false)
-            .map(|_| ())
+        if visible == self.options.show_section_bookmarks {
+            return Ok(());
+        }
+        let saved = if self.options_invalid || self.options_future {
+            Ok(())
+        } else {
+            let mut options = self.options.clone();
+            options.show_section_bookmarks = visible;
+            match self.apply_options(options, self.options_revision, false) {
+                Ok(_) => return Ok(()),
+                Err(error) => Err(error),
+            }
+        };
+        self.options.show_section_bookmarks = visible;
+        self.options_revision = self.options_revision.wrapping_add(1);
+        saved
     }
 
     pub fn layout(&self) -> crate::options::WorkspaceLayout {
@@ -190,7 +204,14 @@ impl Session {
         }
         if quality_changed {
             // The render revision also rejects an old job which completes after Apply.
-            self.revision = self.revision.wrapping_add(1);
+            let revision = self.revision.wrapping_add(1);
+            // The song did not change, so a song that waits for a scan still opens.
+            if let Some((_, queued, _)) = &mut self.pending_open
+                && *queued == self.revision
+            {
+                *queued = revision;
+            }
+            self.revision = revision;
             self.render_dirty = true;
             self.render = None;
             self.failed_revision = None;

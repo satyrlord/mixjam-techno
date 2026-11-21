@@ -43,7 +43,7 @@ pub(crate) fn send_knob(
     let response = ui.interact(rect, ui.id().with(name), Sense::click_and_drag());
     let before = *value;
     let fine = ui.input(|input| input.modifiers.shift);
-    if response.dragged() {
+    if controls::primary_dragged(ui, &response) {
         let delta = ui.input(|input| input.pointer.delta());
         *value += (delta.x - delta.y) / 120.0 * if fine { 0.1 } else { 1.0 };
     }

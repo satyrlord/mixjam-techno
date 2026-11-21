@@ -71,8 +71,15 @@ def best_triad(held):
     return best
 
 
+def _tonic(key):
+    """The tonic pitch class of a key name, a (tonic, mode) pair, or a bare pitch class."""
+    if isinstance(key, str):
+        return parse_key(key)[0]
+    return key[0] if isinstance(key, tuple) else key
+
+
 def shift_to(source_key, target_key):
-    """Semitones (-6..+5) that move `source_key`'s tonic onto `target_key`'s."""
-    a, _ = parse_key(source_key) if isinstance(source_key, str) else source_key
-    b, _ = parse_key(target_key) if isinstance(target_key, str) else target_key
-    return (b - a + 6) % 12 - 6
+    """Semitones (-6..+5) that move `source_key`'s tonic onto `target_key`'s.
+
+    Each key is a key name, a (tonic, mode) pair, or a tonic pitch class."""
+    return (_tonic(target_key) - _tonic(source_key) + 6) % 12 - 6

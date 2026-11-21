@@ -24,13 +24,13 @@ pub(in super::super) struct ScoreTools {
 impl MixJamApp {
     /// The score's toolbar: its heading and counts, then the automation lane,
     /// Follow, Sections, Zoom and Maximise against the right edge.
-    pub(super) fn score_toolbar(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn score_toolbar(&mut self, ui: &mut egui::Ui, track_count: usize) {
         // Keep the toolbar in one row beside the Sounds panel, so its
         // controls do not take height from the lane viewport.
         let narrow = ui.available_width() < 840.0;
         let counts = format!(
             "{} tracks  /  {} clips",
-            occupied_tracks(self.session.project()).len(),
+            track_count,
             self.session.project().clips.len()
         );
         // Below this width, the heading would push actions behind a side panel.

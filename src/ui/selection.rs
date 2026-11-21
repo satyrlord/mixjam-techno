@@ -34,6 +34,7 @@ impl MixJamApp {
         self.selection.track = None;
         // Project and library replacement invalidate every in-flight gesture.
         self.boards.master_view_generation = self.boards.master_view_generation.wrapping_add(1);
+        self.boards.summaries = Default::default();
         self.gestures.drag = None;
         self.gestures.handle_drag = None;
         self.gestures.automation_drag = None;

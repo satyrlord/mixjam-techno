@@ -571,7 +571,6 @@ fn ducker_section(
     ducker: &Ducker,
 ) -> (Ducker, bool) {
     let mut draft = *ducker;
-    let own = track as f64 + 1.0;
     let label = format!("Track {}", track + 1);
     let top = bounds.top() + DUCKER_TOP;
     controls::inset(
@@ -592,13 +591,10 @@ fn ducker_section(
          bass makes room for the kick. It works after the fader and before the sends.",
         if draft.on { "on" } else { "off" }
     ));
-    if draft.on && f64::from(draft.key) == own {
-        draft.key = if track == 0 { 2 } else { 1 };
-    }
+    draft.set_key(track, f64::from(draft.key));
     let y = top + 48.0;
     let at = |column: usize| column_x(bounds, column);
-    let before = f64::from(draft.key);
-    let mut key = before;
+    let mut key = f64::from(draft.key);
     dial(
         ui,
         dial_points(at(0), y),
@@ -613,14 +609,7 @@ fn ducker_section(
         },
         draft.on,
     );
-    let mut key = key.round().clamp(1.0, 64.0);
-    if key != before && key == own {
-        key = if key > before { own + 1.0 } else { own - 1.0 };
-        if !(1.0..=64.0).contains(&key) {
-            key = before;
-        }
-    }
-    draft.key = key as u8;
+    draft.set_key(track, key);
     for (column, param) in DuckerParam::ALL.into_iter().enumerate() {
         let x = at(column + 1);
         let (label_text, hint, format) = ducker_face(param);

@@ -3,7 +3,7 @@
 use super::{REFRESH, Refresh};
 use crate::master as settings;
 use crate::master::dsp::{
-    Biquad, Coefficients, DcBlocker, Delay, Oversampler, Smoothed, db_to_gain, pole,
+    Biquad, Coefficients, DcBlocker, Delay, Oversampler, Smoothed, cascade, db_to_gain, pole,
 };
 use crate::playback_quality::Oversampling;
 
@@ -323,11 +323,7 @@ impl Tape {
         let mut channel = |index: usize, sample: f32| {
             let emphasized = self.filters[0].process(index, f64::from(sample)) as f32;
             let saturated = self.oversamplers[index].process(emphasized, |x| tape(x, gain));
-            let mut sample = f64::from(saturated);
-            for filter in &mut self.filters[1..] {
-                sample = filter.process(index, sample);
-            }
-            sample as f32
+            cascade(&mut self.filters[1..], index, f64::from(saturated)) as f32
         };
         (channel(0, left), channel(1, right))
     }

@@ -44,6 +44,84 @@ pub fn sections_error(sections: &[Section]) -> Option<String> {
     None
 }
 
+impl super::Project {
+    /// The span that `clip` can grow into on its track, as `[start, end]`:
+    /// from the end of the clip before it to the start of the clip after it,
+    /// or the timeline's ends. An edit within the span covers no neighbor. A
+    /// neighbor that already overlaps `clip` keeps the span at its edges.
+    pub fn clip_room(&self, clip: &Clip) -> [u32; 2] {
+        let end = clip.start_tick.saturating_add(clip.length_ticks);
+        let (mut first, mut last) = (0, MAX_TICKS);
+        for other in self
+            .clips
+            .iter()
+            .filter(|other| other.track == clip.track && other.id != clip.id)
+        {
+            let other_end = other.start_tick.saturating_add(other.length_ticks);
+            if other_end <= clip.start_tick {
+                first = first.max(other_end);
+            } else if other.start_tick >= end {
+                last = last.min(other.start_tick);
+            } else {
+                return [clip.start_tick, end];
+            }
+        }
+        [first, last]
+    }
+
+    /// The sections with a new one at `tick`, in start order. Its name is
+    /// "Section N", with the first N that no section has. `None` when a
+    /// section already starts at `tick`.
+    pub fn sections_with_new(&self, tick: u32) -> Option<Vec<Section>> {
+        let index = self
+            .sections
+            .partition_point(|section| section.start_tick < tick);
+        if self
+            .sections
+            .get(index)
+            .is_some_and(|section| section.start_tick == tick)
+        {
+            return None;
+        }
+        let name = (1..)
+            .map(|n| format!("Section {n}"))
+            .find(|name| self.sections.iter().all(|section| section.name != *name))
+            .unwrap_or_default();
+        let mut sections = self.sections.clone();
+        sections.insert(
+            index,
+            Section {
+                start_tick: tick,
+                name,
+            },
+        );
+        Some(sections)
+    }
+
+    /// The sections without the one that starts at `tick`.
+    pub fn sections_without(&self, tick: u32) -> Vec<Section> {
+        let mut sections = self.sections.clone();
+        sections.retain(|section| section.start_tick != tick);
+        sections
+    }
+
+    /// The sections with the one at `tick` named `name`, trimmed. `None` when
+    /// no section starts there, the name is empty, or it does not change.
+    pub fn sections_renamed(&self, tick: u32, name: &str) -> Option<Vec<Section>> {
+        let name = name.trim();
+        let index = self
+            .sections
+            .iter()
+            .position(|section| section.start_tick == tick)?;
+        if name.is_empty() || self.sections[index].name == name {
+            return None;
+        }
+        let mut sections = self.sections.clone();
+        sections[index].name = name.into();
+        Some(sections)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Clip {
     pub id: u64,

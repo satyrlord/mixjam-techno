@@ -125,15 +125,16 @@ pub(crate) fn rotary(
                 )
             });
         }
-        if response.clicked() || response.drag_started() {
+        let start = super::primary_drag_start(ui, &response);
+        if response.clicked() || start.is_some() {
             response.request_focus();
         }
         let draft_id = response.id.with("draft");
-        if response.drag_started() {
+        if start.is_some() {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(draft_id, spec.fraction(before)));
         }
-        if response.dragged() {
+        if super::primary_dragged(ui, &response) {
             let draft = ui
                 .ctx()
                 .data(|data| data.get_temp::<f64>(draft_id))

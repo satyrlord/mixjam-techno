@@ -643,6 +643,30 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
 }
 
 #[test]
+fn a_clip_volume_outside_the_native_range_is_refused_with_its_own_message() {
+    let record = |delta: i16| {
+        let mut bytes = vec![0];
+        bytes.extend_from_slice(&128i32.to_le_bytes());
+        bytes.extend_from_slice(&174u16.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&delta.to_le_bytes());
+        bytes
+    };
+    let library = Library::empty();
+    for delta in [i16::MAX, 0, -16384, -32767] {
+        let song = custom_song(&current_label(), &[record(delta)]);
+        let project = load_bytes(&song, &library).unwrap();
+        assert!((0.0..=2.0).contains(&project.clips[0].gain), "{delta}");
+    }
+    let song = custom_song(&current_label(), &[record(i16::MIN)]);
+    assert_eq!(
+        load_bytes(&song, &library).unwrap_err(),
+        "The native clip has invalid volume data."
+    );
+}
+
+#[test]
 fn reader_rejects_truncated_fields() {
     let mut reader = Reader {
         bytes: &[3, 0, b'A'],

@@ -15,11 +15,10 @@ generic targets when there is no profile:
 - Masking in 120-500 Hz and between lines that share a band.
 - Audibility: the lanes that `OUT/audible.txt` marks as drowned or nearly
   drowned. Read the meter limit in
-  [Measurement limits](REFERENCE.md#measurement-limits). A low "% heard" is
-  not a finding by itself. List these lanes under "Judgements that need
-  ears". Make a finding only when other evidence shows that a line is lost,
-  for example a solo render that has a melody and a mix where its band is
-  masked.
+  [Measurement limits](REFERENCE-INPUTS.md#measurement-limits). A low "% heard"
+  is not a finding by itself. List these lanes under "Judgements that need
+  ears". Make a finding only when other evidence shows that a line is lost, for
+  example a solo render that has a melody and a mix where its band is masked.
 - Stereo width and correlation in each section, and the mono fold-down of
   wide sounds.
 - Reverb and delay: sends, return levels, and if they wash or clarify.
@@ -28,12 +27,12 @@ generic targets when there is no profile:
   fade.
 - Levels of the loud and quiet sections against the targets, dynamics, and peaks.
   Compare a premaster with premaster targets only (see
-  [Measurement limits](REFERENCE.md#measurement-limits)).
+  [Measurement limits](REFERENCE-INPUTS.md#measurement-limits)).
 - The master board: what it does to the mix, measured with `master.py`.
 
 ## Evidence
 
-Read your inputs in [Role inputs](REFERENCE.md#role-inputs).
+Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs).
 
 Measure what the report does not give: solo renders of lane groups, sample
 steps at joins, and band levels in each section. Use `master.py` to test a
@@ -44,7 +43,7 @@ is in the master. The board settings are the work of the mastering engineer.
 
 ## Output
 
-Use the [finding format](REFERENCE.md#finding-format): at most 8 findings, then
-at most 5 things to keep. Give fixes in dB, pan, send amounts, filter points,
-EQ settings, and fades, each inside its
-[control range](REFERENCE.md#control-ranges). Give no score.
+Use the [finding format](REFERENCE-FINDINGS.md#finding-format): at most 8
+findings, then at most 5 things to keep. Give fixes in dB, pan, send amounts,
+filter points, EQ settings, and fades, each inside its [control
+range](REFERENCE-CONTROLS.md#control-ranges). Give no score.

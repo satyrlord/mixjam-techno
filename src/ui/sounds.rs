@@ -254,7 +254,7 @@ impl MixJamApp {
                     self.sounds.reveal = Some(id);
                     ui.memory_mut(|memory| memory.request_focus(list_id));
                 }
-                self.sound_actions(id, &response);
+                self.sound_actions(ui, id, &response);
             }
         });
         name_scroll_area(ui, "sounds-panel-list", "Sound list");
@@ -296,7 +296,7 @@ impl MixJamApp {
     /// What a sound row does: a click selects it for placement, a
     /// double-click previews it, and a drag carries it to a track. Enter on
     /// the focused list places the current sound.
-    pub(super) fn sound_actions(&mut self, id: u32, response: &Response) {
+    fn sound_actions(&mut self, ui: &egui::Ui, id: u32, response: &Response) {
         if response.clicked() {
             self.selection.sample = Some(id);
             self.selection.place_on_click = true;
@@ -304,7 +304,8 @@ impl MixJamApp {
         if response.double_clicked() {
             self.preview(id);
         }
-        if response.drag_started() {
+        let start = controls::primary_drag_start(ui, response);
+        if self.gestures.drag.is_none() && start.is_some() {
             self.selection.sample = Some(id);
             self.selection.place_on_click = true;
             self.gestures.drag = Some(DragItem::Sample(id));

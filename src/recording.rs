@@ -4,7 +4,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 
 pub fn count_in(bpm: f64) -> Result<Pcm, String> {
-    if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
+    if !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(&bpm) {
         return Err("Effective tempo must be from 7.5 to 1200 BPM.".into());
     }
     let sample_rate = crate::audio::Mix::SAMPLE_RATE;
@@ -156,7 +156,7 @@ impl Recorder {
     }
 
     pub fn start(bpm: f64) -> Result<Self, String> {
-        if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
+        if !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(&bpm) {
             return Err("Effective tempo must be from 7.5 to 1200 BPM.".into());
         }
         let device = cpal::default_host()

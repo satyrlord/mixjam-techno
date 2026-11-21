@@ -1,6 +1,7 @@
 //! New sample editing algorithms behind the recovered manual's operations.
 //! The original resampler, time stretcher, and tempo detector are not recovered.
 use crate::audio::Pcm;
+use crate::master::dsp::Coefficients;
 
 pub fn trim(input: &Pcm, start_frame: u64, end_frame: u64) -> Result<Pcm, String> {
     input.validate()?;
@@ -68,7 +69,7 @@ pub fn time_stretch(input: &Pcm, source_bpm: f64, target_bpm: f64) -> Result<Pcm
     input.validate()?;
     if [source_bpm, target_bpm]
         .iter()
-        .any(|bpm| !bpm.is_finite() || !(7.5..=1200.0).contains(bpm))
+        .any(|bpm| !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(bpm))
     {
         return Err("Source and target tempo must be from 7.5 to 1200 BPM.".into());
     }
@@ -87,9 +88,7 @@ pub fn time_stretch(input: &Pcm, source_bpm: f64, target_bpm: f64) -> Result<Pcm
 /// keeps its pitch.
 pub fn repitch(input: &Pcm, cents: i32) -> Result<Pcm, String> {
     input.validate()?;
-    if !(-crate::engine::MAX_PITCH_CENTS..=crate::engine::MAX_PITCH_CENTS).contains(&cents) {
-        return Err("Pitch must be from -24 to 24 semitones.".into());
-    }
+    crate::engine::check_pitch(cents, "Pitch")?;
     let frames = input.frames() as usize;
     if cents == 0 || frames < 8 {
         return Ok(input.clone());
@@ -188,15 +187,13 @@ fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
 fn zero_phase_low_pass(input: &Pcm, cutoff: f64) -> Vec<f64> {
     let channels = input.channels as usize;
     let frames = input.frames() as usize;
-    let omega = 2.0 * std::f64::consts::PI * cutoff.min(f64::from(input.sample_rate) * 0.45)
-        / f64::from(input.sample_rate);
-    let alpha = omega.sin() / std::f64::consts::SQRT_2;
-    let cos = omega.cos();
-    let a0 = 1.0 + alpha;
-    let b0 = (1.0 - cos) / 2.0 / a0;
-    let b1 = (1.0 - cos) / a0;
-    let a1 = -2.0 * cos / a0;
-    let a2 = (1.0 - alpha) / a0;
+    let rate = f64::from(input.sample_rate);
+    let [b0, b1, b2, a1, a2] = Coefficients::low_pass_at(
+        cutoff.min(rate * 0.45),
+        std::f64::consts::FRAC_1_SQRT_2,
+        rate,
+    )
+    .values();
     let mut band: Vec<f64> = input
         .samples
         .iter()
@@ -209,7 +206,7 @@ fn zero_phase_low_pass(input: &Pcm, cutoff: f64) -> Vec<f64> {
                 let frame = if backward { frames - 1 - step } else { step };
                 let index = frame * channels + channel;
                 let x = band[index];
-                let y = b0 * x + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+                let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
                 (x2, x1, y2, y1) = (x1, x, y1, y);
                 band[index] = y;
             }

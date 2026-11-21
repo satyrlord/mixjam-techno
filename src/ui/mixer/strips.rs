@@ -5,7 +5,7 @@ use super::*;
 pub(crate) fn show(
     ui: &mut egui::Ui,
     project: &Project,
-    library: LibraryView<'_>,
+    summaries: &[(String, String)],
     master: &mut f32,
     fx: &mut FxBuses,
     bypass: &mut bool,
@@ -36,8 +36,7 @@ pub(crate) fn show(
     // interactive area also includes the cap's 16-point overhang at each end.
     let height = (ui.available_height() - 14.0).max(304.0 * scale);
     let bank_width = (ui.available_width() - width - 12.0 * scale).max(width);
-    let occupied = occupied_tracks(project);
-    let mut summaries = mixer_sample_summaries(project, library);
+    let occupied = project.occupied_tracks();
     let any_solo = project.any_solo();
     let mut result = Changes::default();
     ui.horizontal_top(|ui| {
@@ -64,8 +63,7 @@ pub(crate) fn show(
                                     ui.scope_builder(
                                         egui::UiBuilder::new().id_salt(("mixer_track", index)),
                                         |ui| {
-                                            let (summary, detail) =
-                                                std::mem::take(&mut summaries[index]);
+                                            let (summary, detail) = &summaries[index];
                                             let track = &project.tracks[index];
                                             let mut mix = track.mix();
                                             let mut gain = mix.gain;
@@ -77,8 +75,8 @@ pub(crate) fn show(
                                                 height,
                                                 (
                                                     &format!("Track {}", index + 1),
-                                                    &summary,
-                                                    &detail,
+                                                    summary.as_str(),
+                                                    detail.as_str(),
                                                 ),
                                                 &mut gain,
                                                 Some(TrackControls {

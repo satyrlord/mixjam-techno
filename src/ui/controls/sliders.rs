@@ -105,9 +105,15 @@ pub(crate) fn stepped_slider(
                 )
             });
         }
-        if response.is_pointer_button_down_on() || response.clicked() {
+        let held = primary_down_on(ui, &response);
+        if held || super::primary_clicked(ui, &response) {
             response.request_focus();
-            if let Some(pointer) = response.interact_pointer_pos() {
+            let pointer = if held {
+                super::drag_position(ui, &response)
+            } else {
+                response.interact_pointer_pos()
+            };
+            if let Some(pointer) = pointer {
                 let fraction = ((pointer.x - left) / (right - left).max(1.0)).clamp(0.0, 1.0);
                 index = (fraction * last as f32).round() as usize;
             }

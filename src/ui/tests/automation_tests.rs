@@ -397,3 +397,154 @@ fn a_return_lane_spans_the_arrangement_and_edits_its_bus_in_one_undo_step() {
     assert_eq!(points(&app), [(512, 1.5), (768, 1.0)]);
     assert_eq!(app.session.project().clips, clips);
 }
+
+#[test]
+fn a_secondary_drag_on_an_automation_lane_changes_no_point() {
+    use mixjam_techno::application::automation::Lane;
+    let (ctx, mut app) = fixture();
+    app.score_tools.automation_lane = Some(Lane::Volume);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let canvas = app.score.rect.unwrap();
+    let start = Pos2::new(
+        canvas.left() + app.score.bar_width,
+        canvas.top() + app.score.row_height / 2.0,
+    );
+    let end = start + Vec2::new(app.score.bar_width, -6.0);
+    let before = app.session.project().clone();
+    secondary_drag(&ctx, &mut app, start, end);
+    assert_eq!(
+        app.session.project(),
+        &before,
+        "The other button adds no point to a track lane."
+    );
+    assert!(app.gestures.automation_drag.is_none());
+    assert!(
+        !app.session.has_history_step(false),
+        "No history step was made."
+    );
+    secondary_then_primary_drag(&ctx, &mut app, start, end);
+    assert_eq!(app.session.project(), &before);
+    assert!(!app.session.has_history_step(false));
+    // The primary button still adds a point and moves it.
+    drag(&ctx, &mut app, start, end, egui::Modifiers::NONE);
+    assert_eq!(app.session.project().tracks[0].automation.volume.len(), 1);
+    let with_point = app.session.project().clone();
+    // The other button does not move a point that it lands on.
+    let point = app.session.project().tracks[0].automation.volume[0];
+    let on_point = Pos2::new(
+        canvas.left() + app.score.bar_width * point.tick as f32 / TICKS_PER_BAR as f32,
+        end.y,
+    );
+    let aside = on_point + Vec2::new(app.score.bar_width, 0.0);
+    secondary_drag(&ctx, &mut app, on_point, aside);
+    assert_eq!(app.session.project(), &with_point);
+}
+
+#[test]
+fn a_secondary_drag_on_a_return_lane_changes_no_point() {
+    let (ctx, mut app) = fixture();
+    app.score_tools.return_lane = Some(1);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let canvas = app.score.rect.unwrap();
+    let row = view::return_row(canvas, app.score.drop_rect.unwrap());
+    let bar_width = app.score.bar_width;
+    let at = |bar: f32, value: f32| {
+        Pos2::new(canvas.left() + bar_width * bar, view::return_y(value, row))
+    };
+    let before = app.session.project().clone();
+    secondary_drag(&ctx, &mut app, at(1.0, 0.25), at(2.0, 1.5));
+    assert_eq!(
+        app.session.project(),
+        &before,
+        "The other button adds no point to a return lane."
+    );
+    assert!(app.gestures.automation_drag.is_none());
+    assert!(
+        !app.session.has_history_step(false),
+        "No history step was made."
+    );
+    secondary_then_primary_drag(&ctx, &mut app, at(1.0, 0.25), at(2.0, 1.5));
+    assert_eq!(app.session.project(), &before);
+    assert!(!app.session.has_history_step(false));
+    // The primary button still adds a point and moves it.
+    drag(
+        &ctx,
+        &mut app,
+        at(1.0, 0.25),
+        at(2.0, 1.5),
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.session.project().return_automation[1].len(), 1);
+}
+
+#[test]
+fn a_secondary_button_release_does_not_end_an_automation_drag() {
+    use mixjam_techno::application::automation::Lane;
+    let none = egui::Modifiers::NONE;
+    // Track automation lane.
+    {
+        let (ctx, mut app) = fixture();
+        app.score_tools.automation_lane = Some(Lane::Volume);
+        frame(&ctx, &mut app, vec![], none);
+        let canvas = app.score.rect.unwrap();
+        let start = Pos2::new(
+            canvas.left() + app.score.bar_width,
+            canvas.top() + app.score.row_height / 2.0,
+        );
+        let mid = start + Vec2::new(app.score.bar_width * 0.5, -4.0);
+        let end = start + Vec2::new(app.score.bar_width, -8.0);
+        pointer(&ctx, &mut app, start, true, none);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(mid)], none);
+        assert!(app.gestures.automation_drag.is_some());
+        for pressed in [true, false] {
+            button_at(&ctx, &mut app, mid, egui::PointerButton::Secondary, pressed);
+        }
+        assert!(
+            app.gestures.automation_drag.is_some(),
+            "Releasing the secondary button keeps the track automation drag open."
+        );
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end)], none);
+        pointer(&ctx, &mut app, end, false, none);
+        assert!(app.gestures.automation_drag.is_none());
+        let points = &app.session.project().tracks[0].automation.volume;
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].tick, 2 * TICKS_PER_BAR);
+        app.history_step(false);
+        assert!(app.session.project().tracks[0].automation.volume.is_empty());
+    }
+    // FX return automation lane.
+    {
+        let (ctx, mut app) = fixture();
+        app.score_tools.return_lane = Some(1);
+        frame(&ctx, &mut app, vec![], none);
+        frame(&ctx, &mut app, vec![], none);
+        let canvas = app.score.rect.unwrap();
+        let row = view::return_row(canvas, app.score.drop_rect.unwrap());
+        let bar_width = app.score.bar_width;
+        let at = |bar: f32, value: f32| {
+            Pos2::new(canvas.left() + bar_width * bar, view::return_y(value, row))
+        };
+        let start = at(1.0, 0.25);
+        let mid = at(1.5, 1.0);
+        let end = at(2.0, 1.5);
+        pointer(&ctx, &mut app, start, true, none);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(mid)], none);
+        assert!(app.gestures.automation_drag.is_some());
+        for pressed in [true, false] {
+            button_at(&ctx, &mut app, mid, egui::PointerButton::Secondary, pressed);
+        }
+        assert!(
+            app.gestures.automation_drag.is_some(),
+            "Releasing the secondary button keeps the return automation drag open."
+        );
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end)], none);
+        pointer(&ctx, &mut app, end, false, none);
+        assert!(app.gestures.automation_drag.is_none());
+        let points = &app.session.project().return_automation[1];
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].tick, 2 * TICKS_PER_BAR);
+        app.history_step(false);
+        assert!(app.session.project().return_automation[1].is_empty());
+    }
+}

@@ -46,7 +46,7 @@ pub struct Project {
     pub fx: crate::fx::FxBuses,
     /// Each FX bus's return lane. A lane with points replaces its bus's
     /// return level for playback and export.
-    #[serde(default, skip_serializing_if = "crate::automation::no_returns")]
+    #[serde(default, skip_serializing_if = "crate::automation::no_lanes")]
     pub return_automation: [Vec<crate::automation::Point>; crate::fx::BUSES],
 }
 
@@ -155,6 +155,22 @@ impl Default for Project {
 impl Project {
     pub fn any_solo(&self) -> bool {
         self.tracks.iter().any(|track| track.solo)
+    }
+
+    /// The tracks, from 0, that hold a clip or are soloed, in order. A solo
+    /// silences the other tracks, so its switch must stay visible even on an
+    /// empty track. Views ask for this each frame, so it is one pass with a
+    /// flag per track.
+    pub fn occupied_tracks(&self) -> Vec<usize> {
+        let mut occupied: Vec<bool> = self.tracks.iter().map(|track| track.solo).collect();
+        for clip in &self.clips {
+            if let Some(flag) = occupied.get_mut(clip.track) {
+                *flag = true;
+            }
+        }
+        (0..occupied.len())
+            .filter(|&track| occupied[track])
+            .collect()
     }
 
     /// Remove choices that no longer affect the arrangement before saving or relinking.

@@ -16,7 +16,7 @@ mod gain;
 #[path = "mixer/strips.rs"]
 mod strips;
 use artwork::*;
-pub(super) use artwork::{row_surface, row_surface_on};
+pub(super) use artwork::{row_surface, row_surface_each};
 use buttons::*;
 pub(super) use buttons::{
     Look, bus_switches, bypass_button, center_button, edit_button, eq_button, pan_slider,

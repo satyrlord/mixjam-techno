@@ -212,7 +212,7 @@ impl MixJamApp {
         let project = self.session.project();
         let lane = rect.x_range().shrink(INSET);
         let x = |tick: f32| lane.min + tick / span * lane.span();
-        let tracks = occupied_tracks(project);
+        let tracks = project.occupied_tracks();
         let mut row_of = [None; TRACK_COUNT];
         for (row, &track) in tracks.iter().enumerate() {
             row_of[track] = Some(row);

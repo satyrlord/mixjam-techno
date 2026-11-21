@@ -27,6 +27,7 @@ mod master_board;
 mod mixer;
 mod pcm;
 mod playback;
+mod render_paths;
 mod repeat;
 mod returns;
 mod sources;

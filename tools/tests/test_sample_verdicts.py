@@ -313,6 +313,33 @@ class PaletteTests(unittest.TestCase):
             self.assertFalse(palette.allowed(chosen, 'E:\\lib\\Pads\\Pad 3.wav', roots))
             self.assertFalse(palette.allowed(chosen, 'E:\\lib\\Bass\\Bass 1.wav', roots))
 
+    def test_prebuilt_palette_keys_give_the_same_answers(self):
+        roots = ['E:\\lib']
+        family = verdicts.family_of('E:\\lib', 'Pads/Pad 1.wav')
+        chosen = dict(families=[family], files=['E:\\elsewhere\\Single.wav'])
+        keys = palette.palette_keys(chosen)
+        with mock.patch.object(palette, '_owner_rules', []):
+            for path in ('E:\\lib\\Pads\\Pad 2.wav', 'E:\\lib\\Bass\\Bass 1.wav',
+                         'E:\\elsewhere\\Single.wav', 'E:\\elsewhere\\Other.wav'):
+                with self.subTest(path=path):
+                    self.assertEqual(palette.allowed(chosen, path, roots, keys),
+                                     palette.allowed(chosen, path, roots))
+
+    def test_the_catalog_is_read_again_when_its_folder_changes(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second, \
+                tempfile.TemporaryDirectory() as names:
+            Path(first, 'd4-a.json').write_text(json.dumps(
+                self.catalog_release('a', 'd4', [self.catalog_sample(7)])))
+            Path(second, 'd4-b.json').write_text(json.dumps(
+                self.catalog_release('b', 'd4', [self.catalog_sample(8)])))
+            with mock.patch.object(palette, '_catalog', None), mock.patch.object(palette, '_codes', None):
+                with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': first, 'SAMPLE_CATALOG_NAMES': names}):
+                    self.assertIn(5 * 100_000 + 7, palette.product_catalog())
+                with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': second, 'SAMPLE_CATALOG_NAMES': names}):
+                    reread = palette.product_catalog()
+                    self.assertIn(5 * 100_000 + 8, reread)
+                    self.assertNotIn(5 * 100_000 + 7, reread)
+
     @staticmethod
     def catalog_release(name, product, samples):
         """A format-3 catalog: sources by size and SHA-256 only, names as label keys."""

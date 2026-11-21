@@ -5,7 +5,13 @@
 //! the `Effect`s that come back. Tests drive the same calls with facts they
 //! write themselves.
 use super::labels;
-use mixjam_techno::application::options::{AppOptions, PlaybackBufferTarget, STALE_DRAFT};
+use mixjam_techno::application::options::{
+    AppOptions, PlaybackBufferTarget, STALE_DRAFT, SongFolderMode,
+};
+use std::{
+    cell::RefCell,
+    time::{Duration, Instant},
+};
 
 /// The pages of the Options window, in their selector's order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -156,13 +162,65 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 3] {
     ]
 }
 
+/// How long the answer about a fixed song folder holds. The window asks
+/// every frame, and a slow or disconnected folder must not stall each one.
+const FOLDER_CHECK_LIFE: Duration = Duration::from_secs(1);
+
+/// The last answer about a fixed song folder.
+struct FolderCheck {
+    values: AppOptions,
+    at: Instant,
+    error: Option<String>,
+}
+
+thread_local! {
+    static LAST_FOLDER_CHECK: RefCell<Option<FolderCheck>> = const { RefCell::new(None) };
+}
+
+/// Drop the held answer, so the next check asks the file system.
+pub(in super::super) fn forget_folder_check() {
+    LAST_FOLDER_CHECK.with_borrow_mut(|last| *last = None);
+}
+
+/// Time left until a cached folder failure expires, so the window can wake
+/// and re-check an idle draft.
+pub(super) fn folder_check_retry_in() -> Option<Duration> {
+    LAST_FOLDER_CHECK.with_borrow(|last| {
+        let check = last.as_ref().filter(|check| check.error.is_some())?;
+        FOLDER_CHECK_LIFE.checked_sub(check.at.elapsed())
+    })
+}
+
+/// `validate_apply` of `values`. A fixed folder costs a file system call, so
+/// the answer for the same values holds for `FOLDER_CHECK_LIFE`.
+fn apply_error(values: &AppOptions) -> Option<String> {
+    if values.song_folder_mode != SongFolderMode::Fixed || values.fixed_song_folder.is_none() {
+        return values.validate_apply().err();
+    }
+    LAST_FOLDER_CHECK.with_borrow_mut(|last| {
+        if let Some(check) = last
+            .as_ref()
+            .filter(|check| check.values == *values && check.at.elapsed() < FOLDER_CHECK_LIFE)
+        {
+            return check.error.clone();
+        }
+        let error = values.validate_apply().err();
+        *last = Some(FolderCheck {
+            values: values.clone(),
+            at: Instant::now(),
+            error: error.clone(),
+        });
+        error
+    })
+}
+
 /// Check a draft as Apply does. A newly selected folder must exist; an
 /// unchanged accepted folder keeps its fallback if it later disappears.
 pub(super) fn validation_error(values: &AppOptions, active: &AppOptions) -> Option<String> {
     if values.song_folder_mode != active.song_folder_mode
         || values.fixed_song_folder != active.fixed_song_folder
     {
-        values.validate_apply().err()
+        apply_error(values)
     } else {
         values.validate().err()
     }
@@ -245,9 +303,13 @@ impl OptionsDraft {
             }
             Action::Reload => self.reload(facts),
             Action::Apply | Action::ApplyAndClose => {
-                if self.apply_blocked(facts).is_some() {
+                forget_folder_check();
+                if let Some(reason) = self.apply_blocked(facts) {
+                    self.failed(reason);
+                    self.confirm_discard = false;
                     return None;
                 }
+                self.error = None;
                 let close = action == Action::ApplyAndClose;
                 if close {
                     self.confirm_discard = false;

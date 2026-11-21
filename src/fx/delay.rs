@@ -6,9 +6,9 @@
 //! and high-cut filters shape the sum before it enters the line. So each
 //! repeat is filtered once more than the one before. The output is the
 //! read taps only, widened, ducked, and trimmed.
-use super::parts::{Ducker, Glide, Lfo, Line, OnePole, Tone, bound, drive, widen};
+use super::parts::{Ducker, Lfo, Line, OnePole, Tone, bound, drive, widen};
 use super::{DelayCharacter, Echoform};
-use crate::master::dsp::{DcBlocker, RATE, db_to_gain, pole};
+use crate::master::dsp::{DcBlocker, RATE, Smoothed, db_to_gain, pole};
 use std::f64::consts::PI;
 
 /// The longest time a line reaches: a dotted whole note at 120 BPM lasts
@@ -22,7 +22,7 @@ const FLUTTER_HZ: f64 = 6.1;
 
 /// The time of one side and the reads at it.
 struct Head {
-    time: Glide,
+    time: Smoothed,
     /// The time the digital crossfade comes from, while it runs.
     from: f64,
     fade: usize,
@@ -30,7 +30,7 @@ struct Head {
 impl Head {
     fn new() -> Self {
         Self {
-            time: Glide::new(RATE * 0.5, 0.08),
+            time: Smoothed::with_time(RATE * 0.5, 0.08),
             from: 0.0,
             fade: 0,
         }
@@ -71,6 +71,10 @@ pub(super) struct Core {
     tone: [Tone; 2],
     /// The extra high-frequency loss of the analog and tape characters.
     soften: [OnePole; 2],
+    /// The loop's high cut, which the soften corner starts from.
+    high_cut: f64,
+    /// The corner the soften poles are tuned to. NaN before the first frame.
+    soften_corner: f64,
     dc: [DcBlocker; 2],
     dc_pole: f64,
     lfo: Lfo,
@@ -78,15 +82,15 @@ pub(super) struct Core {
     flutter: Lfo,
     ducker: Ducker,
     rate: f64,
-    feedback: Glide,
-    cross: Glide,
-    width: Glide,
-    output: Glide,
-    drive: Glide,
-    depth: Glide,
-    duck: Glide,
-    analog: Glide,
-    tape: Glide,
+    feedback: Smoothed,
+    cross: Smoothed,
+    width: Smoothed,
+    output: Smoothed,
+    drive: Smoothed,
+    depth: Smoothed,
+    duck: Smoothed,
+    analog: Smoothed,
+    tape: Smoothed,
     digital: bool,
     compensation: f64,
     activity: f64,
@@ -94,12 +98,14 @@ pub(super) struct Core {
 impl Core {
     pub(super) fn new() -> Self {
         let frames = (REACH_SECONDS * RATE) as usize;
-        let smooth = |value| Glide::new(value, 0.005);
+        let smooth = |value| Smoothed::with_time(value, 0.005);
         Self {
             lines: [Line::new(frames), Line::new(frames)],
             heads: [Head::new(), Head::new()],
             tone: [Tone::default(); 2],
             soften: [OnePole::default(); 2],
+            high_cut: 0.0,
+            soften_corner: f64::NAN,
             dc: [DcBlocker::ZERO; 2],
             dc_pole: pole(1.0 / (2.0 * PI * 5.0)),
             lfo: Lfo::default(),
@@ -108,14 +114,14 @@ impl Core {
             ducker: Ducker::new(),
             rate: 0.0,
             feedback: smooth(0.0),
-            cross: Glide::new(0.0, 0.01),
+            cross: Smoothed::with_time(0.0, 0.01),
             width: smooth(1.0),
             output: smooth(0.0),
             drive: smooth(0.0),
             depth: smooth(0.0),
             duck: smooth(0.0),
-            analog: Glide::new(0.0, 0.02),
-            tape: Glide::new(0.0, 0.02),
+            analog: Smoothed::with_time(0.0, 0.02),
+            tape: Smoothed::with_time(0.0, 0.02),
             digital: true,
             compensation: 0.0,
             activity: 0.0,
@@ -142,10 +148,10 @@ impl Core {
         self.analog.set(analog);
         self.tape.set(tape);
         let (low_cut, high_cut) = (f64::from(settings.low_cut), f64::from(settings.high_cut));
-        for (tone, soften) in self.tone.iter_mut().zip(&mut self.soften) {
+        for tone in &mut self.tone {
             tone.tune(low_cut, high_cut);
-            soften.tune(high_cut * (1.0 - 0.25 * analog - 0.45 * tape));
         }
+        self.high_cut = high_cut;
         self.rate = f64::from(settings.mod_rate);
         self.depth
             .set(f64::from(settings.mod_depth) / 1000.0 * RATE);
@@ -211,6 +217,18 @@ impl Core {
             .fold(0.0, f64::max) as usize
             + (0.05 * RATE) as usize
     }
+    /// Tune the soften poles from the glided analog and tape weights, so the
+    /// soften corner moves with the rest of a character change.
+    #[inline]
+    fn tune_soften(&mut self, analog: f64, tape: f64) {
+        let corner = self.high_cut * (1.0 - 0.25 * analog - 0.45 * tape);
+        if corner != self.soften_corner {
+            self.soften_corner = corner;
+            for soften in &mut self.soften {
+                soften.tune(corner);
+            }
+        }
+    }
     /// The colouring of the analog and tape characters, blended by their weights.
     #[inline]
     fn colour(&mut self, side: usize, x: f64, analog: f64, tape: f64) -> f64 {
@@ -244,6 +262,7 @@ impl Core {
         let amount = self.drive.next();
         let (left, right) = (drive(left, amount), drive(right, amount));
         let (analog, tape) = (self.analog.next(), self.tape.next());
+        self.tune_soften(analog, tape);
         let depth = self.depth.next();
         let wander = tape * depth * (0.6 * self.wow.value(0.0) + 0.08 * self.flutter.value(0.0));
         let offsets = [
@@ -503,6 +522,37 @@ mod tests {
             heard = heard.max(core.process(0.0, 0.0).0.abs());
         }
         assert!(heard > 0.01, "the tail rang on behind the bypass");
+    }
+
+    #[test]
+    fn the_soften_corner_glides_with_a_character_change() {
+        let tape = Echoform {
+            character: DelayCharacter::Tape,
+            high_cut: 8000.0,
+            ..plain()
+        };
+        let mut core = delay(&tape, 120.0);
+        core.process(0.0, 0.0);
+        core.set(
+            &Echoform {
+                character: DelayCharacter::Analog,
+                ..tape
+            },
+            120.0,
+            0.0,
+        );
+        core.process(0.0, 0.0);
+        // One frame into the glide, the corner sits near the tape corner,
+        // not at the analog target.
+        let corner = 8000.0 * (1.0 - 0.25 * core.analog.value() - 0.45 * core.tape.value());
+        let mut expected = OnePole::default();
+        expected.tune(corner);
+        for side in 0..2 {
+            let mut soften = core.soften[side];
+            soften.clear();
+            assert_eq!(soften.low(1.0), expected.low(1.0), "side {side}");
+            expected.clear();
+        }
     }
 
     #[test]

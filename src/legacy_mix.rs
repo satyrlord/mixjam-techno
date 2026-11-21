@@ -112,6 +112,11 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
         "Cannot decode the original mix arrangement. The file is damaged or uses an unsupported \
          profile.",
     )?;
+    // The structural parse admits any volume delta. A volume outside the range
+    // of the other profiles is a damaged song and gets its own message.
+    for event in &timeline.events {
+        chunks::checked_clip_gain(event.gain)?;
+    }
     let header = Header {
         title,
         author,
@@ -151,30 +156,16 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
             }
             let stored_position = reader.i32()?;
             let sample_id = reader.u16()?;
-            let native_position = if stored_position < 0 {
-                !stored_position as u32
-            } else {
-                stored_position as u32
-            };
             // Native duration writer 0x4fd1d5 divides stored positions by 128.
             // Common projects use 256 ticks per bar, so convert exactly once.
-            let start_tick = native_position
-                .checked_mul(2)
-                .filter(|value| *value <= MAX_TICKS)
-                .ok_or("Invalid native clip position.")?;
+            let start_tick = chunks::native_position(stored_position)?;
             let (left_trim, right_trim, gain_delta) = if stored_position < 0 {
                 (0, 0, 0)
             } else {
                 (reader.u32()?, reader.u32()?, reader.i16()?)
             };
-            let left_trim = left_trim
-                .checked_mul(2)
-                .filter(|value| *value <= MAX_TICKS)
-                .ok_or("Invalid native clip trim.")?;
-            let right_trim = right_trim
-                .checked_mul(2)
-                .filter(|value| *value <= MAX_TICKS)
-                .ok_or("Invalid native clip trim.")?;
+            let left_trim = chunks::native_tick_count(left_trim)?;
+            let right_trim = chunks::native_tick_count(right_trim)?;
             let reference = match source {
                 1 => {
                     let mut reference = read_wave_extension(&mut reader)?;
@@ -192,7 +183,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
                 position: start_tick,
                 left_trim,
                 right_trim,
-                gain: (32767i32 + gain_delta as i32) as f32 / 32767.0,
+                gain: chunks::clip_gain(gain_delta),
             });
         }
     }

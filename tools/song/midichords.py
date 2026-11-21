@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harmony import NOTES, best_triad, parse_key, pitch_class  # noqa: E402
+from cli import pop_option  # noqa: E402
+from harmony import NOTES, best_triad, parse_key, pitch_class, shift_to  # noqa: E402
 from midinotes import notes, per_bar, pitch_classes  # noqa: E402
 
 KEY_AT_END = r'\b([A-G][#b]?)(m?)\s*$'
@@ -49,7 +50,7 @@ def shift_for(name, wav_names=(), to='A minor'):
     tonic, minor, text = found
     minor_target, major_target = targets(to)
     target = minor_target if minor else major_target
-    return (target - tonic + 6) % 12 - 6, text
+    return shift_to(tonic, target), text
 
 
 def number_of(path):
@@ -57,22 +58,24 @@ def number_of(path):
     return (int(match.group(1)) if match else 0, path.stem)
 
 
+def midi_loops(folder, to):
+    """(path, semitones to the key `to`, the file's key text) of each MIDI file in `folder`
+    whose key is known, in loop number order."""
+    wav_names = [p.stem for p in folder.parent.glob('*.wav')]
+    for path in sorted(folder.glob('*.mid'), key=number_of):
+        shift, key = shift_for(path.stem, wav_names, to)
+        if shift is not None:
+            yield path, shift, key
+
+
 def main():
     args = sys.argv[1:]
-    to = 'A minor'
-    if '--to' in args:
-        i = args.index('--to')
-        to = args[i + 1]
-        del args[i:i + 2]
+    to = pop_option(args, '--to', default='A minor')
     if not args:
         raise SystemExit(__doc__)
     for folder in map(Path, args):
-        wav_names = [p.stem for p in folder.parent.glob('*.wav')]
         is_bass = 'bass' in folder.name.lower()
-        for path in sorted(folder.glob('*.mid'), key=number_of):
-            shift, key = shift_for(path.stem, wav_names, to)
-            if shift is None:
-                continue
+        for path, shift, key in midi_loops(folder, to):
             found, ppq = notes(path)
             bars = per_bar(found, ppq, shift)
             chords = []

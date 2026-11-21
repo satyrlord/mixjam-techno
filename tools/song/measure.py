@@ -38,9 +38,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import clash  # noqa: E402
 import env  # noqa: E402
 import phrase  # noqa: E402
+from cli import option  # noqa: E402
 from pitch_clock import PitchClock  # noqa: E402
 from harmony import NOTES, scale  # noqa: E402
-from mixjam import MELODIC, TICKS_PER_BAR, Sound, read_wav, ticks_of  # noqa: E402
+from mixjam import MELODIC, TICKS_PER_BAR, Sound, read_wav, ticks_of, twin_base  # noqa: E402
 
 
 def db(x):
@@ -96,11 +97,6 @@ def default_meta(document):
                           for b in range(0, int(math.ceil(end / TICKS_PER_BAR)), 32)])
 
 
-def twin_base(name):
-    """A lane and its cross-fade twin ("Name (twin)") count as one lane."""
-    return name.replace(' (twin)', '')
-
-
 def sample_names(document):
     """Names for imported, missing and catalog placements, including unresolved IDs."""
     names = {sample['id']: sample['name'] for sample in
@@ -112,8 +108,10 @@ def sample_names(document):
     return names
 
 
-def mechanical(document, lanes):
-    """The gate's problem list. Source duration and ending windows follow Pitch."""
+def mechanical(document, lanes, found=None):
+    """The gate's problem list. Source duration and ending windows follow Pitch.
+
+    `found` is phrase.cuts(document, lanes, None), when the caller has it already."""
     samples = {s['id']: s for s in document['samples']}
     missing_ids = {s['id']: s['name'] for s in document.get('missingSamples', [])}
     names = sample_names(document)
@@ -222,7 +220,9 @@ def mechanical(document, lanes):
             problems.append(f'The fader of track {index + 1} is at {20 * math.log10(level):.2f} dB, '
                             'not a whole dB.')
     # Artist profile working rule 10: a clip plays its sample's whole phrase (phrase.py).
-    problems += [phrase.describe(document, c) for c in phrase.cuts(document, lanes, phrase.GATED)]
+    if found is None:
+        found = phrase.cuts(document, lanes, phrase.GATED)
+    problems += [phrase.describe(document, c) for c in found if c[2] in phrase.GATED]
     return problems
 
 
@@ -234,7 +234,7 @@ def main():
     document = json.loads(song_path.read_text(encoding='utf-8'))
     meta_path = song_path.with_suffix('.meta.json')
     meta = json.loads(meta_path.read_text(encoding='utf-8')) if meta_path.exists() else default_meta(document)
-    key = args[args.index('--key') + 1] if '--key' in args else meta.get('key')
+    key = option(args, '--key', default=meta.get('key'))
     in_key = scale(key) if key else None
     bpm = document['song']['bpm']
     lanes = meta['lanes']
@@ -243,7 +243,9 @@ def main():
 
     say(f"# Measurement report: {document['song']['title']}\n")
     say('## Mechanical checks\n')
-    problems = mechanical(document, lanes)
+    # One analysis of every source serves the gate and the count of ungated cuts.
+    cuts = phrase.cuts(document, lanes, None)
+    problems = mechanical(document, lanes, cuts)
     say(f'{len(problems)} problems.\n')
     for problem in problems[:60]:
         say(f'- {problem}')
@@ -307,7 +309,7 @@ def main():
 
     arrangement(document, lanes, sections, total_bars, say)
     clip_gains(document, say)
-    phrase_counts(document, lanes, say)
+    phrase_counts(cuts, say)
     clash.report(document, lanes, render, say)
     stem_tables(render, rate, bpm, sections, in_key, say)
     targets(say)
@@ -331,9 +333,8 @@ def clip_gains(document, say):
     say('; '.join(rows) + '\n')
 
 
-def phrase_counts(document, lanes, say):
-    """Phrase cuts on the lanes that the gate does not check (effects, drums)."""
-    found = phrase.cuts(document, lanes, None)
+def phrase_counts(found, say):
+    """Phrase cuts on the lanes that the gate does not check (effects, drums); `found` is every cut."""
     found = [c for c in found if c[2] not in phrase.GATED]
     say('## Phrase cuts on other lanes (not gated)\n')
     if not found:

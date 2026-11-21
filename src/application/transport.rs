@@ -98,9 +98,7 @@ impl Session {
             .project()
             .loop_region
             .map(|[a, b]| [self.tick_to_frame(a, rate), self.tick_to_frame(b, rate)]);
-        self.master.set(&self.editor.project().master);
-        self.master.set_returns(&self.editor.project().fx);
-        self.master.set_levels(self.editor.project());
+        self.sync_master(true);
         let master = Some(self.master.clone());
         match self.player.as_mut().unwrap().play_with_quality(
             mix,

@@ -225,3 +225,41 @@ fn installed_catalog_has_complete_nonoverlapping_ranges() {
     assert_eq!(library.read_pcm(14546).unwrap().frames(), 75600);
     assert_eq!(library.step_synth_sources().unwrap().len(), 504);
 }
+
+#[test]
+fn an_oversized_or_overlong_sample_index_is_refused_before_it_is_parsed() {
+    let folder = Folder::new();
+    let packed = super::packed_folder(&folder.0);
+    fs::create_dir_all(&packed).unwrap();
+    fs::write(packed.join("archive"), [0u8; 16]).unwrap();
+    let open = || {
+        Library::open_archive(
+            crate::products::Product::T2,
+            &folder.0,
+            &folder.0,
+            "archive",
+            140.0,
+        )
+        .err()
+        .unwrap()
+    };
+    let index = packed.join("archive.inf");
+    let records = crate::catalog::MAX_INDEX_RECORDS + 1;
+    fs::write(
+        &index,
+        format!(
+            "[SAMPLES]
+{}",
+            "0
+"
+            .repeat(records * 12)
+        ),
+    )
+    .unwrap();
+    assert_eq!(open(), "The sample index lists too many records.");
+    let file = fs::File::create(&index).unwrap();
+    file.set_len(crate::catalog::MAX_CATALOG_TEXT_BYTES + 1)
+        .unwrap();
+    drop(file);
+    assert_eq!(open(), "The sample index exceeds its size limit.");
+}

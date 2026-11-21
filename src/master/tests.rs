@@ -122,6 +122,25 @@ fn delaying_pedals_add_up_and_others_add_nothing() {
 }
 
 #[test]
+fn the_board_delay_reads_in_milliseconds_at_a_sample_rate() {
+    let mut chain = MasterChain::default();
+    assert_eq!(chain.latency_ms(44_100), 0.0);
+    chain.soft_clip.on = true;
+    chain.limiter.on = true;
+    let frames = chain.latency() as f32;
+    assert!(frames > 0.0);
+    for rate in [44_100, 48_000, 96_000] {
+        let expected = frames * 1000.0 / rate as f32;
+        assert!(
+            (chain.latency_ms(rate) - expected).abs() < 1e-4,
+            "{rate} Hz"
+        );
+    }
+    // The board's status line used to divide by 44.1.
+    assert!((chain.latency_ms(44_100) - frames / 44.1).abs() < 1e-4);
+}
+
+#[test]
 fn master_playback_quality_preserves_delay_safety_and_full_quality_samples() {
     use crate::playback_quality::Oversampling;
     let input: Vec<f32> = (0..5000)

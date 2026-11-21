@@ -181,6 +181,21 @@ enum Notice {
 /// The full text of the reduced-quality notice.
 const REDUCED: &str = "Playback quality reduced; exports use full quality";
 
+/// What the status line says this frame.
+struct StatusLine {
+    /// The message, or the idle text, or the Step synth board's hint.
+    text: String,
+    error: bool,
+    /// How long the message has shown, None for text that is not logged.
+    age: Option<Duration>,
+    /// The message has settled back to the idle text.
+    settled: bool,
+    now: Instant,
+}
+
+/// The width of the history mark beside the status.
+const STATUS_MARK_WIDTH: f32 = 14.0;
+
 impl MixJamApp {
     /// Keep the status bar's row across the whole window, under the rail.
     /// Its controls are drawn by `status_bar` after the rest of the window,
@@ -217,29 +232,80 @@ impl MixJamApp {
         // The right-hand group is drawn left to right, after the status, so
         // Tab reads the bar in the order it is seen; its width is measured
         // first to place it against the right edge.
-        let heading = egui::WidgetText::from(panels.clone())
-            .into_galley(
-                ui,
-                Some(egui::TextWrapMode::Extend),
-                f32::INFINITY,
-                egui::TextStyle::Body,
-            )
-            .size()
-            .x;
-        let group = heading
-            + PANEL_SWITCHES
-                .iter()
-                .map(|(_, label, _)| gap + panel_switch_width(ui, label))
-                .sum::<f32>()
-            + gap
-            + STATUS_VERSION_GAP
-            + text_width(ui, &version);
+        let group = right_group_width(ui, &panels, &version, gap);
         let split = (inner.right() - group).max(inner.left());
         let left = Rect::from_min_max(inner.min, Pos2::new(split - gap, inner.bottom()));
         let right = Rect::from_min_max(Pos2::new(split, inner.top()), inner.max);
 
-        // The message: a logged one settles back to the idle text after a
-        // while, unless it is an error or reports what is going on now.
+        let missing = self.session.missing_samples().len();
+        let line = self.status_line(ctx, missing);
+        let status = &line.text;
+
+        // The notices shorten, in steps, before the message loses its room.
+        let project = self.session.project();
+        let notices = Notices {
+            conflicts: !self.session.sample_conflicts().is_empty(),
+            details: !project.import_notices.is_empty()
+                || !project.source_notices.is_empty()
+                || !project.source_settings.is_empty()
+                || missing > 0,
+            missing,
+            reduced: self.session.options().quality_reduced(),
+        };
+        // The history mark leads the status once there is a message to show.
+        let logged = !self.status_log.entries.is_empty();
+        // The clock, or in its place the count of unread errors.
+        let room = left.width()
+            - 2.0 * (28.0 + gap)
+            - STATUS_ICONS_GAP
+            - if logged { STATUS_MARK_WIDTH + gap } else { 0.0 };
+        let wanted = if !status.is_empty() && status != DEFAULT_STATUS {
+            text_width(ui, status).min(STATUS_MESSAGE_ROOM)
+        } else {
+            0.0
+        };
+        // The first level at which the notices and the message fit, or the
+        // shortest. The level's notices are laid out once.
+        let mut level = 0;
+        let (parts, shown_notices) = loop {
+            let parts = notices.parts(level);
+            let width: f32 = parts
+                .iter()
+                .map(|(_, parts)| notice_width(ui, parts) + gap)
+                .sum();
+            if level == 3 || width + wanted <= room {
+                break (parts, width);
+            }
+            level += 1;
+        };
+        // The idle text takes its short form where the whole does not fit.
+        let short_idle = status == DEFAULT_STATUS && text_width(ui, status) > room - shown_notices;
+
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(left)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            |ui| {
+                self.status_icons(ui, ctx);
+                self.notice_chips(ui, ctx, parts, missing);
+                // A clock mark leads to the earlier messages whenever there
+                // are any, also when the line itself has nothing to say.
+                if !line.text.is_empty() || logged {
+                    self.status_history(ui, line, logged, short_idle);
+                }
+            },
+        );
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(right)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            |ui| self.panel_switches(ui, ctx, panels, &version, gap),
+        );
+    }
+
+    /// The message: a logged one settles back to the idle text after a
+    /// while, unless it is an error or reports what is going on now.
+    fn status_line(&mut self, ctx: &egui::Context, missing: usize) -> StatusLine {
         let now = Instant::now();
         let idle = self.status == DEFAULT_STATUS;
         let progress = self.libraries.scan_status.as_deref() == Some(self.status.as_str());
@@ -264,11 +330,10 @@ impl MixJamApp {
         {
             ctx.request_repaint_after(STATUS_ERROR_FADE - age);
         }
-        let missing = self.session.missing_samples().len();
         // At rest, the Step synth board in view gives its own hint.
         // The general idle text would contradict a missing-sound notice.
         let board_hint = self.step_synth.hint.take();
-        let (status, error) = if !idle && !settled {
+        let (text, error) = if !idle && !settled {
             (status_text(&self.status), self.status_error)
         } else if let Some(hint) = board_hint {
             (hint.to_owned(), false)
@@ -277,286 +342,304 @@ impl MixJamApp {
         } else {
             (DEFAULT_STATUS.to_owned(), false)
         };
+        StatusLine {
+            text,
+            error,
+            age,
+            settled,
+            now,
+        }
+    }
 
-        // The notices shorten, in steps, before the message loses its room.
-        let project = self.session.project();
-        let notices = Notices {
-            conflicts: !self.session.sample_conflicts().is_empty(),
-            details: !project.import_notices.is_empty()
-                || !project.source_notices.is_empty()
-                || !project.source_settings.is_empty()
-                || missing > 0,
-            missing,
-            reduced: self.session.options().quality_reduced(),
-        };
-        // The history mark leads the status once there is a message to show.
-        let logged = !self.status_log.entries.is_empty();
+    /// Options and All commands lead the bar, so the rail's whole height goes
+    /// to the tools.
+    fn status_icons(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let icons = self.icons(ctx);
+        let options = status_icon_button(
+            ui,
+            RailIcon::Options.label(),
+            RailIcon::Options.hint(),
+            Some(self.options.is_some()),
+            |ui, centre, color| {
+                if let Some(icons) = &icons {
+                    ui.painter().image(
+                        icons.texture_id(RailIcon::Options),
+                        icons.icon_rect(ui.ctx(), centre),
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        color,
+                    );
+                }
+            },
+        );
+        if options.clicked() {
+            self.run_command(commands::Command::Options, ctx);
+        }
+        if status_icon_button(
+            ui,
+            commands::ALL_COMMANDS,
+            commands::ALL_COMMANDS_HINT,
+            None,
+            |ui, centre, color| commands::paint_magnifier(ui.painter(), centre, color),
+        )
+        .clicked()
+        {
+            self.commands = Some(commands::CommandList::new());
+        }
+        ui.add_space(STATUS_ICONS_GAP);
+    }
+
+    /// The notices that the song and the options raise, each a chip that
+    /// opens what it reports.
+    fn notice_chips(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        notices: Vec<(Notice, Vec<(String, Color32)>)>,
+        missing: usize,
+    ) {
+        for (notice, parts) in notices {
+            let (name, value, hint) = match notice {
+                Notice::Conflicts => (
+                    "Sample conflicts",
+                    None,
+                    "Sample choices are not confirmed. Opens Sample conflicts.".to_owned(),
+                ),
+                Notice::Details if missing > 0 => (
+                    "Import details",
+                    Some(format!("{} play silence", plural_samples(missing))),
+                    "Missing samples play silence. Import details shows their saved \
+                     references."
+                        .to_owned(),
+                ),
+                Notice::Details => (
+                    "Import details",
+                    None,
+                    "Opens the import notices and the song's source details.".to_owned(),
+                ),
+                Notice::Reduced => (
+                    "Reduced quality",
+                    Some(REDUCED.to_owned()),
+                    format!("{REDUCED}. Opens Options."),
+                ),
+            };
+            if notice_chip(ui, &parts, name, value.as_deref())
+                .hover_hint(hint)
+                .clicked()
+            {
+                match notice {
+                    Notice::Conflicts => {
+                        self.conflicts.open = true;
+                        self.conflicts.error = None;
+                    }
+                    Notice::Details => self.sample_import.details_open = true,
+                    Notice::Reduced => {
+                        self.run_command(commands::Command::Options, ctx);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The history mark, the status line, and the popup of earlier messages.
+    /// The mark counts the errors the popup has not shown yet.
+    fn status_history(
+        &mut self,
+        ui: &mut egui::Ui,
+        line: StatusLine,
+        logged: bool,
+        short_idle: bool,
+    ) {
+        let StatusLine {
+            text: status,
+            error,
+            age,
+            settled,
+            now,
+        } = line;
         let showing = error && age.is_some_and(|age| age < STATUS_ERROR_FADE);
         let unread = self.status_log.unread_errors(showing);
-        // The clock, or in its place the count of unread errors.
-        let mark_width = 14.0;
-        let room = left.width()
-            - 2.0 * (28.0 + gap)
-            - STATUS_ICONS_GAP
-            - if logged { mark_width + gap } else { 0.0 };
-        let wanted = if !status.is_empty() && status != DEFAULT_STATUS {
-            text_width(ui, &status).min(STATUS_MESSAGE_ROOM)
+        let alone = status.is_empty();
+        let mark = logged.then(|| {
+            // Beside the status it shares the status's Tab stop; alone it is
+            // the Tab stop.
+            let sense = if alone { Sense::click() } else { Sense::CLICK };
+            let (rect, mark) = ui.allocate_exact_size(Vec2::new(STATUS_MARK_WIDTH, 24.0), sense);
+            let name = match unread {
+                0 => "Recent messages".to_owned(),
+                1 => "Recent messages, 1 unread error".to_owned(),
+                count => format!("Recent messages, {count} unread errors"),
+            };
+            mark.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+            (rect, mark)
+        });
+        // An old error keeps its Coral in a dot before it, unless the mark's
+        // count already shows it.
+        let faded = error && age.is_some_and(|age| age >= STATUS_ERROR_FADE);
+        if faded && unread == 0 {
+            let (dot, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
+            ui.painter().circle_filled(dot.center(), 3.0, roles().coral);
+        }
+        let color = if error && !faded {
+            roles().coral
         } else {
-            0.0
+            roles().muted
         };
-        let level = (0..3)
-            .find(|level| {
-                let width: f32 = notices
-                    .parts(*level)
-                    .iter()
-                    .map(|(_, parts)| notice_width(ui, parts) + gap)
-                    .sum();
-                width + wanted <= room
-            })
-            .unwrap_or(3);
-        // The idle text takes its short form where the whole does not fit.
-        let shown_notices: f32 = notices
-            .parts(level)
-            .iter()
-            .map(|(_, parts)| notice_width(ui, parts) + gap)
-            .sum();
-        let short_idle = status == DEFAULT_STATUS && text_width(ui, &status) > room - shown_notices;
-
-        let icons = self.icons(ctx);
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(left)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            |ui| {
-                // Options and All commands lead the bar, so the rail's whole
-                // height goes to the tools.
-                let options = status_icon_button(
-                    ui,
-                    RailIcon::Options.label(),
-                    RailIcon::Options.hint(),
-                    Some(self.options.is_some()),
-                    |ui, centre, color| {
-                        if let Some(icons) = &icons {
-                            ui.painter().image(
-                                icons.texture_id(RailIcon::Options),
-                                icons.icon_rect(ui.ctx(), centre),
-                                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                                color,
-                            );
-                        }
-                    },
-                );
-                if options.clicked() {
-                    self.run_command(commands::Command::Options, ctx);
+        let line = (!alone).then(|| {
+            let text = if short_idle {
+                IDLE_SHORT
+            } else {
+                status.as_str()
+            };
+            // The faded-error dot and notices can change the preceding widget
+            // count. Keep the status's focus ID.
+            let line = ui
+                .scope_builder(egui::UiBuilder::new().id("status-bar-message"), |ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(text).size(STATUS_TEXT).color(color))
+                            .truncate()
+                            .sense(Sense::click()),
+                    )
+                })
+                .inner;
+            let spoken = if error {
+                format!("Error: {status}")
+            } else {
+                status.clone()
+            };
+            ui.ctx().accesskit_node_builder(line.id, |node| {
+                node.set_role(egui::accesskit::Role::Button);
+                node.set_label("Status");
+                node.set_value(spoken);
+                node.set_live(egui::accesskit::Live::Polite);
+                match unread {
+                    0 => {}
+                    1 => node.set_description("1 unread error"),
+                    count => node.set_description(format!("{count} unread errors")),
                 }
-                if status_icon_button(
-                    ui,
-                    commands::ALL_COMMANDS,
-                    commands::ALL_COMMANDS_HINT,
-                    None,
-                    |ui, centre, color| commands::paint_magnifier(ui.painter(), centre, color),
-                )
-                .clicked()
-                {
-                    self.commands = Some(commands::CommandList::new());
-                }
-                ui.add_space(STATUS_ICONS_GAP);
-                for (notice, parts) in notices.parts(level) {
-                    let (name, value, hint) = match notice {
-                        Notice::Conflicts => (
-                            "Sample conflicts",
-                            None,
-                            "Sample choices are not confirmed. Opens Sample conflicts.".to_owned(),
-                        ),
-                        Notice::Details if missing > 0 => (
-                            "Import details",
-                            Some(format!("{} play silence", plural_samples(missing))),
-                            "Missing samples play silence. Import details shows their saved \
-                             references."
-                                .to_owned(),
-                        ),
-                        Notice::Details => (
-                            "Import details",
-                            None,
-                            "Opens the import notices and the song's source details.".to_owned(),
-                        ),
-                        Notice::Reduced => (
-                            "Reduced quality",
-                            Some(REDUCED.to_owned()),
-                            format!("{REDUCED}. Opens Options."),
-                        ),
-                    };
-                    if notice_chip(ui, &parts, name, value.as_deref())
-                        .hover_hint(hint)
-                        .clicked()
-                    {
-                        match notice {
-                            Notice::Conflicts => {
-                                self.conflicts.open = true;
-                                self.conflicts.error = None;
-                            }
-                            Notice::Details => self.sample_import.details_open = true,
-                            Notice::Reduced => {
-                                self.run_command(commands::Command::Options, ctx);
-                            }
-                        }
-                    }
-                }
-                // A clock mark leads to the earlier messages whenever there
-                // are any, also when the line itself has nothing to say. It
-                // counts the errors the popup has not shown yet.
-                if !status.is_empty() || logged {
-                    let alone = status.is_empty();
-                    let mark = logged.then(|| {
-                        // Beside the status it shares the status's Tab stop;
-                        // alone it is the Tab stop.
-                        let sense = if alone { Sense::click() } else { Sense::CLICK };
-                        let (rect, mark) =
-                            ui.allocate_exact_size(Vec2::new(mark_width, 24.0), sense);
-                        let name = match unread {
-                            0 => "Recent messages".to_owned(),
-                            1 => "Recent messages, 1 unread error".to_owned(),
-                            count => format!("Recent messages, {count} unread errors"),
-                        };
-                        mark.widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name)
-                        });
-                        (rect, mark)
+            });
+            line
+        });
+        let response = match (line, &mark) {
+            (Some(line), Some((_, mark))) => line | mark.clone(),
+            (Some(line), None) => line,
+            (None, Some((_, mark))) => mark.clone(),
+            (None, None) => unreachable!("the status or the log has text"),
+        }
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+        let popup_id = ui.make_persistent_id("status-history-popup");
+        let open = egui::Popup::is_id_open(ui.ctx(), popup_id);
+        if let Some((rect, _)) = mark {
+            // Unread errors take the clock's place until the popup has shown
+            // them.
+            if unread > 0 {
+                paint_count(ui, rect.center(), unread);
+            } else {
+                let lit = response.hovered() || response.has_focus() || open;
+                let ink = if lit { roles().text } else { roles().muted };
+                paint_clock(ui.painter(), rect.center(), ink);
+            }
+        }
+        focus_outline(ui, &response, roles().accent);
+        // A click shows the message whole, with the ones before it.
+        let response = response.hover_hint(if alone {
+            "Click for recent messages.".to_owned()
+        } else {
+            format!("{status}\n\nClick for recent messages.")
+        });
+        let shown = (!settled).then_some(age).flatten().is_some();
+        let current = (!alone).then_some((status.as_str(), error));
+        let popup = egui::Popup::from_toggle_button_response(&response)
+            .id(popup_id)
+            .align(egui::RectAlign::TOP_START)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .width(440.0)
+            .show(|ui| {
+                let recent = egui::ScrollArea::vertical()
+                    .id_salt("status-history")
+                    .max_height(ui.ctx().content_rect().height() * 0.65)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        self.status_log.show_recent(ui, current, shown, now)
                     });
-                    // An old error keeps its Coral in a dot before it, unless
-                    // the mark's count already shows it.
-                    let faded = error && age.is_some_and(|age| age >= STATUS_ERROR_FADE);
-                    if faded && unread == 0 {
-                        let (dot, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
-                        ui.painter().circle_filled(dot.center(), 3.0, roles().coral);
-                    }
-                    let color = if error && !faded {
-                        roles().coral
-                    } else {
-                        roles().muted
-                    };
-                    let line = (!alone).then(|| {
-                        let text = if short_idle {
-                            IDLE_SHORT
-                        } else {
-                            status.as_str()
-                        };
-                        // The faded-error dot and notices can change the
-                        // preceding widget count. Keep the status's focus ID.
-                        let line = ui
-                            .scope_builder(egui::UiBuilder::new().id("status-bar-message"), |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(text).size(STATUS_TEXT).color(color),
-                                    )
-                                    .truncate()
-                                    .sense(Sense::click()),
-                                )
-                            })
-                            .inner;
-                        let spoken = if error {
-                            format!("Error: {status}")
-                        } else {
-                            status.clone()
-                        };
-                        ui.ctx().accesskit_node_builder(line.id, |node| {
-                            node.set_role(egui::accesskit::Role::Button);
-                            node.set_label("Status");
-                            node.set_value(spoken);
-                            node.set_live(egui::accesskit::Live::Polite);
-                            match unread {
-                                0 => {}
-                                1 => node.set_description("1 unread error"),
-                                count => node.set_description(format!("{count} unread errors")),
-                            }
-                        });
-                        line
-                    });
-                    let response = match (line, &mark) {
-                        (Some(line), Some((_, mark))) => line | mark.clone(),
-                        (Some(line), None) => line,
-                        (None, Some((_, mark))) => mark.clone(),
-                        (None, None) => unreachable!("the status or the log has text"),
-                    }
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    let popup_id = ui.make_persistent_id("status-history-popup");
-                    let open = egui::Popup::is_id_open(ui.ctx(), popup_id);
-                    if let Some((rect, _)) = mark {
-                        // Unread errors take the clock's place until the
-                        // popup has shown them.
-                        if unread > 0 {
-                            paint_count(ui, rect.center(), unread);
-                        } else {
-                            let lit = response.hovered() || response.has_focus() || open;
-                            let ink = if lit { roles().text } else { roles().muted };
-                            paint_clock(ui.painter(), rect.center(), ink);
-                        }
-                    }
-                    focus_outline(ui, &response, roles().accent);
-                    // A click shows the message whole, with the ones before it.
-                    let response = response.hover_hint(if alone {
-                        "Click for recent messages.".to_owned()
-                    } else {
-                        format!("{status}\n\nClick for recent messages.")
-                    });
-                    let shown = (!settled).then_some(age).flatten().is_some();
-                    let current = (!alone).then_some((status.as_str(), error));
-                    let popup = egui::Popup::from_toggle_button_response(&response)
-                        .id(popup_id)
-                        .align(egui::RectAlign::TOP_START)
-                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                        .width(440.0)
-                        .show(|ui| {
-                            let recent = egui::ScrollArea::vertical()
-                                .id_salt("status-history")
-                                .max_height(ui.ctx().content_rect().height() * 0.65)
-                                .auto_shrink([false, true])
-                                .show(ui, |ui| {
-                                    self.status_log.show_recent(ui, current, shown, now)
-                                });
-                            name_scroll_area(ui, "status-history", "Recent messages");
-                            recent.inner
-                        });
-                    if let Some(popup) = popup {
-                        self.status_log.mark_read();
-                        if popup.inner {
-                            self.status_log.clear();
-                        }
-                    }
-                }
-            },
-        );
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(right)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            |ui| {
-                ui.label(panels);
-                // In a maximised score all read off but Overview; each switch
-                // restores the score with the previous panel choices.
-                for (command, label, hint) in PANEL_SWITCHES {
-                    if panel_switch(ui, label, self.command_active(command))
-                        .hover_hint(hint)
-                        .clicked()
-                    {
-                        self.run_command(command, ctx);
-                    }
-                }
-                // A short rule keeps the version apart from the switches.
-                // The item spacing on each side makes up the rest of the gap.
-                let (rule, _) = ui.allocate_exact_size(
-                    Vec2::new((STATUS_VERSION_GAP - gap).max(1.0), 12.0),
-                    Sense::hover(),
-                );
-                ui.painter().vline(
-                    rule.center().x.round() + 0.5,
-                    rule.y_range(),
-                    egui::Stroke::new(1.0_f32, roles().line),
-                );
-                version_link(ui, &version).hover_hint("Open MixJam Techno on GitHub");
-            },
-        );
+                name_scroll_area(ui, "status-history", "Recent messages");
+                recent.inner
+            });
+        if let Some(popup) = popup {
+            self.status_log.mark_read();
+            if popup.inner {
+                self.status_log.clear();
+            }
+        }
     }
+
+    /// The right-hand group: the PANELS heading, the panel switches, and the
+    /// version link.
+    fn panel_switches(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        panels: egui::RichText,
+        version: &str,
+        gap: f32,
+    ) {
+        ui.label(panels);
+        // In a maximised score all read off but Overview; each switch
+        // restores the score with the previous panel choices.
+        for (command, label, hint) in PANEL_SWITCHES {
+            if panel_switch(ui, label, self.command_active(command))
+                .hover_hint(hint)
+                .clicked()
+            {
+                self.run_command(command, ctx);
+            }
+        }
+        // A short rule keeps the version apart from the switches. The item
+        // spacing on each side makes up the rest of the gap.
+        let (rule, _) = ui.allocate_exact_size(
+            Vec2::new((STATUS_VERSION_GAP - gap).max(1.0), 12.0),
+            Sense::hover(),
+        );
+        ui.painter().vline(
+            rule.center().x.round() + 0.5,
+            rule.y_range(),
+            egui::Stroke::new(1.0_f32, roles().line),
+        );
+        version_link(ui, version).hover_hint("Open MixJam Techno on GitHub");
+    }
+}
+
+/// The width of the right-hand group, from the heading to the version. It
+/// changes only with the theme and the display scale, so it is measured once
+/// for each.
+fn right_group_width(ui: &egui::Ui, panels: &egui::RichText, version: &str, gap: f32) -> f32 {
+    let key = egui::Id::new((
+        "status-group-width",
+        gap.to_bits(),
+        theme::current(),
+        ui.ctx().pixels_per_point().to_bits(),
+    ));
+    if let Some(width) = ui.ctx().data(|data| data.get_temp::<f32>(key)) {
+        return width;
+    }
+    let heading = egui::WidgetText::from(panels.clone())
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Body,
+        )
+        .size()
+        .x;
+    let width = heading
+        + PANEL_SWITCHES
+            .iter()
+            .map(|(_, label, _)| gap + panel_switch_width(ui, label))
+            .sum::<f32>()
+        + gap
+        + STATUS_VERSION_GAP
+        + text_width(ui, version);
+    ui.ctx().data_mut(|data| data.insert_temp(key, width));
+    width
 }
 
 impl StatusLog {

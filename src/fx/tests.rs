@@ -114,3 +114,80 @@ fn controls_hold_their_ranges() {
     bus.return_level = 0.5;
     bus.validate().unwrap();
 }
+
+#[test]
+fn a_bus_loads_a_preset_and_keeps_its_duck_key() {
+    let mut bus = FxBus {
+        module: Module::EchoformDelay(Echoform {
+            duck_key: 5,
+            feedback: 12.0,
+            ..Echoform::default()
+        }),
+        return_level: 0.3,
+        ..FxBus::default()
+    };
+    assert_eq!(bus.matching_preset(), None);
+    assert!(bus.load_preset("Dub Feedback"));
+    let expected = Echoform {
+        duck_key: 5,
+        ..Echoform::preset("Dub Feedback").unwrap()
+    };
+    assert_eq!(bus.module, Module::EchoformDelay(expected));
+    assert_eq!(bus.return_level, 1.0);
+    assert_eq!(bus.matching_preset(), Some("Dub Feedback"));
+    // A return level away from the preset's makes the bus custom.
+    bus.return_level = 0.5;
+    assert_eq!(bus.matching_preset(), None);
+    // An unknown name or another effect's preset changes nothing.
+    let before = bus;
+    assert!(!bus.load_preset("Nope"));
+    assert!(!bus.load_preset("Warm Chamber"));
+    assert_eq!(bus, before);
+    // An empty bus has no presets.
+    let mut empty = FxBus::default();
+    assert!(empty.module.presets().is_empty());
+    assert!(!empty.load_preset("Wide Tape Echo"));
+    assert_eq!(empty, FxBus::default());
+    assert_eq!(empty.matching_preset(), None);
+    // Every preset loads, stays valid, and is the one the bus matches.
+    for module in [
+        Module::EchoformDelay(Echoform::default()),
+        Module::AetherformReverb(Aetherform::default()),
+        Module::EmberformDrive(Emberform::default()),
+    ] {
+        for &(name, mix) in module.presets() {
+            let mut bus = FxBus {
+                module,
+                ..FxBus::default()
+            };
+            assert!(bus.load_preset(name), "{name}");
+            assert_eq!(bus.return_level, mix / 100.0);
+            assert_eq!(bus.matching_preset(), Some(name));
+            bus.validate().unwrap();
+        }
+    }
+}
+
+#[test]
+fn a_preset_matches_only_with_its_return_level() {
+    let mut bus = FxBus {
+        module: Module::AetherformReverb(Aetherform::preset("Dark Hall").unwrap()),
+        return_level: 0.92,
+        ..FxBus::default()
+    };
+    assert_eq!(bus.matching_preset(), Some("Dark Hall"));
+    bus.return_level = 0.5;
+    assert_eq!(bus.matching_preset(), None);
+}
+
+#[test]
+fn every_drive_preset_matches_itself() {
+    for (name, level) in Emberform::PRESETS {
+        let bus = FxBus {
+            module: Module::EmberformDrive(Emberform::preset(name).unwrap()),
+            return_level: level / 100.0,
+            ..FxBus::default()
+        };
+        assert_eq!(bus.matching_preset(), Some(name));
+    }
+}

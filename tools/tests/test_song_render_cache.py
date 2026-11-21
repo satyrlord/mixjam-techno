@@ -7,18 +7,67 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
+from concurrent.futures import Future, wait
 from unittest import mock
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'song'))
+import audible  # noqa: E402
 import mixjam  # noqa: E402
 import render  # noqa: E402
 from audible import lane_bars  # noqa: E402
 
 
 class RenderCacheTests(unittest.TestCase):
+    def test_failed_lane_render_preserves_the_last_wav(self):
+        for keyed in [False, True]:
+            with self.subTest(keyed=keyed), tempfile.TemporaryDirectory() as directory:
+                out = Path(directory)
+                previous = out / 'lane-01.wav'
+                mixjam.write_wav(previous, 44100, np.full((8, 2), 0.25))
+                contents = previous.read_bytes()
+                previous_song = mixjam.Song('Existing song').save(out / 'lane-01.mixjam')
+                song_contents = previous_song.read_bytes()
+                song = mixjam.Song('Failed export')
+                if keyed:
+                    song.ducker(1, 2)
+                with mock.patch.object(render, 'run', side_effect=RuntimeError('render failed')), \
+                        mock.patch.object(render, 'run_stems', return_value=False):
+                    with self.assertRaisesRegex(RuntimeError, 'render failed'):
+                        render.render_lanes(song.document(), {'track 1': [1]}, out, jobs=1)
+                self.assertEqual(previous.read_bytes(), contents)
+                self.assertEqual(previous_song.read_bytes(), song_contents)
+                self.assertEqual(set(out.rglob('*.mixjam')), {previous_song})
+
+    def test_submission_interrupt_cancels_queued_lanes(self):
+        class InterruptedPool:
+            def __enter__(self):
+                self.pending = None
+                return self
+
+            def submit(self, work, item):
+                if self.pending is not None:
+                    raise KeyboardInterrupt
+                future = Future()
+                self.pending = future, work, item
+                return future
+
+            def __exit__(self, *exc):
+                future, work, item = self.pending
+                if future.set_running_or_notify_cancel():
+                    work(item)
+
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'ThreadPoolExecutor', return_value=InterruptedPool()), \
+                mock.patch.object(render, 'run') as run:
+            song = mixjam.Song('Interrupted submission')
+            with self.assertRaises(KeyboardInterrupt):
+                render.render_lanes(song.document(), {'one': [1], 'two': [2]}, Path(directory), jobs=1)
+            run.assert_not_called()
+
     def test_isolated_repeat_keeps_song_end_and_cache_duration(self):
         song = mixjam.Song('repeat duration')
         document = song.document()
@@ -589,6 +638,25 @@ class RenderCacheTests(unittest.TestCase):
             np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
             self.assertEqual(list((cache / render.CACHE_VERSION).glob('*.tmp')), [])
 
+    def test_pruning_preserves_an_active_link_to_an_old_wav(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            source = cache / 'source.wav'
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            os.utime(source, (1, 1))
+            replace = os.replace
+
+            def prune_before_publication(staged, destination):
+                if Path(destination).suffix == '.wav':
+                    self.assertTrue(os.path.samefile(staged, source))
+                    render.prune_cache(cache)
+                replace(staged, destination)
+
+            key = 'a' * 32
+            with mock.patch.object(render.os, 'replace', side_effect=prune_before_publication):
+                render.to_cache(cache, key, source)
+            self.assertTrue(render.from_cache(cache, key, cache / 'output.wav'))
+
     def test_cache_pruning_keeps_unrelated_wavs_and_the_newest_entry(self):
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory)
@@ -670,6 +738,80 @@ class RenderCacheTests(unittest.TestCase):
         self.assertEqual(calls, {'lane-01.wav': render.POSIX_NICENESS,
                                  'lane-02.wav': render.POSIX_NICENESS,
                                  'master.wav': render.POSIX_NICENESS})
+
+    def test_a_song_with_no_clips_stops_with_a_message(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            song = root / 'empty.mixjam'
+            song.write_text(json.dumps(mixjam.Song('empty').document()), encoding='utf-8')
+            for tool in (render, audible):
+                with self.subTest(tool=tool.__name__), \
+                        mock.patch.object(sys, 'argv', [tool.__name__, str(song), str(root / 'out')]):
+                    with self.assertRaises(SystemExit) as caught:
+                        tool.main()
+                    self.assertEqual(str(caught.exception), 'The song has no clips.')
+
+    def test_a_failed_lane_stops_the_lanes_that_have_not_started(self):
+        started = []
+        def native(path, *_):
+            started.append(path.stem)
+            if path.stem == 'lane-01':
+                raise RuntimeError('lane failed')
+
+        def slow_coordinator(futures, **_kwargs):
+            # The worker can dequeue every task before the coordinator can cancel.
+            return wait(futures)
+
+        document = mixjam.Song('failure').document()
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'run', side_effect=native), \
+                mock.patch.object(render, 'wait', side_effect=slow_coordinator):
+            with self.assertRaisesRegex(RuntimeError, 'lane failed'):
+                render.render_lanes(document, {'one': [1], 'two': [2], 'three': [3]}, Path(directory), jobs=1)
+        self.assertEqual(started, ['lane-01'])
+
+    def test_cache_pruning_removes_orphan_digests_and_old_temporary_files_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            source = cache / 'source.wav'
+            mixjam.write_wav(source, 44100, np.zeros((8, 2)))
+            kept = 'a' * 32
+            render.to_cache(cache, kept, source)
+            folder = cache / render.CACHE_VERSION
+            orphan = folder / ('b' * 32 + '.sha256')
+            orphan.write_text('digest', encoding='utf-8')
+            new_digest = folder / ('c' * 32 + '.sha256')
+            new_digest.write_text('digest', encoding='utf-8')
+            long_ago = time.time() - render.STALE_TEMPORARY_SECONDS - 60
+            old = folder / f'mixjam-lane-{int(long_ago * 1e9)}-old.tmp'
+            fresh = folder / f'mixjam-lane-{time.time_ns()}-new.tmp'
+            old.write_bytes(b'x')
+            fresh.write_bytes(b'x')
+            unrelated = [folder / 'notes.tmp', folder / 'archive.sha256', folder / 'mixjam-lane-notes.tmp']
+            os.utime(orphan, (long_ago, long_ago))
+            for path in unrelated:
+                path.touch()
+                os.utime(path, (long_ago, long_ago))
+            render.prune_cache(cache)
+            self.assertFalse(orphan.exists())
+            self.assertTrue(new_digest.exists())
+            self.assertFalse(old.exists())
+            self.assertTrue(fresh.exists())
+            self.assertTrue((folder / f'{kept}.sha256').exists())
+            self.assertTrue((folder / f'{kept}.wav').exists())
+            self.assertTrue(all(path.exists() for path in unrelated))
+
+    def test_keyed_parts_removes_its_temporary_song_file(self):
+        song = mixjam.Song('keyed')
+        song.ducker(2, 1)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, wav = root / 'lane-02.mixjam', root / 'lane-02.wav'
+            with mock.patch.object(render, 'run_stems', return_value=False), \
+                    mock.patch.object(render, 'run') as native:
+                render.keyed_parts(song.document(), [2], path, wav, root / 'data')
+            native.assert_called_once()
+            self.assertFalse(path.exists())
 
 
 if __name__ == '__main__':

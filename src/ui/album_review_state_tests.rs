@@ -1,9 +1,22 @@
 use super::*;
+use mixjam_techno::application::album_review::covers::CoverCache;
+
+fn fixture_folder() -> PathBuf {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "mixjam-review-state-{}-{stamp}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&path).unwrap();
+    path
+}
 
 #[test]
 fn clearing_waits_for_cover_results_and_cannot_restore_a_cleared_cover() {
-    let folder =
-        std::env::temp_dir().join(format!("mixjam-cover-clear-pending-{}", std::process::id()));
+    let folder = fixture_folder();
     let cache = CoverCache::new(folder.clone(), 1 << 20);
     cache
         .store(
@@ -34,5 +47,36 @@ fn clearing_waits_for_cover_results_and_cannot_restore_a_cleared_cover() {
     state.poll(&ctx);
     assert!(state.textures.is_empty());
     assert_eq!(cache.usage(), (0, 0));
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn the_album_page_copies_its_review_once_for_each_shelf_revision() {
+    let folder = fixture_folder();
+    std::fs::write(
+        folder.join("brian-eno-apollo.json"),
+        include_str!("../../assets/album-review/brian-eno-apollo.json"),
+    )
+    .unwrap();
+    let mut state = AlbumReviewState::default();
+    state.use_folder(
+        Some(folder.clone()),
+        CoverCache::new(folder.join("covers"), 1 << 20),
+    );
+    let first = state
+        .page_review("brian-eno-apollo")
+        .expect("The review is on the shelf.");
+    let again = state.page_review("brian-eno-apollo").unwrap();
+    assert!(
+        Rc::ptr_eq(&first, &again),
+        "A frame must not copy the review."
+    );
+    let mut changed = (*first).clone();
+    changed.overview.push_str(" A closing note.");
+    state.shelf().update(changed).unwrap();
+    let second = state.page_review("brian-eno-apollo").unwrap();
+    assert!(!Rc::ptr_eq(&first, &second));
+    assert!(second.overview.ends_with(" A closing note."));
+    assert!(state.page_review("no-such-review").is_none());
     std::fs::remove_dir_all(folder).unwrap();
 }

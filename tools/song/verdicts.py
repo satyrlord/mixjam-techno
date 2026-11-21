@@ -41,13 +41,13 @@ import re
 import statistics
 import sys
 from collections import Counter, defaultdict
-from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
 import samples  # noqa: E402
 import sampletags  # noqa: E402
+from harmony import MODES, pitch_class  # noqa: E402
 
 COLUMNS = ['root', 'path', 'bytes', 'mtime', 'analysis_version', 'family', 'kind', 'verdict', 'reasons', 'owner_note', 'chord', 'chord_fit', 'tune',
            'same_as']
@@ -113,11 +113,10 @@ def triad_shares(chroma):
 
 
 def parse_chord(text):
-    match = re.fullmatch(r'([A-G])([#b]?)(m?)', text.strip())
+    match = re.fullmatch(r'([A-G][#b]?)(m?)', text.strip())
     if not match:
         return None
-    root = samples.NOTES.index(match.group(1)) + {'#': 1, 'b': -1, '': 0}[match.group(2)]
-    return root % 12, bool(match.group(3))
+    return pitch_class(match.group(1)), bool(match.group(2))
 
 
 def chord_fit(row, chord):
@@ -140,7 +139,7 @@ def in_scale(name_key, measured_key):
     if not named or not measured:
         return True
     root, minor = named
-    steps = (0, 2, 3, 5, 7, 8, 10) if minor else (0, 2, 4, 5, 7, 9, 11)
+    steps = MODES['minor' if minor else 'major']
     return (measured[0] - root) % 12 in steps
 
 
@@ -163,10 +162,10 @@ def load_owner():
             raise SystemExit(f'The verdict {rule["verdict"]!r} in {path} is not valid. '
                              f'Use one of {", ".join(OWNER_VERDICTS)}.')
         rule['match'] = rule['pattern'].replace('\\', '/').lower()
+        rule['regex'] = owner_pattern(rule['match'])
     return rules
 
 
-@lru_cache(maxsize=4096)
 def owner_pattern(pattern):
     """Only * is special in an owner rule; brackets and ? are literal."""
     return re.compile(re.escape(pattern).replace(r'\*', '.*'), re.DOTALL)
@@ -176,7 +175,9 @@ def owner_verdict(rules, root, path):
     full = (f'{root}/{path}' if root else str(path)).replace('\\', '/').lower()
     found = None
     for rule in rules:  # the last matching line wins, so a file line can follow its family's line
-        if owner_pattern(rule['match']).fullmatch(full):
+        if 'regex' not in rule:  # a rule that did not come from load_owner
+            rule['regex'] = owner_pattern(rule['match'])
+        if rule['regex'].fullmatch(full):
             found = rule
     return found
 

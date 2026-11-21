@@ -30,6 +30,17 @@ const SELECTOR_WIDTH: f32 = 136.0;
 const FOOTER: f32 = 38.0;
 const FOOTER_GAP: f32 = 12.0;
 
+fn pending_focus_id() -> egui::Id {
+    egui::Id::new("options-pending-focus")
+}
+
+fn take_pending_focus(ctx: &egui::Context) -> Option<egui::Id> {
+    ctx.data_mut(|data| {
+        data.remove_temp::<Option<egui::Id>>(pending_focus_id())
+            .flatten()
+    })
+}
+
 /// The open window: its draft, and where the keyboard goes.
 pub(super) struct OptionsWindow {
     pub(super) draft: OptionsDraft,
@@ -93,7 +104,8 @@ impl MixJamApp {
             window.focus_page = true;
         } else {
             let mut window = OptionsWindow::new(&self.session, Page::Audio);
-            window.previous_focus = ctx.memory(|memory| memory.focused());
+            let pending = take_pending_focus(ctx);
+            window.previous_focus = ctx.memory(|memory| memory.focused()).or(pending);
             self.options = Some(window);
         }
         dialog::expand(ctx, WINDOW);
@@ -106,15 +118,43 @@ impl MixJamApp {
     pub(super) fn close_options(&mut self, ctx: &egui::Context) {
         if let Some(window) = self.options.take() {
             if let Some(id) = window.previous_focus {
-                ctx.memory_mut(|memory| memory.request_focus(id));
-            } else if let Some(id) = ctx.memory(|memory| memory.focused()) {
+                if ctx.memory(|memory| memory.top_modal_layer().is_none()) {
+                    ctx.memory_mut(|memory| memory.request_focus(id));
+                    return;
+                }
+                // On the first pass after Discard, egui still blocks the
+                // workspace because the modal was drawn in the previous pass.
+                ctx.data_mut(|data| data.insert_temp(pending_focus_id(), Some(id)));
+                ctx.request_repaint();
+            }
+            if let Some(id) = ctx.memory(|memory| memory.focused()) {
                 ctx.memory_mut(|memory| memory.surrender_focus(id));
             }
         }
     }
 
+    fn restore_options_focus(&self, ctx: &egui::Context) {
+        let pending = pending_focus_id();
+        if !ctx.data(|data| data.get_temp::<Option<egui::Id>>(pending).is_some())
+            || self.blocking_modal(ctx).is_some()
+        {
+            return;
+        }
+        if ctx.memory(|memory| memory.top_modal_layer().is_some()) {
+            ctx.request_repaint();
+        } else if let Some(id) = take_pending_focus(ctx) {
+            ctx.memory_mut(|memory| {
+                if memory.focused().is_none() {
+                    memory.request_focus(id);
+                }
+            });
+            ctx.request_repaint();
+        }
+    }
+
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
         let Some(mut window) = self.options.take() else {
+            self.restore_options_focus(ctx);
             return;
         };
         let facts = facts(&self.session);
@@ -136,11 +176,18 @@ impl MixJamApp {
         if !open {
             actions.push(Action::Close);
         }
+        let close_requested = actions.iter().any(|action| matches!(action, Action::Close));
         let mut effects: Vec<Effect> = actions
             .into_iter()
             .filter_map(|action| window.update(action, &facts))
             .collect();
         window.settle(&facts);
+        if close_requested && window.confirm_discard {
+            dialog::expand(ctx, DISCARD);
+        }
+        if let Some(wait) = draft::folder_check_retry_in() {
+            ctx.request_repaint_after(wait);
+        }
         if window.confirm_discard {
             let mut answer = None;
             let response = dialog::modal(ctx, DISCARD, DISCARD, |ui| {
@@ -186,6 +233,7 @@ impl MixJamApp {
             Effect::Close => self.close_options(ctx),
             Effect::PickFolder => self.ask_path(FileRequest::OptionsFolder),
             Effect::SaveCapture => {
+                // The session puts the result in the status line, error or not.
                 let _ = self.session.save_playback_capture("Saved from Options");
             }
             Effect::OpenLibraries => self.open_sample_libraries(ctx),

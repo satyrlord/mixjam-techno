@@ -743,6 +743,17 @@ fn inspector_picture_fade_drag_uses_the_release_position() {
     );
     let during = app.session.project().clips[0].fades.fade_in.ticks;
     assert!(during > 0);
+    let middle = origin + Vec2::new(32.0, 0.0);
+    for pressed in [true, false] {
+        button_at(
+            &ctx,
+            &mut app,
+            middle,
+            egui::PointerButton::Secondary,
+            pressed,
+        );
+    }
+    assert_eq!(app.session.project().clips[0].fades.fade_in.ticks, during);
     pointer(
         &ctx,
         &mut app,
@@ -753,6 +764,44 @@ fn inspector_picture_fade_drag_uses_the_release_position() {
     assert!(app.session.project().clips[0].fades.fade_in.ticks > during);
     app.history_step(false);
     assert_eq!(app.session.project().clips[0], clip);
+}
+
+#[test]
+fn a_secondary_drag_does_not_change_an_inspector_fade() {
+    for add_primary in [false, true] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.open_inspector();
+        let clip = app.session.project().clips[0].clone();
+        app.select_clip(clip.id, false);
+        let none = egui::Modifiers::NONE;
+        let output = frame(&ctx, &mut app, vec![], none);
+        let origin = screen(&output)
+            .node("Inspector clip fade in handle")
+            .rect()
+            .center();
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(origin)],
+            none,
+        );
+        let secondary = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: none,
+        };
+        frame(&ctx, &mut app, vec![secondary(origin, true)], none);
+        let end = origin + Vec2::new(80.0, 0.0);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end)], none);
+        if add_primary {
+            pointer(&ctx, &mut app, end, true, none);
+            pointer(&ctx, &mut app, end, false, none);
+        }
+        frame(&ctx, &mut app, vec![secondary(end, false)], none);
+        assert_eq!(app.session.project().clips[0], clip);
+    }
 }
 
 #[test]

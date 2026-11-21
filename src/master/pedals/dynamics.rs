@@ -3,8 +3,8 @@
 //! and the limiter look ahead.
 use crate::master as settings;
 use crate::master::dsp::{
-    Biquad, Coefficients, DETECTOR, Delay, KNEE_DB, MovingMin, Smoothed, TruePeak, db_to_gain,
-    flush, gain_to_db, pole, reduction,
+    Biquad, Coefficients, DETECTOR, Delay, KNEE_DB, LookaheadGain, Smoothed, TruePeak, cascade,
+    db_to_gain, flush, gain_to_db, pole, reduction,
 };
 use std::f64::consts::FRAC_1_SQRT_2;
 
@@ -119,31 +119,18 @@ const WET: f64 = 0.6;
 #[derive(Clone, Copy)]
 struct PeakLimiter {
     delays: [Delay<BAND_LOOKAHEAD>; 2],
-    needs: MovingMin<SPAN>,
-    span: usize,
-    held: f64,
-    ramp: [f64; BAND_LOOKAHEAD],
-    ramp_at: usize,
-    ramp_sum: f64,
-    release: f64,
+    gain: LookaheadGain<f64, BAND_LOOKAHEAD, SPAN>,
 }
 impl PeakLimiter {
     fn new((hold, release): (usize, f64)) -> Self {
         Self {
             delays: [Delay::ZERO; 2],
-            needs: MovingMin::EMPTY,
-            span: BAND_LOOKAHEAD + 1 + hold,
-            held: 1.0,
-            ramp: [1.0; BAND_LOOKAHEAD],
-            ramp_at: 0,
-            ramp_sum: BAND_LOOKAHEAD as f64,
-            release: pole(release),
+            gain: LookaheadGain::new(BAND_LOOKAHEAD + 1 + hold, pole(release)),
         }
     }
     fn clear(&mut self) {
-        let (span, release) = (self.span, self.release);
-        *self = Self::new((0, 1.0));
-        (self.span, self.release) = (span, release);
+        self.delays = [Delay::ZERO; 2];
+        self.gain.clear();
     }
     /// The frame `BAND_LOOKAHEAD` ago and the gain it gets. The gain holds
     /// the louder of the frame and `key`, a level, under the threshold.
@@ -154,25 +141,12 @@ impl PeakLimiter {
         } else {
             1.0
         };
-        let lowest = self.needs.push(need, self.span);
-        self.held = if lowest < self.held {
-            lowest
-        } else {
-            flush(lowest + (self.held - lowest) * self.release)
-        };
-        self.ramp_sum += self.held - self.ramp[self.ramp_at];
-        self.ramp[self.ramp_at] = self.held;
-        self.ramp_at += 1;
-        if self.ramp_at == BAND_LOOKAHEAD {
-            // Recount now and then, so rounding cannot build up.
-            self.ramp_at = 0;
-            self.ramp_sum = self.ramp.iter().sum();
-        }
+        let gain = self.gain.push(need);
         let delayed = [
             f64::from(self.delays[0].push(left as f32)),
             f64::from(self.delays[1].push(right as f32)),
         ];
-        (delayed, (self.ramp_sum / BAND_LOOKAHEAD as f64).min(1.0))
+        (delayed, gain)
     }
 }
 
@@ -304,15 +278,11 @@ impl Multiband {
         let mut bands = [[0.0; 2]; 3];
         for (channel, sample) in [f64::from(left), f64::from(right)].into_iter().enumerate() {
             let [low_pass, high_pass, mid_pass, top_pass] = &mut *splits;
-            let section = |[first, second]: &mut [Biquad; 2], x| {
-                let x = first.process(channel, x);
-                second.process(channel, x)
-            };
-            let low = section(low_pass, sample);
-            let rest = section(high_pass, sample);
+            let low = cascade(low_pass, channel, sample);
+            let rest = cascade(high_pass, channel, sample);
             bands[0][channel] = all_pass.process(channel, low);
-            bands[1][channel] = section(mid_pass, rest);
-            bands[2][channel] = section(top_pass, rest);
+            bands[1][channel] = cascade(mid_pass, channel, rest);
+            bands[2][channel] = cascade(top_pass, channel, rest);
         }
         bands
     }
@@ -393,13 +363,7 @@ pub(in crate::master) struct Limiter {
     /// The key's true peak, which the limiter also holds under the ceiling.
     key_detectors: [TruePeak; 2],
     delays: [Delay<LIMITER_LATENCY>; 2],
-    needs: [f32; WINDOW],
-    need_at: usize,
-    held: f32,
-    ramp: [f32; LOOKAHEAD],
-    ramp_at: usize,
-    ramp_sum: f64,
-    release: f32,
+    envelope: LookaheadGain<f32, LOOKAHEAD, WINDOW>,
     /// The most reduction since `take_reduction`, in dB.
     most: f32,
 }
@@ -414,13 +378,7 @@ impl Limiter {
             detectors: [TruePeak::ZERO; 2],
             key_detectors: [TruePeak::ZERO; 2],
             delays: [Delay::ZERO; 2],
-            needs: [1.0; WINDOW],
-            need_at: 0,
-            held: 1.0,
-            ramp: [1.0; LOOKAHEAD],
-            ramp_at: 0,
-            ramp_sum: LOOKAHEAD as f64,
-            release: pole(0.08) as f32,
+            envelope: LookaheadGain::new(WINDOW, pole(0.08) as f32),
             most: 0.0,
         }
     }
@@ -467,23 +425,8 @@ impl Limiter {
         if key.is_some() {
             peak = peak.max(key_peak);
         }
-        self.needs[self.need_at] = if peak > ceiling { ceiling / peak } else { 1.0 };
-        self.need_at = (self.need_at + 1) % WINDOW;
-        let lowest = self.needs.iter().copied().fold(1.0, f32::min);
-        self.held = if lowest < self.held {
-            lowest
-        } else {
-            lowest + (self.held - lowest) * self.release
-        };
-        self.ramp_sum += f64::from(self.held) - f64::from(self.ramp[self.ramp_at]);
-        self.ramp[self.ramp_at] = self.held;
-        self.ramp_at += 1;
-        if self.ramp_at == LOOKAHEAD {
-            // Recount now and then, so rounding cannot build up.
-            self.ramp_at = 0;
-            self.ramp_sum = self.ramp.iter().map(|v| f64::from(*v)).sum();
-        }
-        let envelope = ((self.ramp_sum / LOOKAHEAD as f64) as f32).min(1.0);
+        let need = if peak > ceiling { ceiling / peak } else { 1.0 };
+        let envelope = self.envelope.push(need) as f32;
         if envelope < 1.0 {
             self.most = self.most.max(-gain_to_db(f64::from(envelope)) as f32);
         }

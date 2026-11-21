@@ -1,13 +1,13 @@
 //! Reading a sound's audio from its source, with the stray end that playback
 //! hides.
 
-use super::{AudioSource, Library, decode_1252};
+use super::{AudioSource, Library};
 use crate::products::Product;
 use legacy_format::packed::{self, DecodeOptions, HeaderKind};
 use std::{
     fs,
     io::{Read, Seek, SeekFrom},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 impl Library {
@@ -57,6 +57,7 @@ impl Library {
         })
     }
 
+    #[cfg(test)]
     pub fn step_synth_sources(&self) -> Result<Vec<(PathBuf, String)>, String> {
         if !self.wav_roots.is_empty() {
             return Ok(self
@@ -77,7 +78,7 @@ impl Library {
         let installation = packed
             .parent()
             .ok_or("The original archive path is invalid.")?;
-        let text = decode_1252(
+        let text = super::decode_1252(
             &fs::read(installation.join("\x65jay").join("\x48ypsound"))
                 .map_err(|e| e.to_string())?,
         );
@@ -93,7 +94,7 @@ impl Library {
             let relative = Path::new(row[0]);
             if relative
                 .components()
-                .any(|component| !matches!(component, Component::Normal(_)))
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
             {
                 return Err("The generator source index contains an invalid path.".into());
             }

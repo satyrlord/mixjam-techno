@@ -1,6 +1,6 @@
 //! Parts that the delay and the reverb share. Delay lines live on the heap
 //! and are sized when an effect is built, so processing never allocates.
-use crate::master::dsp::{MovingMin, RATE, db_to_gain, flush, gain_to_db, pole};
+use crate::master::dsp::{LookaheadGain, RATE, db_to_gain, flush, gain_to_db, pole};
 use std::f64::consts::{PI, TAU};
 
 /// A delay line of one channel, read at fractional positions with cubic
@@ -207,54 +207,6 @@ pub(super) fn widen(left: f64, right: f64, width: f64) -> (f64, f64) {
     (mid + side, mid - side)
 }
 
-/// A setting that glides to its target with its own time constant.
-#[derive(Clone, Copy)]
-pub(super) struct Glide {
-    value: f64,
-    target: f64,
-    step: f64,
-}
-impl Glide {
-    pub(super) fn new(value: f64, seconds: f64) -> Self {
-        Self {
-            value,
-            target: value,
-            step: 1.0 - pole(seconds),
-        }
-    }
-    pub(super) fn set(&mut self, target: f64) {
-        self.target = target;
-    }
-    pub(super) fn set_time(&mut self, seconds: f64) {
-        self.step = 1.0 - pole(seconds);
-    }
-    pub(super) fn settle(&mut self) {
-        self.value = self.target;
-    }
-    /// Set the value, keeping the target: the glide goes on from there.
-    pub(super) fn hold(&mut self, value: f64) {
-        self.value = value;
-    }
-    pub(super) fn value(&self) -> f64 {
-        self.value
-    }
-    pub(super) fn target(&self) -> f64 {
-        self.target
-    }
-    #[inline]
-    pub(super) fn next(&mut self) -> f64 {
-        if self.value != self.target {
-            let gap = self.target - self.value;
-            self.value = if gap.abs() <= 1e-9 * (1.0 + self.target.abs()) {
-                self.target
-            } else {
-                self.value + gap * self.step
-            };
-        }
-        self.value
-    }
-}
-
 /// The frames whose gain needs the safety limiter compares: its lookahead
 /// and the frame now arriving.
 const NEEDS: usize = super::LOOKAHEAD + 1;
@@ -265,12 +217,7 @@ const NEEDS: usize = super::LOOKAHEAD + 1;
 /// effects shorten their own delays by as much.
 pub(super) struct SafetyLimiter {
     delays: [Line; 2],
-    needs: MovingMin<NEEDS>,
-    held: f64,
-    ramp: Box<[f64]>,
-    ramp_at: usize,
-    ramp_sum: f64,
-    release: f64,
+    gain: LookaheadGain<f64, { super::LOOKAHEAD }, NEEDS>,
 }
 impl SafetyLimiter {
     const CEILING: f64 = 0.891_250_938_133_745_5; // -1 dBFS
@@ -279,21 +226,12 @@ impl SafetyLimiter {
         let lookahead = super::LOOKAHEAD;
         Self {
             delays: [Line::new(lookahead), Line::new(lookahead)],
-            needs: MovingMin::EMPTY,
-            held: 1.0,
-            ramp: vec![1.0; lookahead].into_boxed_slice(),
-            ramp_at: 0,
-            ramp_sum: lookahead as f64,
-            release: pole(0.1),
+            gain: LookaheadGain::new(NEEDS, pole(0.1)),
         }
     }
     pub(super) fn clear(&mut self) {
         self.delays.iter_mut().for_each(Line::clear);
-        self.needs = MovingMin::EMPTY;
-        self.held = 1.0;
-        self.ramp.fill(1.0);
-        self.ramp_at = 0;
-        self.ramp_sum = self.ramp.len() as f64;
+        self.gain.clear();
     }
     /// The frame `LOOKAHEAD` ago, limited when `on`.
     #[inline]
@@ -311,21 +249,7 @@ impl SafetyLimiter {
         } else {
             1.0
         };
-        let lowest = self.needs.push(need, NEEDS);
-        self.held = if lowest < self.held {
-            lowest
-        } else {
-            flush(lowest + (self.held - lowest) * self.release)
-        };
-        self.ramp_sum += self.held - self.ramp[self.ramp_at];
-        self.ramp[self.ramp_at] = self.held;
-        self.ramp_at += 1;
-        if self.ramp_at == lookahead {
-            // Recount now and then, so rounding cannot build up.
-            self.ramp_at = 0;
-            self.ramp_sum = self.ramp.iter().sum();
-        }
-        let gain = (self.ramp_sum / lookahead as f64).min(1.0);
+        let gain = self.gain.push(need);
         (delayed.0 * gain, delayed.1 * gain)
     }
 }
@@ -377,33 +301,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn moving_min_keeps_the_oldest_live_value_when_full() {
-        let mut minimum = MovingMin::<4>::EMPTY;
-        for index in 0usize..20 {
-            assert_eq!(
-                minimum.push(index as f64, 4),
-                index.saturating_sub(3) as f64
-            );
-        }
-    }
-
-    #[test]
     fn clearing_the_limiter_reuses_its_buffers() {
         let mut limiter = SafetyLimiter::new();
-        let pointers = (
-            limiter.delays[0].buffer.as_ptr(),
-            limiter.needs.values.as_ptr(),
-            limiter.ramp.as_ptr(),
-        );
+        let pointers = limiter.delays.each_ref().map(|line| line.buffer.as_ptr());
         limiter.process(1.0, 1.0, true);
         limiter.clear();
         assert_eq!(
             pointers,
-            (
-                limiter.delays[0].buffer.as_ptr(),
-                limiter.needs.values.as_ptr(),
-                limiter.ramp.as_ptr()
-            )
+            limiter.delays.each_ref().map(|line| line.buffer.as_ptr())
         );
         for _ in 0..1000 {
             assert_eq!(limiter.process(0.0, 0.0, true), (0.0, 0.0));

@@ -175,12 +175,7 @@ impl EqParam {
 
     /// Set the control, held to its range.
     pub fn set(self, eq: &mut ChannelEq, value: f32) {
-        let range = self.range();
-        let value = if value.is_nan() {
-            range.default
-        } else {
-            value.clamp(range.low, range.high)
-        };
+        let value = self.range().hold(value);
         match self {
             Self::LowCut => eq.low_cut = value,
             Self::LowHz => eq.low_hz = value,
@@ -200,10 +195,10 @@ impl EqParam {
 
 impl ChannelEq {
     pub fn validate(&self) -> Result<(), String> {
-        if EqParam::ALL.into_iter().any(|param| {
-            let (value, range) = (param.get(self), param.range());
-            !(value.is_finite() && (range.low..=range.high).contains(&value))
-        }) {
+        if !EqParam::ALL
+            .into_iter()
+            .all(|param| param.range().contains(param.get(self)))
+        {
             return Err("A channel EQ setting is out of range.".into());
         }
         Ok(())

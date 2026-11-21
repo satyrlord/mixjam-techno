@@ -368,10 +368,7 @@ fn event_tuple(
     let (left_trim, right_trim, gain) = if position >= 0 {
         let left = reader.u32()?;
         let right = reader.u32()?;
-        let gain = (32767.0 + f32::from(reader.i16()?)) / 32767.0;
-        if !(0.0..=2.0).contains(&gain) {
-            return Err("The native clip has invalid volume data.".into());
-        }
+        let gain = checked_clip_gain(clip_gain(reader.i16()?))?;
         (native_tick_count(left)?, native_tick_count(right)?, gain)
     } else {
         (0, 0, 1.0)
@@ -397,7 +394,22 @@ pub(in crate::compat) fn native_fader_gain(stored: u16, scale: f64) -> f32 {
     ((value * 65536.0).trunc() / 65536.0) as f32
 }
 
-pub(super) fn native_position(position: i32) -> Result<u32, String> {
+/// The gain that a saved clip volume delta gives: the stored value is the
+/// offset from unity in units of 1/32767.
+pub(crate) fn clip_gain(delta: i16) -> f32 {
+    (32767.0 + f32::from(delta)) / 32767.0
+}
+
+/// A clip gain must lie between silence and twice unity.
+pub(crate) fn checked_clip_gain(gain: f32) -> Result<f32, String> {
+    if (0.0..=2.0).contains(&gain) {
+        Ok(gain)
+    } else {
+        Err("The native clip has invalid volume data.".into())
+    }
+}
+
+pub(crate) fn native_position(position: i32) -> Result<u32, String> {
     let position = if position < 0 {
         -i64::from(position) - 1
     } else {
@@ -408,7 +420,7 @@ pub(super) fn native_position(position: i32) -> Result<u32, String> {
     )
 }
 
-pub(super) fn native_tick_count(value: u32) -> Result<u32, String> {
+pub(crate) fn native_tick_count(value: u32) -> Result<u32, String> {
     // All admitted counted profiles have native duration writers with 128 units per bar.
     value
         .checked_mul(2)

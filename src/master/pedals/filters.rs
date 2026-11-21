@@ -2,7 +2,7 @@
 //! Each recomputes its filters while a setting glides.
 use super::{REFRESH, Refresh};
 use crate::master as settings;
-use crate::master::dsp::{Biquad, Coefficients, Smoothed};
+use crate::master::dsp::{Biquad, Coefficients, Smoothed, cascade};
 use std::f64::consts::FRAC_1_SQRT_2;
 
 // Trim EQ -------------------------------------------------------------------------------
@@ -63,13 +63,10 @@ impl TrimEq {
         if self.refresh.due(gliding, self.settled()) {
             self.design();
         }
-        let mut samples = [f64::from(left), f64::from(right)];
-        for filter in &mut self.filters {
-            for (channel, sample) in samples.iter_mut().enumerate() {
-                *sample = filter.process(channel, *sample);
-            }
-        }
-        (samples[0] as f32, samples[1] as f32)
+        (
+            cascade(&mut self.filters, 0, f64::from(left)) as f32,
+            cascade(&mut self.filters, 1, f64::from(right)) as f32,
+        )
     }
 }
 
@@ -130,13 +127,10 @@ impl LiftEq {
         {
             self.design();
         }
-        let mut samples = [f64::from(left), f64::from(right)];
-        for filter in &mut self.filters {
-            for (channel, sample) in samples.iter_mut().enumerate() {
-                *sample = filter.process(channel, *sample);
-            }
-        }
-        (samples[0] as f32, samples[1] as f32)
+        (
+            cascade(&mut self.filters, 0, f64::from(left)) as f32,
+            cascade(&mut self.filters, 1, f64::from(right)) as f32,
+        )
     }
 }
 
