@@ -345,10 +345,11 @@ fn maximise_button(ui: &mut egui::Ui, on: bool) -> Response {
 
 /// The Automation menu's first group: the lanes on every track other than
 /// the sends, which have their own group.
-pub(in super::super) const TRACK_LANES: [automation::Lane; 6] = [
+pub(in super::super) const TRACK_LANES: [automation::Lane; 7] = [
     automation::Lane::Volume,
     automation::Lane::Pan,
     automation::Lane::Filter,
+    automation::Lane::Compression,
     automation::Lane::Pitch,
     automation::Lane::Repeat,
     automation::Lane::RepeatGate,

@@ -153,7 +153,7 @@ pub(super) const AUTOMATION: &[Block] = &[
     Terms(&[
         (
             "Every track",
-            "Volume (dB over the fader), Pan, Filter, Pitch, Repeat, and Repeat gate.",
+            "Volume (dB over the fader), Pan, Filter, Compression, Pitch, Repeat, and Repeat gate.",
         ),
         (
             "Sends",
@@ -177,6 +177,7 @@ pub(super) const AUTOMATION: &[Block] = &[
     ]),
     Facts(&[
         "Values move in a straight line between points. Repeat and Repeat gate move in steps.",
+        "Compression sets how much of the track compressor is mixed in, from 0% to 100%. It applies while the compressor is on.",
         "The menu marks the current lane, and shows how many tracks have points on each lane, or how many points a return lane has.",
         "A ring around a knob in the Mixer means that a lane sets it during playback.",
     ]),

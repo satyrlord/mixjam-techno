@@ -66,6 +66,7 @@ Automation lanes, FX buses, and the master:
 | Repeat lane | 0 (off), 4, 8, 16, 32, or 64 |
 | Repeat gate lane | 5 to 100 % |
 | Pitch lane | -4800 to 2400 cents |
+| Compression lane | 0 to 100 % |
 | FX return level (`returnLevel`) | 0 to 1 |
 | FX return lane | 0 to 2 (1 is the full return) |
 | Master gain (`masterGain`), an amplitude | 0 to 4 |

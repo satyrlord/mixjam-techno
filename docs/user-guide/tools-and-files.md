@@ -144,9 +144,9 @@ of the application. The song keeps its native sample identities. These copies
 are the source audio of the saved song. Later saves use the copies again if
 they did not change.
 
-A `.mixjam` song is JSON, format version 25. [SONG-FORMAT.md](../SONG-FORMAT.md)
-describes it and how earlier versions open. A song links to WAV files. It is
-not a portable audio bundle.
+A `.mixjam` song is a JSON document that links to WAV files.
+[SONG-FORMAT.md](../SONG-FORMAT.md) gives the current format version and
+describes how earlier versions open.
 
 A song finds a WAV file that moved in a library folder, or to a different
 library folder, by the end of its path: the file name and the folders just

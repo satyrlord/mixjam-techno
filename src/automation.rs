@@ -22,10 +22,10 @@ pub(crate) use evaluate::{Envelope, Varispeed};
 pub use evaluate::{filter_cutoff, value_at, volume_gain};
 pub(crate) use filter::Filter;
 pub use model::{
-    Automation, Lane, PITCH_CEILING_CENTS, PITCH_FLOOR_CENTS, Point, REPEAT_GATE_FLOOR,
-    REPEAT_GATE_FULL, REPEAT_GATE_STEP, REPEAT_STEPS, RETURN_CEILING, VOLUME_CEILING_DB,
-    VOLUME_FLOOR_DB, moved_point, no_lanes, pan_gains, pan_label, pitch_label, return_label,
-    set_point, snap_return, validate_points, validate_return_points,
+    Automation, COMPRESSION_FULL, COMPRESSION_STEP, Lane, PITCH_CEILING_CENTS, PITCH_FLOOR_CENTS,
+    Point, REPEAT_GATE_FLOOR, REPEAT_GATE_FULL, REPEAT_GATE_STEP, REPEAT_STEPS, RETURN_CEILING,
+    VOLUME_CEILING_DB, VOLUME_FLOOR_DB, moved_point, no_lanes, pan_gains, pan_label, pitch_label,
+    return_label, set_point, snap_return, validate_points, validate_return_points,
 };
 #[cfg(test)]
 pub(crate) use repeat::REPEAT_RAMP_FRAMES;

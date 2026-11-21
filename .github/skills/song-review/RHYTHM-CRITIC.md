@@ -29,8 +29,8 @@ Read your inputs in [Role inputs](REFERENCE-INPUTS.md#role-inputs). Also read:
 - the current tools of the application, in
   [docs/SONG-FORMAT.md](../../../docs/SONG-FORMAT.md) and
   [docs/USER-GUIDE.md](../../../docs/USER-GUIDE.md): the automation lanes
-  (volume, filter, pan, repeat, repeat gate, pitch), clip pitch, fades and
-  reverse, the lane EQ, drive, compressor and ducker, and the FX buses.
+  (volume, filter, pan, repeat, repeat gate, pitch, compression), clip pitch,
+  fades and reverse, the lane EQ, drive, compressor and ducker, and the FX buses.
 
 Measure by proxy with your own numpy analysis. Short test renders of a lane or
 an excerpt are permitted. `drumfamily.py` compares the rhythm and tone of drum

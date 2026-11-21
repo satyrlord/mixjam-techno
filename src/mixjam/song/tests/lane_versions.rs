@@ -125,7 +125,7 @@ fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 25);
+    assert_eq!(document["formatVersion"], 26);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened, project);
     // Version 22 and earlier reject each key, even when it holds nothing.
@@ -359,7 +359,7 @@ fn only_version_24_lanes_hold_pitch_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 25);
+    assert_eq!(document["formatVersion"], 26);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 23 rejects the key, even as an empty list, and opens the
@@ -435,7 +435,7 @@ fn only_version_21_lanes_hold_repeat_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 25);
+    assert_eq!(document["formatVersion"], 26);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 20 rejects the key, even as an empty list, and opens the
@@ -559,7 +559,7 @@ fn only_version_22_lanes_hold_a_drive() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 25);
+    assert_eq!(document["formatVersion"], 26);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 21 and earlier reject the key, on or off, and open the
@@ -740,5 +740,48 @@ fn only_version_25_songs_hold_the_emberform_drive() {
     assert_eq!(
         parse(&serde_json::to_vec(&earlier).unwrap()).unwrap().fx,
         expected
+    );
+}
+
+#[test]
+fn only_version_26_lanes_hold_compression_automation() {
+    let project = eased(project());
+    let document = serde_json::to_value(Document::new(
+        &project,
+        "2020-01-02T03:04:05Z".into(),
+        timestamp(0),
+    ))
+    .unwrap();
+    assert_eq!(document["formatVersion"], 26);
+    let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+    assert_eq!(reopened.tracks, project.tracks);
+    // Version 25 rejects the key, even as an empty list.
+    for compression in [
+        document["lanes"][5]["automation"]["compression"].clone(),
+        serde_json::json!([]),
+    ] {
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 25.into();
+        earlier["lanes"][5]["automation"]["compression"] = compression;
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+            "Version 25 lanes cannot contain compression automation."
+        );
+    }
+    for (value, error) in [
+        (serde_json::json!(-1.0), "Compression automation values"),
+        (serde_json::json!(100.5), "Compression automation values"),
+        (serde_json::json!(null), "The automation is invalid"),
+    ] {
+        let mut wrong = document.clone();
+        wrong["lanes"][5]["automation"]["compression"][1]["value"] = value;
+        let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+        assert!(found.contains(error), "{found}");
+    }
+    let mut wrong = document;
+    wrong["lanes"][5]["automation"]["compression"][1] = serde_json::json!([320, 0.0]);
+    assert_eq!(
+        parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err(),
+        "The automation points must be JSON objects."
     );
 }

@@ -1,7 +1,7 @@
 # Version history
 
 Migration keeps the earlier settings within the limits below. A save of an
-earlier song writes version 25, which earlier builds cannot open.
+earlier song writes version 26, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ earlier song writes version 25, which earlier builds cannot open.
 | 23 | Adds FX bus return automation, the lane automation `repeatGate`, and the placement `reverse`. | Static returns, full-length repeats, no reversed clips. |
 | 24 | Adds the lane automation `pitch`. | No pitch automation. |
 | 25 | Adds the FX bus module `emberform-drive`. | No drive returns. |
+| 26 | Adds the lane automation `compression`. | The lane compressor fully in. |
 
 Each saved lane `ducker` of an earlier song, on or off, opens with its
 `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0. The lane

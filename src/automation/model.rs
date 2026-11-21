@@ -52,6 +52,16 @@ pub enum Lane {
     /// points, and adds to each clip's own pitch. It acts where the clips
     /// read their sources, before the Repeat lane. See `Varispeed`.
     Pitch,
+    /// How much of the track's compressor is mixed in, from 0 (the sound
+    /// as it enters the compressor) to 100 percent (the compressor as set).
+    /// It moves in straight lines between points and holds its first and
+    /// last values outside them, as Filter does; without points the
+    /// compressor is fully in. The compressor is one gain per frame with no
+    /// lookahead, so the mix moves that gain toward unity: the dry and the
+    /// compressed sound never comb. The detector runs at every value, so a
+    /// rise from 0% meets a compressor that has already settled. It does
+    /// nothing while the compressor is off.
+    Compression,
 }
 
 /// The lowest volume value, which is silence.
@@ -79,8 +89,13 @@ pub const RETURN_CEILING: f32 = 2.0;
 pub const PITCH_FLOOR_CENTS: f32 = -4800.0;
 pub const PITCH_CEILING_CENTS: f32 = 2400.0;
 
+/// The Compression lane's top in percent of the compressor, and the step
+/// that the arrangement snaps its points to.
+pub const COMPRESSION_FULL: f32 = 100.0;
+pub const COMPRESSION_STEP: f32 = 5.0;
+
 impl Lane {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Volume,
         Self::Send(0),
         Self::Send(1),
@@ -91,6 +106,7 @@ impl Lane {
         Self::Repeat,
         Self::RepeatGate,
         Self::Pitch,
+        Self::Compression,
     ];
 
     pub fn label(self) -> String {
@@ -102,11 +118,12 @@ impl Lane {
             Self::Repeat => "Repeat".into(),
             Self::RepeatGate => "Repeat gate".into(),
             Self::Pitch => "Pitch".into(),
+            Self::Compression => "Compression".into(),
         }
     }
 
     /// The lane's name in agent requests: volume, send1 to send4, filter,
-    /// pan, repeat, repeatgate, or pitch.
+    /// pan, repeat, repeatgate, pitch, or compression.
     pub fn key(self) -> String {
         match self {
             Self::Volume => "volume".into(),
@@ -116,6 +133,7 @@ impl Lane {
             Self::Repeat => "repeat".into(),
             Self::RepeatGate => "repeatgate".into(),
             Self::Pitch => "pitch".into(),
+            Self::Compression => "compression".into(),
         }
     }
 
@@ -132,12 +150,13 @@ impl Lane {
         self.steps() || self == Self::Pitch
     }
 
-    /// The value that a resting lane holds before its first point.
+    /// The lane's fallback with no points. A resting lane also holds this
+    /// value before its first point.
     pub fn before_first(self) -> f32 {
-        if self == Self::RepeatGate {
-            REPEAT_GATE_FULL
-        } else {
-            0.0
+        match self {
+            Self::RepeatGate => REPEAT_GATE_FULL,
+            Self::Compression => COMPRESSION_FULL,
+            _ => 0.0,
         }
     }
 
@@ -154,13 +173,15 @@ impl Lane {
             Self::Repeat => (0.0, 64.0),
             Self::RepeatGate => (REPEAT_GATE_FLOOR, REPEAT_GATE_FULL),
             Self::Pitch => (PITCH_FLOOR_CENTS, PITCH_CEILING_CENTS),
+            Self::Compression => (0.0, COMPRESSION_FULL),
         }
     }
 
     /// `value` on the lane's grid and within its range: Volume in half
     /// decibels; Send, Filter, and Pan in hundredths, with Filter and Pan
     /// held at the middle within 0.04 of it; the nearest Repeat step; the
-    /// gate in `REPEAT_GATE_STEP`s; and Pitch in whole semitones.
+    /// gate in `REPEAT_GATE_STEP`s; Pitch in whole semitones; and
+    /// Compression in `COMPRESSION_STEP`s, with NaN at the full compressor.
     pub fn snap(self, value: f32) -> f32 {
         let (low, high) = self.range();
         if value.is_nan() {
@@ -177,6 +198,7 @@ impl Lane {
                 .unwrap_or(0.0),
             Self::RepeatGate => (value / REPEAT_GATE_STEP).round() * REPEAT_GATE_STEP,
             Self::Pitch => (value / 100.0).round() * 100.0,
+            Self::Compression => (value / COMPRESSION_STEP).round() * COMPRESSION_STEP,
         };
         value.clamp(low, high)
     }
@@ -195,6 +217,7 @@ impl Lane {
             Self::Repeat => format!("1/{value:.0}"),
             Self::RepeatGate => format!("{value:.0}%"),
             Self::Pitch => pitch_label(value),
+            Self::Compression => format!("{value:.0}%"),
         }
     }
 }
@@ -250,10 +273,17 @@ pub struct Automation {
     pub repeat_gate: Vec<Point>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pitch: Vec<Point>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub compression: Vec<Point>,
 }
 
 impl Automation {
     pub fn is_empty(&self) -> bool {
+        self.is_empty_except_compression() && self.compression.is_empty()
+    }
+
+    /// Whether every lane that can act with the compressor off is empty.
+    pub(crate) fn is_empty_except_compression(&self) -> bool {
         self.volume.is_empty()
             && no_lanes(&self.sends)
             && self.filter.is_empty()
@@ -272,6 +302,7 @@ impl Automation {
             Lane::Repeat => &self.repeat,
             Lane::RepeatGate => &self.repeat_gate,
             Lane::Pitch => &self.pitch,
+            Lane::Compression => &self.compression,
         }
     }
 
@@ -284,6 +315,7 @@ impl Automation {
             Lane::Repeat => &mut self.repeat,
             Lane::RepeatGate => &mut self.repeat_gate,
             Lane::Pitch => &mut self.pitch,
+            Lane::Compression => &mut self.compression,
         }
     }
 

@@ -165,11 +165,24 @@ impl Document {
                             self.format_version
                         ));
                     }
-                    let lanes_are_objects =
-                        ["volume", "filter", "pan", "repeat", "repeatGate", "pitch"]
-                            .iter()
-                            .filter_map(|key| record.get(*key))
-                            .all(point_arrays_have_objects);
+                    if self.format_version < 26 && record.contains_key("compression") {
+                        return Err(format!(
+                            "Version {} lanes cannot contain compression automation.",
+                            self.format_version
+                        ));
+                    }
+                    let lanes_are_objects = [
+                        "volume",
+                        "filter",
+                        "pan",
+                        "repeat",
+                        "repeatGate",
+                        "pitch",
+                        "compression",
+                    ]
+                    .iter()
+                    .filter_map(|key| record.get(*key))
+                    .all(point_arrays_have_objects);
                     let sends_are_objects = record
                         .get("sends")
                         .and_then(serde_json::Value::as_array)

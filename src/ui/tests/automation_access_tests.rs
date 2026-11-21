@@ -166,7 +166,7 @@ fn the_lane_menu_shows_its_last_row_whole_and_does_not_scroll() {
 }
 
 #[test]
-fn the_lane_menu_groups_all_fourteen_lanes_and_shows_what_each_holds() {
+fn the_lane_menu_groups_all_fifteen_lanes_and_shows_what_each_holds() {
     use mixjam_techno::application::automation::{Lane, Point};
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -246,7 +246,7 @@ fn the_lane_menu_groups_all_fourteen_lanes_and_shows_what_each_holds() {
         (0..mixjam_techno::application::fx::BUSES)
             .map(|bus| (format!("FX {} return", bus + 1), (None, Some(bus)))),
     );
-    assert_eq!(lanes.len(), 14);
+    assert_eq!(lanes.len(), 15);
     for (label, lane) in lanes {
         choose_automation_lane(&ctx, &mut app, &label);
         assert_eq!(
@@ -263,13 +263,23 @@ fn the_lane_menu_groups_all_fourteen_lanes_and_shows_what_each_holds() {
 }
 
 #[test]
-fn the_agent_automate_request_reaches_all_fourteen_lanes() {
+fn the_agent_automate_request_reaches_and_lists_compression_and_other_lanes() {
     use mixjam_techno::application::automation::Lane;
     let (context, mut app, port) = agent_fixture();
+    let reply = agent(
+        &context,
+        &mut app,
+        &port,
+        &["automate", "track=1", "lane=unknown", "points=[]"],
+    );
+    assert_eq!(reply["ok"], false, "{reply}");
+    let error = reply["error"].as_str().unwrap();
+    assert!(error.contains("compression"), "{reply}");
+    assert!(mixjam_techno::agent::HELP.contains("|compression"));
     for lane in Lane::ALL {
         let value = match lane {
             Lane::Repeat => "8",
-            Lane::RepeatGate => "50",
+            Lane::RepeatGate | Lane::Compression => "50",
             Lane::Send(_) => "0.5",
             _ => "0",
         };

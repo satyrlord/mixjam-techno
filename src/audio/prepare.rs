@@ -149,11 +149,10 @@ impl Mix {
             if let Some(slot) = keyed {
                 keys[slot].voices.push(voice.clone());
             }
-            // A track whose EQ, drive, and compressor are off, at 100%
-            // width, that has no automation, and that neither ducks nor keys
-            // a ducker mixes its voices straight into the sum, as before the
-            // EQ existed.
-            if track.automation.is_empty()
+            // A track without an active processor or automation mixes its
+            // voices straight into the sum. With the compressor off, its
+            // Compression lane has no effect on this route.
+            if track.automation.is_empty_except_compression()
                 && !track.eq.on
                 && !track.drive.on
                 && !track.compressor.on

@@ -21,12 +21,12 @@ counts hide, so that every action stays within the score. If less than
 accessible name. All actions stay on one row beside the Sounds panel, so that
 the lane viewport keeps its height.
 
-The Automation menu lists Off and all 14 lanes in three groups, under small
+The Automation menu lists Off and all 15 lanes in three groups, under small
 muted uppercase headings:
 
 | Heading | Lanes |
 | --- | --- |
-| On every track | Volume, Pan, Filter, Pitch, Repeat, Repeat gate |
+| On every track | Volume, Pan, Filter, Compression, Pitch, Repeat, Repeat gate |
 | Send amount, on every track | FX 1 to FX 4 send |
 | Return level, one line across the song | FX 1 to FX 4 return |
 

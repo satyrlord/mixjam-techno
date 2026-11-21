@@ -237,6 +237,9 @@ impl Command {
             Self::Lane(Some(Lane::Pitch), _) => "Bend the playback speed, like a tape machine",
             Self::Lane(Some(Lane::Repeat), _) => "Rolls and ratchets from the track's own sound",
             Self::Lane(Some(Lane::RepeatGate), _) => "How much of each repeat sounds",
+            Self::Lane(Some(Lane::Compression), _) => {
+                "How much of the track's compressor is mixed in"
+            }
             Self::Lane(Some(Lane::Send(_)), _) => "How much each track sends to this bus",
             Self::Lane(None, Some(_)) => "The bus's return level, one line across the song",
         }

@@ -37,8 +37,8 @@ these keys:
 - `placements`
 
 Earlier versions use the fields in the [version history](version-history.md).
-A lane from version 18 can also hold `automation` (below) and the keys on
-[Lane processing keys](lane-processing.md).
+A lane can also hold `automation` from version 14 and the keys on
+[Lane processing keys](lane-processing.md) from the versions listed there.
 
 ### `automation`
 
@@ -49,6 +49,7 @@ A lane from version 18 can also hold `automation` (below) and the keys on
 - `repeat`, from version 21
 - `repeatGate`, from version 23
 - `pitch`, from version 24
+- `compression`, from version 26
 
 Each list holds `{"tick", "value"}` points in strictly increasing tick order
 within the timeline. Automation points do not extend the duration of the song.
@@ -131,3 +132,21 @@ The lane acts where the placements read their sources. It acts before
 `repeat`, so the repeats replay the pitched sound. It also acts before the EQ
 and everything after the EQ. Versions 23 and earlier reject `pitch`, even as
 an empty list.
+
+#### `compression`
+
+`compression` is how much of the lane compressor is mixed in, in percent, from
+0 to 100. At 0 the lane sounds as with the compressor off. At 100 it sounds as
+the compressor is set.
+
+- The lane holds its first value before its first point and its last value
+  after its last point. Between points, it moves in a straight line at every
+  frame.
+- A lane without points has the compressor fully in.
+- The compressor applies one gain to each frame. The lane moves that gain
+  toward unity, so the dry and the compressed sound stay in phase.
+- The detector of the compressor runs at every value. A rise from 0 meets a
+  compressor that has already settled.
+
+While the compressor is off, the lane does nothing. Versions 25 and earlier
+reject `compression`, even as an empty list.

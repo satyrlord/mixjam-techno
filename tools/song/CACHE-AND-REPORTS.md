@@ -21,7 +21,7 @@ keeps that lane's previous WAV. Use `--no-cache` to render every lane.
 
 Caching needs these conditions:
 
-- The song is format 18 to 25.
+- The song is format 18 to 26.
 - The song has directly linked, absolute, imported WAV paths with a source
   tempo.
 - The song has no native, library, missing-source, conflict, or origin

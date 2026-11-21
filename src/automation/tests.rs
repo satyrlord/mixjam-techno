@@ -132,7 +132,25 @@ fn lanes_reject_points_out_of_order_or_range() {
     assert_eq!(Lane::Pitch.label(), "Pitch");
     automation.pitch = points(&[(0, -4800.0), (16, 2400.0), (32, 12.5)]);
     automation.validate().unwrap();
+    assert_eq!(Lane::from_key("compression"), Some(Lane::Compression));
+    assert_eq!(Lane::Compression.label(), "Compression");
+    automation.compression = points(&[(0, 0.0), (16, 42.5), (32, 100.0)]);
+    automation.validate().unwrap();
     assert!(!automation.is_empty());
+    for bad in [-0.5, 100.5, f32::NAN] {
+        assert!(validate_points(Lane::Compression, &points(&[(0, bad)])).is_err());
+    }
+}
+
+#[test]
+fn compression_reads_as_a_percentage_and_holds_its_ends() {
+    assert_eq!(Lane::Compression.range(), (0.0, 100.0));
+    assert_eq!(Lane::Compression.format(35.0), "35%");
+    assert_eq!(Lane::Compression.snap(37.0), 35.0);
+    assert_eq!(Lane::Compression.snap(130.0), 100.0);
+    assert_eq!(Lane::Compression.snap(f32::NAN), 100.0);
+    assert!(!Lane::Compression.steps());
+    assert!(!Lane::Compression.rests_before_first());
 }
 
 #[test]

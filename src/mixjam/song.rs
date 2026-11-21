@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 25.
+//! The application's own `.mixjam` song format.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -53,6 +53,9 @@
 //!   Earlier songs have no pitch automation and reject the key.
 //! - Version 25 adds the Emberform Drive, an FX bus `module` of type
 //!   `emberform-drive`. Earlier songs reject it.
+//! - Version 26 adds the Compression lane, `compression` in a lane's
+//!   `automation`. Earlier songs have the compressor fully in and reject
+//!   the key.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -68,4 +71,4 @@ mod writing;
 pub(super) use reading::parse;
 pub(super) use writing::save;
 
-pub(super) const FORMAT_VERSION: u32 = 25;
+pub(super) const FORMAT_VERSION: u32 = 26;

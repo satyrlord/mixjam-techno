@@ -1,12 +1,12 @@
 # Automation
 
 To draw automation, choose a lane in the **Automation** menu above the
-arrangement. The lane then shows on all tracks. The menu has 14 lanes in three
+arrangement. The lane then shows on all tracks. The menu has 15 lanes in three
 groups:
 
 | Group | Lanes |
 | --- | --- |
-| On every track | Volume (dB over the fader), Pan, Filter, Pitch, Repeat, Repeat gate |
+| On every track | Volume (dB over the fader), Pan, Filter, Compression, Pitch, Repeat, Repeat gate |
 | Send amount, on every track | FX 1 send to FX 4 send. Each has the name of the effect on its bus. |
 | Return level, one line across the song | FX 1 return to FX 4 return |
 
@@ -90,6 +90,19 @@ length:
 Before the next clip on the track, draw the lane back to 0. The Repeat lane
 repeats the pitched sound. The EQ, the drive, and the other processing of the
 track come after the Pitch lane.
+
+## Compression lane
+
+The Compression lane sets how much of the compressor of a track is mixed in.
+At the bottom of the row, 0% gives the sound before compression. At the top,
+100% gives the full effect of the compressor settings. Points snap in 5% steps.
+
+Use it when one phrase of a compressed track must keep its dynamics. Draw the
+lane down to 0% just before the phrase and back up to 100% just after it.
+
+The lane holds its first and last values outside its points and moves in
+straight lines between points. Without points, the compressor applies in
+full. The lane has no effect while the track compressor is off.
 
 ## FX return lanes
 

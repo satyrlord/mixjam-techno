@@ -29,7 +29,7 @@ A track is a `TrackChain` when one of these conditions is true:
 
 - Its channel EQ, drive, compressor, or ducker is on.
 - Its width is not 100%.
-- It has automation.
+- It has automation outside the Compression lane.
 - It is the key of a ducker.
 
 A `TrackChain` mixes its voices into a 128-frame stack buffer. These stages
@@ -115,7 +115,10 @@ operate on the sound of the track before its level:
 
 - The compressor follows the mean power of the two channels with the curve of
   the master Bus compressor (`master::dsp::reduction`). Thus the fader does
-  not change how hard it works.
+  not change how hard it works. The Compression lane, when the track has
+  one, mixes each compressed frame with the frame before the compressor. The
+  compressor only scales each frame, so the mix stays in phase. The detector
+  runs at every value of the lane.
 - The width scales the side of each frame, on a track whose two outputs are
   on.
 

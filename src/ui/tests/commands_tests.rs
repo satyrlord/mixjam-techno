@@ -32,7 +32,7 @@ fn every_rail_tool_panel_switch_and_lane_is_a_command() {
         .iter()
         .filter(|command| matches!(command, Command::Lane(..)))
         .collect();
-    assert_eq!(lanes.len(), 15, "Off and the 14 lanes");
+    assert_eq!(lanes.len(), 16, "Off and the 15 lanes");
     for lane in Lane::ALL {
         assert!(all.contains(&Command::Lane(Some(lane), None)), "{lane:?}");
     }

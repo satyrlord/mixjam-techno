@@ -14,9 +14,9 @@ file. If replacing the song fails, it restores the earlier metadata. Use one
 writer per song path.
 
 `song.automate(track, lane, points)` accepts the lanes `volume`, `filter`,
-`pan`, `repeat`, `repeatgate`, `pitch`, and `send1` to `send4`. Each bar is a
-finite number from 1 to 4097. Each value is a finite number in its control's
-range. A rejected batch leaves the earlier points unchanged.
+`pan`, `repeat`, `repeatgate`, `pitch`, `compression`, and `send1` to `send4`.
+Each bar is a finite number from 1 to 4097. Each value is a finite number in
+its control's range. A rejected batch leaves the earlier points unchanged.
 
 - A `pan` lane is from -1 (left) to 1 (right). While it has points, it replaces
   the pan knob of the lane. Before its first point, it rests at the knob.
@@ -42,6 +42,11 @@ mechanical gate follows this speed clock when it checks the source duration,
 the silent gaps, and the source window at the ending of a clip. This includes
 reversal.
 
+A `compression` lane sets the compressor mix from 0 to 100 percent. The
+writer adds points at 100 before the first point if needed. The mix changes
+in a straight line between points. Return it to 100 by the start of any
+later clip. The lane has an effect only when the compressor is on.
+
 `song.automate_return(bus, [(bar, value), ...])` writes the return lane of an
 FX bus. Each bar is from 1 to 4097. The value is from 0 to 2 (1 is the full
 return, and 2 is about +6 dB).
@@ -66,10 +71,10 @@ ranges of all lane, clip, and automation controls are in
 
 ## Earlier songs
 
-The song tools expect format 25. Formats 18 to 24 also work. `render.py` does
-not pass sample folders to the application. `measure.py` checks linked paths
-from its working directory. For an earlier song or a library-relative WAV, make
-a format-25 working copy:
+The song tools accept formats 18 to 26. `render.py` does not pass sample folders
+to the application. `measure.py` checks linked paths from its working directory.
+For an earlier song or a library-relative WAV, make a working copy in the
+[current song format](../../docs/SONG-FORMAT.md).
 
 1. Use the native `convert` command with the necessary `--samples` folders and
    an isolated `MIXJAM_TECHNO_DATA_DIR`.

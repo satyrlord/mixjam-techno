@@ -98,8 +98,8 @@ pub(super) struct Lane {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) sends: Option<[f32; crate::fx::BUSES]>,
     // Raw until the version is checked, as version 20 added `pan`, version
-    // 21 `repeat`, version 23 `repeatGate`, and version 24 `pitch`, which an
-    // earlier song must not hold even as an empty list.
+    // 21 `repeat`, version 23 `repeatGate`, version 24 `pitch`, and version
+    // 26 `compression`. Each key requires its format version, even when empty.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) automation: Option<Saved<crate::automation::Automation>>,
     // Raw until the version is checked, as the second peak's keys are

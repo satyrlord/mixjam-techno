@@ -209,6 +209,16 @@ fn stopped(mut project: Project) -> Project {
     project
 }
 
+/// The test song with track 6's compressor mixed out over bar 2 on its
+/// Compression lane, as version 26 saves it.
+fn eased(mut project: Project) -> Project {
+    project.tracks[5].compressor.on = true;
+    project.tracks[5].automation.compression = [(256, 100.0), (320, 0.0), (512, 0.0), (576, 100.0)]
+        .map(|(tick, value)| crate::automation::Point { tick, value })
+        .to_vec();
+    project
+}
+
 /// The test song with a drive on track 6, and one that is off but keeps
 /// its settings on track 9, as version 22 saves them.
 fn driven(mut project: Project) -> Project {

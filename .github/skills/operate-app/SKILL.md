@@ -67,7 +67,7 @@ Do not start a session on the settings of the owner unless the owner asks.
    Completion criterion: The reply and `state` confirm the clips, the
    selection, the transport position, the loop, or the sections.
 4. Use `automate track=N lane=LANE` to replace the volume, send, filter, pan,
-   repeat, repeat gate, or pitch automation lane of a track. Use
+   repeat, repeat gate, pitch, or compression lane of a track. Use
    `automate bus=N lane=return` to replace the return lane of an FX bus.
    Completion criterion: `state` shows the new points.
 5. Use `clip` to set the gain, trim, length, fades, pitch, and reverse of one

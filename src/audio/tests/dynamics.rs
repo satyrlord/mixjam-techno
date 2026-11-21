@@ -36,6 +36,135 @@ fn a_lane_compressor_works_before_the_fader_and_off_changes_nothing() {
 }
 
 #[test]
+fn the_compression_lane_mixes_the_compressor_in_from_dry_to_full() {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    editor.place(1, 0, 0, 256).unwrap();
+    let mut project = editor.project().clone();
+    let samples = HashMap::from([(1, tone(220.0))]);
+    let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+    let frames = 11_025..44_100;
+    project.tracks[0].compressor = crate::compressor::Compressor {
+        on: true,
+        threshold: -30.0,
+        ratio: 4.0,
+        attack: 1.0,
+        makeup: 3.0,
+        ..Default::default()
+    };
+    let full = render(&project);
+    project.tracks[0].compressor.on = false;
+    let dry = render(&project);
+    project.tracks[0].compressor.on = true;
+    let lane = |value: f32| vec![crate::automation::Point { tick: 0, value }];
+    // At 100% the lane leaves the compressor as it is set, and at 0% the
+    // track sounds as with the compressor off.
+    project.tracks[0].automation.compression = lane(100.0);
+    assert!(render(&project) == full);
+    project.tracks[0].automation.compression = lane(0.0);
+    let off = render(&project);
+    let worst = off
+        .iter()
+        .zip(&dry)
+        .fold(0.0_f32, |worst, (a, b)| worst.max((a - b).abs()));
+    assert!(worst < 1e-6, "{worst}");
+    // At 50% each frame is halfway between the dry and the full one, so
+    // the level lies between theirs.
+    project.tracks[0].automation.compression = lane(50.0);
+    let half = render(&project);
+    let worst = half
+        .iter()
+        .zip(dry.iter().zip(&full))
+        .fold(0.0_f32, |worst, (h, (d, f))| {
+            worst.max((h - 0.5 * (d + f)).abs())
+        });
+    assert!(worst < 1e-5, "{worst}");
+    let (low, mid, high) = (
+        level_db(&full, frames.clone()),
+        level_db(&half, frames.clone()),
+        level_db(&dry, frames),
+    );
+    assert!(low < mid && mid < high, "{low:.2} {mid:.2} {high:.2}");
+
+    // Hold 0% before the first point, rise to 100%, then fall to 25% and hold.
+    let points = [(24, 0.0), (48, 100.0), (80, 25.0)];
+    project.tracks[0].automation.compression = points
+        .map(|(tick, value)| crate::automation::Point { tick, value })
+        .to_vec();
+    let varying = render(&project);
+    let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+    let [start, peak, end] =
+        points.map(|(tick, _)| (f64::from(tick) * frames_per_tick).round() as usize);
+    for (index, ((actual, dry), full)) in varying.iter().zip(&dry).zip(&full).enumerate() {
+        let frame = index / 2;
+        let mix = if frame < start {
+            0.0
+        } else if frame < peak {
+            (frame - start) as f32 / (peak - start) as f32
+        } else if frame < end {
+            1.0 - 0.75 * (frame - peak) as f32 / (end - peak) as f32
+        } else {
+            0.25
+        };
+        // The full render supplies the detector history, including the part
+        // of the automated render held at 0%.
+        let expected = dry + (full - dry) * mix;
+        assert!((actual - expected).abs() < 1e-6, "frame {frame}");
+    }
+    let mix = mix_with_samples(&project, &samples).unwrap();
+    let mut state = RenderState::default();
+    let mut split = vec![0.0; varying.len()];
+    const BLOCK_FRAMES: usize = 113;
+    for (index, block) in split.chunks_mut(BLOCK_FRAMES * 2).enumerate() {
+        mix.read_block((index * BLOCK_FRAMES) as u64, block, None, &mut state);
+    }
+    assert!(split == varying);
+
+    // With the compressor off, the lane changes nothing.
+    project.tracks[0].compressor.on = false;
+    assert!(render(&project) == dry);
+}
+
+#[test]
+fn compression_points_leave_a_mix_exactly_as_it_was_with_the_compressor_off() {
+    let mut editor = crate::engine::Editor::new(Project {
+        master_gain: 1.0,
+        ..Project::default()
+    });
+    let samples = [0.2, 0.3, -0.5]
+        .into_iter()
+        .enumerate()
+        .map(|(track, sample)| {
+            let id = track as u32 + 1;
+            editor.place(id, track, 0, 256).unwrap();
+            (
+                id,
+                Pcm {
+                    sample_rate: Mix::SAMPLE_RATE,
+                    channels: 1,
+                    samples: vec![sample],
+                },
+            )
+        })
+        .collect();
+    let render = |project: &Project| {
+        let mut frame = [0.0; 2];
+        mix_with_samples(project, &samples)
+            .unwrap()
+            .read(0, &mut frame);
+        frame
+    };
+    let mut project = editor.project().clone();
+    let unautomated = render(&project);
+    assert_eq!(unautomated, [0.0; 2]);
+    // Moving the first track to a chain would change the sum order.
+    project.tracks[0].automation.compression = vec![crate::automation::Point {
+        tick: 0,
+        value: 50.0,
+    }];
+    assert_eq!(render(&project), unautomated);
+}
+
+#[test]
 fn the_second_peak_cuts_its_line_in_the_mix() {
     let mut editor = crate::engine::Editor::new(Project::default());
     editor.place(1, 0, 0, 256).unwrap();

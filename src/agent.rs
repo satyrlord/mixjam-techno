@@ -67,7 +67,7 @@ Arrangement (the lanes have no separate controls)
                          Replace the song's sections; [] removes them. Each
                          section starts at its bar (or \"tick\") and lasts until
                          the next one. Names are 1 to 48 characters.
-  automate track=N lane=volume|send1..send4|filter|pan|repeat|repeatgate|pitch
+  automate track=N lane=volume|send1..send4|filter|pan|repeat|repeatgate|pitch|compression
                          points=[[BAR,VALUE],...]
                          Replace one automation lane of a track; [] clears it.
                          Volume is dB over the fader, -60 (silence) to 6;
@@ -85,6 +85,8 @@ Arrangement (the lanes have no separate controls)
                          pitch as a speed change, like a tape: -1200 plays
                          an octave down at half speed, so a fall to -4800
                          is a tape-stop. It is 0 before the first point.
+                         Compression is 0 to 100 percent of the track
+                         compressor. It applies while the compressor is on.
   automate bus=N lane=return points=[[BAR,VALUE],...]
                          Replace FX bus N's return lane (1 to 4); [] clears
                          it. The return is 0 to 2 (1 is 100%, 2 about +6 dB)

@@ -163,10 +163,10 @@ fn automation_command(
             if !(1..=TRACK_COUNT).contains(&track) {
                 return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
             }
-            let lane = automation::Lane::from_key(lane).ok_or(
-                "Track lanes are volume, send1, send2, send3, send4, filter, pan, repeat, \
-                 repeatgate, and pitch.",
-            )?;
+            let lane = automation::Lane::from_key(lane).ok_or_else(|| {
+                let keys = automation::Lane::ALL.map(automation::Lane::key);
+                format!("Track lanes are {}.", keys.join(", "))
+            })?;
             EditCommand::SetAutomation {
                 track: track - 1,
                 lane,

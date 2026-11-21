@@ -275,6 +275,7 @@ class RenderCacheTests(unittest.TestCase):
         song = mixjam.Song('closure')
         song.ducker(2, 1)
         song.ducker(1, 3)
+        song.compressor(1)
         document = song.document()
         for index in range(5):
             document['lanes'][index]['placements'] = [dict(id=index + 1, sampleId=1_000_000 + index,
@@ -295,6 +296,10 @@ class RenderCacheTests(unittest.TestCase):
             self.assertEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
                              original)
             document['lanes'][0]['gain'] = 0.5
+            self.assertNotEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
+                                original)
+            document['lanes'][0]['gain'] = 1.0
+            document['lanes'][0]['automation']['compression'] = [{'tick': 0, 'value': 0}]
             self.assertNotEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
                                 original)
 

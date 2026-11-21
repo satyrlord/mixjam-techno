@@ -21,7 +21,8 @@ This file holds the body of step 2 of the [song-review skill](SKILL.md).
    that it gets.
    Completion criterion: The original song and its metadata are unchanged.
 6. If the song's `formatVersion` is below 18, or its linked WAVs need library
-   folders, convert the working copy to format 25. Set
+   folders, convert the working copy to the
+   [current song format](../../../docs/SONG-FORMAT.md). Set
    `MIXJAM_TECHNO_DATA_DIR` to a private folder in the review folder, then run
    `.\target\release\mixjam-techno.exe convert --mix INPUT --output OUTPUT.mixjam`
    with one `--samples FOLDER` for each necessary WAV folder. Copy the

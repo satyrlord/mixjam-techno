@@ -1,4 +1,4 @@
-"""Write format-25 .mixjam songs from Python.
+"""Write format-26 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path. The writer links it as an imported sample by path.
@@ -20,6 +20,8 @@ Automation rules:
   is on, so it can end at any value.
 - The pitch lane rests at 0 cents before its first point, so it needs no resting points.
   It moves in straight lines.
+- The compression lane rests at 100 (the lane compressor fully in) until its first point and
+  moves in straight lines. It does nothing while the compressor is off.
 - An FX bus return lane (`automate_return`) replaces the return level of the bus while it has
   points. It moves in straight lines.
 
@@ -34,6 +36,8 @@ import sys
 import wave
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from decimal import Decimal
+from numbers import Real
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -49,7 +53,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 25
+FORMAT_VERSION = 26
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -58,6 +62,8 @@ REPEAT_VALUES = (0, 4, 8, 16, 32, 64)
 REPEAT_GATE_RANGE = (5.0, 100.0)
 # The pitch lane's range in cents (PITCH_FLOOR_CENTS and PITCH_CEILING_CENTS in src/automation.rs).
 PITCH_RANGE = (-4800.0, 2400.0)
+# The compression lane's range in percent of the lane compressor (COMPRESSION_FULL).
+COMPRESSION_RANGE = (0.0, 100.0)
 # Track automation ranges (Lane::range in src/automation/model.rs).
 AUTOMATION_RANGES = {
     'volume': (-60.0, 6.0),
@@ -65,6 +71,7 @@ AUTOMATION_RANGES = {
     'pan': (-1.0, 1.0),
     'repeatGate': REPEAT_GATE_RANGE,
     'pitch': PITCH_RANGE,
+    'compression': COMPRESSION_RANGE,
     **{f'send{bus}': (0.0, 1.0) for bus in range(1, 5)},
 }
 # An FX bus's return lane: 0 to 2, where 1 is the full return (RETURN_CEILING).
@@ -516,8 +523,8 @@ class Song:
 
     # Automation, effects, master.
     def automate(self, track, lane, points):
-        """lane: volume, send1..send4, filter, pan, repeat, repeatgate, or pitch. points: [(bar, value)],
-        bar 1-based, fractions allowed.
+        """lane: volume, send1..send4, filter, pan, repeat, repeatgate, pitch, or compression.
+        points: [(bar, value)], bar 1-based, fractions allowed.
 
         Volume is dB over the fader; a send replaces the knob (0-1); filter is -1 (low-pass) to 1
         (high-pass), 0 open; pan replaces the pan knob, -1 (left) to 1 (right), 0 center. Repeat is
@@ -531,15 +538,20 @@ class Song:
         together, so [(8.5, 0), (9, -4800), (9.0625, 0)] is a tape-stop over the last half bar of
         bar 8 that comes back at bar 9.0625. It is 0 before its first point, moves in straight lines
         in cents, and runs before the repeat lane, so repeats replay the pitched sound. End it at 0
-        before a later clip on the track. Points add to the lane's
+        before a later clip on the track. Compression is 0 to 100, the percent of the track's
+        compressor that is mixed in: 0 sounds as with the compressor off, 100 as the compressor is
+        set; it is 100 before its first point and moves in straight lines, so
+        [(128.75, 100), (129, 0), (137, 0), (137.25, 100)] plays the phrase at 129-136 open and
+        compresses the track's other phrases. End it at 100 before a later clip on the track. It
+        does nothing while the compressor is off. Points add to the lane's
         earlier points, so each section writes its own moves; a point on a tick that the lane
         already has is an error.
         """
         track = _whole_track(track)
-        if lane not in ('volume', 'filter', 'pan', 'repeat', 'repeatgate', 'pitch', 'send1', 'send2',
-                        'send3', 'send4'):
+        if lane not in ('volume', 'filter', 'pan', 'repeat', 'repeatgate', 'pitch', 'compression', 'send1',
+                        'send2', 'send3', 'send4'):
             raise ValueError('The automation lane must be volume, filter, pan, repeat, repeatgate, '
-                             'pitch, or send1 through send4.')
+                             'pitch, compression, or send1 through send4.')
         name = lane
         lane = 'repeatGate' if lane == 'repeatgate' else lane
         automation = self.automation[track - 1]
@@ -549,6 +561,12 @@ class Song:
             entries = list(automation.get(lane, []))
         ticks = {entry['tick'] for entry in entries}
         for bar, value in points:
+            if lane == 'compression':
+                low, high = AUTOMATION_RANGES[lane]
+                if (isinstance(value, bool) or not isinstance(value, (Real, Decimal))
+                        or (isinstance(value, Decimal) and not value.is_finite())
+                        or not low <= value <= high):
+                    raise ValueError(f'Track {track} {name} must be a number from {low:g} to {high:g}.')
             at = point_tick(bar, value, f'Track {track} {name}')
             if at in ticks:
                 raise ValueError(f'Track {track} {name} has more than one point at bar {bar}.')
@@ -556,7 +574,7 @@ class Song:
             if lane == 'repeat':
                 if isinstance(value, bool) or number not in REPEAT_VALUES:
                     raise ValueError(f'Track {track} repeat must be 0 (off), 4, 8, 16, 32, or 64, not {value}.')
-            else:
+            elif lane != 'compression':
                 low, high = AUTOMATION_RANGES[lane]
                 if not low <= number <= high or (lane == 'pitch' and isinstance(value, bool)):
                     units = ' cents' if lane == 'pitch' else ''
@@ -608,6 +626,7 @@ class Song:
     def _held(self, index):
         """Track `index`'s automation as the engine should play it (see the module rules)."""
         lane = self.lanes[index]
+        neutral = {'pan': lane['pan'], 'compression': COMPRESSION_RANGE[1]}
         held = {}
         for key, points in self.automation[index].items():
             lists = points if key == 'sends' else [points]
@@ -617,9 +636,9 @@ class Song:
                     # The gate acts only while repeat is on, so it may end anywhere.
                     out.append([dict(entry) for entry in entries])
                     continue
-                neutral = lane['sends'][i] if key == 'sends' else lane['pan'] if key == 'pan' else 0.0
+                rest = lane['sends'][i] if key == 'sends' else neutral.get(key, 0.0)
                 name = key if key != 'sends' else f'send{i + 1}'
-                out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}',
+                out.append(hold(entries, rest, lane['placements'], f'track {index + 1} {name}',
                                 steps=key in ('repeat', 'pitch')))
             held[key] = out if key == 'sends' else out[0]
         return held

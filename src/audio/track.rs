@@ -210,6 +210,9 @@ pub(super) struct TrackChain {
     /// the drive's output lines up with the song.
     pub(super) drive: Option<(crate::drive::Run, usize)>,
     pub(super) compressor: Option<crate::compressor::Run>,
+    /// The Compression lane, in percent of the compressor: only with the
+    /// compressor on.
+    compression: Option<Envelope>,
     /// The side's gain: the width as a fraction of 100%.
     width: Option<f32>,
     volume: Option<Envelope>,
@@ -253,6 +256,11 @@ impl TrackChain {
                 .compressor
                 .on
                 .then(|| crate::compressor::Run::new(&track.compressor)),
+            compression: track
+                .compressor
+                .on
+                .then(|| Envelope::new(&automation.compression, frames_per_tick))
+                .flatten(),
             width: track.widens().then_some(track.width / 100.0),
             volume: Envelope::new(&automation.volume, frames_per_tick),
             sends: std::array::from_fn(|bus| {
@@ -377,7 +385,34 @@ impl TrackChain {
             }
         }
         if let Some(compressor) = &self.compressor {
-            compressor.process(buffer, &mut state.compressor);
+            match &self.compression {
+                Some(envelope) => {
+                    // The compressor only scales each frame, so the mix of
+                    // the dry and the compressed frame is in phase.
+                    let mut dry = [0.0_f32; Self::CHUNK * 2];
+                    let dry = &mut dry[..buffer.len()];
+                    dry.copy_from_slice(buffer);
+                    compressor.process(buffer, &mut state.compressor);
+                    for (index, (wet, dry)) in buffer
+                        .as_chunks_mut::<2>()
+                        .0
+                        .iter_mut()
+                        .zip(dry.as_chunks::<2>().0)
+                        .enumerate()
+                    {
+                        let mix =
+                            envelope.at(at + index as u64) / crate::automation::COMPRESSION_FULL;
+                        // At 100% the frame stays exactly as compressed.
+                        if mix >= 1.0 {
+                            continue;
+                        }
+                        for channel in 0..2 {
+                            wet[channel] = dry[channel] + (wet[channel] - dry[channel]) * mix;
+                        }
+                    }
+                }
+                None => compressor.process(buffer, &mut state.compressor),
+            }
         }
         if let Some(width) = self.width {
             widen(buffer, width);

@@ -1,4 +1,4 @@
-//! Automation lanes: point editing on the pan, repeat, gate, pitch and return lanes.
+//! Point editing and drawing for track automation and FX return lanes.
 
 use super::*;
 
@@ -315,6 +315,25 @@ fn the_pitch_lane_snaps_to_semitones_and_rests_at_zero_before_its_first_point() 
         drawn,
         "The Pitch lane must rest at 0 before its first point."
     );
+}
+
+#[test]
+fn an_empty_compression_lane_shows_the_full_compressor() {
+    use mixjam_techno::application::automation::Lane;
+    let (ctx, mut app) = fixture();
+    app.score_tools.automation_lane = Some(Lane::Compression);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let canvas = app.score.rect.unwrap();
+    let full = canvas.left_top() + Vec2::new(0.0, 4.0);
+    let stroke = egui::Stroke::new(1.0_f32, roles().muted.gamma_multiply(0.6));
+    let drawn = output.shapes.iter().any(|shape| {
+        let egui::Shape::Vec(dashes) = &shape.shape else {
+            return false;
+        };
+        matches!(dashes.first(), Some(egui::Shape::LineSegment { points, stroke: line })
+            if *line == stroke && points[0].distance(full) < 0.01)
+    });
+    assert!(drawn, "The empty Compression lane must be drawn at 100%.");
 }
 
 #[test]

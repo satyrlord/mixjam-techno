@@ -53,6 +53,7 @@ lane. `points=[]` clears it. The lanes are these:
 - `repeat`: 0 off, or 4, 8, 16, 32, or 64 for 1/4 to 1/64 repeats.
 - `repeatgate`: 5 to 100, the percent of each repeat that sounds.
 - `pitch`: -4800 to 2400 cents of playback speed.
+- `compression`: 0 to 100, the percent of the track's compressor in the mix.
 
 The repeat lane steps. It is off before its first point, and holds each value
 until the next point. Thus `points=[[5,8],[5.25,16],[5.375,32],[5.5,0]]` rolls
@@ -68,6 +69,10 @@ add to the pitch of each clip. The lane is 0 before its first point and moves in
 straight lines. Thus
 `automate track=3 lane=pitch points=[[8.5,0],[9,-4800],[9.0625,0]]` is a tape
 stop over the second half of bar 8.
+
+The compression lane holds its first and last values outside its points and
+moves in straight lines between points. An empty lane gives full compression.
+Its values apply while the track compressor is on.
 
 `state` lists the lanes of each track that have points under its `automation`.
 The gate shows as `repeatGate`. A send or pan lane there replaces the knob in
