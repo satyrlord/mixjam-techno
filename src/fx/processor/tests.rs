@@ -356,7 +356,8 @@ fn a_return_scales_with_its_input_across_a_sleep() {
         assert!(signal > 0.0);
         assert!(
             error < signal * 1e-8,
-            "the second burst differs by {:.1} dB",
+            "{} second burst differs by {:.1} dB",
+            module.label(),
             10.0 * (error / signal).log10()
         );
     }

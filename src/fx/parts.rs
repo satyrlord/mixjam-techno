@@ -4,11 +4,20 @@ use super::RenderQuality;
 use crate::master::dsp::{LookaheadGain, RATE, TruePeak, db_to_gain, flush, gain_to_db, pole};
 use std::f64::consts::{PI, TAU};
 
+/// The cubic Lagrange value between the second and third of four samples,
+/// `f` of the way from the second.
+#[inline]
+pub(super) fn cubic_lagrange([a, b, c, d]: [f64; 4], f: f64) -> f64 {
+    let k3 = (d - a) * (1.0 / 6.0) + (b - c) * 0.5;
+    let k2 = (a + c) * 0.5 - b;
+    let k1 = c - b - k2 - k3;
+    b + f * (k1 + f * (k2 + f * k3))
+}
+
 /// A delay line of one channel, read at fractional positions with cubic
 /// Lagrange interpolation.
 pub(super) struct Line {
     buffer: Box<[f32]>,
-    mask: usize,
     /// Where the next sample goes.
     write: usize,
 }
@@ -18,7 +27,6 @@ impl Line {
         let size = (frames + 16).next_power_of_two();
         Self {
             buffer: vec![0.0; size].into_boxed_slice(),
-            mask: size - 1,
             write: 0,
         }
     }
@@ -31,58 +39,212 @@ impl Line {
     }
     #[inline]
     pub(super) fn push(&mut self, sample: f32) {
-        self.buffer[self.write] = sample;
-        self.write = (self.write + 1) & self.mask;
+        let mask = self.buffer.len().wrapping_sub(1);
+        self.buffer[self.write & mask] = sample;
+        self.write = self.write.wrapping_add(1) & mask;
     }
     /// The sample pushed `delay` pushes ago; 1 is the last one.
     #[inline]
     pub(super) fn at(&self, delay: usize) -> f32 {
-        self.buffer[self.write.wrapping_sub(delay) & self.mask]
+        let mask = self.buffer.len().wrapping_sub(1);
+        self.buffer[self.write.wrapping_sub(delay) & mask]
     }
     /// The signal `delay` frames back, between pushed samples. The delay is
     /// held between 2 frames and the line's reach.
     #[inline]
     pub(super) fn read(&self, delay: f64) -> f64 {
-        let delay = delay.clamp(2.0, self.reach());
-        let whole = delay.floor();
-        let f = delay - whole;
-        let n = whole as usize;
-        let y = |k: isize| f64::from(self.at((n as isize + k) as usize));
-        let (a, b, c, d) = (y(-1), y(0), y(1), y(2));
-        let c0 = -f * (f - 1.0) * (f - 2.0) / 6.0;
-        let c1 = (f + 1.0) * (f - 1.0) * (f - 2.0) / 2.0;
-        let c2 = -(f + 1.0) * f * (f - 2.0) / 2.0;
-        let c3 = (f + 1.0) * f * (f - 1.0) / 6.0;
-        c0 * a + c1 * b + c2 * c + c3 * d
+        read_cubic_ring(&self.buffer, self.write, delay)
     }
-    /// 16-tap Blackman-windowed sinc interpolation for transparent offline high-frequency reads.
+    /// The sum of the samples at `delays`, each times its gain.
+    #[inline]
+    pub(super) fn read_taps(&self, delays: &[usize], gains: &[f64]) -> f64 {
+        let (write, mask) = (self.write, self.buffer.len().wrapping_sub(1));
+        delays
+            .iter()
+            .zip(gains)
+            .map(|(&d, &g)| f64::from(self.buffer[write.wrapping_sub(d) & mask]) * g)
+            .sum()
+    }
+    /// 16-tap Blackman-windowed sinc interpolation for transparent offline
+    /// high-frequency reads, from a 128-phase table.
     #[inline]
     pub(super) fn read_sinc(&self, delay: f64) -> f64 {
-        if delay < 8.0 || delay > (self.buffer.len() - 9) as f64 {
-            return self.read(delay);
+        read_sinc_ring(&self.buffer, self.write, delay)
+    }
+}
+
+/// The cubic read of a power-of-two ring, held between 2 frames and its
+/// reach.
+#[inline]
+fn read_cubic_ring(buffer: &[f32], write: usize, delay: f64) -> f64 {
+    let delay = delay.clamp(2.0, (buffer.len() - 3) as f64);
+    let whole = delay.floor();
+    let f = delay - whole;
+    let mask = buffer.len().wrapping_sub(1);
+    let base = write.wrapping_sub(whole as usize);
+    let y = |k: usize| f64::from(buffer[base.wrapping_add(k) & mask]);
+    cubic_lagrange([y(1), y(0), y(usize::MAX), y(usize::MAX - 1)], f)
+}
+
+/// The windowed sinc read of a power-of-two ring.
+#[inline]
+fn read_sinc_ring(buffer: &[f32], write: usize, delay: f64) -> f64 {
+    if delay < 8.0 || delay > (buffer.len() - 9) as f64 {
+        return read_cubic_ring(buffer, write, delay);
+    }
+    let whole = delay.floor();
+    let f = delay - whole;
+    let n = whole as usize;
+    let mask = buffer.len().wrapping_sub(1);
+    let at = |d: usize| f64::from(buffer[write.wrapping_sub(d) & mask]);
+    if f < 1e-9 {
+        return at(n);
+    }
+    let table = sinc_table();
+    let position = f * SINC_PHASES as f64;
+    let phase = (position as usize).min(SINC_PHASES - 1);
+    let alpha = position - phase as f64;
+    let (a, b) = (&table[phase], &table[phase + 1]);
+    let mut sum = 0.0;
+    for (i, (low, high)) in a.iter().zip(b).enumerate() {
+        let tap = low + (high - low) * alpha;
+        sum += tap * at(n + i - 7);
+    }
+    sum
+}
+
+/// `LINES` delay lines of `CAP` frames that push and read together, in one
+/// allocation with one write position.
+pub(super) struct RingBank<const LINES: usize, const CAP: usize> {
+    buffer: Box<[[f32; CAP]; LINES]>,
+    write: usize,
+}
+impl<const LINES: usize, const CAP: usize> RingBank<LINES, CAP> {
+    pub(super) fn new() -> Self {
+        const { assert!(CAP.is_power_of_two() && CAP >= 16) };
+        let buffer: Box<[[f32; CAP]; LINES]> = vec![[0.0; CAP]; LINES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("one ring for each line");
+        Self { buffer, write: 0 }
+    }
+    pub(super) fn clear(&mut self) {
+        for line in self.buffer.iter_mut() {
+            line.fill(0.0);
         }
-        let whole = delay.floor();
-        let f = delay - whole;
-        let n = whole as usize;
-        if f < 1e-9 {
-            return f64::from(self.at(n));
+    }
+    /// The longest delay that a read reaches.
+    #[cfg(test)]
+    pub(super) const fn reach(&self) -> f64 {
+        (CAP - 3) as f64
+    }
+    /// The signal `delay` frames back on line `i`, by cubic interpolation.
+    #[inline]
+    pub(super) fn read_cubic(&self, i: usize, delay: f64) -> f64 {
+        read_cubic_ring(&self.buffer[i], self.write, delay)
+    }
+    /// The windowed sinc read of line `i`.
+    #[inline]
+    pub(super) fn read_sinc(&self, i: usize, delay: f64) -> f64 {
+        read_sinc_ring(&self.buffer[i], self.write, delay)
+    }
+    #[inline]
+    pub(super) fn push(&mut self, samples: [f32; LINES]) {
+        let at = self.write & (CAP - 1);
+        for (line, sample) in self.buffer.iter_mut().zip(samples) {
+            line[at] = sample;
         }
-        let mut sum = 0.0;
-        let mut norm = 0.0;
-        for k in -7_isize..=8 {
-            let x = f - k as f64;
-            let sinc = if x.abs() < 1e-9 {
-                1.0
-            } else {
-                (PI * x).sin() / (PI * x)
-            };
-            let u = x / 8.0;
-            let w = 0.42 + 0.5 * (PI * u).cos() + 0.08 * (2.0 * PI * u).cos();
-            let tap = w * sinc;
-            sum += tap * f64::from(self.at((n as isize + k) as usize));
-            norm += tap;
+        self.write = self.write.wrapping_add(1) & (CAP - 1);
+    }
+}
+
+const SINC_PHASES: usize = 128;
+type SincTable = [[f64; 16]; SINC_PHASES + 1];
+
+fn sinc_table() -> &'static SincTable {
+    static TABLE: std::sync::OnceLock<Box<SincTable>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut table = Box::new([[0.0; 16]; SINC_PHASES + 1]);
+        for (phase, row) in table.iter_mut().enumerate() {
+            let f = phase as f64 / SINC_PHASES as f64;
+            for (i, tap) in row.iter_mut().enumerate() {
+                let x = f - (i as f64 - 7.0);
+                let sinc = if x.abs() < 1e-12 {
+                    1.0
+                } else {
+                    (PI * x).sin() / (PI * x)
+                };
+                let u = x / 8.0;
+                *tap = sinc * (0.42 + 0.5 * (PI * u).cos() + 0.08 * (2.0 * PI * u).cos());
+            }
+            let norm: f64 = row.iter().sum();
+            row.iter_mut().for_each(|tap| *tap /= norm);
         }
-        sum / norm
+        table
+    })
+}
+
+/// Build the sinc table before a processor reaches the audio thread.
+pub(super) fn warm_sinc_table() {
+    sinc_table();
+}
+
+/// The coefficient and gain of a first-order shelf of `db` at `hz`.
+fn shelf_params(hz: f64, db: f64, high: bool) -> (f64, f64) {
+    let linear = db_to_gain(db);
+    let root = linear.sqrt();
+    let tan = (PI * hz.clamp(10.0, 0.49 * RATE) / RATE).tan();
+    let w = if high { tan * root } else { tan / root };
+    (w / (1.0 + w), linear - 1.0)
+}
+
+/// `N` first-order shelves that run together, all low or all high.
+#[derive(Clone, Copy)]
+pub(super) struct ShelfBank<const N: usize> {
+    gain: [f64; N],
+    coeff: [f64; N],
+    state: [f64; N],
+}
+impl<const N: usize> ShelfBank<N> {
+    pub(super) fn new() -> Self {
+        Self {
+            gain: [0.0; N],
+            coeff: [0.0; N],
+            state: [0.0; N],
+        }
+    }
+    pub(super) fn clear(&mut self) {
+        self.state = [0.0; N];
+    }
+    pub(super) fn clear_line(&mut self, i: usize) {
+        self.state[i] = 0.0;
+    }
+    pub(super) fn tune_low(&mut self, i: usize, hz: f64, db: f64) {
+        (self.coeff[i], self.gain[i]) = shelf_params(hz, db, false);
+    }
+    pub(super) fn tune_high(&mut self, i: usize, hz: f64, db: f64) {
+        (self.coeff[i], self.gain[i]) = shelf_params(hz, db, true);
+    }
+    #[inline(always)]
+    fn step(&mut self, samples: &mut [f64; N], high: bool) {
+        for (sample, (state, (&coeff, &gain))) in samples
+            .iter_mut()
+            .zip(self.state.iter_mut().zip(self.coeff.iter().zip(&self.gain)))
+        {
+            let v = (*sample - *state) * coeff;
+            let low = v + *state;
+            *state = flush(low + v);
+            let band = if high { *sample - low } else { low };
+            *sample += gain * band;
+        }
+    }
+    #[inline]
+    pub(super) fn process_low(&mut self, samples: &mut [f64; N]) {
+        self.step(samples, false);
+    }
+    #[inline]
+    pub(super) fn process_high(&mut self, samples: &mut [f64; N]) {
+        self.step(samples, true);
     }
 }
 
@@ -189,21 +351,82 @@ impl Tone {
 /// A sine oscillator with a phase from 0 to 1.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Lfo {
-    phase: f64,
+    /// The phase in 2^-64 turns. Whole-number steps add without rounding,
+    /// so a skip equals the same number of advances exactly.
+    phase: u64,
 }
+/// One frame of `hz`, in 2^-64 turns.
+pub(super) fn lfo_step(hz: f64) -> u64 {
+    ((hz / RATE).rem_euclid(1.0) * 18_446_744_073_709_551_616.0).round() as u64
+}
+/// The sine and cosine of a phase in 2^-64 turns, from polynomials on one
+/// eighth turn: within 1e-10.
+#[inline]
+fn sin_cos_u64(phase: u64) -> (f64, f64) {
+    let quarter = phase >> 62;
+    let rest = phase & ((1u64 << 62) - 1);
+    let x = (rest as f64 * (1.0 / 4_611_686_018_427_387_904.0) - 0.5) * std::f64::consts::FRAC_PI_2;
+    let x2 = x * x;
+    let s = x
+        * (1.0
+            + x2 * (-1.0 / 6.0
+                + x2 * (1.0 / 120.0
+                    + x2 * (-1.0 / 5040.0
+                        + x2 * (1.0 / 362_880.0
+                            + x2 * (-1.0 / 39_916_800.0 + x2 / 6_227_020_800.0))))));
+    let c = 1.0
+        + x2 * (-0.5
+            + x2 * (1.0 / 24.0
+                + x2 * (-1.0 / 720.0
+                    + x2 * (1.0 / 40_320.0 + x2 * (-1.0 / 3_628_800.0 + x2 / 479_001_600.0)))));
+    let (s0, c0) = (
+        (c + s) * std::f64::consts::FRAC_1_SQRT_2,
+        (c - s) * std::f64::consts::FRAC_1_SQRT_2,
+    );
+    match quarter {
+        0 => (s0, c0),
+        1 => (c0, -s0),
+        2 => (-s0, -c0),
+        _ => (-c0, s0),
+    }
+}
+
+/// The sine and cosine of an angle in radians, by the same polynomials.
+#[inline]
+pub(super) fn sin_cos_rad(radians: f64) -> (f64, f64) {
+    let turns = radians * (1.0 / TAU);
+    let fraction = turns - turns.floor();
+    sin_cos_u64((fraction * 18_446_744_073_709_551_616.0) as u64)
+}
+
 impl Lfo {
     /// The sine at `offset` turns from the current phase.
     #[inline]
     pub(super) fn value(&self, offset: f64) -> f64 {
-        (TAU * (self.phase + offset)).sin()
+        let shift = (offset.rem_euclid(1.0) * 18_446_744_073_709_551_616.0).round() as u64;
+        sin_cos_u64(self.phase.wrapping_add(shift)).0
     }
+    /// The sine of the current phase.
     #[inline]
-    pub(super) fn advance(&mut self, hz: f64) {
-        self.phase = (self.phase + hz / RATE).fract();
+    pub(super) fn sin(&self) -> f64 {
+        sin_cos_u64(self.phase).0
+    }
+    /// The sine and cosine of the current phase.
+    #[inline]
+    pub(super) fn sin_cos(&self) -> (f64, f64) {
+        sin_cos_u64(self.phase)
+    }
+    /// Advance by one frame of a step from `lfo_step`.
+    #[inline]
+    pub(super) fn advance_step(&mut self, step: u64) {
+        self.phase = self.phase.wrapping_add(step);
     }
     /// Advance by `frames` frames at once.
     pub(super) fn skip(&mut self, hz: f64, frames: u64) {
-        self.phase = (self.phase + hz * frames as f64 / RATE).fract();
+        self.skip_step(lfo_step(hz), frames);
+    }
+    pub(super) fn skip_step(&mut self, step: u64, frames: u64) {
+        self.phase = self.phase.wrapping_add(step.wrapping_mul(frames));
     }
 }
 
@@ -249,11 +472,14 @@ impl Ducker {
         if amount <= 0.0 || self.envelope < 1e-5 {
             return (1.0, 0.0);
         }
-        let db = gain_to_db(self.envelope);
+        let db = self.envelope.ln() * (20.0 / std::f64::consts::LN_10);
         let x = ((db - (threshold_db - 15.0)) / 30.0).clamp(0.0, 1.0);
         let knee = x * x * (3.0 - 2.0 * x);
         let gr_db = 24.0 * amount * knee;
-        (db_to_gain(-gr_db), gr_db)
+        if gr_db == 0.0 {
+            return (1.0, 0.0);
+        }
+        ((-gr_db * (std::f64::consts::LN_10 / 20.0)).exp(), gr_db)
     }
     #[cfg(test)]
     #[inline]
@@ -430,6 +656,93 @@ pub(super) fn ceiling(left: f64, right: f64, on: bool) -> (f64, f64) {
     (l, r)
 }
 
+/// `N` fixed all-passes that run together in one allocation.
+pub(super) struct FixedAllPassBank<const N: usize> {
+    buffer: Box<[f32]>,
+    starts: [usize; N],
+    ends: [usize; N],
+    at: [usize; N],
+}
+impl<const N: usize> FixedAllPassBank<N> {
+    /// All-passes of the given lengths in milliseconds.
+    pub(super) fn new(times_ms: [f64; N]) -> Self {
+        let lengths = times_ms.map(|ms| (ms / 1000.0 * RATE).round().max(1.0) as usize);
+        let mut starts = [0; N];
+        let mut ends = [0; N];
+        let mut total = 0;
+        for i in 0..N {
+            starts[i] = total;
+            total += lengths[i];
+            ends[i] = total;
+        }
+        Self {
+            buffer: vec![0.0; total].into_boxed_slice(),
+            starts,
+            ends,
+            at: starts,
+        }
+    }
+    pub(super) fn clear(&mut self) {
+        self.buffer.fill(0.0);
+        self.at = self.starts;
+    }
+    /// Pass each sample through its own all-pass.
+    #[inline]
+    pub(super) fn process_all(&mut self, samples: &mut [f64; N], gain: f64) {
+        for (i, sample) in samples.iter_mut().enumerate() {
+            let position = self.at[i];
+            let Some(slot) = self.buffer.get_mut(position) else {
+                continue;
+            };
+            let delayed = f64::from(*slot);
+            let v = *sample + gain * delayed;
+            *slot = flush(v) as f32;
+            let next = position + 1;
+            self.at[i] = if next < self.ends[i] {
+                next
+            } else {
+                self.starts[i]
+            };
+            *sample = delayed - gain * v;
+        }
+    }
+}
+
+/// A Schroeder all-pass whose delay never moves, in a ring of its exact
+/// length.
+pub(super) struct FixedAllPass {
+    buffer: Box<[f32]>,
+    at: usize,
+}
+impl FixedAllPass {
+    pub(super) fn new(seconds: f64) -> Self {
+        let length = (seconds * RATE).round().max(1.0) as usize;
+        Self {
+            buffer: vec![0.0; length].into_boxed_slice(),
+            at: 0,
+        }
+    }
+    pub(super) fn clear(&mut self) {
+        self.buffer.fill(0.0);
+        self.at = 0;
+    }
+    #[inline]
+    pub(super) fn process(&mut self, input: f64, gain: f64) -> f64 {
+        let Some(slot) = self.buffer.get_mut(self.at) else {
+            return input;
+        };
+        let delayed = f64::from(*slot);
+        let v = input + gain * delayed;
+        *slot = flush(v) as f32;
+        self.at = if self.at + 1 < self.buffer.len() {
+            self.at + 1
+        } else {
+            0
+        };
+        delayed - gain * v
+    }
+}
+
 /// A Schroeder all-pass of fixed length: it smears a sound in time
 /// without colouring its spectrum.
 pub(super) struct AllPass {
@@ -437,9 +750,6 @@ pub(super) struct AllPass {
     length: usize,
 }
 impl AllPass {
-    pub(super) fn new(seconds: f64) -> Self {
-        Self::with_modulation(seconds, 0)
-    }
     pub(super) fn with_modulation(seconds: f64, extra_frames: usize) -> Self {
         let length = (seconds * RATE).round().max(1.0) as usize;
         Self {
@@ -449,11 +759,6 @@ impl AllPass {
     }
     pub(super) fn clear(&mut self) {
         self.line.clear();
-    }
-    #[inline]
-    pub(super) fn process(&mut self, input: f64, gain: f64) -> f64 {
-        let delayed = f64::from(self.line.at(self.length));
-        self.filter(input, gain, delayed)
     }
     #[inline]
     pub(super) fn process_modulated(&mut self, input: f64, gain: f64, offset: f64) -> f64 {
@@ -582,6 +887,66 @@ mod tests {
         let rms = (energy / 236.0).sqrt();
         let db_err = 20.0 * (rms / std::f64::consts::FRAC_1_SQRT_2).log10();
         assert!(db_err.abs() < 0.15, "12 kHz sinc droop {db_err:.3} dB");
+    }
+
+    #[test]
+    fn the_polynomial_sine_and_cosine_match_the_library_in_every_quarter() {
+        for step in 0..4000u64 {
+            let phase = step * (u64::MAX / 4000);
+            let turn = phase as f64 / 18_446_744_073_709_551_616.0;
+            let (s, c) = (TAU * turn).sin_cos();
+            let (ps, pc) = sin_cos_u64(phase);
+            assert!((s - ps).abs() < 1e-12 && (c - pc).abs() < 1e-12, "{turn}");
+        }
+        for radians in [-30.0, -1e-20, 0.0, PI, 30.0] {
+            let (s, c) = f64::sin_cos(radians);
+            let (ps, pc) = sin_cos_rad(radians);
+            assert!(
+                (s - ps).abs() < 1e-11 && (c - pc).abs() < 1e-11,
+                "{radians}"
+            );
+        }
+    }
+
+    #[test]
+    fn first_order_shelf_shapes_target_band_monotonically() {
+        let gain_at = |shelf: &mut ShelfBank<1>, high: bool, hz: f64| -> f64 {
+            shelf.clear();
+            let (mut sum, mut base) = (0.0, 0.0);
+            for i in 0..8820 {
+                let x = (TAU * hz * i as f64 / RATE).sin();
+                let mut frame = [x];
+                if high {
+                    shelf.process_high(&mut frame);
+                } else {
+                    shelf.process_low(&mut frame);
+                }
+                if i >= 4410 {
+                    sum += frame[0] * frame[0];
+                    base += x * x;
+                }
+            }
+            20.0 * (sum / base).sqrt().log10()
+        };
+        for db in [9.0, -9.0] {
+            let mut low = ShelfBank::<1>::new();
+            low.tune_low(0, 500.0, db);
+            let mut high = ShelfBank::<1>::new();
+            high.tune_high(0, 4000.0, db);
+            assert!((gain_at(&mut low, false, 20.0) - db).abs() < 0.3);
+            assert!(gain_at(&mut low, false, 18_000.0).abs() < 0.3);
+            assert!((gain_at(&mut high, true, 20_000.0) - db).abs() < 0.5);
+            assert!(gain_at(&mut high, true, 40.0).abs() < 0.3);
+            let curve: Vec<f64> = [50.0, 200.0, 500.0, 2000.0, 8000.0]
+                .iter()
+                .map(|hz| gain_at(&mut low, false, *hz))
+                .collect();
+            assert!(
+                curve
+                    .windows(2)
+                    .all(|w| (w[1] - w[0]) * db.signum() <= 1e-6)
+            );
+        }
     }
 
     #[test]

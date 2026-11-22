@@ -38,6 +38,18 @@ fn plain() -> Echoform {
 }
 
 #[test]
+fn tape_colour_starts_at_exact_silence() {
+    let settings = Echoform {
+        character: DelayCharacter::Tape,
+        ..plain()
+    };
+    let mut core = delay(&settings, 120.0);
+    core.tune_soften(0.0, 1.0);
+    assert_eq!(core.colour(0, 0.0, 0.0, 1.0), 0.0);
+    assert!(core.colour(0, 0.5, 0.0, 1.0) > 0.0);
+}
+
+#[test]
 fn synced_repeats_land_on_their_note_lengths_at_each_tempo() {
     for bpm in [120.0, 125.0, 140.0, 180.0] {
         let settings = Echoform {

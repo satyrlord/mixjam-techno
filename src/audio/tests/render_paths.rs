@@ -188,34 +188,34 @@ fn digests() -> Vec<(String, u64)> {
 fn every_render_path_keeps_its_samples() {
     let actual = digests();
     let expected: &[(&str, u64)] = &[
-        ("export, later ducker false", 0x189d92569ea25176),
+        ("export, later ducker false", 0xe0bfefbc8c94ee4f),
         (
             "export without buses, later ducker false",
             0xc0b0a73765e7b9a3,
         ),
-        ("stem 0, later ducker false", 0x292b387983869c19),
-        ("stem 1, later ducker false", 0xaabcdc2cffff366f),
-        ("stem 2, later ducker false", 0x2febb95ce7241c91),
-        ("stem 3, later ducker false", 0xde8aeb711552983b),
-        ("stem 4, later ducker false", 0xd777de9848425c5a),
+        ("stem 0, later ducker false", 0x80b2a787acb82c19),
+        ("stem 1, later ducker false", 0xefac1d01627c866f),
+        ("stem 2, later ducker false", 0xbaf9536bb7dfac91),
+        ("stem 3, later ducker false", 0xc091345d7f4f773d),
+        ("stem 4, later ducker false", 0x8e522612e0cae6e9),
         (
             "playback in 256-frame blocks, later ducker false",
-            0x806b46e0d0410549,
+            0x560d5c3918fd81f1,
         ),
         (
             "playback in 100-frame blocks, later ducker false",
-            0x806b46e0d0410549,
+            0x560d5c3918fd81f1,
         ),
         (
             "playback from a later start, later ducker false",
-            0x099ceb263837e442,
+            0x955424e545ce1f25,
         ),
         (
             "playback through a loop, later ducker false",
-            0x4efbfffc63815b31,
+            0x7907beacf3d5b0db,
         ),
         ("read, later ducker false", 0x937f6d5ad8872edf),
-        ("export, later ducker true", 0x81f27ccac8aaab14),
+        ("export, later ducker true", 0x0ef1631a1c6b3148),
         (
             "export without buses, later ducker true",
             0xaf5dea72c6b14407,
@@ -223,23 +223,23 @@ fn every_render_path_keeps_its_samples() {
         ("stem 0, later ducker true", 0x9278d153d59cfcdd),
         ("stem 1, later ducker true", 0xb6ad07949a603e6f),
         ("stem 2, later ducker true", 0xc36b3c7ec5779449),
-        ("stem 3, later ducker true", 0xffe51cce3875c014),
-        ("stem 4, later ducker true", 0x8be5764e7584145a),
+        ("stem 3, later ducker true", 0xae5fdd7e313d2f0b),
+        ("stem 4, later ducker true", 0xaabcfec537ff4ee9),
         (
             "playback in 256-frame blocks, later ducker true",
-            0x41da9063eb6f3675,
+            0x156099774923dac1,
         ),
         (
             "playback in 100-frame blocks, later ducker true",
-            0x41da9063eb6f3675,
+            0x156099774923dac1,
         ),
         (
             "playback from a later start, later ducker true",
-            0xe706e1eaebf23da4,
+            0x2e2879601ccb16e0,
         ),
         (
             "playback through a loop, later ducker true",
-            0xf2982dc3aa1b52f4,
+            0x599e96a141f8193f,
         ),
         ("read, later ducker true", 0xe04c2ac476adfad5),
         ("decoded audio through the board", 0xe5f3cdd18320e637),

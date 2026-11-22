@@ -343,7 +343,11 @@ fn before_version_27(document: &mut serde_json::Value, expected: &mut Project) {
                 d.filter_resonance = 0.0;
                 d.duck_threshold_db = -27.0;
             }
-            crate::fx::Module::AetherformReverb(r) => r.duck_threshold_db = -27.0,
+            crate::fx::Module::AetherformReverb(r) => {
+                r.bass_mult = 1.0;
+                r.treble_mult = 1.0;
+                r.duck_threshold_db = -27.0;
+            }
             crate::fx::Module::EmberformDrive(d) => d.duck_threshold_db = -27.0,
             crate::fx::Module::Empty => {}
         }

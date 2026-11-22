@@ -41,7 +41,7 @@ pub enum ReverbCharacter {
 /// and a fifth, and two octaves.
 pub const SHIMMER_INTERVALS: [u8; 4] = [7, 12, 19, 24];
 
-/// The Aetherform Reverb: early reflections and an eight-line feedback
+/// The Aetherform Reverb: early reflections and a sixteen-line feedback
 /// delay network, with a pitch-shifted shimmer branch.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -317,6 +317,8 @@ impl Aetherform {
                 mod_rate_hz: 0.18,
                 mod_depth_percent: 9.0,
                 shimmer_amount_percent: 14.0,
+                bass_mult: 0.65,
+                treble_mult: 1.05,
                 duck_amount_percent: 46.0,
                 duck_release_ms: 420.0,
                 output_db: -2.0,
@@ -337,6 +339,8 @@ impl Aetherform {
                 mod_rate_hz: 0.21,
                 mod_depth_percent: 24.0,
                 shimmer_amount_percent: 18.0,
+                bass_mult: 1.25,
+                treble_mult: 0.7,
                 shimmer_interval_semitones: 7,
                 duck_amount_percent: 18.0,
                 duck_release_ms: 1100.0,
@@ -358,6 +362,8 @@ impl Aetherform {
                 mod_rate_hz: 0.12,
                 mod_depth_percent: 4.0,
                 shimmer_amount_percent: 0.0,
+                bass_mult: 0.75,
+                treble_mult: 0.85,
                 duck_amount_percent: 12.0,
                 duck_release_ms: 220.0,
                 output_db: -1.0,
@@ -379,6 +385,8 @@ impl Aetherform {
                 mod_depth_percent: 42.0,
                 shimmer_enabled: true,
                 shimmer_amount_percent: 38.0,
+                bass_mult: 1.15,
+                treble_mult: 0.8,
                 duck_amount_percent: 8.0,
                 duck_release_ms: 1800.0,
                 output_db: -5.2,
@@ -401,6 +409,8 @@ impl Aetherform {
                 mod_depth_percent: 36.0,
                 shimmer_enabled: true,
                 shimmer_amount_percent: 72.0,
+                bass_mult: 0.6,
+                treble_mult: 1.1,
                 duck_amount_percent: 4.0,
                 duck_release_ms: 2200.0,
                 output_db: -6.0,
@@ -424,6 +434,8 @@ impl Aetherform {
                 shimmer_enabled: true,
                 shimmer_amount_percent: 84.0,
                 shimmer_interval_semitones: 19,
+                bass_mult: 1.35,
+                treble_mult: 0.65,
                 duck_amount_percent: 0.0,
                 duck_release_ms: 2500.0,
                 output_db: -7.0,

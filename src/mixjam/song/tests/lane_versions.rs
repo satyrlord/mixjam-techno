@@ -770,7 +770,11 @@ fn only_version_25_songs_hold_the_emberform_drive() {
     for bus in &mut expected.buses {
         match &mut bus.module {
             crate::fx::Module::EchoformDelay(d) => d.duck_threshold_db = -27.0,
-            crate::fx::Module::AetherformReverb(r) => r.duck_threshold_db = -27.0,
+            crate::fx::Module::AetherformReverb(r) => {
+                r.bass_mult = 1.0;
+                r.treble_mult = 1.0;
+                r.duck_threshold_db = -27.0;
+            }
             crate::fx::Module::EmberformDrive(d) => d.duck_threshold_db = -27.0,
             crate::fx::Module::Empty => {}
         }

@@ -528,10 +528,10 @@ fn a_shrinking_space_bounds_each_read_head_during_the_depth_glide() {
         let now = modulated_length(length.length, depth, phase, vintage, wander);
         let before = modulated_length(length.previous, depth, phase, vintage, wander);
         assert!(
-            now >= 2.0 && now <= core.lines[0].reach(),
+            now >= 2.0 && now <= core.lines.reach(),
             "queued {queued}: new head asks for {now} frames"
         );
-        assert!(before >= 2.0 && before <= core.lines[0].reach());
+        assert!(before >= 2.0 && before <= core.lines.reach());
         assert!((before - (length.previous - depth)).abs() < 1e-9);
     }
 }
@@ -642,4 +642,401 @@ fn a_retime_during_a_crossfade_waits_for_it_and_never_jumps() {
         ..neutral()
     });
     assert!(core.positions() == expected.positions());
+}
+
+// Measurements -------------------------------------------------------------
+
+/// The magnitudes of the first half of the transform of `signal`, whose
+/// length is a power of two.
+fn fft_magnitudes(signal: &[f64]) -> Vec<f64> {
+    let n = signal.len();
+    assert!(n.is_power_of_two());
+    let (mut re, mut im) = (signal.to_vec(), vec![0.0; n]);
+    let mut j = 0;
+    for i in 1..n {
+        let mut bit = n >> 1;
+        while j & bit != 0 {
+            j ^= bit;
+            bit >>= 1;
+        }
+        j ^= bit;
+        if i < j {
+            re.swap(i, j);
+            im.swap(i, j);
+        }
+    }
+    let mut len = 2;
+    while len <= n {
+        let step = -2.0 * PI / len as f64;
+        for start in (0..n).step_by(len) {
+            for k in 0..len / 2 {
+                let (s, c) = (step * k as f64).sin_cos();
+                let (a, b) = (start + k, start + k + len / 2);
+                let (tr, ti) = (re[b] * c - im[b] * s, re[b] * s + im[b] * c);
+                (re[b], im[b]) = (re[a] - tr, im[a] - ti);
+                (re[a], im[a]) = (re[a] + tr, im[a] + ti);
+            }
+        }
+        len *= 2;
+    }
+    (0..=n / 2).map(|k| re[k].hypot(im[k])).collect()
+}
+
+fn blackman_harris(n: usize) -> Vec<f64> {
+    (0..n)
+        .map(|i| {
+            let x = 2.0 * PI * i as f64 / (n - 1) as f64;
+            0.35875 - 0.48829 * x.cos() + 0.14128 * (2.0 * x).cos() - 0.01168 * (3.0 * x).cos()
+        })
+        .collect()
+}
+
+/// The stereo response to an impulse at frame 0.
+fn impulse_response(settings: &Aetherform, frames: usize) -> Vec<(f64, f64)> {
+    let mut core = reverb(settings);
+    (0..frames)
+        .map(|i| {
+            let x = if i == 0 { 0.5 } else { 0.0 };
+            core.process(x, x)
+        })
+        .collect()
+}
+
+/// How flat the spectrum of the late tail is, from 0 to 1: the geometric
+/// over the arithmetic mean of the magnitudes from 200 Hz to 6 kHz.
+fn late_flatness(response: &[(f64, f64)]) -> f64 {
+    let start = (0.3 * RATE) as usize;
+    let window = blackman_harris(32_768);
+    let mono: Vec<f64> = response[start..start + 32_768]
+        .iter()
+        .zip(&window)
+        .map(|((l, r), w)| 0.5 * (l + r) * w)
+        .collect();
+    let spectrum = fft_magnitudes(&mono);
+    let bin = |hz: f64| (hz / RATE * 32_768.0) as usize;
+    let band: Vec<f64> = spectrum[bin(200.0)..bin(6000.0)]
+        .iter()
+        .map(|m| m + 1e-15)
+        .collect();
+    let log_mean = band.iter().map(|m| m.ln()).sum::<f64>() / band.len() as f64;
+    log_mean.exp() / (band.iter().sum::<f64>() / band.len() as f64)
+}
+
+/// The largest correlation of the two sides within one millisecond.
+fn iacc(segment: &[(f64, f64)]) -> f64 {
+    let energy =
+        |side: fn(&(f64, f64)) -> f64| segment.iter().map(|f| side(f).powi(2)).sum::<f64>();
+    let denominator = (energy(|f| f.0) * energy(|f| f.1)).sqrt();
+    let n = segment.len() as isize;
+    (-44_isize..=44)
+        .map(|lag| {
+            (0..n)
+                .filter(|i| (0..n).contains(&(i + lag)))
+                .map(|i| segment[i as usize].0 * segment[(i + lag) as usize].1)
+                .sum::<f64>()
+                .abs()
+        })
+        .fold(0.0, f64::max)
+        / denominator
+}
+
+fn space_settings(space_model: SpaceModel) -> Aetherform {
+    Aetherform {
+        space_model,
+        decay_seconds: 2.5,
+        size_percent: 75.0,
+        mod_depth_percent: 20.0,
+        mod_rate_hz: 0.35,
+        diffusion_percent: 80.0,
+        density_percent: 85.0,
+        late_balance_percent: 50.0,
+        width_percent: 100.0,
+        ..neutral()
+    }
+}
+
+#[test]
+fn offline_spaces_achieve_dense_smooth_late_tails_and_low_iacc() {
+    for model in SpaceModel::ALL {
+        let response = impulse_response(&space_settings(model), (1.6 * RATE) as usize);
+        let peak = response
+            .iter()
+            .map(|(l, r)| l.abs().max(r.abs()))
+            .fold(0.0, f64::max);
+        let onset = response
+            .iter()
+            .position(|(l, r)| l.abs().max(r.abs()) >= 0.01 * peak)
+            .unwrap();
+        let flatness = late_flatness(&response);
+        let early = iacc(&response[onset..onset + (0.1 * RATE) as usize]);
+        let late = iacc(&response[(0.3 * RATE) as usize..(1.5 * RATE) as usize]);
+        assert!(flatness >= 0.80, "{model:?}: flatness {flatness:.3}");
+        assert!(early <= 0.15, "{model:?}: early IACC {early:.3}");
+        assert!(late <= 0.1, "{model:?}: late IACC {late:.3}");
+    }
+}
+
+#[test]
+fn offline_predelay_and_12khz_sinc_reads_stay_accurate() {
+    // The strongest early reflection moves by the pre-delay, to a frame.
+    let peak_at = |pre_delay_ms: f32| {
+        let settings = Aetherform {
+            pre_delay_ms,
+            late_balance_percent: 0.0,
+            ..space_settings(SpaceModel::Plate)
+        };
+        let response = impulse_response(&settings, 600);
+        response
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.0.abs().total_cmp(&b.1.0.abs()))
+            .unwrap()
+            .0 as f64
+    };
+    let gap = peak_at(2.0) - peak_at(0.0);
+    assert!((gap - 0.002 * RATE).abs() <= 1.0, "{gap} frames");
+    // The tail's energy at 12 kHz stays level with 1 kHz.
+    let settings = Aetherform {
+        late_balance_percent: 100.0,
+        decay_seconds: 1.0,
+        ..space_settings(SpaceModel::Hall)
+    };
+    let response = impulse_response(&settings, 65_536);
+    let mono: Vec<f64> = response.iter().map(|(l, r)| 0.5 * (l + r)).collect();
+    let spectrum = fft_magnitudes(&mono);
+    let band = |low: f64, high: f64| {
+        let bin = |hz: f64| (hz / RATE * 65_536.0) as usize;
+        let power: f64 = spectrum[bin(low)..bin(high)].iter().map(|m| m * m).sum();
+        10.0 * (power / (bin(high) - bin(low)) as f64).log10()
+    };
+    let droop = band(11_000.0, 13_000.0) - band(900.0, 1100.0);
+    assert!(droop.abs() < 0.5, "{droop:.2} dB at 12 kHz");
+}
+
+/// A frame source of one sine, with `amplitude`.
+fn shift_sine(hz: f64, amplitude: f64, ratio: f64, quality: RenderQuality) -> Vec<f64> {
+    let mut shifter = Shifter::new();
+    shifter.tune(ratio, 20_000.0);
+    (0..(3.0 * RATE) as usize)
+        .map(|i| {
+            let x = amplitude * (2.0 * PI * hz * i as f64 / RATE).sin();
+            shifter.process_pair([x, 0.5 * x], ratio, quality)[0]
+        })
+        .collect()
+}
+
+/// The frequency of the strongest partial near `hz`, by parabolic
+/// interpolation of the magnitudes.
+fn partial_near(signal: &[f64], hz: f64) -> f64 {
+    let window = blackman_harris(65_536);
+    let windowed: Vec<f64> = signal[22_050..22_050 + 65_536]
+        .iter()
+        .zip(&window)
+        .map(|(x, w)| x * w)
+        .collect();
+    let spectrum = fft_magnitudes(&windowed);
+    let bin = |hz: f64| (hz / RATE * 65_536.0) as usize;
+    let best = (bin(hz * 0.94)..bin(hz * 1.06))
+        .max_by(|a, b| spectrum[*a].total_cmp(&spectrum[*b]))
+        .unwrap();
+    let (a, b, c) = (spectrum[best - 1], spectrum[best], spectrum[best + 1]);
+    (best as f64 + 0.5 * (a - c) / (a - 2.0 * b + c)) * RATE / 65_536.0
+}
+
+#[test]
+fn phase_vocoder_shimmer_holds_pitch_and_low_am_ripple() {
+    for quality in [RenderQuality::Live, RenderQuality::Offline] {
+        for semitones in [12.0_f64, 7.0] {
+            let ratio = 2f64.powf(semitones / 12.0);
+            let shifted = shift_sine(440.0, 0.3, ratio, quality);
+            let found = partial_near(&shifted, 440.0 * ratio);
+            let cents = 1200.0 * (found / (440.0 * ratio)).log2();
+            assert!(
+                cents.abs() < 2.0,
+                "{quality:?} +{semitones}: {cents:.2} cents"
+            );
+            let levels: Vec<f64> = shifted[22_050..110_250]
+                .as_chunks::<512>()
+                .0
+                .iter()
+                .map(|chunk| (chunk.iter().map(|x| x * x).sum::<f64>() / 512.0).sqrt())
+                .collect();
+            let high = levels.iter().copied().fold(0.0, f64::max);
+            let low = levels.iter().copied().fold(f64::INFINITY, f64::min);
+            let ripple = 20.0 * (high / low).log10();
+            assert!(ripple < 0.5, "{quality:?} +{semitones}: {ripple:.2} dB");
+        }
+        // A chord keeps every partial in tune.
+        let chord: Vec<f64> = {
+            let mut shifter = Shifter::new();
+            shifter.tune(2.0, 20_000.0);
+            (0..(3.0 * RATE) as usize)
+                .map(|i| {
+                    let t = i as f64 / RATE;
+                    let x: f64 = [261.6256, 311.127, 391.9954]
+                        .iter()
+                        .map(|hz| 0.1 * (2.0 * PI * hz * t).sin())
+                        .sum();
+                    shifter.process_pair([x, x], 2.0, quality)[0]
+                })
+                .collect()
+        };
+        for hz in [261.6256, 311.127, 391.9954] {
+            let cents = 1200.0 * (partial_near(&chord, 2.0 * hz) / (2.0 * hz)).log2();
+            assert!(
+                cents.abs() < 2.0,
+                "{quality:?} chord {hz}: {cents:.2} cents"
+            );
+        }
+        // Eight times the input gives exactly eight times the output.
+        let (quiet, loud) = (
+            shift_sine(440.0, 0.02, 2.0, quality),
+            shift_sine(440.0, 0.16, 2.0, quality),
+        );
+        assert!(
+            quiet
+                .iter()
+                .zip(&loud)
+                .all(|(q, l)| (8.0 * q - l).abs() < 1e-12)
+        );
+    }
+}
+
+#[test]
+fn bloom_character_smears_smoothly_without_slapback_spikes() {
+    let settings = Aetherform {
+        character: ReverbCharacter::Bloom,
+        late_balance_percent: 100.0,
+        ..space_settings(SpaceModel::Hall)
+    };
+    let response = impulse_response(&settings, (0.2 * RATE) as usize);
+    let window = (0.005 * RATE) as usize;
+    let energies: Vec<f64> = response[(0.03 * RATE) as usize..(0.15 * RATE) as usize]
+        .chunks(window)
+        .map(|chunk| chunk.iter().map(|(l, r)| l * l + r * r).sum::<f64>())
+        .collect();
+    let mean = energies.iter().sum::<f64>() / energies.len() as f64;
+    let peak = energies.iter().copied().fold(0.0, f64::max);
+    assert!(peak < 6.0 * mean, "peak {peak:e} against mean {mean:e}");
+}
+
+#[test]
+fn the_reverb_profile_tracks_space_early_reflections_and_band_decay() {
+    let base = space_settings(SpaceModel::Hall);
+    let plain = sample_reverb_profile(&base);
+    assert_eq!(plain.rt60_bands[1], base.decay_seconds);
+    assert!(plain.er_count > 4);
+    assert!(
+        plain
+            .decay_curves
+            .iter()
+            .flatten()
+            .all(|v| (0.0..=1.0).contains(v))
+    );
+    let shaped = sample_reverb_profile(&Aetherform {
+        bass_mult: 1.5,
+        treble_mult: 0.5,
+        pre_delay_ms: 80.0,
+        early_reflections_enabled: false,
+        ..base
+    });
+    assert!(shaped.rt60_bands[0] > shaped.rt60_bands[1]);
+    assert!(shaped.rt60_bands[2] < 0.6 * shaped.rt60_bands[1]);
+    assert!(shaped.pre_delay_norm > plain.pre_delay_norm);
+    assert_eq!(shaped.er_count, 0);
+    let bloom = sample_reverb_profile(&Aetherform {
+        character: ReverbCharacter::Bloom,
+        ..base
+    });
+    assert!(bloom.decay_curves[1][2] < plain.decay_curves[1][2]);
+}
+
+#[test]
+fn the_reverb_profile_keeps_a_long_pre_delay_on_its_time_axis() {
+    let settings = Aetherform {
+        decay_seconds: 0.2,
+        pre_delay_ms: 250.0,
+        size_percent: 100.0,
+        ..space_settings(SpaceModel::Hall)
+    };
+    let profile = sample_reverb_profile(&settings);
+    let seconds = |time: f32| time * profile.horizon_seconds;
+    assert!((seconds(profile.pre_delay_norm) - 0.25).abs() < 1e-6);
+    assert!((seconds(profile.er_taps[0].0) - 0.2561).abs() < 1e-6);
+}
+
+#[test]
+fn live_feedback_heads_read_fractional_positions_with_cubic_interpolation() {
+    let mut core = reverb(&neutral());
+    core.lengths[0].length = 100.5;
+    core.lines.push([1.0; LINES]);
+    for _ in 1..100 {
+        core.lines.push([0.0; LINES]);
+    }
+    let swing = Swing {
+        depth: 0.0,
+        vintage: 0.0,
+        wander: 0.0,
+        waves: [(0.0, 1.0); 3],
+    };
+    assert_eq!(core.read_heads(&swing, 1.0, RenderQuality::Live)[0], 0.5625);
+}
+
+#[test]
+fn the_old_shimmer_interval_keeps_its_bandwidth_while_fading() {
+    let settings = Aetherform {
+        shimmer_enabled: true,
+        shimmer_amount_percent: 100.0,
+        shimmer_interval_semitones: 7,
+        ..neutral()
+    };
+    let (mut reference, mut changed) = (reverb(&settings), reverb(&settings));
+    let switch_at = 4096;
+    for i in 0..switch_at + 4096 {
+        if i == switch_at {
+            changed.set(
+                &Aetherform {
+                    shimmer_interval_semitones: 24,
+                    ..settings
+                },
+                0.0,
+            );
+        }
+        let input = (2.0 * PI * 9000.0 * i as f64 / RATE).sin();
+        for core in [&mut reference, &mut changed] {
+            core.shimmer_level.next();
+            core.update_shimmer([input; 2], RenderQuality::Live);
+        }
+        assert_eq!(changed.ratio, reference.ratio);
+        assert_eq!(changed.shimmer, reference.shimmer, "frame {i}");
+    }
+}
+
+#[test]
+fn enabling_shimmer_again_does_not_replay_its_old_audio() {
+    let settings = Aetherform {
+        shimmer_enabled: true,
+        shimmer_amount_percent: 100.0,
+        ..neutral()
+    };
+    let mut core = reverb(&settings);
+    let disabled = Aetherform {
+        shimmer_enabled: false,
+        ..settings
+    };
+    for i in 0..48_000 {
+        if i == 4096 {
+            core.set(&disabled, 0.0);
+        }
+        let tail = (2.0 * PI * 440.0 * i as f64 / RATE).sin();
+        core.shimmer_level.next();
+        core.update_shimmer([tail; 2], RenderQuality::Live);
+    }
+    assert_eq!(core.shimmer_level.value(), 0.0);
+    core.set(&settings, 0.0);
+    for i in 0..4096 {
+        core.shimmer_level.next();
+        core.update_shimmer([0.0; 2], RenderQuality::Live);
+        assert_eq!(core.shimmer, [0.0; 2], "frame {i} after restart");
+    }
 }

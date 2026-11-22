@@ -5,6 +5,7 @@ use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Stroke, Vec2,
 };
 use mixjam_techno::application::FxBusMeterReading;
+use mixjam_techno::application::fx::ReverbProfile;
 
 /// Draw a recessed chassis bay with material-aware framing and title legend.
 pub(in super::super) fn bay(
@@ -452,6 +453,156 @@ pub(in super::super) fn delay_scope_frame(
     }
 }
 
+/// The color of the high band's curve, apart from the middle and low bands.
+fn high_band_color(material: Material) -> Color32 {
+    match material {
+        Material::Metal => Color32::from_rgb(196, 226, 168),
+        Material::Plastic => Color32::from_rgb(232, 240, 255),
+        Material::Flat => Color32::from_rgb(214, 220, 232),
+    }
+}
+
+/// Plot one decay curve over the scope's plot area, with a soft glow under
+/// it when `glow` is set.
+fn draw_decay_curve(
+    ui: &egui::Ui,
+    plot: Rect,
+    curve: &[f32],
+    color: Color32,
+    width: f32,
+    glow: bool,
+) {
+    let denom = (curve.len() - 1) as f32;
+    let poly: Vec<Pos2> = curve
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            Pos2::new(
+                plot.left() + i as f32 / denom * plot.width(),
+                plot.bottom() - v.clamp(0.0, 1.0) * plot.height(),
+            )
+        })
+        .collect();
+    if glow {
+        let stroke = Stroke::new(2.0 * width, color.gamma_multiply(0.28));
+        ui.painter().add(egui::Shape::line(poly.clone(), stroke));
+    }
+    ui.painter()
+        .add(egui::Shape::line(poly, Stroke::new(width, color)));
+}
+
+/// Plot the early reflections, the pre-delay, and the decay of the low,
+/// middle, and high bands of a reverb, with their times in the footer.
+pub(in super::super) fn reverb_scope_frame(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    tag: &str,
+    profile: &ReverbProfile,
+    accent: Color32,
+) {
+    let r = roles();
+    let painter = ui.painter();
+    let (mut plot, mid_color, grid, low_color) = draw_scope_chrome(ui, rect, title, accent);
+    painter.text(
+        Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
+        Align2::RIGHT_CENTER,
+        tag,
+        FontId::proportional(9.0),
+        r.legend.gamma_multiply(0.85),
+    );
+    if profile.er_count > 0 {
+        let early = Rect::from_min_max(plot.left_bottom() - Vec2::new(0.0, 44.0), plot.max);
+        draw_early_reflections(ui, early, profile, low_color, grid);
+        plot.max.y = early.top() - 6.0;
+    }
+    // -20 and -40 dB; the bottom edge is -60 dB.
+    for level in [1.0_f32 / 3.0, 2.0 / 3.0] {
+        let y = plot.bottom() - level * plot.height();
+        painter.line_segment(
+            [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
+            Stroke::new(1.0_f32, grid.gamma_multiply(0.7)),
+        );
+    }
+    let pre_x = plot.left() + profile.pre_delay_norm * plot.width();
+    painter.line_segment(
+        [
+            Pos2::new(pre_x, plot.top()),
+            Pos2::new(pre_x, plot.bottom()),
+        ],
+        Stroke::new(1.0_f32, grid),
+    );
+    plot.min.x = pre_x;
+    let [low, mid, high] = &profile.decay_curves;
+    let glow = r.material != Material::Flat;
+    draw_decay_curve(ui, plot, low, low_color, 1.4, false);
+    draw_decay_curve(ui, plot, high, high_band_color(r.material), 1.4, false);
+    draw_decay_curve(ui, plot, mid, mid_color, 1.8, glow);
+    let [b, m, t] = profile.rt60_bands;
+    let horizon = profile.horizon_seconds;
+    painter.text(
+        Pos2::new(rect.left() + 8.0, rect.bottom() - 9.0),
+        Align2::LEFT_CENTER,
+        format!("0–{horizon:.2} s"),
+        FontId::proportional(9.0),
+        r.legend,
+    );
+    painter.text(
+        Pos2::new(rect.right() - 8.0, rect.bottom() - 9.0),
+        Align2::RIGHT_CENTER,
+        format!("B {b:.1}s  M {m:.1}s  T {t:.1}s"),
+        FontId::proportional(9.0),
+        r.legend.gamma_multiply(0.9),
+    );
+    let response = ui.interact(rect, ui.id().with(title), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
+    response.ctx.accesskit_node_builder(response.id, |node| {
+        let pre_ms = profile.pre_delay_norm * horizon * 1000.0;
+        node.set_label(title);
+        node.set_value(format!(
+            "{title}. Pre-delay {pre_ms:.0} ms. RT60 in seconds. \
+             Bass {b:.2}. Middle {m:.2}. Treble {t:.2}. \
+             Left-channel early reflections {}. Decay plot 0 to {horizon:.2} seconds.",
+            profile.er_count
+        ));
+    });
+}
+
+/// Expand the reflection times on their own scale, starting after the pre-delay.
+fn draw_early_reflections(
+    ui: &egui::Ui,
+    rect: Rect,
+    profile: &ReverbProfile,
+    trace: Color32,
+    grid: Color32,
+) {
+    let painter = ui.painter();
+    let taps = &profile.er_taps[..profile.er_count];
+    let after_pre_ms = |t: f32| (t - profile.pre_delay_norm) * profile.horizon_seconds * 1000.0;
+    let span = (after_pre_ms(taps[taps.len() - 1].0) / 10.0)
+        .ceil()
+        .max(1.0)
+        * 10.0;
+    painter.text(
+        rect.left_top(),
+        Align2::LEFT_TOP,
+        format!("Early L · 0–{span:.0} ms after pre-delay"),
+        FontId::proportional(9.0),
+        roles().legend,
+    );
+    let axis = rect.center().y + 5.0;
+    painter.line_segment(
+        [Pos2::new(rect.left(), axis), Pos2::new(rect.right(), axis)],
+        Stroke::new(1.0_f32, grid),
+    );
+    for &(time, strength) in taps {
+        let x = rect.left() + after_pre_ms(time) / span * rect.width();
+        let tip = Pos2::new(x, axis - 15.0 * strength);
+        painter.line_segment([Pos2::new(x, axis), tip], Stroke::new(1.4_f32, trace));
+        painter.circle_filled(tip, 1.6, trace);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::super::{fx, master, theme};
@@ -509,10 +660,13 @@ mod tests {
 
     #[test]
     fn instrument_controls_render_telemetry_scope_and_all_materials() {
-        use super::{bay, delay_scope_frame, meter_bar, scope_frame};
+        use super::{bay, delay_scope_frame, meter_bar, reverb_scope_frame, scope_frame};
         use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
         use mixjam_techno::application::FxBusMeterReading;
+        use mixjam_techno::application::Session;
+        use mixjam_techno::application::fx::Aetherform;
 
+        let profile = Session::fx_reverb_profile(&Aetherform::default());
         let points: Vec<f32> = (0..65).map(|i| (i as f32 / 32.0) - 1.0).collect();
         let readings = [
             (
@@ -559,6 +713,7 @@ mod tests {
             ctx.enable_accesskit();
             let meter_rect = Rect::from_min_size(Pos2::new(20.0, 260.0), Vec2::new(180.0, 24.0));
             let delay_rect = Rect::from_min_size(Pos2::new(320.0, 330.0), Vec2::new(240.0, 140.0));
+            let reverb_rect = Rect::from_min_size(Pos2::new(20.0, 350.0), Vec2::new(246.0, 120.0));
             for pass in 0..2 {
                 let raw = egui::RawInput {
                     screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(640.0, 480.0))),
@@ -617,6 +772,14 @@ mod tests {
                             "Tap & Decay",
                             &[(0.15, 1.0, -0.25)],
                             true,
+                            accent,
+                        );
+                        reverb_scope_frame(
+                            ui,
+                            reverb_rect,
+                            "Decay & Space",
+                            "HALL · BLOOM +12",
+                            &profile,
                             accent,
                         );
                     });

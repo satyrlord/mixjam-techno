@@ -80,7 +80,11 @@ changes on that same frame. When the same inputs pass through blocks of
 different sizes, the new key must not wait until the next block. A linked delay
 uses the left tap time on both sides. Smear spreads feedback inside the loop,
 and Resonance shapes the loop filters. The reverb's Bass and Treble controls
-adjust decay in their bands. Each has a neutral value of 1.
+adjust decay in their bands. Each has a neutral value of 1. The reverb mixes
+sixteen delay lines with a fast Hadamard transform. Offline renders read them
+with a windowed sinc, and live playback uses cubic reads. The shimmer is a
+stereo phase vocoder. Its hop grid depends only on the frames that passed, so
+the block size does not change it, and a bus that slept wakes on the same grid.
 
 A reverb delay change crossfades from a snapshot of all current delay
 positions. Each read head limits its own modulation during the transition.

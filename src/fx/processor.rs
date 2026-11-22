@@ -24,6 +24,8 @@ const CUT: usize = RATE * 12 / 1000;
 const SLEEP_AFTER: usize = 2 * RATE;
 const RATE: usize = crate::audio::Mix::SAMPLE_RATE as usize;
 const SILENCE: f64 = 1e-6;
+/// The frames that a block run goes through bus by bus.
+const CHUNK: usize = 256;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -260,7 +262,7 @@ impl Bus {
         }
         match self.kind {
             Kind::Delay => self.delay.skip(self.slept),
-            Kind::Reverb => self.reverb.skip(self.slept),
+            Kind::Reverb => self.reverb.skip(self.slept, self.quality),
             Kind::Drive | Kind::Empty => {}
         }
         self.awake = true;
@@ -274,7 +276,7 @@ impl Bus {
         match self.kind {
             Kind::Empty => (0.0, 0.0),
             Kind::Delay => self.delay.process_with_quality(left, right, self.quality),
-            Kind::Reverb => self.reverb.process(left, right),
+            Kind::Reverb => self.reverb.process_with_quality(left, right, self.quality),
             Kind::Drive => self.drive.process_with_quality(left, right, self.quality),
         }
     }
@@ -486,6 +488,7 @@ impl ReturnsProcessor {
     }
 
     fn with_quality(settings: &FxBuses, bpm: f64, quality: RenderQuality) -> Self {
+        super::prepare_tables();
         let mut buses: Box<[Bus; BUSES]> = Box::new(std::array::from_fn(|_| Bus::new(quality)));
         for (bus, settings) in buses.iter_mut().zip(&settings.buses) {
             bus.apply(settings, bpm, true);
@@ -601,47 +604,110 @@ impl ReturnsProcessor {
         let mut meters = [BusMeterAcc::default(); BUSES];
         if sends.is_some() || self.ringing() {
             let mut slots = self.key_slots(&keys);
-            for (frame, out) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-                let (dry_l, dry_r) = if self.dry_latency > 0 {
-                    (
-                        delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency),
-                        delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency),
-                    )
-                } else {
-                    (f64::from(out[0]), f64::from(out[1]))
-                };
-                let (mut sum_l, mut sum_r) = if solo_mask == 0 {
-                    (dry_l, dry_r)
-                } else {
-                    (0.0, 0.0)
-                };
-                let bus_frames = self.frame(frame, sends, &keys, &mut slots, lanes);
-                for (index, (l, r, duck_gr, lim_gr)) in bus_frames.into_iter().enumerate() {
-                    meters[index].record(l, r, duck_gr, lim_gr);
-                    if solo_mask == 0 || (solo_mask & (1 << index)) != 0 {
-                        sum_l += l;
-                        sum_r += r;
-                    }
+            let mut sum = [[0.0_f64; 2]; CHUNK];
+            for (number, chunk) in block.as_chunks_mut::<2>().0.chunks_mut(CHUNK).enumerate() {
+                self.seed_chunk(chunk, &mut sum, solo_mask);
+                self.accumulate_chunk(
+                    number * CHUNK,
+                    chunk.len(),
+                    sends,
+                    &keys,
+                    &mut slots,
+                    lanes,
+                    &mut meters,
+                    &mut sum,
+                    solo_mask,
+                );
+                for (out, sum) in chunk.iter_mut().zip(&sum) {
+                    *out = [sum[0] as f32, sum[1] as f32];
                 }
-                out[0] = sum_l as f32;
-                out[1] = sum_r as f32;
             }
         } else {
-            self.sleep_through(frames);
-            if self.dry_latency > 0 {
-                for out in block.as_chunks_mut::<2>().0.iter_mut() {
-                    out[0] =
-                        delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency)
-                            as f32;
-                    out[1] =
-                        delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency)
-                            as f32;
-                }
-            } else if solo_mask != 0 {
-                block.fill(0.0);
-            }
+            self.process_idle(block, frames, solo_mask);
         }
         self.publish_meters(&meters, frames);
+    }
+
+    fn seed_chunk(&mut self, chunk: &[[f32; 2]], sum: &mut [[f64; 2]; CHUNK], solo_mask: u8) {
+        for (out, sum) in chunk.iter().zip(sum) {
+            let dry = if self.dry_latency > 0 {
+                [
+                    delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency),
+                    delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency),
+                ]
+            } else {
+                [f64::from(out[0]), f64::from(out[1])]
+            };
+            *sum = if solo_mask == 0 { dry } else { [0.0, 0.0] };
+        }
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn accumulate_chunk(
+        &mut self,
+        first: usize,
+        count: usize,
+        sends: Option<&[f32]>,
+        keys: &crate::ducker::Keys,
+        slots: &mut [KeySlot; BUSES],
+        lanes: Lanes,
+        meters: &mut [BusMeterAcc; BUSES],
+        sum: &mut [[f64; 2]; CHUNK],
+        solo_mask: u8,
+    ) {
+        for index in 0..BUSES {
+            let audible = solo_mask == 0 || (solo_mask & (1 << index)) != 0;
+            for (at, sum) in sum[..count].iter_mut().enumerate() {
+                let (l, r, duck_gr, lim_gr) =
+                    self.bus_frame(index, first + at, sends, keys, &mut slots[index], lanes);
+                meters[index].record(l, r, duck_gr, lim_gr);
+                if audible {
+                    sum[0] += l;
+                    sum[1] += r;
+                }
+            }
+        }
+    }
+
+    fn process_idle(&mut self, block: &mut [f32], frames: usize, solo_mask: u8) {
+        self.sleep_through(frames);
+        if self.dry_latency > 0 {
+            for out in block.as_chunks_mut::<2>().0.iter_mut() {
+                out[0] = delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency)
+                    as f32;
+                out[1] = delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency)
+                    as f32;
+            }
+        } else if solo_mask != 0 {
+            block.fill(0.0);
+        }
+    }
+
+    /// One frame of bus `index`: its send, key, and return lane.
+    #[inline]
+    fn bus_frame(
+        &mut self,
+        index: usize,
+        frame: usize,
+        sends: Option<&[f32]>,
+        keys: &crate::ducker::Keys,
+        slot: &mut KeySlot,
+        lanes: Lanes,
+    ) -> (f64, f64, f64, f64) {
+        let (bpm, quality) = (self.bpm, self.quality);
+        let bus = &mut self.buses[index];
+        let (left, right) = sends.map_or((0.0, 0.0), |sends| {
+            let at = frame * 2 * BUSES + index * 2;
+            (f64::from(sends[at]), f64::from(sends[at + 1]))
+        });
+        let key = slot.frame(keys, bus.duck_key(), frame);
+        let lane_offset = if quality == RenderQuality::Offline {
+            -(bus.kind.effect_latency(quality) as isize)
+        } else {
+            bus.kind.latency(quality) as isize
+        };
+        let lane = lane_at(lanes, index, frame, lane_offset);
+        bus.process(left, right, key, lane, bpm)
     }
 
     #[inline]
@@ -653,22 +719,9 @@ impl ReturnsProcessor {
         slots: &mut [KeySlot; BUSES],
         lanes: Lanes,
     ) -> [(f64, f64, f64, f64); BUSES] {
-        let bpm = self.bpm;
-        let quality = self.quality;
         let mut returns = [(0.0, 0.0, 0.0, 0.0); BUSES];
-        for (index, (bus, out)) in self.buses.iter_mut().zip(&mut returns).enumerate() {
-            let (left, right) = sends.map_or((0.0, 0.0), |sends| {
-                let at = frame * 2 * BUSES + index * 2;
-                (f64::from(sends[at]), f64::from(sends[at + 1]))
-            });
-            let key = slots[index].frame(keys, bus.duck_key(), frame);
-            let lane_offset = if quality == RenderQuality::Offline {
-                -(bus.kind.effect_latency(quality) as isize)
-            } else {
-                bus.kind.latency(quality) as isize
-            };
-            let lane = lane_at(lanes, index, frame, lane_offset);
-            *out = bus.process(left, right, key, lane, bpm);
+        for (index, out) in returns.iter_mut().enumerate() {
+            *out = self.bus_frame(index, frame, sends, keys, &mut slots[index], lanes);
         }
         returns
     }

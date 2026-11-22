@@ -234,7 +234,7 @@ aetherform = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.
                   modRateHz=0.32, modDepthPercent=18.0, shimmerEnabled=True,
                   shimmerAmountPercent=24.0, shimmerIntervalSemitones=12,
                   duckAmountPercent=28.0, duckReleaseMs=720.0, duckThresholdDb=-24.0,
-                  bassMult=1.0, trebleMult=1.0, outputDb=-1.5, bypass=False)
+                  bassMult=1.3, trebleMult=0.65, outputDb=-1.5, bypass=False)
 mixer_project['fx'] = [dict(module=module, powered=True, returnLevel=level, limiter=True)
                        for module, level in ((aetherform, 0.88), (echoform, 0.82),
                                              (dict(type='empty'), 1.0), (dict(type='empty'), 1.0))]

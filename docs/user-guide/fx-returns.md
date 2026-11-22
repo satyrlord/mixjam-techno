@@ -32,7 +32,11 @@ The bus controls:
   with wow and flutter. **Smear** spreads the repeats, and **Resonance** shapes
   the repeat filters.
 - In Aetherform Reverb, **Bass** and **Treble** change how long the
-  low and high frequencies ring relative to the main decay time.
+  low and high frequencies ring relative to the main decay time. **Decay &
+  Space** shows the pre-delay and the three decay curves. It plots the left
+  channel's early reflections in milliseconds after the pre-delay. **Early**
+  turns the early reflections on or off. **Shimmer** feeds the tail back higher
+  by the chosen interval, and its amount acts while Shimmer is on.
 
 ## Emberform Drive
 

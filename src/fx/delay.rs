@@ -7,7 +7,7 @@
 //! bounding.
 use super::adaa::Adaa2State;
 use super::oversample::{FirOversampler, HalfBandIir2x, RenderQuality};
-use super::parts::{AllPass, Lfo, Line, OnePole, Svf, Tone, bound, widen};
+use super::parts::{AllPass, Lfo, Line, OnePole, Svf, Tone, bound, lfo_step, widen};
 use super::{DelayCharacter, DistortionShape, Echoform};
 use crate::master::dsp::{Biquad, Coefficients, DcBlocker, RATE, Smoothed, db_to_gain, pole};
 use std::f64::consts::{FRAC_1_SQRT_2, PI};
@@ -23,6 +23,8 @@ const FLUTTER_HZ_R: f64 = 6.7;
 const NATIVE_WOW_SAMPLES: f64 = 0.000_14 * RATE;
 const NATIVE_FLUTTER_SAMPLES: f64 = 0.000_025 * RATE;
 const SMEAR_SWING: f64 = 0.000_15 * RATE;
+const BIAS: f64 = 0.12;
+const TAPE_DRIVE: f64 = 1.6;
 
 /// The time of one side and the reads at it.
 struct Head {
@@ -282,6 +284,7 @@ pub(super) struct Core {
     soften_corner: f64,
     dc: [DcBlocker; 2],
     dc_pole: f64,
+    tape_zero: f64,
     env_attack: f64,
     env_release: f64,
     env_smooth: f64,
@@ -290,7 +293,9 @@ pub(super) struct Core {
     wow_r: Lfo,
     flutter_l: Lfo,
     flutter_r: Lfo,
-    rate: f64,
+    /// The steps of the modulation, wow left, wow right, flutter left, and
+    /// flutter right oscillators.
+    lfo_steps: [u64; 5],
     feedback: Smoothed,
     cross: Smoothed,
     width: Smoothed,
@@ -328,6 +333,7 @@ impl Core {
             soften_corner: f64::NAN,
             dc: [DcBlocker::ZERO; 2],
             dc_pole: pole(1.0 / (2.0 * PI * 15.0)),
+            tape_zero: (TAPE_DRIVE * BIAS).tanh(),
             env_attack: 1.0 - pole(0.012),
             env_release: 1.0 - pole(0.060),
             env_smooth: 1.0 - pole(0.010),
@@ -336,7 +342,13 @@ impl Core {
             wow_r: Lfo::default(),
             flutter_l: Lfo::default(),
             flutter_r: Lfo::default(),
-            rate: 0.0,
+            lfo_steps: [
+                0,
+                lfo_step(WOW_HZ_L),
+                lfo_step(WOW_HZ_R),
+                lfo_step(FLUTTER_HZ_L),
+                lfo_step(FLUTTER_HZ_R),
+            ],
             feedback: smooth(0.0),
             cross: Smoothed::with_time(0.0, 0.01),
             width: smooth(1.0),
@@ -406,7 +418,7 @@ impl Core {
     }
 
     fn set_levels(&mut self, settings: &Echoform) {
-        self.rate = f64::from(settings.mod_rate);
+        self.lfo_steps[0] = lfo_step(f64::from(settings.mod_rate));
         self.depth
             .set(f64::from(settings.mod_depth) / 1000.0 * RATE);
         self.feedback.set(f64::from(settings.feedback) / 100.0);
@@ -469,11 +481,12 @@ impl Core {
     }
 
     pub(super) fn skip(&mut self, frames: u64) {
-        self.lfo.skip(self.rate, frames);
-        self.wow_l.skip(WOW_HZ_L, frames);
-        self.wow_r.skip(WOW_HZ_R, frames);
-        self.flutter_l.skip(FLUTTER_HZ_L, frames);
-        self.flutter_r.skip(FLUTTER_HZ_R, frames);
+        let steps = self.lfo_steps;
+        self.lfo.skip_step(steps[0], frames);
+        self.wow_l.skip_step(steps[1], frames);
+        self.wow_r.skip_step(steps[2], frames);
+        self.flutter_l.skip_step(steps[3], frames);
+        self.flutter_r.skip_step(steps[4], frames);
     }
 
     pub(super) fn activity(&self) -> f64 {
@@ -504,12 +517,17 @@ impl Core {
         if analog == 0.0 && tape == 0.0 {
             return x;
         }
-        let warm = (1.2 * x).tanh() / 1.2;
-        let bias = 0.12;
-        let worn = self.dc[side].process(
-            ((1.6 * (x + bias)).tanh() - (1.6 * bias).tanh()) / 1.6,
-            self.dc_pole,
-        );
+        let warm = if analog > 0.0 {
+            (1.2 * x).tanh() / 1.2
+        } else {
+            x
+        };
+        let worn = if tape > 0.0 {
+            let biased = (TAPE_DRIVE * (x + BIAS)).tanh();
+            self.dc[side].process((biased - self.tape_zero) / TAPE_DRIVE, self.dc_pole)
+        } else {
+            x
+        };
         let shaped = x + analog * (warm - x) + tape * (worn - x);
         let soft = self.soften[side].low(shaped);
         shaped + (analog + tape).min(1.0) * (soft - shaped)
@@ -517,21 +535,30 @@ impl Core {
 
     #[inline]
     fn modulation_offsets(&mut self, tape: f64, depth: f64) -> [f64; 2] {
-        let wander_l = tape
-            * ((NATIVE_WOW_SAMPLES + 0.35 * depth) * self.wow_l.value(0.0)
-                + (NATIVE_FLUTTER_SAMPLES + 0.05 * depth) * self.flutter_l.value(0.0));
-        let wander_r = tape
-            * ((NATIVE_WOW_SAMPLES + 0.35 * depth) * self.wow_r.value(0.0)
-                + (NATIVE_FLUTTER_SAMPLES + 0.05 * depth) * self.flutter_r.value(0.0));
-        let offsets = [
-            depth * self.lfo.value(0.0) + wander_l,
-            depth * self.lfo.value(0.25) + wander_r,
-        ];
-        self.lfo.advance(self.rate);
-        self.wow_l.advance(WOW_HZ_L);
-        self.wow_r.advance(WOW_HZ_R);
-        self.flutter_l.advance(FLUTTER_HZ_L);
-        self.flutter_r.advance(FLUTTER_HZ_R);
+        let (sin, cos) = if depth > 0.0 {
+            self.lfo.sin_cos()
+        } else {
+            (0.0, 0.0)
+        };
+        let (wander_l, wander_r) = if tape > 0.0 {
+            let swing = (
+                NATIVE_WOW_SAMPLES + 0.35 * depth,
+                NATIVE_FLUTTER_SAMPLES + 0.05 * depth,
+            );
+            (
+                tape * (swing.0 * self.wow_l.sin() + swing.1 * self.flutter_l.sin()),
+                tape * (swing.0 * self.wow_r.sin() + swing.1 * self.flutter_r.sin()),
+            )
+        } else {
+            (0.0, 0.0)
+        };
+        let offsets = [depth * sin + wander_l, depth * cos + wander_r];
+        let steps = self.lfo_steps;
+        self.lfo.advance_step(steps[0]);
+        self.wow_l.advance_step(steps[1]);
+        self.wow_r.advance_step(steps[2]);
+        self.flutter_l.advance_step(steps[3]);
+        self.flutter_r.advance_step(steps[4]);
         offsets
     }
 

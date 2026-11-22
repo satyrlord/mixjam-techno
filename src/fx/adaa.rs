@@ -73,6 +73,25 @@ pub(super) fn eval_shape(shape: DistortionShape, x: f64) -> (f64, f64, f64) {
     }
 }
 
+/// The second antiderivative alone, which the filter keeps in its memory.
+#[inline]
+fn eval_f2(shape: DistortionShape, x: f64) -> f64 {
+    match shape {
+        DistortionShape::Foldback => x - x.sin(),
+        DistortionShape::Overdrive => alg_f2(x, 1.0),
+        DistortionShape::Tube if x >= 0.0 => alg_f2(x, 1.0),
+        DistortionShape::Tube => alg_f2(x, 0.65),
+        _ => eval_shape(shape, x).2,
+    }
+}
+
+#[inline]
+fn alg_f2(x: f64, k: f64) -> f64 {
+    let u = k * x;
+    let r = (1.0 + u * u).sqrt();
+    0.5 * (u * r + u.asinh() - 2.0 * u) * (1.0 / (k * k * k))
+}
+
 #[inline]
 pub(super) fn curve_only(shape: DistortionShape, x: f64) -> f64 {
     eval_shape(shape, x).0
@@ -117,8 +136,8 @@ impl Adaa2State {
     }
 
     pub(super) fn retarget(&mut self, shape: DistortionShape) {
-        self.f2_1 = eval_shape(shape, self.x1).2;
-        self.f2_2 = eval_shape(shape, self.x2).2;
+        self.f2_1 = eval_f2(shape, self.x1);
+        self.f2_2 = eval_f2(shape, self.x2);
     }
 
     #[inline]
@@ -134,7 +153,7 @@ impl Adaa2State {
     /// Evaluate the 2nd-order antiderivative filter and update history.
     #[inline]
     pub(super) fn process(&mut self, shape: DistortionShape, x0: f64) -> f64 {
-        let (_, _, f2_0) = eval_shape(shape, x0);
+        let f2_0 = eval_f2(shape, x0);
         let dx2 = x0 - self.x2;
         let out = if dx2.abs() > ADAA_EPS {
             let d_hi = Self::d1(shape, x0, self.x1, f2_0, self.f2_1);

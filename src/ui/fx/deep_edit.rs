@@ -6,7 +6,7 @@ use super::unit::{bus_switch, choice, left_division, module_and_preset_combos, n
 use super::{DEEP_EDIT_TITLE, enamel};
 use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::{
-    BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, FxBus, Module,
+    Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, FxBus, Module,
     ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel, TimeMode,
 };
 
@@ -261,24 +261,23 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     );
 }
 
-fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, accent: Color32) {
-    let left_w = 468.0;
-    let top_h = 178.0;
-    let bot_h = 146.0;
+/// The four bays of a workspace: two side by side on top, two below.
+fn quad_bays(area: Rect) -> [Rect; 4] {
+    let (left_w, top_h, bot_h) = (468.0, 178.0, 146.0);
     let right_w = (area.width() - left_w - 10.0).max(220.0);
-    let time_bay = Rect::from_min_size(area.min, Vec2::new(left_w, top_h));
-    let scope_bay = Rect::from_min_size(
-        area.min + Vec2::new(left_w + 10.0, 0.0),
-        Vec2::new(right_w, top_h),
-    );
-    let tone_bay = Rect::from_min_size(
-        area.min + Vec2::new(0.0, top_h + 10.0),
-        Vec2::new(left_w, bot_h),
-    );
-    let duck_bay = Rect::from_min_size(
-        area.min + Vec2::new(left_w + 10.0, top_h + 10.0),
-        Vec2::new(right_w, bot_h),
-    );
+    let bay = |x: f32, y: f32, w: f32, h: f32| {
+        Rect::from_min_size(area.min + Vec2::new(x, y), Vec2::new(w, h))
+    };
+    [
+        bay(0.0, 0.0, left_w, top_h),
+        bay(left_w + 10.0, 0.0, right_w, top_h),
+        bay(0.0, top_h + 10.0, left_w, bot_h),
+        bay(left_w + 10.0, top_h + 10.0, right_w, bot_h),
+    ]
+}
+
+fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, accent: Color32) {
+    let [time_bay, scope_bay, tone_bay, duck_bay] = quad_bays(area);
 
     controls::instrument::bay(ui, time_bay, "Time & Feedback", accent, false);
     if let Module::EchoformDelay(delay) = &mut bus.module {
@@ -414,83 +413,17 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
 }
 
 fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color32) {
-    let space_bay = Rect::from_min_size(area.min, Vec2::new(area.width(), 174.0));
-    let tone_bay = Rect::from_min_size(area.min + Vec2::new(0.0, 182.0), Vec2::new(458.0, 148.0));
-    let duck_bay = Rect::from_min_size(
-        area.min + Vec2::new(468.0, 182.0),
-        Vec2::new((area.width() - 468.0).max(250.0), 148.0),
-    );
+    let [space_bay, scope_bay, tone_bay, duck_bay] = quad_bays(area);
 
     controls::instrument::bay(ui, space_bay, "Space, Damping & Shimmer", accent, false);
-    if let Module::AetherformReverb(reverb) = &mut bus.module {
-        choice(
-            ui,
-            Rect::from_min_size(
-                space_bay.min + Vec2::new(12.0, 26.0),
-                Vec2::new(104.0, 22.0),
-            ),
-            &format!("{PREFIX} space"),
-            &mut reverb.space_model,
-            &SpaceModel::ALL.map(|m| (m, m.label())),
-            "Acoustic space model.",
-        );
-        choice(
-            ui,
-            Rect::from_min_size(
-                space_bay.min + Vec2::new(124.0, 26.0),
-                Vec2::new(98.0, 22.0),
-            ),
-            &format!("{PREFIX} reverb character"),
-            &mut reverb.character,
-            &[
-                (ReverbCharacter::Natural, "Natural"),
-                (ReverbCharacter::Vintage, "Vintage"),
-                (ReverbCharacter::Bloom, "Bloom"),
-            ],
-            "Tail character.",
-        );
-        bus_switch(
-            ui,
-            space_bay.min + Vec2::new(234.0, 26.0),
-            &format!("{PREFIX} early reflections"),
-            "Early",
-            &mut reverb.early_reflections_enabled,
-            "Initial room reflections.",
-            false,
-        );
-        bus_switch(
-            ui,
-            space_bay.min + Vec2::new(312.0, 26.0),
-            &format!("{PREFIX} shimmer"),
-            "Shimmer",
-            &mut reverb.shimmer_enabled,
-            "Pitch-shifted tail feedback.",
-            false,
-        );
-        let intervals: Vec<(u8, String)> = SHIMMER_INTERVALS
-            .iter()
-            .map(|s| (*s, format!("+{s}")))
-            .collect();
-        let labels: Vec<(u8, &str)> = intervals.iter().map(|(v, l)| (*v, l.as_str())).collect();
-        ui.add_enabled_ui(reverb.shimmer_enabled, |ui| {
-            choice(
-                ui,
-                Rect::from_min_size(
-                    space_bay.min + Vec2::new(404.0, 26.0),
-                    Vec2::new(70.0, 22.0),
-                ),
-                &format!("{PREFIX} shimmer interval"),
-                &mut reverb.shimmer_interval_semitones,
-                &labels,
-                "Shimmer pitch interval in semitones.",
-            );
-        });
-    }
+    reverb_switches(ui, space_bay, bus);
     let space_grid = Rect::from_min_max(space_bay.min + Vec2::new(0.0, 32.0), space_bay.max);
-    draw_dial_grid(
+    draw_dial_grid_with(
         ui,
         space_grid,
-        10,
+        9,
+        49.0,
+        true,
         bus,
         &[
             Slot::Reverb(ReverbParam::PreDelay),
@@ -502,15 +435,16 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
             Slot::Reverb(ReverbParam::Diffusion),
             Slot::Reverb(ReverbParam::Density),
             Slot::Reverb(ReverbParam::ShimmerAmount),
-            Slot::Return,
         ],
     );
 
     controls::instrument::bay(ui, tone_bay, "Tone, Modulation & Output", accent, false);
-    draw_dial_grid(
+    draw_dial_grid_with(
         ui,
         tone_bay,
-        7,
+        8,
+        55.0,
+        true,
         bus,
         &[
             Slot::Reverb(ReverbParam::LowCut),
@@ -520,14 +454,17 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
             Slot::Reverb(ReverbParam::Drive),
             Slot::Reverb(ReverbParam::Width),
             Slot::Reverb(ReverbParam::Output),
+            Slot::Return,
         ],
     );
 
     controls::instrument::bay(ui, duck_bay, "Post-Limiter Ducker", accent, false);
-    draw_dial_grid(
+    draw_dial_grid_with(
         ui,
         duck_bay,
         4,
+        55.0,
+        true,
         bus,
         &[
             Slot::Reverb(ReverbParam::DuckKey),
@@ -536,8 +473,100 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
             Slot::Reverb(ReverbParam::DuckRelease),
         ],
     );
+
+    if let Module::AetherformReverb(reverb) = &bus.module {
+        let tag = reverb_tag(reverb);
+        let profile = Session::fx_reverb_profile(reverb);
+        controls::instrument::reverb_scope_frame(
+            ui,
+            scope_bay,
+            "Decay & Space",
+            &tag,
+            &profile,
+            accent,
+        );
+    }
 }
 
+/// The scope's tag: the space, the character, and the shimmer interval.
+fn reverb_tag(reverb: &Aetherform) -> String {
+    let character = match reverb.character {
+        ReverbCharacter::Natural => "NATURAL",
+        ReverbCharacter::Vintage => "VINTAGE",
+        ReverbCharacter::Bloom => "BLOOM",
+    };
+    let mut tag = format!(
+        "{} · {character}",
+        reverb.space_model.label().to_uppercase()
+    );
+    if reverb.shimmer_enabled {
+        tag.push_str(&format!(" +{}", reverb.shimmer_interval_semitones));
+    }
+    tag
+}
+
+/// The selectors and switches along the top of the space bay.
+fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
+    let Module::AetherformReverb(reverb) = &mut bus.module else {
+        return;
+    };
+    let at = |x: f32, w: f32| {
+        Rect::from_min_size(space_bay.min + Vec2::new(x, 26.0), Vec2::new(w, 22.0))
+    };
+    choice(
+        ui,
+        at(10.0, 88.0),
+        &format!("{PREFIX} space"),
+        &mut reverb.space_model,
+        &SpaceModel::ALL.map(|m| (m, m.label())),
+        "Acoustic space model.",
+    );
+    choice(
+        ui,
+        at(104.0, 82.0),
+        &format!("{PREFIX} reverb character"),
+        &mut reverb.character,
+        &[
+            (ReverbCharacter::Natural, "Natural"),
+            (ReverbCharacter::Vintage, "Vintage"),
+            (ReverbCharacter::Bloom, "Bloom"),
+        ],
+        "Tail character.",
+    );
+    bus_switch(
+        ui,
+        space_bay.min + Vec2::new(194.0, 26.0),
+        &format!("{PREFIX} early reflections"),
+        "Early",
+        &mut reverb.early_reflections_enabled,
+        "Initial room reflections.",
+        false,
+    );
+    bus_switch(
+        ui,
+        space_bay.min + Vec2::new(270.0, 26.0),
+        &format!("{PREFIX} shimmer"),
+        "Shimmer",
+        &mut reverb.shimmer_enabled,
+        "Pitch-shifted tail feedback.",
+        false,
+    );
+    let intervals: Vec<(u8, String)> = SHIMMER_INTERVALS
+        .iter()
+        .map(|s| (*s, format!("+{s}")))
+        .collect();
+    let labels: Vec<(u8, &str)> = intervals.iter().map(|(v, l)| (*v, l.as_str())).collect();
+    ui.add_enabled_ui(reverb.shimmer_enabled, |ui| {
+        choice(
+            ui,
+            at(360.0, 64.0),
+            &format!("{PREFIX} shimmer interval"),
+            &mut reverb.shimmer_interval_semitones,
+            &labels,
+            "Shimmer pitch interval in semitones.",
+        );
+    });
+}
 fn draw_module_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64) {
     let ui = &mut ui.new_child(egui::UiBuilder::new().id_salt("fx-bays").max_rect(area));
     let accent = bay_accent(&bus.module);

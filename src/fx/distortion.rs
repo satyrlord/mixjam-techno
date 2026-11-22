@@ -15,7 +15,8 @@ use std::f64::consts::PI;
 const FADE: usize = 441;
 /// Level match detector smoothing time, silence freeze gate, and slew limit.
 const LEVEL_TIME: f64 = 0.1;
-const MATCH_DB: f64 = 18.0;
+/// The level match reaches 18 dB: `10^(18 / 20)`.
+const MATCH_LIMIT: f64 = 7.943_282_347_242_815;
 const GATE_RMS_SQ: f64 = 1.584_893_192_461_114e-6; // -58 dBFS RMS
 const MAX_GAIN_SLEW_PER_SAMPLE: f64 = 0.000_063; // ~24 dB/s @ 44.1 kHz
 const PRE_AA_QS: [f64; 4] = [0.509_795_58, 0.601_344_89, 0.899_976_22, 2.562_915_45];
@@ -289,24 +290,13 @@ impl Core {
         self.process_with_quality(left, right, RenderQuality::Offline)
     }
 
-    pub(super) fn process_with_quality(
-        &mut self,
-        left: f64,
-        right: f64,
-        quality: RenderQuality,
-    ) -> (f64, f64) {
-        let (gain, asym, tape) = (self.gain.next(), self.asym.next(), self.tape.next());
-        let active_input = left.abs().max(right.abs()) > 1e-6;
+    fn crush_step(&mut self, active_input: bool, asym: f64, crushing_any: bool) -> (bool, f64) {
         let jitter = if asym > 0.0 && active_input {
             0.03 * asym * self.next_rand()
         } else {
             0.0
         };
-        let shape = self.shape;
-        let from = (self.fade > 1).then_some(self.from);
-        let crushing = shape == DistortionShape::Bitcrush;
-        let was_crushing = from == Some(DistortionShape::Bitcrush);
-        let dither = if (crushing || was_crushing) && active_input {
+        let dither = if crushing_any && active_input {
             0.5 * (self.next_rand() + self.next_rand()) / self.levels
         } else {
             0.0
@@ -316,19 +306,73 @@ impl Core {
         if hold {
             self.phase -= self.phase.floor();
         }
-        let weight = if self.fade > 0 {
-            self.fade -= 1;
-            let progress = 1.0 - self.fade as f64 / FADE as f64;
-            0.5 - 0.5 * (PI * progress).cos()
-        } else {
-            1.0
-        };
-        let mut clean = [0.0; 2];
-        let mut wet = [0.0; 2];
-        let crush_filter = self.crush_rate_hz < 20_000.0;
+        (hold, dither)
+    }
 
-        for (index, input) in [left, right].into_iter().enumerate() {
-            let levels = self.levels;
+    fn next_fade_weight(&mut self) -> f64 {
+        if self.fade == 0 {
+            return 1.0;
+        }
+        self.fade -= 1;
+        let progress = 1.0 - self.fade as f64 / FADE as f64;
+        0.5 - 0.5 * (PI * progress).cos()
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn shape_crushed(
+        &mut self,
+        index: usize,
+        driven: f64,
+        from: Option<DistortionShape>,
+        weight: f64,
+        hold: bool,
+        dither: f64,
+        quality: RenderQuality,
+    ) -> (f64, usize) {
+        let crush_filter = self.crush_rate_hz < 20_000.0;
+        let pre = if crush_filter {
+            cascade(&mut self.crush_pre, index, driven)
+        } else {
+            driven
+        };
+        let side = &mut self.sides[index];
+        if hold {
+            let noise = if pre.abs() > 1e-6 { dither } else { 0.0 };
+            side.held = quantize(pre, self.levels, noise);
+        }
+        let rec = if crush_filter && self.high_cut_hz < 19_500.0 {
+            cascade(&mut self.crush_post, index, side.held)
+        } else {
+            side.held
+        };
+        let Some(old) = from else {
+            return (rec, 0);
+        };
+        let shape = self.shape;
+        let (analog, latency) = self.sides[index].analog(driven, shape, Some(old), weight, quality);
+        let analog_weight = if shape == DistortionShape::Bitcrush {
+            1.0 - weight
+        } else {
+            weight
+        };
+        (rec + (analog - rec) * analog_weight, latency)
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn process_side(
+        &mut self,
+        index: usize,
+        input: f64,
+        gain: f64,
+        asym: f64,
+        tape: f64,
+        from: Option<DistortionShape>,
+        weight: f64,
+        hold: bool,
+        dither: f64,
+        quality: RenderQuality,
+    ) -> (f64, f64) {
+        let x = {
             let side = &mut self.sides[index];
             let x0 = side.low_cut[0].high(input);
             let x = side.low_cut[1].high(x0);
@@ -339,54 +383,38 @@ impl Core {
                 self.env_release
             };
             side.bias_env += (abs_x - side.bias_env) * env_k;
-            let driven = biased_input(x, gain, asym, side.bias_env);
-
-            let (y_shaped, used_lat) = if crushing || was_crushing {
-                let pre = if crush_filter {
-                    cascade(&mut self.crush_pre, index, driven)
-                } else {
-                    driven
-                };
-                if hold {
-                    let noise = if pre.abs() > 1e-6 { dither } else { 0.0 };
-                    side.held = quantize(pre, levels, noise);
-                }
-                let rec = if crush_filter && self.high_cut_hz < 19_500.0 {
-                    cascade(&mut self.crush_post, index, side.held)
-                } else {
-                    side.held
-                };
-                if from.is_none() {
-                    (rec, 0)
-                } else {
-                    let (analog, latency) = side.analog(driven, shape, from, weight, quality);
-                    let analog_weight = if crushing { 1.0 - weight } else { weight };
-                    (rec + (analog - rec) * analog_weight, latency)
-                }
-            } else {
-                side.analog(driven, shape, from, weight, quality)
-            };
-
-            let mut y = side.dc.process(y_shaped, self.dc_pole);
-            if tape > 0.0 {
-                let soft = side.soften.low(y);
-                y += tape * (soft - y);
-            }
-            // Apply high_cut BEFORE wet power matching so darker EQ stays loudness-balanced.
-            if self.high_cut_hz < 19_999.0 {
-                let y0 = side.high_cut[0].low(y);
-                y = side.high_cut[1].low(y0);
-            }
-            if quality == RenderQuality::Offline {
-                y = self.align_offline(index, y, used_lat);
-                self.clean_delay[index].push(x as f32);
-                clean[index] = f64::from(self.clean_delay[index].at(Self::OFFLINE_LATENCY + 1));
-            } else {
-                clean[index] = x;
-            }
-            wet[index] = y;
+            x
+        };
+        let driven = biased_input(x, gain, asym, self.sides[index].bias_env);
+        let shape = self.shape;
+        let crushing =
+            shape == DistortionShape::Bitcrush || from == Some(DistortionShape::Bitcrush);
+        let (y_shaped, used_lat) = if crushing {
+            self.shape_crushed(index, driven, from, weight, hold, dither, quality)
+        } else {
+            self.sides[index].analog(driven, shape, from, weight, quality)
+        };
+        let mut y = self.sides[index].dc.process(y_shaped, self.dc_pole);
+        if tape > 0.0 {
+            let soft = self.sides[index].soften.low(y);
+            y += tape * (soft - y);
         }
+        // Apply high_cut BEFORE wet power matching so darker EQ stays loudness-balanced.
+        if self.high_cut_hz < 19_999.0 {
+            let y0 = self.sides[index].high_cut[0].low(y);
+            y = self.sides[index].high_cut[1].low(y0);
+        }
+        if quality == RenderQuality::Offline {
+            y = self.align_offline(index, y, used_lat);
+            self.clean_delay[index].push(x as f32);
+            let clean = f64::from(self.clean_delay[index].at(Self::OFFLINE_LATENCY + 1));
+            (clean, y)
+        } else {
+            (x, y)
+        }
+    }
 
+    fn update_level_match(&mut self, clean: [f64; 2], wet: [f64; 2]) -> f64 {
         let power = |pair: [f64; 2]| 0.5 * (pair[0] * pair[0] + pair[1] * pair[1]);
         let clean_sq = power(clean);
         let [clean_power, wet_power] = &mut self.detectors;
@@ -399,15 +427,36 @@ impl Core {
         } else if heard <= GATE_RMS_SQ {
             self.matched_gain
         } else {
-            let limit = db_to_gain(MATCH_DB);
             ((heard + POWER_FLOOR) / (made + POWER_FLOOR))
                 .sqrt()
-                .clamp(1.0 / limit, limit)
+                .clamp(1.0 / MATCH_LIMIT, MATCH_LIMIT)
         };
         let delta = target_gain - self.matched_gain;
         self.matched_gain += delta.clamp(-MAX_GAIN_SLEW_PER_SAMPLE, MAX_GAIN_SLEW_PER_SAMPLE);
+        self.matched_gain
+    }
 
-        let matched = [wet[0] * self.matched_gain, wet[1] * self.matched_gain];
+    pub(super) fn process_with_quality(
+        &mut self,
+        left: f64,
+        right: f64,
+        quality: RenderQuality,
+    ) -> (f64, f64) {
+        let (gain, asym, tape) = (self.gain.next(), self.asym.next(), self.tape.next());
+        let active_input = left.abs().max(right.abs()) > 1e-6;
+        let from = (self.fade > 1).then_some(self.from);
+        let crushing =
+            self.shape == DistortionShape::Bitcrush || from == Some(DistortionShape::Bitcrush);
+        let (hold, dither) = self.crush_step(active_input, asym, crushing);
+        let weight = self.next_fade_weight();
+        let (c0, w0) = self.process_side(
+            0, left, gain, asym, tape, from, weight, hold, dither, quality,
+        );
+        let (c1, w1) = self.process_side(
+            1, right, gain, asym, tape, from, weight, hold, dither, quality,
+        );
+        let matched_gain = self.update_level_match([c0, c1], [w0, w1]);
+        let matched = [w0 * matched_gain, w1 * matched_gain];
         self.activity = matched[0].abs().max(matched[1].abs());
         let (l, r) = widen(matched[0], matched[1], self.width.next());
         let trim = self.output.next();

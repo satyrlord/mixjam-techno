@@ -61,7 +61,7 @@ pub mod fx {
     pub use crate::fx::{
         Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division,
         Echoform, Emberform, FxBus, FxBuses, Module, Range, ReverbCharacter, ReverbParam,
-        SHIMMER_INTERVALS, SpaceModel, TimeMode, return_limiter_ceiling_dbfs,
+        ReverbProfile, SHIMMER_INTERVALS, SpaceModel, TimeMode, return_limiter_ceiling_dbfs,
     };
 }
 /// Step synth pattern edits and the board's undo, apart from the screen.

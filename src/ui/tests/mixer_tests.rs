@@ -905,6 +905,69 @@ fn fx_delay_deep_edit_controls_and_scope_cover_all_bays() {
 }
 
 #[test]
+fn fx_reverb_deep_edit_controls_and_scope_cover_all_bays() {
+    use mixjam_techno::application::fx::{Aetherform, Module, ReverbCharacter, SpaceModel};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    buses.buses[0].module = Module::AetherformReverb(Aetherform::default());
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+
+    let output = click_named(&ctx, &mut app, "Deep edit FX 1");
+    assert!(screen(&output).shows("Decay & Space"));
+    assert!(screen(&output).shows("CHAMBER · VINTAGE"));
+    assert!(
+        accessible_node(&output, "Deep edit shimmer amount")
+            .1
+            .is_disabled()
+    );
+    let output = click_named(&ctx, &mut app, "Deep edit shimmer");
+    assert!(screen(&output).shows("CHAMBER · VINTAGE +12"));
+    assert!(
+        !accessible_node(&output, "Deep edit shimmer amount")
+            .1
+            .is_disabled()
+    );
+    for (name, value) in [
+        ("Deep edit bass multiplier", 1.4),
+        ("Deep edit treble multiplier", 0.6),
+        ("Deep edit pre-delay", 40.0),
+    ] {
+        let (target, _) = accessible_node(&output, name);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::SetValue,
+                    target,
+                    data: Some(egui::accesskit::ActionData::NumericValue(value)),
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+    }
+    choose(&ctx, &mut app, "Deep edit space", "Hall");
+    choose(&ctx, &mut app, "Deep edit reverb character", "Bloom");
+    let Module::AetherformReverb(reverb) = app.session.project().fx.buses[0].module else {
+        panic!("FX 1 holds Aetherform Reverb");
+    };
+    assert!(reverb.shimmer_enabled);
+    assert_eq!(reverb.bass_mult, 1.4);
+    assert_eq!(reverb.treble_mult, 0.6);
+    assert_eq!(reverb.pre_delay_ms, 40.0);
+    assert_eq!(reverb.space_model, SpaceModel::Hall);
+    assert_eq!(reverb.character, ReverbCharacter::Bloom);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let readout = accessible_node(&output, "Decay & Space").1.value().unwrap();
+    assert!(readout.starts_with("Decay & Space."), "{readout}");
+    assert!(readout.contains("Pre-delay 40 ms"), "{readout}");
+    assert!(readout.contains("Bass"), "{readout}");
+    assert!(readout.contains("Middle"), "{readout}");
+    assert!(readout.contains("Treble"), "{readout}");
+}
+#[test]
 fn fx_meters_expose_their_values_to_assistive_technology() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();

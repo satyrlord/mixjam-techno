@@ -347,18 +347,8 @@ fn sends_feed_the_fx_buses_whose_tails_ring_past_the_song_in_export_and_playback
 
 #[test]
 fn four_live_fx_buses_run_without_heap_allocations_across_256_frame_blocks() {
-    let mut fx = FxBuses::default();
-    fx.buses[0].module = crate::fx::Module::EmberformDrive(crate::fx::Emberform {
-        shape: crate::fx::DistortionShape::Foldback,
-        drive_db: 18.0,
-        ..crate::fx::Emberform::default()
-    });
-    fx.buses[1].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
-    fx.buses[2].module = crate::fx::Module::AetherformReverb(crate::fx::Aetherform::default());
-    fx.buses[3].module = crate::fx::Module::EmberformDrive(crate::fx::Emberform::default());
-
     let control = MasterControl::new(&crate::master::MasterChain::default());
-    control.set_returns(&fx);
+    control.set_returns(&four_bus_load());
     let mut processor = crate::fx::ReturnsProcessor::live(control, 128.0);
     let mut block = vec![0.1_f32; 256 * 2];
     let mut sends = vec![0.0_f32; 256 * 2 * crate::fx::BUSES];
@@ -370,7 +360,6 @@ fn four_live_fx_buses_run_without_heap_allocations_across_256_frame_blocks() {
             sends[at + 1] = s;
         }
     }
-    processor.process(&mut block, Some(&sends));
     let use_count = crate::audio::flight::tests::heap_use(|| {
         for _ in 0..10 {
             block.fill(0.1);
@@ -379,4 +368,65 @@ fn four_live_fx_buses_run_without_heap_allocations_across_256_frame_blocks() {
     });
     assert_eq!(use_count.allocations, 0);
     assert_eq!(use_count.frees, 0);
+}
+
+/// Four active buses: a foldback drive, the default delay, and two
+/// reverbs with the shimmer on.
+fn four_bus_load() -> FxBuses {
+    let mut fx = FxBuses::default();
+    fx.buses[0].module = crate::fx::Module::EmberformDrive(crate::fx::Emberform {
+        shape: crate::fx::DistortionShape::Foldback,
+        drive_db: 18.0,
+        ..crate::fx::Emberform::default()
+    });
+    fx.buses[1].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
+    let shimmering = crate::fx::Module::AetherformReverb(crate::fx::Aetherform {
+        shimmer_enabled: true,
+        bass_mult: 1.25,
+        treble_mult: 0.7,
+        ..crate::fx::Aetherform::default()
+    });
+    fx.buses[2].module = shimmering;
+    fx.buses[3].module = shimmering;
+    fx
+}
+
+/// Time the return stage alone in a release build:
+/// `cargo test --release --lib -- --ignored --nocapture live_four_bus`.
+#[test]
+#[ignore = "timing needs a release build and a quiet machine"]
+fn live_four_bus_p99_block_budget_benchmark() {
+    const FRAMES: usize = 256;
+    const BLOCKS: usize = 1000;
+    let control = MasterControl::new(&crate::master::MasterChain::default());
+    control.set_returns(&four_bus_load());
+    let mut processor = crate::fx::ReturnsProcessor::live(control, 128.0);
+    let mut block = [0.1_f32; FRAMES * 2];
+    let sends: Vec<f32> = (0..FRAMES * crate::fx::BUSES)
+        .flat_map(|slot| {
+            let x = 0.25 * ((slot / crate::fx::BUSES) as f32 * 0.1).sin();
+            [x, x]
+        })
+        .collect();
+    let mut wall_ms = Vec::with_capacity(BLOCKS);
+    for n in 0..64 + BLOCKS {
+        block.fill(0.1);
+        let start = std::time::Instant::now();
+        processor.process(&mut block, Some(&sends));
+        if n >= 64 {
+            wall_ms.push(start.elapsed().as_secs_f64() * 1000.0);
+        }
+    }
+    wall_ms.sort_by(f64::total_cmp);
+    let rate = Mix::SAMPLE_RATE;
+    let cadence = FRAMES as f64 * 1000.0 / f64::from(rate);
+    let mean = wall_ms.iter().sum::<f64>() / BLOCKS as f64;
+    let p99 = wall_ms[BLOCKS * 99 / 100 - 1];
+    let max = wall_ms[BLOCKS - 1];
+    let late = wall_ms.iter().filter(|&&ms| ms > cadence).count();
+    eprintln!(
+        "FX returns only, {rate} Hz, {FRAMES} frames, {BLOCKS} blocks. \
+         Wall time: mean {mean:.3} ms, p99 {p99:.3} ms, max {max:.3} ms. \
+         {late} blocks over the {cadence:.3} ms block duration."
+    );
 }

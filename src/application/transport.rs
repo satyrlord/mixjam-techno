@@ -48,6 +48,10 @@ impl Session {
     ) -> usize {
         crate::fx::sample_delay_taps(settings, bpm, taps)
     }
+    /// Sample the decay curves and early reflections of an Aetherform Reverb.
+    pub fn fx_reverb_profile(settings: &crate::fx::Aetherform) -> crate::fx::ReverbProfile {
+        crate::fx::sample_reverb_profile(settings)
+    }
     pub fn is_previewing(&self) -> bool {
         self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
     }

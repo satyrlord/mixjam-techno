@@ -161,10 +161,13 @@ is:
 - Emberform Drive: ember.
 
 An inactive or empty unit dims its enclosure. FX Deep Edit groups the
-effect's controls and shows the Emberform Drive transfer curve or the
-Echoform Delay stereo repeat preview. Its bus buttons select the controls and
-meters for that bus. Link L/R pairs Echoform's left and right delay times in
-both Free and Sync modes.
+effect's controls and shows the Emberform Drive transfer curve, the
+Echoform Delay stereo repeat preview, or the Aetherform Reverb Decay & Space
+scope. That scope shows the pre-delay and the bass, middle, and treble decay
+curves. Its footer gives the plotted time range and the decay times. A separate
+plot shows the left-channel early reflections after the pre-delay. The bus
+buttons select the controls and meters for that bus. Link L/R pairs Echoform's
+left and right delay times in both Free and Sync modes.
 
 ## Shared shell and controls
 
