@@ -43,6 +43,19 @@ impl Range {
 }
 /// A ducker's key: 0, the bus's own input, or a track from 1 to 64.
 pub(super) const KEY_RANGE: Range = range(0.0, crate::engine::TRACK_COUNT as f32, 0.0, 1.0);
+/// Common ducker and output ranges shared across FX settings.
+pub(super) const fn duck_threshold_range(default: f32) -> Range {
+    range(-48.0, 0.0, default, 0.5)
+}
+pub(super) const fn duck_amount_range(default: f32) -> Range {
+    range(0.0, 100.0, default, 1.0)
+}
+pub(super) const fn duck_release_range(default: f32) -> Range {
+    log_range(50.0, 2500.0, default, 1.0)
+}
+pub(super) const fn output_range(default: f32) -> Range {
+    range(-24.0, 12.0, default, 0.1)
+}
 /// Whether a ducker's key is the bus's own input. Such a key is not saved.
 pub(super) fn is_own(key: &u8) -> bool {
     *key == 0

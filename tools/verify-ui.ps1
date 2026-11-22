@@ -9,7 +9,7 @@ param(
     # Captures run in parallel. Each case has its own process, data folder, and file.
     [ValidateRange(1, 32)]
     [int]$Jobs = [Math]::Max(1, [Math]::Min(8, [Environment]::ProcessorCount / 2)),
-    [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips', 'command-list')]
+    [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'fx-deep-edit', 'fx-deep-edit-delay', 'fx-deep-edit-reverb', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips', 'command-list')]
     [string[]]$Views = @()
 )
 
@@ -225,14 +225,16 @@ mixer_project['clips'][0]['sample_id'] = samples[4]['id']
 echoform = dict(type='echoform-delay', mode='sync', divisionL='1/4', divisionR='1/8.',
                 timeMsL=420.0, timeMsR=610.0, feedback=68.0, pingPong=True, width=142.0,
                 lowCut=160.0, highCut=7800.0, modRate=0.38, modDepth=5.4, character='tape',
-                drive=0.0, duckAmount=34.0, duckRelease=620.0, outputDb=-1.5, bypass=False)
+                drive=0.0, duckAmount=34.0, duckRelease=620.0, duckThresholdDb=-24.0,
+                linkTimes=False, smearPercent=0.0, filterResonance=0.0, outputDb=-1.5, bypass=False)
 aetherform = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.0,
                   decaySeconds=2.8, sizePercent=68.0, character='vintage', drivePercent=0.0,
                   widthPercent=148.0, lateBalancePercent=72.0, lowCutHz=180.0, highCutHz=8600.0,
                   diffusionPercent=78.0, densityPercent=84.0, earlyReflectionsEnabled=True,
                   modRateHz=0.32, modDepthPercent=18.0, shimmerEnabled=True,
                   shimmerAmountPercent=24.0, shimmerIntervalSemitones=12,
-                  duckAmountPercent=28.0, duckReleaseMs=720.0, outputDb=-1.5, bypass=False)
+                  duckAmountPercent=28.0, duckReleaseMs=720.0, duckThresholdDb=-24.0,
+                  bassMult=1.0, trebleMult=1.0, outputDb=-1.5, bypass=False)
 mixer_project['fx'] = [dict(module=module, powered=True, returnLevel=level, limiter=True)
                        for module, level in ((aetherform, 0.88), (echoform, 0.82),
                                              (dict(type='empty'), 1.0), (dict(type='empty'), 1.0))]
@@ -240,6 +242,19 @@ mixer_project['fx'][1]['powered'] = False
 mixer_project['tracks'][0]['sends'] = [0.4, 0.0, 0.25, 0.0]
 mixer_project['tracks'][2]['sends'] = [0.0, 0.7, 0.0, 1.0]
 mixer_states = write_project('mixer-states', mixer_project)
+emberform = dict(type='emberform-drive', shape='tube', driveDb=18.0, asymmetryPercent=25.0,
+                 lowCutHz=120.0, highCutHz=9500.0, bits=16, crushRateHz=44100.0,
+                 widthPercent=115.0, duckAmountPercent=30.0, duckReleaseMs=320.0,
+                 duckThresholdDb=-24.0, levelMatch=True, outputDb=-1.0, bypass=False)
+fx_rack_project = deepcopy(mixer_project)
+fx_rack_project['title'] = 'FX returns'
+fx_rack_project['fx'] = [
+    dict(module=emberform, powered=True, returnLevel=0.86, limiter=True),
+    dict(module=aetherform, powered=True, returnLevel=0.88, limiter=True),
+    dict(module=echoform, powered=False, returnLevel=0.82, limiter=True),
+    dict(module=dict(type='empty'), powered=True, returnLevel=1.0, limiter=True),
+]
+fx_rack = write_project('fx-rack', fx_rack_project)
 # Faded clips, a pitched clip, and automation lanes on the first tracks.
 shaped_project = deepcopy(project)
 shaped_project['title'] = 'Fades and automation'
@@ -327,7 +342,9 @@ def run_case(theme, size, view):
                 'inspector-song': sections, 'inspector-track': mixer_states,
                 'inspector-clip': shaped, 'inspector-clips': shaped,
                 'follow': follow,
-                'fx-board': mixer_states, 'clip-fades': shaped, 'automation': shaped,
+                'fx-board': fx_rack, 'fx-deep-edit': fx_rack,
+                'fx-deep-edit-delay': fx_rack, 'fx-deep-edit-reverb': fx_rack,
+                'clip-fades': shaped, 'automation': shaped,
                 'automation-menu': shaped,
                 'missing': missing, 'missing-details': missing,
                 'missing-effects': missing, 'missing-edit': missing,

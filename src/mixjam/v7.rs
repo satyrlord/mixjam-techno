@@ -299,21 +299,8 @@ fn master_from_bus(bus: &MasterBus) -> MasterChain {
 fn fx_from_buses(buses: &[FxBus]) -> Result<crate::fx::FxBuses, String> {
     let mut fx = crate::fx::FxBuses::default();
     for (slot, bus) in fx.buses.iter_mut().zip(buses) {
-        let mut module = bus.module.clone();
-        if let Some(fields) = module.as_object_mut() {
-            fields.remove("id");
-        }
-        let known = matches!(
-            module.get("type").and_then(Value::as_str),
-            Some("empty" | "echoform-delay" | "aetherform-reverb")
-        );
         *slot = crate::fx::FxBus {
-            module: if known {
-                serde_json::from_value(module)
-                    .map_err(|error| format!("A MixJam return module is invalid: {error}"))?
-            } else {
-                crate::fx::Module::Empty
-            },
+            module: import_return_module(bus.module.clone())?,
             powered: bus.powered,
             return_level: bus.return_level as f32,
             limiter: bus.limiter_enabled,
@@ -321,6 +308,22 @@ fn fx_from_buses(buses: &[FxBus]) -> Result<crate::fx::FxBuses, String> {
     }
     fx.validate()?;
     Ok(fx)
+}
+
+fn import_return_module(mut module: Value) -> Result<crate::fx::Module, String> {
+    let Some(fields) = module.as_object_mut() else {
+        return Ok(crate::fx::Module::Empty);
+    };
+    if !matches!(
+        fields.get("type").and_then(Value::as_str),
+        Some("empty" | "echoform-delay" | "aetherform-reverb")
+    ) {
+        return Ok(crate::fx::Module::Empty);
+    }
+    fields.remove("id");
+    crate::fx::migration::migrate_earlier_module(fields, 7)?;
+    serde_json::from_value(module)
+        .map_err(|error| format!("A MixJam return module is invalid: {error}"))
 }
 
 pub(super) fn convert(

@@ -107,13 +107,24 @@ impl Mix {
     ) -> Result<(), String> {
         let mut returns =
             (self.sends && fx.is_active()).then(|| ReturnsProcessor::new(fx, self.bpm));
+        let fx_latency = returns
+            .as_ref()
+            .map_or(0, ReturnsProcessor::latency_samples);
+        let key_stride = if fx_latency > 0 && self.side && master.key_tracks().next().is_some() {
+            2 * self.key_tracks.len()
+        } else {
+            0
+        };
         let mut master = MasterProcessor::new(master);
-        // The pedals run on past the end by their delay, which is cut
-        // from the start.
-        let latency = master.latency();
+        // Both FX oversampling/limiting and master pedals run past the end by their delay,
+        // which is trimmed from the start so the export aligns with song frame 0.
+        let latency = fx_latency + master.latency();
         let mut schedule = Schedule::new(Self::EXPORT_BLOCK as usize, latency);
         let mut block = vec![0.0; Self::EXPORT_BLOCK as usize * 2];
         let mut sends = vec![0.0; Self::EXPORT_BLOCK as usize * 2 * BUSES];
+        let mut key_ring = vec![0.0; fx_latency * key_stride];
+        let mut key_write = 0;
+        let mut delayed_keys = vec![0.0; Self::EXPORT_BLOCK as usize * key_stride];
         // Frames fed into the board so far.
         let mut position = 0;
         let mut state = RenderState::default();
@@ -121,7 +132,7 @@ impl Mix {
             returns.as_ref().is_some_and(ReturnsProcessor::ringing)
         }) {
             let samples = &mut block[..count * 2];
-            let keyed = match phase {
+            let raw_key_frames = match phase {
                 Phase::Song => {
                     match &mut returns {
                         Some(returns) => {
@@ -141,7 +152,7 @@ impl Mix {
                     }
                     count
                 }
-                Phase::Tail { .. } => {
+                Phase::Tail { .. } | Phase::Flush => {
                     samples.fill(0.0);
                     if let Some(returns) = &mut returns {
                         returns.process_at(
@@ -153,12 +164,29 @@ impl Mix {
                     }
                     0
                 }
-                Phase::Flush => {
-                    samples.fill(0.0);
-                    0
+            };
+            let keys = self.key_block(&state, raw_key_frames);
+            let keys = if key_stride == 0 {
+                keys
+            } else {
+                let delayed = &mut delayed_keys[..count * key_stride];
+                let mut source = keys.audio.chunks_exact(key_stride);
+                for out in delayed.chunks_exact_mut(key_stride) {
+                    let slot = &mut key_ring[key_write..key_write + key_stride];
+                    out.copy_from_slice(slot);
+                    if let Some(input) = source.next() {
+                        slot.copy_from_slice(input);
+                    } else {
+                        slot.fill(0.0);
+                    }
+                    key_write = (key_write + key_stride) % key_ring.len();
+                }
+                crate::ducker::Keys {
+                    tracks: &self.key_tracks,
+                    audio: delayed,
                 }
             };
-            master.process_keyed(samples, self.key_block(&state, keyed));
+            master.process_keyed(samples, keys);
             let skip = (latency as u64).saturating_sub(position).min(count as u64) as usize;
             write(&samples[skip * 2..])?;
             position += count as u64;
@@ -320,6 +348,9 @@ impl Mix {
     ) -> Result<(), String> {
         let mut returns =
             (self.sends && fx.is_active()).then(|| ReturnsProcessor::new(fx, self.bpm));
+        let fx_latency = returns
+            .as_ref()
+            .map_or(0, ReturnsProcessor::latency_samples);
         let block_frames = Self::EXPORT_BLOCK as usize;
         let mut dry = vec![0.0; block_frames * 2];
         let mut feed = vec![0.0; block_frames * 2 * BUSES];
@@ -328,56 +359,70 @@ impl Mix {
         let mut part = vec![0.0; block_frames * 2];
         // Each track keeps its own filter histories, as a playback would.
         let mut states: Vec<RenderState> = tracks.iter().map(|_| RenderState::default()).collect();
-        // No pedals delay the parts, so they end with the buses' tails.
-        let mut schedule = Schedule::new(block_frames, 0);
+        // Track stems carry zero delay; FX stems flush `fx_latency` and trim the same at start.
+        let mut schedule = Schedule::new(block_frames, fx_latency);
         let mut position = 0;
         while let Some((phase, count)) = schedule.next(self.frames.saturating_sub(position), || {
             returns.as_ref().is_some_and(ReturnsProcessor::ringing)
         }) {
             let dry = &mut dry[..count * 2];
             let wet = &mut wet[..count * 2 * BUSES];
-            if phase == Phase::Song {
-                let sends = &mut sends[..count * 2 * BUSES];
-                sends.fill(0.0);
-                for (index, (&track, state)) in tracks.iter().zip(&mut states).enumerate() {
-                    // The first track's state keeps the key audio that the
-                    // buses read.
-                    let side = index == 0;
-                    if returns.is_some() {
-                        let feed = &mut feed[..count * 2 * BUSES];
-                        self.mix_keyed(position, dry, Some(feed), state, Some(track), side);
-                        for (sum, value) in sends.iter_mut().zip(feed.iter()) {
-                            *sum += value;
+            match phase {
+                Phase::Song => {
+                    let sends = &mut sends[..count * 2 * BUSES];
+                    sends.fill(0.0);
+                    for (index, (&track, state)) in tracks.iter().zip(&mut states).enumerate() {
+                        // The first track's state keeps the key audio that the
+                        // buses read.
+                        let side = index == 0;
+                        if returns.is_some() {
+                            let feed = &mut feed[..count * 2 * BUSES];
+                            self.mix_keyed(position, dry, Some(feed), state, Some(track), side);
+                            for (sum, value) in sends.iter_mut().zip(feed.iter()) {
+                                *sum += value;
+                            }
+                        } else {
+                            self.mix_keyed(position, dry, None, state, Some(track), side);
                         }
-                    } else {
-                        self.mix_keyed(position, dry, None, state, Some(track), side);
+                        write(index, dry)?;
                     }
-                    write(index, dry)?;
+                    if let Some(returns) = &mut returns {
+                        returns.split(
+                            wet,
+                            Some(sends),
+                            self.key_block(&states[0], count),
+                            self.lanes(position),
+                        );
+                    }
                 }
-                if let Some(returns) = &mut returns {
-                    returns.split(
-                        wet,
-                        Some(sends),
-                        self.key_block(&states[0], count),
-                        self.lanes(position),
-                    );
+                Phase::Tail { .. } => {
+                    dry.fill(0.0);
+                    for index in 0..tracks.len() {
+                        write(index, dry)?;
+                    }
+                    if let Some(returns) = &mut returns {
+                        returns.split(wet, None, crate::ducker::Keys::NONE, self.lanes(position));
+                    }
                 }
-            } else {
-                dry.fill(0.0);
-                for index in 0..tracks.len() {
-                    write(index, dry)?;
-                }
-                if let Some(returns) = &mut returns {
-                    returns.split(wet, None, crate::ducker::Keys::NONE, self.lanes(position));
+                Phase::Flush => {
+                    if let Some(returns) = &mut returns {
+                        returns.split(wet, None, crate::ducker::Keys::NONE, self.lanes(position));
+                    }
                 }
             }
-            let part = &mut part[..count * 2];
-            for (offset, &bus) in buses.iter().enumerate() {
-                for (frame, out) in part.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-                    let at = frame * 2 * BUSES + bus * 2;
-                    *out = [wet[at], wet[at + 1]];
+            let skip_wet = (fx_latency as u64)
+                .saturating_sub(position)
+                .min(count as u64) as usize;
+            let write_frames = count - skip_wet;
+            if write_frames > 0 {
+                let part = &mut part[..write_frames * 2];
+                for (offset, &bus) in buses.iter().enumerate() {
+                    for (frame, out) in part.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                        let at = (skip_wet + frame) * 2 * BUSES + bus * 2;
+                        *out = [wet[at], wet[at + 1]];
+                    }
+                    write(tracks.len() + offset, part)?;
                 }
-                write(tracks.len() + offset, part)?;
             }
             position += count as u64;
         }

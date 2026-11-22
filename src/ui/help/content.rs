@@ -369,19 +369,20 @@ pub(super) const FX_RETURNS: &[Block] = &[
     Steps(&[
         "Choose Echoform Delay, Aetherform Reverb, or Emberform Drive for the bus.",
         "Load a preset.",
-        "Set its controls.",
+        "Set the main controls on the card. Select Edit to open all controls and meters in FX Deep Edit. Use FX 1 through FX 4 to change buses.",
     ]),
     Facts(&[
-        "Sync sets the delay in note lengths at the song tempo.",
-        "Input off lets the tail ring on. Clear tail stops it at once. An export lets the tails continue after the end of the song.",
+        "Sync sets the delay in note lengths at the song tempo. Link L/R lets the left control set both sides in Free and Sync modes.",
+        "Power off stops new input and lets the tail ring on. Clear tail fades that bus over 12 ms. Clear all FX tails fades all the buses.",
         "Each effect's ducker lowers its repeats or tail while its input plays. Set Key to a track number, such as the kick's, to follow that track instead. A preset keeps the Key.",
-        "The limiter of each bus keeps its return below -1 dBFS.",
+        "Solo monitors only the selected returns during playback. Export uses the full mix.",
+        "The limiter keeps each return below -1 dBFS during playback and below -1 dBTP in exports.",
         "In the Mixer, each return strip sets the return level and switches the Input and Limiter of its bus. Edit opens the bus here.",
     ]),
     Heading("Emberform Drive"),
     Facts(&[
-        "A parallel distortion: the dry sends stay clean, and the bus adds saturation beside them. It has no delay, so it stays in phase with the dry sound.",
-        "Type sets the curve. Drive pushes the input into it at a steady output level. Asym adds even harmonics.",
+        "Emberform Drive adds saturation beside the clean dry sound. Export compensates for the processing delay.",
+        "Type sets the curve. Drive pushes the input into it. Level match compensates for the change in level. Asym adds even harmonics.",
         "Low cut and High cut set the band that it distorts, so a bass can keep a clean sub.",
     ]),
 ];

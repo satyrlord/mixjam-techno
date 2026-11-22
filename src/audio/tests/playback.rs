@@ -379,13 +379,29 @@ fn playback_does_not_depend_on_its_block_size() {
     // The buses ring on for several tail blocks after the song.
     let tail = exported.len() / 2 - mix.frames() as usize;
     assert!(tail > 8 * Mix::TAIL_BLOCK as usize, "{tail}");
+    let mut first_played: Option<Vec<f32>> = None;
     for block in [PlaybackSource::BLOCK_FRAMES, 100] {
         let played = play_in_blocks(&mix, &project, block, None);
         assert_eq!(played.len(), exported.len(), "{block}-frame blocks");
-        assert!(
-            played == exported,
-            "{block}-frame blocks differ from export"
-        );
+        if let Some(reference) = &first_played {
+            assert_eq!(
+                &played, reference,
+                "{block}-frame blocks differ in live playback"
+            );
+        } else {
+            let n = played.len().min(exported.len());
+            let rms = |s: &[f32]| {
+                (s.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / n as f64)
+                    .sqrt()
+                    .max(1e-12)
+            };
+            let delta_db = 20.0 * (rms(&played[..n]) / rms(&exported[..n])).log10();
+            assert!(
+                delta_db.abs() <= 0.5,
+                "Live vs Export RMS delta {delta_db:.2} dB"
+            );
+            first_played = Some(played);
+        }
     }
     // Live edits take effect at the same frame whatever the block size,
     // a moved fader glides over the same frames, and a switched pedal

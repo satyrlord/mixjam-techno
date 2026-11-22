@@ -1,10 +1,12 @@
 //! The saved document: the structs that map one-to-one onto the JSON keys.
 
-use super::migration::{Saved, UniqueJson};
+use super::migration::Saved;
 use crate::{
     engine::Fades,
+    fx::migration::{migrate_earlier_module, module_in_bus},
     master::MasterChain,
     products::{LibraryBinding, Product},
+    unique_json::UniqueJson,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
@@ -153,8 +155,9 @@ pub(super) fn point_arrays_have_objects(value: &serde_json::Value) -> bool {
 }
 
 /// The FX buses of a saved song and their return lanes. Versions 13 to 22
-/// reject a bus's `returnAutomation`, even as an empty list, and versions
-/// 13 to 24 the Emberform Drive.
+/// reject a bus's `returnAutomation`, even as an empty list, versions
+/// 13 to 24 reject the Emberform Drive, and versions 13 to 26 reject version
+/// 27 FX parameters.
 pub(super) fn saved_buses(
     buses: &Saved<SongBuses>,
     version: u32,
@@ -193,13 +196,16 @@ pub(super) fn saved_buses(
                 "Version {version} songs cannot contain FX return automation."
             ));
         }
-        let fx = serde_json::from_str(raw.get()).map_err(invalid)?;
-        return Ok((fx, Default::default()));
     }
     let UniqueJson(mut json) = serde_json::from_str(raw.get()).map_err(invalid)?;
     let mut returns: [Vec<crate::automation::Point>; crate::fx::BUSES] = Default::default();
     if let Some(buses) = json.as_array_mut() {
         for (bus, record) in buses.iter_mut().enumerate() {
+            if version < 27
+                && let Some(module) = module_in_bus(record)
+            {
+                migrate_earlier_module(module, version)?;
+            }
             let lane = record
                 .as_object_mut()
                 .and_then(|record| record.remove("returnAutomation"));

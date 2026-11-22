@@ -13,6 +13,32 @@ impl Session {
     pub fn master_meters(&self) -> MeterReading {
         self.master.meters()
     }
+    /// Live meter and gain reduction readings for the four FX returns.
+    pub fn fx_meters(&self) -> [crate::master::FxBusMeterReading; crate::fx::BUSES] {
+        if self.playing_mix() {
+            self.master.fx_meters()
+        } else {
+            [Default::default(); crate::fx::BUSES]
+        }
+    }
+    /// Whether FX bus `bus` is currently soloed for live monitoring.
+    pub fn fx_solo(&self, bus: usize) -> bool {
+        self.master.fx_solo(bus)
+    }
+    /// Toggle transient monitoring solo on FX bus `bus` (never saved in project).
+    pub fn toggle_fx_solo(&mut self, bus: usize) {
+        self.master.set_fx_solo(bus, !self.master.fx_solo(bus));
+    }
+    /// Cut the ringing tail on every FX return bus cleanly.
+    pub fn clear_all_fx_tails(&self) {
+        for bus in 0..crate::fx::BUSES {
+            self.master.clear_tail(bus);
+        }
+    }
+    /// Sample the normalized Emberform Drive transfer curve over `[-1.0, 1.0]`.
+    pub fn fx_drive_curve(settings: &crate::fx::Emberform, points: &mut [f32]) {
+        crate::fx::sample_transfer_curve(settings, points);
+    }
     pub fn is_previewing(&self) -> bool {
         self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
     }

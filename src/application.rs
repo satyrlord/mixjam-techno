@@ -14,8 +14,8 @@ pub use crate::{
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
-        EQ_BAND_MAX, EQ_FREQUENCIES, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob, KnobRange, MasterChain,
-        MeterReading, OVER_DBTP, PedalKind, VU_REFERENCE_DBFS, presets,
+        EQ_BAND_MAX, EQ_FREQUENCIES, FxBusMeterReading, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob,
+        KnobRange, MasterChain, MeterReading, OVER_DBTP, PedalKind, VU_REFERENCE_DBFS, presets,
     },
     peaks::{PeakState, Peaks},
     products::Product,
@@ -319,6 +319,7 @@ impl Session {
         self.gesture = None;
         self.automation_gesture = None;
         self.return_gesture = None;
+        self.master.clear_fx_solos();
         self.sync_master(true);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;

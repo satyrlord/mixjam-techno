@@ -2,13 +2,15 @@
 //!
 //! Each side reads its delay line at its time plus modulation. The repeats
 //! pass the character's colouring and, in ping-pong, cross to the other
-//! side; scaled by the feedback, they join the new input, and the low-cut
+//! side; diffusion spreads the feedback before it joins the new input, and the low-cut
 //! and high-cut filters shape the sum before it enters the line. So each
 //! repeat is filtered once more than the one before. The output is the
-//! read taps only, widened, ducked, and trimmed.
-use super::parts::{Ducker, Lfo, Line, OnePole, Tone, bound, drive, widen};
+//! read taps only, widened, and trimmed.
+use super::parts::{AllPass, Lfo, Line, OnePole, Tone, bound, drive, widen};
 use super::{DelayCharacter, Echoform};
-use crate::master::dsp::{DcBlocker, RATE, Smoothed, db_to_gain, pole};
+use crate::master::dsp::{
+    Biquad, Coefficients, DcBlocker, RATE, Smoothed, cascade, db_to_gain, pole,
+};
 use std::f64::consts::PI;
 
 /// The longest time a line reaches: a dotted whole note at 120 BPM lasts
@@ -19,6 +21,7 @@ const FADE: usize = 1323;
 /// The tape character's slow and fast speed wobbles, in hertz.
 const WOW_HZ: f64 = 0.53;
 const FLUTTER_HZ: f64 = 6.1;
+const SMEAR_SWING: f64 = 0.00015 * RATE;
 
 /// The time of one side and the reads at it.
 struct Head {
@@ -69,6 +72,10 @@ pub(super) struct Core {
     heads: [Head; 2],
     /// The loop's low-cut and high-cut.
     tone: [Tone; 2],
+    resonant_tone: [Biquad; 2],
+    resonance: Smoothed,
+    diffusers: [[AllPass; 2]; 2],
+    smear: Smoothed,
     /// The extra high-frequency loss of the analog and tape characters.
     soften: [OnePole; 2],
     /// The loop's high cut, which the soften corner starts from.
@@ -80,7 +87,6 @@ pub(super) struct Core {
     lfo: Lfo,
     wow: Lfo,
     flutter: Lfo,
-    ducker: Ducker,
     rate: f64,
     feedback: Smoothed,
     cross: Smoothed,
@@ -88,7 +94,6 @@ pub(super) struct Core {
     output: Smoothed,
     drive: Smoothed,
     depth: Smoothed,
-    duck: Smoothed,
     analog: Smoothed,
     tape: Smoothed,
     digital: bool,
@@ -103,6 +108,12 @@ impl Core {
             lines: [Line::new(frames), Line::new(frames)],
             heads: [Head::new(), Head::new()],
             tone: [Tone::default(); 2],
+            resonant_tone: [Biquad::FLAT; 2],
+            resonance: smooth(0.0),
+            diffusers: [[0.0031, 0.0067], [0.0037, 0.0073]].map(|times| {
+                times.map(|time| AllPass::with_modulation(time, SMEAR_SWING.ceil() as usize))
+            }),
+            smear: smooth(0.0),
             soften: [OnePole::default(); 2],
             high_cut: 0.0,
             soften_corner: f64::NAN,
@@ -111,7 +122,6 @@ impl Core {
             lfo: Lfo::default(),
             wow: Lfo::default(),
             flutter: Lfo::default(),
-            ducker: Ducker::new(),
             rate: 0.0,
             feedback: smooth(0.0),
             cross: Smoothed::with_time(0.0, 0.01),
@@ -119,7 +129,6 @@ impl Core {
             output: smooth(0.0),
             drive: smooth(0.0),
             depth: smooth(0.0),
-            duck: smooth(0.0),
             analog: Smoothed::with_time(0.0, 0.02),
             tape: Smoothed::with_time(0.0, 0.02),
             digital: true,
@@ -151,6 +160,13 @@ impl Core {
         for tone in &mut self.tone {
             tone.tune(low_cut, high_cut);
         }
+        let resonance = (f64::from(settings.filter_resonance) / 100.0).min(1.0);
+        let q =
+            std::f64::consts::FRAC_1_SQRT_2 + (4.0 - std::f64::consts::FRAC_1_SQRT_2) * resonance;
+        self.resonant_tone[0].set(Coefficients::high_pass(low_cut, q));
+        self.resonant_tone[1].set(Coefficients::low_pass(high_cut, q));
+        self.resonance.set(resonance);
+        self.smear.set(f64::from(settings.smear_percent) / 100.0);
         self.high_cut = high_cut;
         self.rate = f64::from(settings.mod_rate);
         self.depth
@@ -159,8 +175,6 @@ impl Core {
         self.cross.set(if settings.ping_pong { 1.0 } else { 0.0 });
         self.width.set(f64::from(settings.width) / 100.0);
         self.drive.set(f64::from(settings.drive) / 100.0);
-        self.duck.set(f64::from(settings.duck_amount) / 100.0);
-        self.ducker.set_release(f64::from(settings.duck_release));
         let output = if settings.bypass {
             0.0
         } else {
@@ -181,7 +195,8 @@ impl Core {
             &mut self.output,
             &mut self.drive,
             &mut self.depth,
-            &mut self.duck,
+            &mut self.resonance,
+            &mut self.smear,
             &mut self.analog,
             &mut self.tape,
         ] {
@@ -192,9 +207,10 @@ impl Core {
     pub(super) fn clear(&mut self) {
         self.lines.iter_mut().for_each(Line::clear);
         self.tone.iter_mut().for_each(Tone::clear);
+        self.resonant_tone.iter_mut().for_each(Biquad::clear);
+        self.diffusers.iter_mut().flatten().for_each(AllPass::clear);
         self.soften.iter_mut().for_each(OnePole::clear);
         self.dc = [DcBlocker::ZERO; 2];
-        self.ducker.clear();
         self.activity = 0.0;
     }
     /// Move the modulation on by `frames` frames that the bus slept through,
@@ -246,19 +262,7 @@ impl Core {
         shaped + (analog + tape).min(1.0) * (soft - shaped)
     }
     #[inline]
-    #[cfg(test)]
     pub(super) fn process(&mut self, left: f64, right: f64) -> (f64, f64) {
-        self.process_keyed(left, right, None)
-    }
-    /// With a key, the ducking follows it instead of the input.
-    pub(super) fn process_keyed(
-        &mut self,
-        left: f64,
-        right: f64,
-        key: Option<(f64, f64)>,
-    ) -> (f64, f64) {
-        let (key_left, key_right) = key.unwrap_or((left, right));
-        let duck = self.ducker.gain(key_left, key_right, self.duck.next());
         let amount = self.drive.next();
         let (left, right) = (drive(left, amount), drive(right, amount));
         let (analog, tape) = (self.analog.next(), self.tape.next());
@@ -287,21 +291,38 @@ impl Core {
         ];
         // Ping-pong crosses the repeats and feeds the input to the left only.
         let cross = self.cross.next();
-        let back = [
+        let mut back = [
             coloured[0] + (coloured[1] - coloured[0]) * cross,
             coloured[1] + (coloured[0] - coloured[1]) * cross,
         ];
+        let smear = self.smear.next();
+        if smear > 0.0 {
+            let drift = SMEAR_SWING * self.wow.value(0.0);
+            for (side, sample) in back.iter_mut().enumerate() {
+                let drift = if side == 0 { drift } else { -drift };
+                let [first, second] = &mut self.diffusers[side];
+                let spread = first.process_modulated(*sample, 0.65, drift);
+                let spread = second.process_modulated(spread, 0.65, -drift);
+                *sample += (spread - *sample) * smear;
+            }
+        }
         let input = [
             left + (0.5 * (left + right) - left) * cross,
             right * (1.0 - cross),
         ];
         let gain = self.feedback.next();
+        let resonance = self.resonance.next();
         for side in 0..2 {
-            let sample = bound(self.tone[side].process(input[side] + gain * back[side]));
-            self.lines[side].push(sample as f32);
+            let feed = input[side] + gain * back[side];
+            let mut sample = self.tone[side].process(feed);
+            if resonance > 0.0 {
+                let resonant = cascade(&mut self.resonant_tone, side, feed);
+                sample += (resonant - sample) * resonance;
+            }
+            self.lines[side].push(bound(sample) as f32);
         }
         let (l, r) = widen(taps[0][1], taps[1][1], self.width.next());
-        let level = self.output.next() * duck;
+        let level = self.output.next();
         (l * level, r * level)
     }
 }
@@ -489,6 +510,63 @@ mod tests {
         for pair in levels.windows(2) {
             assert!(pair[1] < pair[0] * 0.9 * 0.5, "{levels:?}");
         }
+    }
+
+    #[test]
+    fn smear_spreads_feedback_repeats_without_moving_the_first_echo() {
+        let time = (0.1 * RATE) as usize;
+        let render = |smear_percent| {
+            let mut core = delay(
+                &Echoform {
+                    mode: super::super::TimeMode::Free,
+                    time_ms_l: 100.0,
+                    time_ms_r: 100.0,
+                    smear_percent,
+                    ..plain()
+                },
+                120.0,
+            );
+            (0..3 * time)
+                .map(|frame| core.process(f64::from(u8::from(frame == 0)), 0.0).0)
+                .collect::<Vec<_>>()
+        };
+        let clean = render(0.0);
+        let smeared = render(60.0);
+        assert_eq!(&clean[..2 * time], &smeared[..2 * time]);
+        let spread = |samples: &[f64]| {
+            samples[2 * time + 100..2 * time + 1764]
+                .iter()
+                .map(|sample| sample * sample)
+                .sum::<f64>()
+        };
+        assert!(spread(&smeared) > 5.0 * spread(&clean));
+    }
+
+    #[test]
+    fn resonance_boosts_the_cutoff_more_than_the_passband() {
+        let response = |filter_resonance, hz: f64| {
+            let mut core = delay(
+                &Echoform {
+                    mode: super::super::TimeMode::Free,
+                    time_ms_l: 20.0,
+                    time_ms_r: 20.0,
+                    feedback: 0.0,
+                    high_cut: 2000.0,
+                    filter_resonance,
+                    ..plain()
+                },
+                120.0,
+            );
+            (0..8820)
+                .map(|frame| {
+                    let input = 0.1 * (2.0 * PI * hz * frame as f64 / RATE).sin();
+                    core.process(input, input).0.powi(2)
+                })
+                .skip(4410)
+                .sum::<f64>()
+        };
+        let boost = |hz| response(80.0, hz) / response(0.0, hz);
+        assert!(boost(2000.0) > 4.0 * boost(500.0));
     }
 
     #[test]

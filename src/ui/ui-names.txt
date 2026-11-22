@@ -13,6 +13,7 @@ button	Center Track 3 pan
 button	Center Track 4 pan
 button	Choose source file
 button	Clear OVER
+button	Clear all FX tails
 button	Clear bar
 button	Clear cover cache
 button	Clip fade in curve
@@ -21,6 +22,7 @@ button	Close Album Review
 button	Close Choose path
 button	Close Effect Studio
 button	Close Effect Studio help
+button	Close FX Deep Edit
 button	Close Help
 button	Close Import sound
 button	Close Mastering help
@@ -37,6 +39,7 @@ button	Collapse Album Review
 button	Collapse Choose path
 button	Collapse Effect Studio
 button	Collapse Effect Studio help
+button	Collapse FX Deep Edit
 button	Collapse Help
 button	Collapse Import sound
 button	Collapse Mastering help
@@ -54,6 +57,14 @@ button	Credits and rights
 button	Decrease End frame
 button	Decrease Pitch
 button	Decrease Start frame
+button	Deep edit FX 1
+button	Deep edit FX 2
+button	Deep edit FX 3
+button	Deep edit FX 4
+button	Deep edit bus 1
+button	Deep edit bus 2
+button	Deep edit bus 3
+button	Deep edit bus 4
 button	Delete
 button	Delete (Delete)
 button	Device details
@@ -215,15 +226,22 @@ checkbox	Booster wide
 checkbox	Bus compressor
 checkbox	Bypass all pedals
 checkbox	Clip reverse
+checkbox	Deep edit limiter
+checkbox	Deep edit power
+checkbox	Deep edit solo
 checkbox	Echo
 checkbox	FX 1 limiter
 checkbox	FX 1 power
+checkbox	FX 1 solo
 checkbox	FX 2 limiter
 checkbox	FX 2 power
+checkbox	FX 2 solo
 checkbox	FX 3 limiter
 checkbox	FX 3 power
+checkbox	FX 3 solo
 checkbox	FX 4 limiter
 checkbox	FX 4 power
+checkbox	FX 4 solo
 checkbox	Filter
 checkbox	Follow playhead on startup
 checkbox	Lift EQ
@@ -668,6 +686,7 @@ checkbox	Tube
 combo_box	Automation lane
 combo_box	Bottom module
 combo_box	Category filter
+combo_box	Deep edit effect
 combo_box	Drive playback oversampling
 combo_box	FX 1 effect
 combo_box	FX 2 effect

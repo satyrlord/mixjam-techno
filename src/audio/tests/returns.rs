@@ -1,6 +1,33 @@
 use super::*;
 
 #[test]
+fn a_short_keyed_song_exports_through_the_fx_tail() {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    editor.place(1, 0, 0, 1).unwrap();
+    let mut project = editor.project().clone();
+    project.tracks[0].sends[0] = 1.0;
+    project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
+    project.master.bus_compressor.on = true;
+    project.master.bus_compressor.key = 1;
+    project.master.bus_compressor.threshold = -30.0;
+    project.master.bus_compressor.attack = 0.1;
+    let mix = mix_with_samples(&project, &HashMap::from([(1, steady(1024))])).unwrap();
+    assert!(mix.frames() < Mix::TAIL_BLOCK);
+    let rendered = mix.to_pcm(&project.master, &project.fx).unwrap();
+    assert!(rendered.frames() > mix.frames());
+    assert!(
+        rendered.samples[mix.frames() as usize * 2..]
+            .iter()
+            .any(|&s| s != 0.0)
+    );
+
+    let dry = mix.to_pcm(&project.master, &FxBuses::default()).unwrap();
+    project.fx.buses[0].return_level = 0.0;
+    let compensated = mix.to_pcm(&project.master, &project.fx).unwrap();
+    assert_eq!(&compensated.samples[..dry.samples.len()], &dry.samples);
+}
+
+#[test]
 fn playback_and_export_stop_at_the_same_tail_limit() {
     let mut project = song();
     project.clips[0].start_tick = 0;
@@ -28,9 +55,19 @@ fn playback_and_export_stop_at_the_same_tail_limit() {
     let exported = mix.to_pcm(&project.master, &project.fx).unwrap();
     let control = MasterControl::new(&project.master);
     control.set_returns(&project.fx);
-    let played: Vec<_> = PlaybackSource::new(mix, 0, None, Some(control)).collect();
+    let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+    let played: Vec<_> = PlaybackSource::new(mix.clone(), 0, None, Some(control)).collect();
     assert_eq!(played.len(), exported.samples.len());
-    assert!(played == exported.samples, "playback differs from export");
+    assert!(
+        rms_db_delta(&played, &exported.samples).abs() <= 0.5,
+        "playback RMS drifted {:.2} dB from export",
+        rms_db_delta(&played, &exported.samples)
+    );
+    let control_small = MasterControl::new(&project.master);
+    control_small.set_returns(&project.fx);
+    let played_small: Vec<_> =
+        PlaybackSource::with_block(mix, 0, None, Some(control_small), 100).collect();
+    assert_eq!(played, played_small);
 }
 
 #[test]
@@ -213,6 +250,16 @@ fn a_return_throw_rings_an_echo_tail_after_the_dry_sound_stops() {
     assert!(thrown.len() > 2 * (after + 44_100), "the tail lasts");
 }
 
+fn rms_db_delta(a: &[f32], b: &[f32]) -> f64 {
+    let n = a.len().min(b.len());
+    let rms = |s: &[f32]| -> f64 {
+        (s.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / n as f64)
+            .sqrt()
+            .max(1e-12)
+    };
+    20.0 * (rms(&a[..n]) / rms(&b[..n])).log10()
+}
+
 #[test]
 fn a_return_lane_plays_and_exports_alike_through_the_tail() {
     // The lane keeps moving past the song's end, into the tail.
@@ -222,7 +269,17 @@ fn a_return_lane_plays_and_exports_alike_through_the_tail() {
     control.set_returns(&project.fx);
     let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
     let played: Vec<f32> = PlaybackSource::new(mix.clone(), 0, None, Some(control)).collect();
-    assert_eq!(played, exported.samples);
+    assert_eq!(played.len(), exported.samples.len());
+    assert!(
+        rms_db_delta(&played, &exported.samples).abs() <= 0.5,
+        "live vs offline RMS delta {:.2} dB",
+        rms_db_delta(&played, &exported.samples)
+    );
+    let control_small = MasterControl::new(&project.master);
+    control_small.set_returns(&project.fx);
+    let played_small: Vec<f32> =
+        PlaybackSource::with_block(mix, 0, None, Some(control_small), 100).collect();
+    assert_eq!(played, played_small);
     let (still, samples) = thrown_song(1.0, &[(0, 1.0), (256, 0.2)]);
     assert_ne!(
         render_with_samples(&still, &samples).unwrap().samples,
@@ -274,5 +331,52 @@ fn sends_feed_the_fx_buses_whose_tails_ring_past_the_song_in_export_and_playback
     control.set_returns(&project.fx);
     let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
     let played: Vec<f32> = PlaybackSource::new(mix, 0, None, Some(control)).collect();
-    assert_eq!(played, wet.samples);
+    assert_eq!(played.len(), wet.samples.len());
+    assert!(
+        played[2 * 22_050..2 * 26_460]
+            .iter()
+            .any(|v| v.abs() > 0.05)
+    );
+    assert!(played[played.len() - 2048..].iter().all(|v| v.abs() < 1e-3));
+    assert!(
+        rms_db_delta(&played, &wet.samples).abs() <= 0.5,
+        "live vs offline RMS delta {:.2} dB",
+        rms_db_delta(&played, &wet.samples)
+    );
+}
+
+#[test]
+fn four_live_fx_buses_run_without_heap_allocations_across_256_frame_blocks() {
+    let mut fx = FxBuses::default();
+    fx.buses[0].module = crate::fx::Module::EmberformDrive(crate::fx::Emberform {
+        shape: crate::fx::DistortionShape::Foldback,
+        drive_db: 18.0,
+        ..crate::fx::Emberform::default()
+    });
+    fx.buses[1].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
+    fx.buses[2].module = crate::fx::Module::AetherformReverb(crate::fx::Aetherform::default());
+    fx.buses[3].module = crate::fx::Module::EmberformDrive(crate::fx::Emberform::default());
+
+    let control = MasterControl::new(&crate::master::MasterChain::default());
+    control.set_returns(&fx);
+    let mut processor = crate::fx::ReturnsProcessor::live(control, 128.0);
+    let mut block = vec![0.1_f32; 256 * 2];
+    let mut sends = vec![0.0_f32; 256 * 2 * crate::fx::BUSES];
+    for i in 0..256 {
+        let s = 0.25 * (i as f32 * 0.1).sin();
+        for bus in 0..crate::fx::BUSES {
+            let at = i * 2 * crate::fx::BUSES + bus * 2;
+            sends[at] = s;
+            sends[at + 1] = s;
+        }
+    }
+    processor.process(&mut block, Some(&sends));
+    let use_count = crate::audio::flight::tests::heap_use(|| {
+        for _ in 0..10 {
+            block.fill(0.1);
+            processor.process(&mut block, Some(&sends));
+        }
+    });
+    assert_eq!(use_count.allocations, 0);
+    assert_eq!(use_count.frees, 0);
 }

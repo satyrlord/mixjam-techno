@@ -1,5 +1,8 @@
 //! The Emberform Drive's settings, controls, and presets.
-use super::range::{KEY_RANGE, Range, is_own, log_range, range};
+use super::range::{
+    KEY_RANGE, Range, duck_amount_range, duck_release_range, duck_threshold_range, is_own,
+    log_range, output_range, range,
+};
 use serde::{Deserialize, Serialize};
 
 /// The curve that the Emberform Drive bends its input through.
@@ -75,6 +78,10 @@ pub struct Emberform {
     /// track as it sounds after its fader.
     #[serde(default, skip_serializing_if = "is_own")]
     pub duck_key: u8,
+    /// Sidechain/self ducking threshold in dBFS.
+    pub duck_threshold_db: f32,
+    /// Hold the output near the dry level so drive shapes tone without level jumps.
+    pub level_match: bool,
     pub output_db: f32,
     pub bypass: bool,
 }
@@ -89,13 +96,14 @@ pub enum DistortionParam {
     Bits,
     CrushRate,
     Width,
+    DuckThreshold,
     DuckAmount,
     DuckRelease,
     DuckKey,
     Output,
 }
 impl DistortionParam {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Drive,
         Self::Asymmetry,
         Self::LowCut,
@@ -103,6 +111,7 @@ impl DistortionParam {
         Self::Bits,
         Self::CrushRate,
         Self::Width,
+        Self::DuckThreshold,
         Self::DuckAmount,
         Self::DuckRelease,
         Self::DuckKey,
@@ -118,10 +127,11 @@ impl DistortionParam {
             Self::Bits => range(1.0, 16.0, d.bits as f32, 1.0),
             Self::CrushRate => log_range(500.0, 44_100.0, d.crush_rate_hz, 10.0),
             Self::Width => range(0.0, 200.0, d.width_percent, 1.0),
-            Self::DuckAmount => range(0.0, 100.0, d.duck_amount_percent, 1.0),
-            Self::DuckRelease => log_range(50.0, 2500.0, d.duck_release_ms, 1.0),
+            Self::DuckThreshold => duck_threshold_range(d.duck_threshold_db),
+            Self::DuckAmount => duck_amount_range(d.duck_amount_percent),
+            Self::DuckRelease => duck_release_range(d.duck_release_ms),
             Self::DuckKey => KEY_RANGE,
-            Self::Output => range(-24.0, 12.0, d.output_db, 0.1),
+            Self::Output => output_range(d.output_db),
         }
     }
     pub fn get(self, drive: &Emberform) -> f32 {
@@ -133,6 +143,7 @@ impl DistortionParam {
             Self::Bits => f32::from(drive.bits),
             Self::CrushRate => drive.crush_rate_hz,
             Self::Width => drive.width_percent,
+            Self::DuckThreshold => drive.duck_threshold_db,
             Self::DuckAmount => drive.duck_amount_percent,
             Self::DuckRelease => drive.duck_release_ms,
             Self::DuckKey => f32::from(drive.duck_key),
@@ -151,6 +162,7 @@ impl DistortionParam {
             Self::HighCut => drive.high_cut_hz = value,
             Self::CrushRate => drive.crush_rate_hz = value,
             Self::Width => drive.width_percent = value,
+            Self::DuckThreshold => drive.duck_threshold_db = value,
             Self::DuckAmount => drive.duck_amount_percent = value,
             Self::DuckRelease => drive.duck_release_ms = value,
             Self::Output => drive.output_db = value,
@@ -178,6 +190,8 @@ impl Emberform {
         duck_amount_percent: 0.0,
         duck_release_ms: 250.0,
         duck_key: 0,
+        duck_threshold_db: -24.0,
+        level_match: true,
         output_db: 0.0,
         bypass: false,
     };

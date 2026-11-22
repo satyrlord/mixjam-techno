@@ -42,7 +42,8 @@ impl BottomModule {
             Self::FxReturns => fx::MODULE_HEIGHT,
             Self::StepSynth => step_synth::MODULE_HEIGHT,
         };
-        (available - Self::ARRANGEMENT_RESERVE - extra).clamp(370.0 - extra, preferred)
+        let floor = (370.0 - extra).min(preferred);
+        (available - Self::ARRANGEMENT_RESERVE - extra).clamp(floor, preferred)
     }
 
     pub(super) fn label(self) -> &'static str {
@@ -110,6 +111,8 @@ pub struct MixJamApp {
     pub(super) stretch: StretchWindow,
     /// The track whose channel EQ window is open.
     pub(super) eq_track: Option<usize>,
+    /// The FX bus open in the Deep Edit floating window, if any.
+    pub(super) fx_deep_edit: Option<usize>,
     /// The Album Review window.
     pub(super) album_review: AlbumReviewWindow,
     /// The recording destination and the recorded take's discard.
@@ -433,6 +436,12 @@ impl MixJamApp {
                 ..Default::default()
             },
             eq_track: matches!(capture_view.as_str(), "mixer-eq" | "mix-view-eq").then_some(0),
+            fx_deep_edit: match capture_view.as_str() {
+                "fx-deep-edit" => Some(0),
+                "fx-deep-edit-reverb" => Some(1),
+                "fx-deep-edit-delay" => Some(2),
+                _ => None,
+            },
             album_review: AlbumReviewWindow {
                 open: capture_view.starts_with("album-review"),
                 state: album_review::capture_state(&capture_view),

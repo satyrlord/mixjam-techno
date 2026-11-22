@@ -42,7 +42,10 @@ pub struct Project {
     pub master: crate::master::MasterChain,
     /// The four FX buses that the tracks' sends feed. All are empty unless
     /// the song filled them.
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::fx::migration::deserialize_project_fx"
+    )]
     pub fx: crate::fx::FxBuses,
     /// Each FX bus's return lane. A lane with points replaces its bus's
     /// return level for playback and export.

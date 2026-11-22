@@ -1,5 +1,5 @@
 //! The block schedule that export, stem export, and playback share: the
-//! song's frames, then the FX buses' tail, then the master pedals' delay.
+//! song's frames, then the FX buses' tail, then the processing delay.
 use super::Mix;
 use crate::fx::TAIL_LIMIT;
 
@@ -11,14 +11,14 @@ pub(super) enum Phase {
     /// Silence through the buses, which still ring. `after` counts the tail
     /// frames before the block: the song's frames go on through the tail.
     Tail { after: u64 },
-    /// Silence through the master pedals, which play out their delay.
+    /// Silence that drains the processing delay.
     Flush,
 }
 
 /// The blocks of a render after its song frames. The buses' tail plays in
 /// steps of `Mix::TAIL_BLOCK` frames while the buses ring, up to
 /// `TAIL_LIMIT` frames. Whether they ring is asked once a step, so a render
-/// in any block size ends at the same frame. Then the master pedals' delay
+/// in any block size ends at the same frame. Then the processing delay
 /// plays out. No step allocates: playback runs it on the audio thread.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Schedule {
@@ -29,7 +29,7 @@ pub(super) struct Schedule {
     step: u64,
     /// Whether the buses have stopped ringing or reached `TAIL_LIMIT`.
     rung_out: bool,
-    /// The frames of the pedals' delay still to play out.
+    /// The frames of processing delay still to play out.
     flush: u64,
 }
 

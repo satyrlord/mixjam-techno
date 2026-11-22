@@ -25,6 +25,7 @@ const BOARD_GAP: f32 = 8.0;
 pub(in super::super) struct BoardsState {
     pub(in super::super) module: BottomModule,
     pub(in super::super) meter_display: MeterDisplay,
+    pub(in super::super) fx_meter_display: fx::MeterDisplay,
     /// A pedal that the Mastering module brings into view on its next frame.
     pub(in super::super) master_reveal: Option<PedalKind>,
     /// Replacing the project invalidates the board's active widget gestures.
@@ -254,7 +255,18 @@ impl MixJamApp {
                     BottomModule::Mastering => self.mastering_toolbar(ui),
                     BottomModule::Mixer => self.mixer_toolbar(ui),
                     BottomModule::StepSynth => self.step_synth_toolbar(ui),
-                    BottomModule::FxReturns => {}
+                    BottomModule::FxReturns => {
+                        if controls::button(
+                            ui,
+                            "Clear all FX tails",
+                            controls::ButtonRole::Secondary,
+                        )
+                        .hover_hint("Fade every active FX return tail cleanly to silence.")
+                        .clicked()
+                        {
+                            self.session.clear_all_fx_tails();
+                        }
+                    }
                 }
             });
         });
@@ -728,9 +740,11 @@ impl MixJamApp {
     pub(in super::super) fn effects_module(&mut self, ui: &mut egui::Ui) {
         let reveal = self.boards.fx_reveal.take();
         let buses = self.session.project().fx;
+        let meters = self.boards.fx_meter_display.read();
+        let solos = std::array::from_fn(|i| self.session.fx_solo(i));
         let action = ui
             .push_id(self.boards.master_view_generation, |ui| {
-                fx::show(ui, &buses, reveal)
+                fx::show(ui, &buses, reveal, &meters, solos)
             })
             .inner;
         match action {
@@ -739,6 +753,8 @@ impl MixJamApp {
                 self.apply(result);
             }
             fx::Action::ClearTail(bus) => self.session.clear_fx_tail(bus),
+            fx::Action::ToggleSolo(bus) => self.session.toggle_fx_solo(bus),
+            fx::Action::OpenDeepEdit(bus) => self.fx_deep_edit = Some(bus),
             fx::Action::None => {}
         }
     }

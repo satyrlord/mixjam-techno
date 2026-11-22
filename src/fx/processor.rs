@@ -1,29 +1,26 @@
-//! The return stage: it runs the four buses on the send feeds and adds
-//! their returns to the dry mix, for playback and export alike. A bus's
-//! return lane, when it has points, replaces its return level frame by
-//! frame.
+//! The return stage: runs the four FX buses on the send feeds and adds their
+//! returns to the dry mix for live preview (`RenderQuality::Live`) and offline
+//! export/stems (`RenderQuality::Offline`).
 //!
-//! The delay and the reverb shorten their own delays by the safety
-//! limiter's lookahead, so their sound arrives in time. A drive has no delay
-//! to shorten, and its return sums with the dry sound it came from, so the
-//! drive's bus adds no latency: an instant ceiling replaces the lookahead.
-use super::parts::{SafetyLimiter, ceiling};
-use super::{BUSES, FxBus, FxBuses, Module, delay, distortion, reverb};
-use crate::master::MasterControl;
+//! Offline renders keep exact integer dry-path latency compensation (`latency_samples()`)
+//! across all active buses and pass all returns through 4x true-peak safety limiting,
+//! followed by the post-limiter ducker aligned to the return output time.
+use super::parts::{Ducker, Line, SafetyLimiter, ceiling_with_gr};
+use super::{BUSES, FxBus, FxBuses, Module, RenderQuality, delay, distortion, reverb};
 use crate::master::dsp::Smoothed;
+use crate::master::{FxBusMeterReading, MasterControl};
 use std::sync::Arc;
 
-/// The safety limiters' lookahead: 5 ms. A delay's or a reverb's return is
-/// this much late, and the effect shortens its own delays by as much. A
-/// drive's return has no limiter and is not late.
+/// The safety limiters' lookahead in Live mode: 5 ms.
 pub(crate) const LOOKAHEAD: usize = RATE / 200;
-/// The longest tail that playback and export let ring after the song: one
-/// minute. A delay with feedback above 100% never dies away by itself.
+/// Maximum offline latency across any active FX bus (Drive 72 + TruePeak limiter 252).
+pub(crate) const MAX_OFFLINE_LATENCY: usize =
+    distortion::Core::OFFLINE_LATENCY + SafetyLimiter::OFFLINE_LATENCY;
+/// The longest tail that playback and export let ring after the song: one minute.
 pub(crate) const TAIL_LIMIT: u64 = 60 * RATE as u64;
 /// A cut (Clear Tail or a change of effect) fades the return out over 12 ms.
 const CUT: usize = RATE * 12 / 1000;
 /// A bus sleeps after two seconds without input or internal activity.
-/// Delay buses also wait long enough for any pending repeat to arrive.
 const SLEEP_AFTER: usize = 2 * RATE;
 const RATE: usize = crate::audio::Mix::SAMPLE_RATE as usize;
 const SILENCE: f64 = 1e-6;
@@ -35,6 +32,7 @@ enum Kind {
     Reverb,
     Drive,
 }
+
 fn kind(module: &Module) -> Kind {
     match module {
         Module::Empty => Kind::Empty,
@@ -43,47 +41,87 @@ fn kind(module: &Module) -> Kind {
         Module::EmberformDrive(_) => Kind::Drive,
     }
 }
+
 impl Kind {
-    /// The frames by which the bus's return follows its input.
-    fn latency(self) -> usize {
-        match self {
-            Self::Drive => 0,
-            _ => LOOKAHEAD,
+    /// Effect core latency before SafetyLimiter (`Offline` Drive oversampling only).
+    fn effect_latency(self, quality: RenderQuality) -> usize {
+        match (self, quality) {
+            (Self::Drive, RenderQuality::Offline) => distortion::Core::OFFLINE_LATENCY,
+            _ => 0,
         }
     }
+
+    /// Total frames by which this bus's raw wet path follows its input at `quality`.
+    fn latency(self, quality: RenderQuality) -> usize {
+        match (self, quality) {
+            (Self::Empty, _) => 0,
+            (Self::Drive, RenderQuality::Live) => 0,
+            (Self::Drive, RenderQuality::Offline) => MAX_OFFLINE_LATENCY,
+            (Self::Delay | Self::Reverb, RenderQuality::Live) => LOOKAHEAD,
+            (Self::Delay | Self::Reverb, RenderQuality::Offline) => SafetyLimiter::OFFLINE_LATENCY,
+        }
+    }
+}
+
+#[inline]
+fn delay_sample(line: &mut Line, sample: f64, delay: usize) -> f64 {
+    if delay == 0 {
+        return sample;
+    }
+    line.push(sample as f32);
+    f64::from(line.at(delay + 1))
 }
 
 struct Bus {
     delay: delay::Core,
     reverb: reverb::Core,
     drive: distortion::Core,
+    ducker: Ducker,
     kind: Kind,
     settings: FxBus,
+    duck_amount: Smoothed,
+    duck_threshold_db: Smoothed,
+    bypass: bool,
     /// The input switch, gliding so a switch does not click.
     input: Smoothed,
     level: Smoothed,
     limiter: SafetyLimiter,
+    pad: [Line; 2],
+    key_delay: [Line; 2],
+    quality: RenderQuality,
+    pad_frames: usize,
     awake: bool,
     quiet: usize,
-    /// Frames since the bus fell asleep. Its effect's modulation moves on by
-    /// as many when it wakes, so the output does not depend on when it slept,
-    /// which depends on the level.
     slept: u64,
-    /// Frames left of a cut's fade, and whether the module changes after it.
     cut: usize,
     pending: Option<FxBus>,
 }
+
 impl Bus {
-    fn new() -> Self {
+    fn new(quality: RenderQuality) -> Self {
         Self {
             delay: delay::Core::new(),
             reverb: reverb::Core::new(),
             drive: distortion::Core::new(),
+            ducker: Ducker::new(),
             kind: Kind::Empty,
             settings: FxBus::default(),
+            duck_amount: Smoothed::new(0.0),
+            duck_threshold_db: Smoothed::new(-27.0),
+            bypass: false,
             input: Smoothed::with_time(1.0, 0.003),
             level: Smoothed::with_time(0.0, 0.005),
             limiter: SafetyLimiter::new(),
+            pad: [
+                Line::new(MAX_OFFLINE_LATENCY),
+                Line::new(MAX_OFFLINE_LATENCY),
+            ],
+            key_delay: [
+                Line::new(MAX_OFFLINE_LATENCY),
+                Line::new(MAX_OFFLINE_LATENCY),
+            ],
+            quality,
+            pad_frames: 0,
             awake: false,
             quiet: 0,
             slept: 0,
@@ -91,6 +129,15 @@ impl Bus {
             pending: None,
         }
     }
+
+    fn total_wet_latency(&self) -> usize {
+        if self.kind == Kind::Empty {
+            0
+        } else {
+            self.kind.latency(self.quality) + self.pad_frames
+        }
+    }
+
     /// Take new settings. A different effect waits for a cut of the old
     /// one's tail while it still sounds.
     fn apply(&mut self, settings: &FxBus, bpm: f64, settle: bool) {
@@ -101,54 +148,85 @@ impl Bus {
             }
             return;
         }
-        // Settings for the effect that sounds now replace any change still waiting.
         self.pending = None;
         if kind(&settings.module) != self.kind {
             self.kind = kind(&settings.module);
             self.silence();
         }
-        let compensation = LOOKAHEAD as f64;
+        let compensation = match self.quality {
+            RenderQuality::Live => LOOKAHEAD as f64,
+            RenderQuality::Offline => 0.0,
+        };
         let fresh = settle || !self.awake;
         match &settings.module {
-            Module::Empty => {}
+            Module::Empty => {
+                self.duck_amount.set(0.0);
+                self.duck_threshold_db.set(-27.0);
+                self.bypass = true;
+            }
             Module::EchoformDelay(delay) => {
                 self.delay.set(delay, bpm, compensation);
                 if fresh {
                     self.delay.settle();
                 }
+                self.duck_amount.set(f64::from(delay.duck_amount) / 100.0);
+                self.duck_threshold_db
+                    .set(f64::from(delay.duck_threshold_db));
+                self.ducker.set_release(f64::from(delay.duck_release));
+                self.bypass = delay.bypass;
             }
             Module::AetherformReverb(reverb) => {
                 self.reverb.set(reverb, compensation);
                 if fresh {
                     self.reverb.settle();
                 }
+                self.duck_amount
+                    .set(f64::from(reverb.duck_amount_percent) / 100.0);
+                self.duck_threshold_db
+                    .set(f64::from(reverb.duck_threshold_db));
+                self.ducker.set_release(f64::from(reverb.duck_release_ms));
+                self.bypass = reverb.bypass;
             }
             Module::EmberformDrive(drive) => {
                 self.drive.set(drive);
                 if fresh {
                     self.drive.settle();
                 }
+                self.duck_amount
+                    .set(f64::from(drive.duck_amount_percent) / 100.0);
+                self.duck_threshold_db
+                    .set(f64::from(drive.duck_threshold_db));
+                self.ducker.set_release(f64::from(drive.duck_release_ms));
+                self.bypass = drive.bypass;
             }
         }
         self.input.set(if settings.powered { 1.0 } else { 0.0 });
         self.level.set(f64::from(settings.return_level));
+        if fresh {
+            self.duck_amount.settle();
+            self.duck_threshold_db.settle();
+        }
         if settle {
             self.input.settle();
             self.level.settle();
         }
         self.settings = *settings;
     }
+
     fn silence(&mut self) {
         self.delay.clear();
         self.reverb.clear();
         self.drive.clear();
+        self.ducker.clear();
         self.limiter.clear();
+        self.pad.iter_mut().for_each(Line::clear);
+        self.key_delay.iter_mut().for_each(Line::clear);
         self.awake = false;
         self.quiet = 0;
         self.slept = 0;
     }
-    /// Sleep, end any cut, and take the effect that waited for the cut. A
-    /// cut left running would fade the next input after the bus wakes.
+
+    /// Sleep, end any cut, and take the effect that waited for the cut.
     fn sleep(&mut self, bpm: f64) {
         self.cut = 0;
         self.silence();
@@ -156,18 +234,18 @@ impl Bus {
             self.apply(&settings, bpm, false);
         }
     }
+
     fn clear_tail(&mut self) {
         if self.awake && self.cut == 0 {
             self.cut = CUT;
         }
     }
-    /// The ducker's key setting of the bus's effect: 0 is its own input.
+
     fn duck_key(&self) -> u8 {
         self.settings.module.duck_key()
     }
-    /// `key` is the ducker's key at this frame, or `None` for the bus's input.
-    /// `lane` is the return lane's value at this frame, which replaces the
-    /// return level, or `None` without a lane.
+
+    /// Returns `(left, right, ducker_gr_db, limiter_gr_db)`.
     #[inline]
     fn process(
         &mut self,
@@ -176,19 +254,28 @@ impl Bus {
         key: Option<(f64, f64)>,
         lane: Option<f64>,
         bpm: f64,
-    ) -> (f64, f64) {
+    ) -> (f64, f64, f64, f64) {
         let gate = self.input.next();
         let (left, right) = (left * gate, right * gate);
         let fed = left != 0.0 || right != 0.0;
+        // The live effect taps already compensate for limiter lookahead.
+        // Offline, the wet padding and dry delay put both on the same clock.
+        let key_latency = match self.quality {
+            RenderQuality::Live => 0,
+            RenderQuality::Offline => self.total_wet_latency(),
+        };
+        let (raw_key_l, raw_key_r) = key.unwrap_or((left, right));
+        let key_l = delay_sample(&mut self.key_delay[0], raw_key_l, key_latency);
+        let key_r = delay_sample(&mut self.key_delay[1], raw_key_r, key_latency);
+
         if !self.awake {
             if !fed || self.kind == Kind::Empty {
                 self.slept += 1;
-                return (0.0, 0.0);
+                return (0.0, 0.0, 0.0, 0.0);
             }
             match self.kind {
                 Kind::Delay => self.delay.skip(self.slept),
                 Kind::Reverb => self.reverb.skip(self.slept),
-                // The drive has no modulation to move on.
                 Kind::Drive | Kind::Empty => {}
             }
             self.awake = true;
@@ -197,13 +284,10 @@ impl Bus {
         }
         let (wet_l, wet_r) = match self.kind {
             Kind::Empty => (0.0, 0.0),
-            Kind::Delay => self.delay.process_keyed(left, right, key),
-            Kind::Reverb => self.reverb.process_keyed(left, right, key),
-            Kind::Drive => self.drive.process_keyed(left, right, key),
+            Kind::Delay => self.delay.process(left, right),
+            Kind::Reverb => self.reverb.process(left, right),
+            Kind::Drive => self.drive.process_with_quality(left, right, self.quality),
         };
-        // The lane moves at every frame, in straight lines, so it has no
-        // steps. The level's glide starts from the lane's value when a new
-        // lane leaves it.
         let level = match lane {
             Some(value) => {
                 self.level.hold(value);
@@ -211,26 +295,51 @@ impl Bus {
             }
             None => self.level.next(),
         };
-        let mut out = if self.kind == Kind::Drive {
-            ceiling(wet_l * level, wet_r * level, self.settings.limiter)
-        } else {
-            self.limiter
-                .process(wet_l * level, wet_r * level, self.settings.limiter)
+        let (lim_l, lim_r, lim_gr) = match (self.kind, self.quality) {
+            (Kind::Drive, RenderQuality::Live) => {
+                ceiling_with_gr(wet_l * level, wet_r * level, self.settings.limiter)
+            }
+            _ => self.limiter.process_quality(
+                wet_l * level,
+                wet_r * level,
+                self.settings.limiter,
+                self.quality,
+            ),
         };
+        let aligned_l = delay_sample(&mut self.pad[0], lim_l, self.pad_frames);
+        let aligned_r = delay_sample(&mut self.pad[1], lim_r, self.pad_frames);
+        let (duck_gain, raw_duck_gr) = self.ducker.gain_at(
+            key_l,
+            key_r,
+            self.duck_amount.next(),
+            self.duck_threshold_db.next(),
+        );
+        let duck_gr = if self.bypass { 0.0 } else { raw_duck_gr };
+        let mut out = (aligned_l * duck_gain, aligned_r * duck_gain);
+
         if self.cut > 0 {
             self.cut -= 1;
             if self.cut == 0 {
                 self.sleep(bpm);
-                return (0.0, 0.0);
+                return (0.0, 0.0, 0.0, 0.0);
             }
             let scale = self.cut as f64 / CUT as f64;
             out.0 *= scale;
             out.1 *= scale;
         }
         let (activity, wait) = match self.kind {
-            Kind::Delay => (self.delay.activity(), SLEEP_AFTER + self.delay.silent_gap()),
-            Kind::Reverb => (self.reverb.activity(), SLEEP_AFTER),
-            Kind::Drive => (self.drive.activity(), SLEEP_AFTER),
+            Kind::Delay => (
+                self.delay.activity(),
+                SLEEP_AFTER + self.delay.silent_gap() + self.total_wet_latency(),
+            ),
+            Kind::Reverb => (
+                self.reverb.activity(),
+                SLEEP_AFTER + self.total_wet_latency(),
+            ),
+            Kind::Drive => (
+                self.drive.activity(),
+                SLEEP_AFTER + self.total_wet_latency(),
+            ),
             Kind::Empty => (0.0, SLEEP_AFTER),
         };
         if fed || activity > SILENCE {
@@ -241,16 +350,15 @@ impl Bus {
                 self.sleep(bpm);
             }
         }
-        out
+        (out.0, out.1, duck_gr, lim_gr)
     }
 }
 
-/// The four buses' return lanes resolved to output frames: a lane with
-/// points replaces its bus's return level. Each frame's value depends only on
-/// the frame, so export, stems, and playback started anywhere agree.
+/// The four buses' return lanes resolved to output frames.
 pub struct ReturnLanes {
     lanes: [Option<crate::automation::Envelope>; BUSES],
 }
+
 impl ReturnLanes {
     /// `None` when no bus has a return lane.
     pub(crate) fn new(
@@ -262,10 +370,7 @@ impl ReturnLanes {
         });
         lanes.iter().any(Option::is_some).then_some(Self { lanes })
     }
-    /// Bus `bus`'s return level at song frame `frame`, if its lane has
-    /// points. The bus applies it its latency's frames before that frame
-    /// leaves it, so each returned frame has the lane's value at its own
-    /// time.
+
     fn at(&self, bus: usize, frame: u64) -> Option<f64> {
         self.lanes[bus]
             .as_ref()
@@ -276,9 +381,10 @@ impl ReturnLanes {
 /// The return lanes, the block's first song frame, and an optional loop.
 pub type Lanes<'a> = Option<(&'a ReturnLanes, u64, Option<[u64; 2]>)>;
 
-fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize, latency: usize) -> Option<f64> {
+fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize, offset: isize) -> Option<f64> {
     lanes.and_then(|(lanes, first, loop_region)| {
-        let mut at = first + (frame + latency) as u64;
+        let shifted = first as isize + frame as isize + offset;
+        let mut at = shifted.max(0) as u64;
         if let Some([start, end]) = loop_region.filter(|[start, end]| start < end)
             && at >= end
         {
@@ -288,47 +394,117 @@ fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize, latency: usize) -> Option
     })
 }
 
+#[derive(Default, Clone, Copy)]
+struct BusMeterAcc {
+    peak_l: f64,
+    peak_r: f64,
+    sum_sq_l: f64,
+    sum_sq_r: f64,
+    duck_gr_db: f64,
+    lim_gr_db: f64,
+}
+
+impl BusMeterAcc {
+    #[inline]
+    fn record(&mut self, l: f64, r: f64, duck_gr: f64, lim_gr: f64) {
+        self.peak_l = self.peak_l.max(l.abs());
+        self.peak_r = self.peak_r.max(r.abs());
+        self.sum_sq_l += l * l;
+        self.sum_sq_r += r * r;
+        self.duck_gr_db = self.duck_gr_db.max(duck_gr);
+        self.lim_gr_db = self.lim_gr_db.max(lim_gr);
+    }
+
+    fn finish(self, frames: usize, tail_active: bool) -> FxBusMeterReading {
+        let n = frames.max(1) as f64;
+        FxBusMeterReading {
+            peak_l: self.peak_l as f32,
+            peak_r: self.peak_r as f32,
+            rms_l: (self.sum_sq_l / n).sqrt() as f32,
+            rms_r: (self.sum_sq_r / n).sqrt() as f32,
+            ducker_gr_db: self.duck_gr_db as f32,
+            limiter_gr_db: self.lim_gr_db as f32,
+            tail_active,
+        }
+    }
+}
+
 /// Runs the buses over blocks of the mix. Its state carries from one block
 /// to the next.
 pub struct ReturnsProcessor {
     control: Option<(Arc<MasterControl>, u64, [u64; BUSES])>,
     bpm: f64,
+    quality: RenderQuality,
+    dry_latency: usize,
+    dry_delay: [Line; 2],
     buses: Box<[Bus; BUSES]>,
 }
+
 impl ReturnsProcessor {
-    /// A processor that starts with its effects at their settings and
-    /// every tail silent.
+    /// Offline processor at `RenderQuality::Offline` with integer dry PDC.
     pub fn new(settings: &FxBuses, bpm: f64) -> Self {
-        let mut buses: Box<[Bus; BUSES]> = Box::new(std::array::from_fn(|_| Bus::new()));
+        Self::with_quality(settings, bpm, RenderQuality::Offline)
+    }
+
+    fn with_quality(settings: &FxBuses, bpm: f64, quality: RenderQuality) -> Self {
+        let mut buses: Box<[Bus; BUSES]> = Box::new(std::array::from_fn(|_| Bus::new(quality)));
         for (bus, settings) in buses.iter_mut().zip(&settings.buses) {
             bus.apply(settings, bpm, true);
+        }
+        let dry_latency = match quality {
+            RenderQuality::Live => 0,
+            RenderQuality::Offline => buses
+                .iter()
+                .map(|b| b.kind.latency(quality))
+                .max()
+                .unwrap_or(0),
+        };
+        for bus in buses.iter_mut() {
+            bus.pad_frames = if bus.kind == Kind::Empty {
+                0
+            } else {
+                dry_latency.saturating_sub(bus.kind.latency(quality))
+            };
         }
         Self {
             control: None,
             bpm,
+            quality,
+            dry_latency,
+            dry_delay: [
+                Line::new(MAX_OFFLINE_LATENCY),
+                Line::new(MAX_OFFLINE_LATENCY),
+            ],
             buses,
         }
     }
-    /// A processor that takes its settings, and Clear Tail requests, from
-    /// `control` as they change.
+
+    /// Live processor (`RenderQuality::Live`, 0 integer dry PDC) taking updates from `control`.
     pub fn live(control: Arc<MasterControl>, bpm: f64) -> Self {
         let mut seen = 0;
         let settings = control
             .poll_returns(&mut seen)
             .unwrap_or_else(|| control.returns());
-        let mut processor = Self::new(&settings, bpm);
+        let mut processor = Self::with_quality(&settings, bpm, RenderQuality::Live);
         let clears = std::array::from_fn(|bus| control.tail_clears(bus));
         processor.control = Some((control, seen, clears));
         processor
     }
-    /// Where each bus's ducker finds its key among `keys`.
+
+    /// Constant integer dry-path latency compensation in frames (`0` in Live).
+    pub fn latency_samples(&self) -> usize {
+        self.dry_latency
+    }
+
     fn key_slots(&self, keys: &crate::ducker::Keys) -> [KeySlot; BUSES] {
         std::array::from_fn(|bus| KeySlot::new(keys, self.buses[bus].duck_key()))
     }
+
     /// Whether any bus still sounds.
     pub fn ringing(&self) -> bool {
         self.buses.iter().any(|bus| bus.awake)
     }
+
     fn poll(&mut self) {
         let Some((control, seen, clears)) = &mut self.control else {
             return;
@@ -346,13 +522,21 @@ impl ReturnsProcessor {
             }
         }
     }
-    /// Add the returns to an interleaved stereo block of the dry mix. The
-    /// master processor holds the sum to full scale after the board's trim.
-    /// `sends` holds the four buses' feeds, eight interleaved channels a
-    /// frame, or is `None` when nothing sends.
+
+    fn publish_meters(&self, stats: &[BusMeterAcc; BUSES], frames: usize) {
+        let Some((control, ..)) = &self.control else {
+            return;
+        };
+        for (index, acc) in stats.iter().enumerate() {
+            control.publish_fx_meter(index, acc.finish(frames, self.buses[index].awake));
+        }
+    }
+
+    /// Add the returns to an interleaved stereo block of the dry mix.
     pub fn process(&mut self, block: &mut [f32], sends: Option<&[f32]>) {
         self.process_keyed(block, sends, crate::ducker::Keys::NONE);
     }
+
     /// `process` with the key tracks of the block, which the duckers whose
     /// key names a track follow.
     pub fn process_keyed(
@@ -363,6 +547,7 @@ impl ReturnsProcessor {
     ) {
         self.process_at(block, sends, keys, None);
     }
+
     /// `process_keyed` with the buses' return lanes from the block's frame.
     pub fn process_at(
         &mut self,
@@ -372,22 +557,54 @@ impl ReturnsProcessor {
         lanes: Lanes,
     ) {
         self.poll();
+        let solo_mask = self.control.as_ref().map_or(0, |(c, ..)| c.fx_solo_mask());
+        let frames = block.len() / 2;
+        let mut meters = [BusMeterAcc::default(); BUSES];
         if sends.is_some() || self.ringing() {
             let mut slots = self.key_slots(&keys);
             for (frame, out) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-                let mut sum = (0.0, 0.0);
-                for (l, r) in self.frame(frame, sends, &keys, &mut slots, lanes) {
-                    sum.0 += l;
-                    sum.1 += r;
+                let (dry_l, dry_r) = if self.dry_latency > 0 {
+                    (
+                        delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency),
+                        delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency),
+                    )
+                } else {
+                    (f64::from(out[0]), f64::from(out[1]))
+                };
+                let (mut sum_l, mut sum_r) = if solo_mask == 0 {
+                    (dry_l, dry_r)
+                } else {
+                    (0.0, 0.0)
+                };
+                let bus_frames = self.frame(frame, sends, &keys, &mut slots, lanes);
+                for (index, (l, r, duck_gr, lim_gr)) in bus_frames.into_iter().enumerate() {
+                    meters[index].record(l, r, duck_gr, lim_gr);
+                    if solo_mask == 0 || (solo_mask & (1 << index)) != 0 {
+                        sum_l += l;
+                        sum_r += r;
+                    }
                 }
-                out[0] += sum.0 as f32;
-                out[1] += sum.1 as f32;
+                out[0] = sum_l as f32;
+                out[1] = sum_r as f32;
             }
         } else {
-            self.sleep_through(block.len() / 2);
+            self.sleep_through(frames);
+            if self.dry_latency > 0 {
+                for out in block.as_chunks_mut::<2>().0.iter_mut() {
+                    out[0] =
+                        delay_sample(&mut self.dry_delay[0], f64::from(out[0]), self.dry_latency)
+                            as f32;
+                    out[1] =
+                        delay_sample(&mut self.dry_delay[1], f64::from(out[1]), self.dry_latency)
+                            as f32;
+                }
+            } else if solo_mask != 0 {
+                block.fill(0.0);
+            }
         }
+        self.publish_meters(&meters, frames);
     }
-    /// Each bus's return for one frame of the block, in bus order.
+
     #[inline]
     fn frame(
         &mut self,
@@ -396,30 +613,34 @@ impl ReturnsProcessor {
         keys: &crate::ducker::Keys,
         slots: &mut [KeySlot; BUSES],
         lanes: Lanes,
-    ) -> [(f64, f64); BUSES] {
+    ) -> [(f64, f64, f64, f64); BUSES] {
         let bpm = self.bpm;
-        let mut returns = [(0.0, 0.0); BUSES];
+        let quality = self.quality;
+        let mut returns = [(0.0, 0.0, 0.0, 0.0); BUSES];
         for (index, (bus, out)) in self.buses.iter_mut().zip(&mut returns).enumerate() {
             let (left, right) = sends.map_or((0.0, 0.0), |sends| {
                 let at = frame * 2 * BUSES + index * 2;
                 (f64::from(sends[at]), f64::from(sends[at + 1]))
             });
             let key = slots[index].frame(keys, bus.duck_key(), frame);
-            let lane = lane_at(lanes, index, frame, bus.kind.latency());
+            let lane_offset = if quality == RenderQuality::Offline {
+                -(bus.kind.effect_latency(quality) as isize)
+            } else {
+                bus.kind.latency(quality) as isize
+            };
+            let lane = lane_at(lanes, index, frame, lane_offset);
             *out = bus.process(left, right, key, lane, bpm);
         }
         returns
     }
-    /// Every bus sleeps through a block that no bus processes.
+
     fn sleep_through(&mut self, frames: usize) {
         for bus in self.buses.iter_mut() {
             bus.slept += frames as u64;
         }
     }
-    /// Each bus's return alone, for an export in parts: `returns` gets the
-    /// four returns, eight interleaved channels a frame as `sends` holds the
-    /// feeds, without the dry mix and not held to full scale. The buses run
-    /// as `process_at` runs them.
+
+    /// Each bus's return alone, for an export in parts.
     pub fn split(
         &mut self,
         returns: &mut [f32],
@@ -429,8 +650,11 @@ impl ReturnsProcessor {
     ) {
         self.poll();
         returns.fill(0.0);
+        let frames = returns.len() / (2 * BUSES);
+        let mut meters = [BusMeterAcc::default(); BUSES];
         if sends.is_none() && !self.ringing() {
-            self.sleep_through(returns.len() / (2 * BUSES));
+            self.sleep_through(frames);
+            self.publish_meters(&meters, frames);
             return;
         }
         let mut slots = self.key_slots(&keys);
@@ -440,20 +664,27 @@ impl ReturnsProcessor {
             .iter_mut()
             .enumerate()
         {
-            let frame = self.frame(frame, sends, &keys, &mut slots, lanes);
-            for (out, (l, r)) in out.as_chunks_mut::<2>().0.iter_mut().zip(frame) {
-                *out = [l as f32, r as f32];
+            let bus_frames = self.frame(frame, sends, &keys, &mut slots, lanes);
+            for (index, (out_ch, (l, r, duck_gr, lim_gr))) in out
+                .as_chunks_mut::<2>()
+                .0
+                .iter_mut()
+                .zip(bus_frames)
+                .enumerate()
+            {
+                meters[index].record(l, r, duck_gr, lim_gr);
+                *out_ch = [l as f32, r as f32];
             }
         }
+        self.publish_meters(&meters, frames);
     }
 }
 
-/// A bus's key slot for this block. A pending module can become active
-/// between frames, so refresh its slot as soon as its key setting changes.
 struct KeySlot {
     key: u8,
     slot: Option<Option<usize>>,
 }
+
 impl KeySlot {
     fn new(keys: &crate::ducker::Keys, key: u8) -> Self {
         Self {
@@ -474,490 +705,4 @@ impl KeySlot {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::fx::{Aetherform, Echoform, TimeMode};
-
-    fn plain_delay() -> Echoform {
-        Echoform {
-            division_l: crate::fx::Division::Quarter,
-            division_r: crate::fx::Division::Quarter,
-            ping_pong: false,
-            width: 100.0,
-            low_cut: 20.0,
-            high_cut: 20_000.0,
-            mod_depth: 0.0,
-            duck_amount: 0.0,
-            feedback: 80.0,
-            output_db: 0.0,
-            character: crate::fx::DelayCharacter::Digital,
-            ..Echoform::default()
-        }
-    }
-
-    #[test]
-    fn a_module_change_uses_its_new_key_within_the_same_block() {
-        let render = |block_size: usize, split: bool| {
-            let control = MasterControl::new(&crate::master::MasterChain::default());
-            control.set_returns(&buses(Module::AetherformReverb(Aetherform::default())));
-            let mut processor = ReturnsProcessor::live(control.clone(), 140.0);
-            feed(&mut processor, 2048, |_| 0.1);
-            control.set_returns(&buses(Module::EchoformDelay(Echoform {
-                mode: TimeMode::Free,
-                time_ms_l: 5.0,
-                time_ms_r: 5.0,
-                feedback: 0.0,
-                duck_amount: 100.0,
-                duck_key: 1,
-                ..plain_delay()
-            })));
-            let frames = 4096;
-            let mut output = Vec::new();
-            for start in (0..frames).step_by(block_size) {
-                let count = block_size.min(frames - start);
-                let mut sends = vec![0.0; count * 2 * BUSES];
-                for (frame, feed) in sends.chunks_mut(2 * BUSES).enumerate() {
-                    let sample = (0.17 * (start + frame) as f32).sin() * 0.1;
-                    feed[..2].copy_from_slice(&[sample, sample]);
-                }
-                let audio = vec![1.0; count * 2];
-                let keys = crate::ducker::Keys {
-                    tracks: &[0],
-                    audio: &audio,
-                };
-                if split {
-                    let mut returns = vec![0.0; count * 2 * BUSES];
-                    processor.split(&mut returns, Some(&sends), keys, None);
-                    for frame in returns.chunks(2 * BUSES) {
-                        output.extend_from_slice(&frame[..2]);
-                    }
-                } else {
-                    let mut block = vec![0.0; count * 2];
-                    processor.process_keyed(&mut block, Some(&sends), keys);
-                    output.extend(block);
-                }
-            }
-            output
-        };
-        let expected = render(1, false);
-        assert!(expected.iter().any(|sample| sample.abs() > 0.001));
-        for split in [false, true] {
-            for block_size in [256, 1024] {
-                assert_eq!(render(block_size, split), expected);
-            }
-        }
-    }
-
-    #[test]
-    fn a_ducker_whose_key_names_a_track_follows_that_track() {
-        let delay = Echoform {
-            duck_amount: 100.0,
-            duck_key: 3,
-            ..plain_delay()
-        };
-        let frames = 88_200;
-        let mut sends = vec![0.0_f32; frames * 2 * BUSES];
-        for (frame, feed) in sends.chunks_mut(2 * BUSES).enumerate() {
-            // About -50 dBFS: too quiet to duck by itself.
-            let value = 0.003 * (frame as f32 * 0.05).sin();
-            feed[..2].copy_from_slice(&[value, value]);
-        }
-        let run = |delay: Echoform, key: f32| {
-            let mut processor = ReturnsProcessor::new(&buses(Module::EchoformDelay(delay)), 120.0);
-            let audio = vec![key; frames * 2];
-            let keys = crate::ducker::Keys {
-                tracks: &[2],
-                audio: &audio,
-            };
-            let mut block = vec![0.0; frames * 2];
-            processor.process_keyed(&mut block, Some(&sends), keys);
-            block[frames..]
-                .iter()
-                .map(|v| f64::from(*v).powi(2))
-                .sum::<f64>()
-        };
-        let quiet = run(delay, 0.0);
-        assert!(quiet > 0.0);
-        // A key at -6 dBFS ducks the repeats by the full 24 dB.
-        assert!(run(delay, 0.5) < quiet * 0.01);
-        // The bus's own input ignores the key tracks.
-        let own = Echoform {
-            duck_key: 0,
-            ..delay
-        };
-        assert_eq!(run(own, 0.5), run(own, 0.0));
-    }
-
-    #[test]
-    fn all_synced_repeats_stay_on_the_grid() {
-        let mut processor =
-            ReturnsProcessor::new(&buses(Module::EchoformDelay(plain_delay())), 120.0);
-        let out = feed(&mut processor, 70_000, |i| if i == 0 { 0.5 } else { 0.0 });
-        for repeat in 1..=3 {
-            let expected = repeat * 22_050;
-            let at = (expected - 600..expected + 20)
-                .max_by(|&a, &b| out[a * 2].abs().total_cmp(&out[b * 2].abs()))
-                .unwrap();
-            assert!(
-                at.abs_diff(expected) <= 2,
-                "repeat {repeat}: {at}, expected {expected}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_long_note_delay_does_not_sleep_before_its_first_echo() {
-        let settings = Echoform {
-            division_l: crate::fx::Division::WholeDotted,
-            division_r: crate::fx::Division::WholeDotted,
-            ..plain_delay()
-        };
-        let mut processor = ReturnsProcessor::new(&buses(Module::EchoformDelay(settings)), 120.0);
-        let out = feed(&mut processor, 140_000, |i| if i == 0 { 0.5 } else { 0.0 });
-        assert!(out[264_590..264_620].iter().any(|x| x.abs() > 0.05));
-    }
-
-    #[test]
-    fn bypass_preserves_the_hidden_tail() {
-        let control = MasterControl::new(&crate::master::MasterChain::default());
-        let settings = Echoform {
-            feedback: 99.0,
-            ..plain_delay()
-        };
-        control.set_returns(&buses(Module::EchoformDelay(settings)));
-        let mut processor = ReturnsProcessor::live(control.clone(), 120.0);
-        feed(&mut processor, 1000, |i| if i < 100 { 0.5 } else { 0.0 });
-        control.set_returns(&buses(Module::EchoformDelay(Echoform {
-            bypass: true,
-            ..settings
-        })));
-        feed(&mut processor, 3 * 44_100, |_| 0.0);
-        control.set_returns(&buses(Module::EchoformDelay(settings)));
-        let out = feed(&mut processor, 44_100, |_| 0.0);
-        assert!(out.iter().any(|x| x.abs() > 0.001));
-    }
-
-    fn buses(module: Module) -> FxBuses {
-        let mut buses = FxBuses::default();
-        buses.buses[0].module = module;
-        buses
-    }
-
-    fn feed(
-        processor: &mut ReturnsProcessor,
-        frames: usize,
-        input: impl Fn(usize) -> f32,
-    ) -> Vec<f32> {
-        let mut out = Vec::new();
-        for start in (0..frames).step_by(1024) {
-            let count = 1024.min(frames - start);
-            let mut block = vec![0.0; count * 2];
-            let mut sends = vec![0.0; count * 2 * BUSES];
-            for i in 0..count {
-                sends[i * 2 * BUSES] = input(start + i);
-                sends[i * 2 * BUSES + 1] = input(start + i);
-            }
-            processor.process(&mut block, Some(&sends));
-            out.extend(block);
-        }
-        out
-    }
-
-    /// Two bursts with a gap long enough for the bus to sleep. A louder
-    /// tail takes longer to die away, so the bus falls asleep later, but the
-    /// return still scales with the input: the modulation's phase must not
-    /// depend on when the bus slept.
-    #[test]
-    fn a_return_scales_with_its_input_across_a_sleep() {
-        // The vintage character and the tape saturate a little, which is
-        // not linear by design: these characters do not.
-        let reverb = Aetherform {
-            character: crate::fx::ReverbCharacter::Natural,
-            decay_seconds: 1.0,
-            mod_rate_hz: 0.7,
-            mod_depth_percent: 60.0,
-            duck_amount_percent: 0.0,
-            shimmer_enabled: true,
-            ..Aetherform::default()
-        };
-        let delay = Echoform {
-            mode: TimeMode::Free,
-            time_ms_l: 120.0,
-            time_ms_r: 170.0,
-            feedback: 40.0,
-            mod_depth: 6.0,
-            mod_rate: 0.9,
-            ..plain_delay()
-        };
-        let burst = 44_100;
-        let frames = 14 * 44_100;
-        let render = |module: Module, gain: f32| {
-            let mut processor = ReturnsProcessor::new(&buses(module), 120.0);
-            let mut out = Vec::new();
-            for start in (0..frames).step_by(1024) {
-                let count = 1024.min(frames - start);
-                let mut block = vec![0.0; count * 2];
-                let sounding = |i: usize| i < burst || i >= frames - burst;
-                if (start..start + count).any(sounding) {
-                    let mut sends = vec![0.0; count * 2 * BUSES];
-                    for i in (0..count).filter(|i| sounding(start + i)) {
-                        let x = gain * 0.01 * (0.031 * (start + i) as f32).sin();
-                        sends[i * 2 * BUSES..i * 2 * BUSES + 2].copy_from_slice(&[x, x]);
-                    }
-                    processor.process(&mut block, Some(&sends));
-                } else {
-                    processor.process(&mut block, None);
-                }
-                out.extend(block);
-            }
-            out
-        };
-        for module in [
-            Module::EchoformDelay(delay),
-            Module::AetherformReverb(reverb),
-        ] {
-            let quiet = render(module, 1.0);
-            let loud = render(module, 8.0);
-            let second = 2 * (frames - burst)..;
-            let signal: f64 = loud[second.clone()]
-                .iter()
-                .map(|x| f64::from(*x).powi(2))
-                .sum();
-            let error: f64 = loud[second.clone()]
-                .iter()
-                .zip(&quiet[second])
-                .map(|(l, q)| (f64::from(*l) - 8.0 * f64::from(*q)).powi(2))
-                .sum();
-            assert!(signal > 0.0);
-            assert!(
-                error < signal * 1e-8,
-                "the second burst differs by {:.1} dB",
-                10.0 * (error / signal).log10()
-            );
-        }
-    }
-
-    /// A drive return sums with the dry sound, so it must arrive with it:
-    /// a parallel copy at a few milliseconds would comb-filter the pair.
-    #[test]
-    fn a_drive_return_arrives_with_its_input_and_holds_the_ceiling() {
-        let drive = crate::fx::Emberform {
-            shape: crate::fx::DistortionShape::HardClip,
-            drive_db: 0.0,
-            low_cut_hz: 20.0,
-            high_cut_hz: 20_000.0,
-            ..crate::fx::Emberform::default()
-        };
-        let mut processor = ReturnsProcessor::new(&buses(Module::EmberformDrive(drive)), 120.0);
-        // Noise, which matches itself at no other lag.
-        let noise: Vec<f32> = (0..44_100u32)
-            .scan(12_345u32, |seed, _| {
-                *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                Some(0.2 * ((*seed >> 8) as f32 / (1u32 << 23) as f32 - 1.0))
-            })
-            .collect();
-        let tone = |i: usize| noise[i];
-        let out = feed(&mut processor, 44_100, tone);
-        // The best match of the return against its input is at no delay.
-        let lag = (0..400)
-            .max_by(|&a, &b| {
-                let score = |lag: usize| -> f64 {
-                    (20_000..30_000)
-                        .map(|i| f64::from(out[i * 2]) * f64::from(tone(i - lag)))
-                        .sum()
-                };
-                score(a).total_cmp(&score(b))
-            })
-            .unwrap();
-        assert!(lag <= 1, "{lag}");
-        for (name, _) in crate::fx::Emberform::PRESETS {
-            let mut settings = buses(Module::EmberformDrive(
-                crate::fx::Emberform::preset(name).unwrap(),
-            ));
-            let drive = settings.buses[0].module;
-            if let Module::EmberformDrive(mut drive) = drive {
-                drive.output_db = 12.0;
-                settings.buses[0].module = Module::EmberformDrive(drive);
-            }
-            settings.buses[0].return_level = 1.0;
-            let mut processor = ReturnsProcessor::new(&settings, 120.0);
-            let out = feed(&mut processor, 22_050, |i| 0.95 * (i as f32 * 0.03).sin());
-            let peak = out.iter().fold(0.0_f32, |a, v| a.max(v.abs()));
-            assert!(peak <= 0.892, "{name}: {peak}");
-            assert!(peak > 0.05, "{name} is silent");
-        }
-    }
-
-    #[test]
-    fn an_empty_bus_returns_silence() {
-        let mut processor = ReturnsProcessor::new(&FxBuses::default(), 120.0);
-        let out = feed(&mut processor, 10_000, |_| 0.5);
-        assert!(out.iter().all(|v| *v == 0.0));
-        assert!(!processor.ringing());
-    }
-
-    #[test]
-    fn a_synced_echo_arrives_on_the_beat_despite_the_limiter() {
-        let delay = Echoform {
-            division_l: crate::fx::Division::Quarter,
-            division_r: crate::fx::Division::Quarter,
-            ping_pong: false,
-            low_cut: 20.0,
-            high_cut: 20_000.0,
-            mod_depth: 0.0,
-            duck_amount: 0.0,
-            feedback: 0.0,
-            character: crate::fx::DelayCharacter::Digital,
-            ..Echoform::default()
-        };
-        let mut processor = ReturnsProcessor::new(&buses(Module::EchoformDelay(delay)), 125.0);
-        let out = feed(&mut processor, 30_000, |i| if i == 0 { 0.5 } else { 0.0 });
-        let first = out.chunks(2).position(|f| f[0].abs() > 0.05).unwrap();
-        assert!((first as i64 - 21_168).abs() <= 2, "{first}");
-    }
-
-    #[test]
-    fn the_return_level_scales_and_the_limiter_holds_the_ceiling() {
-        let reverb = Aetherform {
-            output_db: 12.0,
-            duck_amount_percent: 0.0,
-            ..Aetherform::default()
-        };
-        let mut settings = buses(Module::AetherformReverb(reverb));
-        let loud = |i: usize| 0.9 * (i as f32 * 0.05).sin();
-        let mut processor = ReturnsProcessor::new(&settings, 120.0);
-        let out = feed(&mut processor, 44_100, loud);
-        let peak = out.iter().fold(0.0_f32, |a, v| a.max(v.abs()));
-        assert!(peak <= 0.892, "{peak}");
-        settings.buses[0].return_level = 0.0;
-        let mut processor = ReturnsProcessor::new(&settings, 120.0);
-        let out = feed(&mut processor, 10_000, loud);
-        assert!(out.iter().all(|v| *v == 0.0));
-    }
-
-    #[test]
-    fn power_off_stops_new_input_and_the_tail_rings_out_then_sleeps() {
-        let delay = Echoform {
-            mode: TimeMode::Free,
-            time_ms_l: 100.0,
-            time_ms_r: 100.0,
-            feedback: 50.0,
-            duck_amount: 0.0,
-            ..Echoform::default()
-        };
-        let mut settings = buses(Module::EchoformDelay(delay));
-        settings.buses[0].powered = false;
-        let mut processor = ReturnsProcessor::new(&settings, 120.0);
-        let out = feed(&mut processor, 20_000, |_| 0.5);
-        assert!(
-            out.iter().all(|v| *v == 0.0),
-            "no input reaches a bus that is off"
-        );
-        settings.buses[0].powered = true;
-        let mut processor = ReturnsProcessor::new(&settings, 120.0);
-        feed(&mut processor, 2000, |i| if i < 100 { 0.5 } else { 0.0 });
-        assert!(processor.ringing());
-        feed(&mut processor, 4 * 44_100, |_| 0.0);
-        assert!(
-            !processor.ringing(),
-            "the bus sleeps once its tail has died"
-        );
-    }
-
-    /// A bus that falls asleep during a cut ends the cut and takes the
-    /// effect that waited for it, so the next input starts at full level.
-    #[test]
-    fn a_bus_that_sleeps_during_a_cut_wakes_without_it() {
-        let drive = FxBus {
-            module: Module::EmberformDrive(crate::fx::Emberform::default()),
-            ..FxBus::default()
-        };
-        let reverb = FxBus {
-            module: Module::AetherformReverb(Aetherform::default()),
-            ..FxBus::default()
-        };
-        for change in [false, true] {
-            let mut bus = Bus::new();
-            bus.apply(&drive, 120.0, true);
-            for _ in 0..64 {
-                bus.process(0.5, 0.5, None, None, 120.0);
-            }
-            while bus.awake && bus.quiet < SLEEP_AFTER {
-                bus.process(0.0, 0.0, None, None, 120.0);
-            }
-            assert!(bus.awake, "the drive has gone quiet but still wakes");
-            if change {
-                bus.apply(&reverb, 120.0, false);
-            } else {
-                bus.clear_tail();
-            }
-            assert_eq!(bus.cut, CUT);
-            bus.process(0.0, 0.0, None, None, 120.0);
-            assert!(!bus.awake, "the bus sleeps on its quiet timeout");
-            assert_eq!(bus.cut, 0, "a sleeping bus has no cut left");
-            assert!(bus.pending.is_none());
-            let expected = if change { Kind::Reverb } else { Kind::Drive };
-            assert!(bus.kind == expected, "the waiting effect is taken");
-        }
-    }
-
-    #[test]
-    fn clear_tail_and_a_change_of_effect_cut_the_tail_quickly() {
-        let control = MasterControl::new(&crate::master::MasterChain::default());
-        let reverb = Aetherform {
-            decay_seconds: 20.0,
-            ..Aetherform::default()
-        };
-        control.set_returns(&buses(Module::AetherformReverb(reverb)));
-        let mut processor = ReturnsProcessor::live(control.clone(), 120.0);
-        feed(&mut processor, 8000, |i| if i < 4000 { 0.5 } else { 0.0 });
-        control.clear_tail(0);
-        let out = feed(&mut processor, 4096, |_| 0.0);
-        let after = out[2 * 1500..].iter().fold(0.0_f32, |a, v| a.max(v.abs()));
-        assert_eq!(after, 0.0, "the tail is gone 34 ms after Clear Tail");
-        feed(&mut processor, 8000, |i| if i < 4000 { 0.5 } else { 0.0 });
-        control.set_returns(&FxBuses::default());
-        let out = feed(&mut processor, 4096, |_| 0.0);
-        let after = out[2 * 1500..].iter().fold(0.0_f32, |a, v| a.max(v.abs()));
-        assert_eq!(after, 0.0);
-    }
-
-    #[test]
-    fn clear_tail_and_effect_changes_fade_to_zero_without_a_jump() {
-        for swap in [false, true] {
-            let control = MasterControl::new(&crate::master::MasterChain::default());
-            let reverb = Aetherform {
-                decay_seconds: 20.0,
-                ..Aetherform::default()
-            };
-            control.set_returns(&buses(Module::AetherformReverb(reverb)));
-            let mut processor = ReturnsProcessor::live(control.clone(), 120.0);
-            feed(&mut processor, 8000, |i| {
-                if i < 4000 {
-                    (i as f32 * 0.05).sin() * 0.8
-                } else {
-                    0.0
-                }
-            });
-            if swap {
-                control.set_returns(&FxBuses::default());
-            } else {
-                control.clear_tail(0);
-            }
-            let out = feed(&mut processor, 1024, |_| 0.0);
-            let last_non_zero = out
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .rposition(|frame| frame[0] != 0.0 || frame[1] != 0.0)
-                .expect("the tail must fade out over the cut window");
-            let end_peak = out[last_non_zero * 2]
-                .abs()
-                .max(out[last_non_zero * 2 + 1].abs());
-            assert!(
-                end_peak < 0.01,
-                "swap={swap}: last frame before silence was {end_peak}"
-            );
-        }
-    }
-}
+mod tests;

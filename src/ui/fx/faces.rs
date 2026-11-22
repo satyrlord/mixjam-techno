@@ -1,9 +1,165 @@
 //! The parameter lettering of the FX returns units: which dials a unit
 //! shows, and each dial's printed label, name, hint, and format.
 use super::master::Format;
+use super::master::{Dial, compact_dial, dial};
 use super::*;
 use mixjam_techno::application::KnobRange;
-use mixjam_techno::application::fx::{DelayParam, DistortionParam, Module, Range, ReverbParam};
+use mixjam_techno::application::fx::{
+    DelayParam, DistortionParam, FxBus, Module, Range, ReverbParam,
+};
+
+/// Hero macro dials displayed on each compact Layer 1 card (`<= 4` knobs).
+pub(super) fn macro_slots(module: &Module) -> &'static [Slot] {
+    match module {
+        Module::Empty => &[Slot::Return],
+        Module::EchoformDelay(_) => &[
+            Slot::Delay(DelayParam::TimeL),
+            Slot::Delay(DelayParam::Feedback),
+            Slot::Delay(DelayParam::HighCut),
+            Slot::Return,
+        ],
+        Module::AetherformReverb(_) => &[
+            Slot::Reverb(ReverbParam::Decay),
+            Slot::Reverb(ReverbParam::Size),
+            Slot::Reverb(ReverbParam::HighCut),
+            Slot::Return,
+        ],
+        Module::EmberformDrive(_) => &[
+            Slot::Drive(DistortionParam::Drive),
+            Slot::Drive(DistortionParam::Asymmetry),
+            Slot::Drive(DistortionParam::HighCut),
+            Slot::Return,
+        ],
+    }
+}
+
+/// Shared dial painter and setter for any `Slot` (used by both Layer 1 and Deep Edit).
+pub(super) fn dial_slot(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    prefix: &str,
+    bus: &mut FxBus,
+    slot: &Slot,
+    compact: bool,
+) {
+    let draw = if compact { compact_dial } else { dial };
+    match slot {
+        Slot::Return => {
+            let mut value = f64::from((bus.return_level * 100.0).round());
+            let before = value;
+            draw(
+                ui,
+                positions,
+                &mut value,
+                Dial {
+                    name: &format!("{prefix} return level"),
+                    label: "Return",
+                    hint: "The level of the effect's sound in the mix.",
+                    range: KnobRange {
+                        low: 0.0,
+                        high: 100.0,
+                        default: 100.0,
+                        step: 1.0,
+                        logarithmic: false,
+                    },
+                    format: Format::whole("%"),
+                    choices: &[],
+                },
+                true,
+            );
+            if value != before {
+                bus.return_level = (value / 100.0) as f32;
+            }
+        }
+        Slot::Delay(param) => {
+            let Module::EchoformDelay(delay) = &mut bus.module else {
+                return;
+            };
+            let enabled = match param {
+                DelayParam::TimeL => delay.mode == mixjam_techno::application::fx::TimeMode::Free,
+                DelayParam::TimeR => {
+                    delay.mode == mixjam_techno::application::fx::TimeMode::Free
+                        && !delay.link_times
+                }
+                _ => true,
+            };
+            if let Some(value) = draw_face_dial(
+                draw,
+                ui,
+                positions,
+                prefix,
+                delay_face(*param),
+                (param.range(), param.get(delay)),
+                enabled,
+            ) {
+                param.set(delay, value);
+            }
+        }
+        Slot::Reverb(param) => {
+            let Module::AetherformReverb(reverb) = &mut bus.module else {
+                return;
+            };
+            let enabled = *param != ReverbParam::ShimmerAmount || reverb.shimmer_enabled;
+            if let Some(value) = draw_face_dial(
+                draw,
+                ui,
+                positions,
+                prefix,
+                reverb_face(*param),
+                (param.range(), param.get(reverb)),
+                enabled,
+            ) {
+                param.set(reverb, value);
+            }
+        }
+        Slot::Drive(param) => {
+            let Module::EmberformDrive(drive) = &mut bus.module else {
+                return;
+            };
+            let enabled = !matches!(param, DistortionParam::Bits | DistortionParam::CrushRate)
+                || drive.shape == mixjam_techno::application::fx::DistortionShape::Bitcrush;
+            if let Some(value) = draw_face_dial(
+                draw,
+                ui,
+                positions,
+                prefix,
+                drive_face(*param),
+                (param.range(), param.get(drive)),
+                enabled,
+            ) {
+                param.set(drive, value);
+            }
+        }
+    }
+}
+
+fn draw_face_dial(
+    draw: fn(&mut egui::Ui, [Pos2; 3], &mut f64, Dial<'_>, bool),
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    prefix: &str,
+    face: Face,
+    (range, current): (Range, f32),
+    enabled: bool,
+) -> Option<f32> {
+    let mut value = f64::from(current);
+    let before = value;
+    draw(
+        ui,
+        positions,
+        &mut value,
+        Dial {
+            name: &format!("{prefix} {}", face.name),
+            label: face.label,
+            hint: face.hint,
+            range: knob(range),
+            format: face.format,
+            choices: &[],
+        },
+        enabled,
+    );
+    (value != before).then_some(value as f32)
+}
 
 /// What one dial prints: its label, the name after the bus's, its hint, and
 /// the format of its value.
@@ -22,6 +178,7 @@ pub(super) enum Slot {
     Drive(DistortionParam),
 }
 
+#[cfg(test)]
 pub(super) fn slots(module: &Module) -> Vec<Slot> {
     match module {
         Module::Empty => Vec::new(),
@@ -34,6 +191,8 @@ pub(super) fn slots(module: &Module) -> Vec<Slot> {
                     ReverbParam::PreDelay,
                     ReverbParam::Decay,
                     ReverbParam::Size,
+                    ReverbParam::BassMult,
+                    ReverbParam::TrebleMult,
                     ReverbParam::LateBalance,
                     ReverbParam::Diffusion,
                     ReverbParam::Density,
@@ -44,6 +203,7 @@ pub(super) fn slots(module: &Module) -> Vec<Slot> {
                     ReverbParam::ModRate,
                     ReverbParam::ModDepth,
                     ReverbParam::ShimmerAmount,
+                    ReverbParam::DuckThreshold,
                     ReverbParam::DuckAmount,
                     ReverbParam::DuckRelease,
                     ReverbParam::DuckKey,
@@ -57,15 +217,6 @@ pub(super) fn slots(module: &Module) -> Vec<Slot> {
             .chain(DistortionParam::ALL.into_iter().map(Slot::Drive))
             .collect(),
     }
-}
-
-/// Dials in a row: two rows hold them all.
-pub(super) fn columns(module: &Module) -> usize {
-    slots(module).len().div_ceil(2)
-}
-
-pub(super) fn unit_width(module: &Module) -> f32 {
-    (columns(module) as f32 * CELL + 2.0 * PADDING).max(320.0)
 }
 
 pub(super) fn knob(range: Range) -> KnobRange {
@@ -117,13 +268,13 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             label: "Low cut",
             name: "low cut",
             hint: "Each repeat loses more below this.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         DelayParam::HighCut => Face {
             label: "High cut",
             name: "high cut",
             hint: "Each repeat loses more above this.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         DelayParam::ModRate => Face {
             label: "Rate",
@@ -143,6 +294,18 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             hint: "Saturates the sound entering the delay.",
             format: Format::whole("%"),
         },
+        DelayParam::FilterResonance => Face {
+            label: "Res",
+            name: "filter resonance",
+            hint: "Resonance around the delay filter cutoff.",
+            format: Format::whole("%"),
+        },
+        DelayParam::Smear => Face {
+            label: "Smear",
+            name: "smear",
+            hint: "Diffuses each repeat into a softer bloom.",
+            format: Format::whole("%"),
+        },
         DelayParam::DuckAmount => Face {
             label: "Duck",
             name: "duck amount",
@@ -160,6 +323,12 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             name: "duck key",
             hint: "The track that lowers the repeats, as it sounds after its fader. Own: the input.",
             format: Format::Key,
+        },
+        DelayParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
         },
         DelayParam::Output => Face {
             label: "Output",
@@ -191,6 +360,18 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             hint: "The size of the space. It does not change the decay.",
             format: Format::whole("%"),
         },
+        ReverbParam::BassMult => Face {
+            label: "Bass",
+            name: "bass multiplier",
+            hint: "Scales low-frequency decay relative to the main decay time.",
+            format: in_unit("x", 2),
+        },
+        ReverbParam::TrebleMult => Face {
+            label: "Treble",
+            name: "treble multiplier",
+            hint: "Scales high-frequency decay relative to the main decay time.",
+            format: in_unit("x", 2),
+        },
         ReverbParam::LateBalance => Face {
             label: "Late",
             name: "late balance",
@@ -213,13 +394,13 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             label: "Low cut",
             name: "low cut",
             hint: "The tail loses more below this as it decays.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         ReverbParam::HighCut => Face {
             label: "High cut",
             name: "high cut",
             hint: "The tail loses more above this as it decays.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         ReverbParam::Width => Face {
             label: "Width",
@@ -269,6 +450,12 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             hint: "The track that lowers the tail, as it sounds after its fader. Own: the input.",
             format: Format::Key,
         },
+        ReverbParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
+        },
         ReverbParam::Output => Face {
             label: "Output",
             name: "output",
@@ -297,13 +484,13 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
             label: "Low cut",
             name: "low cut",
             hint: "Takes the lows out before the curve, so they stay clean in the dry sound.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         DistortionParam::HighCut => Face {
             label: "High cut",
             name: "high cut",
             hint: "Softens the fizz above this after the curve.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         DistortionParam::Bits => Face {
             label: "Bits",
@@ -316,7 +503,7 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
             name: "crush rate",
             hint: "The crusher's sample rate: lower folds more aliasing in. It acts with the Bitcrush \
              type.",
-            format: Format::whole("Hz"),
+            format: Format::Hertz,
         },
         DistortionParam::Width => Face {
             label: "Width",
@@ -342,6 +529,12 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
             hint: "The track that lowers the distortion, as it sounds after its fader. Own: the input.",
             format: Format::Key,
         },
+        DistortionParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
+        },
         DistortionParam::Output => Face {
             label: "Output",
             name: "output",
@@ -357,20 +550,19 @@ mod tests {
     use mixjam_techno::application::fx::{Aetherform, Echoform, Emberform};
 
     #[test]
-    fn every_unit_fits_its_dials_in_two_rows() {
+    fn every_unit_fits_its_macro_dials_on_a_compact_card() {
         for module in [
             Module::Empty,
             Module::EchoformDelay(Echoform::default()),
             Module::AetherformReverb(Aetherform::default()),
             Module::EmberformDrive(Emberform::default()),
         ] {
-            let count = slots(&module).len();
-            assert!(count <= 2 * columns(&module));
-            assert!(columns(&module) as f32 * CELL + 2.0 * PADDING <= unit_width(&module));
+            let macros = macro_slots(&module).len();
+            assert!((1..=4).contains(&macros));
         }
         assert_eq!(
             slots(&Module::AetherformReverb(Aetherform::default())).len(),
-            18
+            21
         );
     }
 }

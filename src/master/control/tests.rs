@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn removing_an_fx_module_releases_its_monitoring_solo() {
+    let control = MasterControl::new(&MasterChain::default());
+    let mut buses = crate::fx::FxBuses::default();
+    buses.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
+    buses.buses[1] = buses.buses[0];
+    control.set_returns(&buses);
+    control.set_fx_solo(0, true);
+    control.set_fx_solo(1, true);
+    assert!(control.fx_solo(0) && control.fx_solo(1));
+
+    buses.buses[0] = Default::default();
+    control.set_returns(&buses);
+    assert!(!control.fx_solo(0) && control.fx_solo(1));
+    control.set_fx_solo(0, true);
+    assert!(!control.fx_solo(0));
+
+    control.set_returns(&crate::fx::FxBuses::default());
+    assert_eq!(control.fx_solo_mask(), 0);
+}
+
+#[test]
 fn compressor_switches_invalidate_only_their_track_and_old_sources_cannot_restore_it() {
     let mut project = crate::engine::Project::default();
     project.tracks[0].compressor.on = true;

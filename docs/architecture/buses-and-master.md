@@ -32,44 +32,57 @@ The return lane of a bus (`Project::return_automation`, which the mix resolves
 into `ReturnLanes`) replaces its return level frame by frame. The mix gives the
 lanes and the song frame of the block to `ReturnsProcessor::process_at` and
 `split`. The bus multiplies the output of its effect by the straight-line value
-of the lane just before its safety stage. It reads the lane ahead by the delay
-of the return of the bus. This is `LOOKAHEAD` frames for a delay or a reverb,
-and none for a drive. Thus each returned frame carries the value of the lane at
-its own time. The song frame continues to count through the tail, in export and
-in playback. Thus a lane that moves after the end of the song shapes the tail in
-the same way. The lane only scales the return. The state of the effect runs
-independently of the lane, as it does behind a Return knob at zero.
+of the lane just before its safety stage. Live delay and reverb read the lane
+`LOOKAHEAD` frames ahead. Live drive reads it at the current frame. Offline, the
+processor reads the lane at the time of the effect sample before latency
+compensation. A lane that moves after the end of the song shapes the tail. The
+state of the effect runs independently of the lane, as it does behind a Return
+knob at zero.
 
 A bus with no input and no remaining internal tail sleeps. The delay sleep gives
 a pending long echo enough time. Bypass does not hide internal tail activity
 from this check. Clear tail and effect changes fade the return over 12 ms after
-the safety stage, then clear the effect state. The safety limiter has a fixed
-220-frame lookahead. The delay takes that lookahead off its output tap. Its
-feedback keeps the full selected time, so each repeat stays on the beat. The
-reverb compensates its pre-delay where possible.
+the safety stage, then clear the effect state. Returns run at
+`RenderQuality::Live` during playback and `RenderQuality::Offline` during export
+and stems:
 
-The Emberform Drive (`src/fx/distortion.rs`) has no delay to shorten. Its return
-adds to the dry sound that it came from. Thus its bus adds no latency. An
-instant ceiling (`ceiling` in `src/fx/parts.rs`) replaces the limiter and its
-lookahead.
+- `RenderQuality::Live` keeps zero dry latency compensation (Emberform Drive
+  uses 2x polyphase IIR oversampling and an instant soft safety ceiling, while
+  Delay and Reverb use the 220-frame lookahead safety limiter with internal
+  pre-delay/tap compensation).
+- `RenderQuality::Offline` runs Emberform Drive with 8x/16x linear-phase FIR
+  oversampling and ADAA2. The safety limiter uses 4x true-peak lookahead with
+  a -1.02 dBTP target when enabled. The dry path and master key tracks use the
+  same delay (`ReturnsProcessor::latency_samples`, up to 324 frames).
+
+The post-limiter ducker runs after the safety stage and aligns to delayed dry or
+key transients within 2 ms. Live playback publishes per-bus peak, RMS, Ducker GR,
+Limiter GR, and tail state through lock-free atomics in `MasterControl`. The
+rack and editor share one display reading. Reduced mode holds the display for
+at least 1/15 second and keeps the largest observed peaks and gain reduction
+until the next update. The window shows idle readings when playback stops.
+The monitoring solo mask starts clear for each song. An empty slot cannot hold
+a solo.
 
 Export, stem export, and playback share one block schedule
 (`src/audio/schedule.rs`). After the song, it runs the stage on silence while a
-bus rings, for at most `TAIL_LIMIT`, in 1024-frame steps (`Mix::TAIL_BLOCK`). At
-the start of each step it asks once whether a bus still rings. The size of the
-blocks of the caller does not change this. Then it runs the delay of the master
-pedals for the mix export and playback. The [playback
-contract](playback.md#output-device-and-the-audio-thread) describes when the
-samples match. A digest test (`src/audio/tests/render_paths.rs`) checks the
-samples of each render path.
+bus rings, for at most `TAIL_LIMIT`, in 1024-frame steps (`Mix::TAIL_BLOCK`),
+then drains offline FX and master delays. The fixtures in
+`src/audio/tests/render_paths.rs` pin separate offline and live digests and
+check live block-size invariance, RMS within 0.5 dB, and onset alignment
+within two samples.
 
 If an FX type change completes inside a processing block, its sidechain key
 changes on that same frame. When the same inputs pass through blocks of
-different sizes, the new key must not wait until the next block. A reverb delay
-change crossfades from a snapshot of all current delay positions. Each read head
-limits its own modulation during the transition. When the old positions stop
-their fade, the modulation returns to the requested depth, within the bounds of
-the new space.
+different sizes, the new key must not wait until the next block. A linked delay
+uses the left tap time on both sides. Smear spreads feedback inside the loop,
+and Resonance shapes the loop filters. The reverb's Bass and Treble controls
+adjust decay in their bands. Each has a neutral value of 1.
+
+A reverb delay change crossfades from a snapshot of all current delay
+positions. Each read head limits its own modulation during the transition.
+When the old positions stop their fade, the modulation returns to the
+requested depth, within the bounds of the new space.
 
 ## Master pedalboard
 

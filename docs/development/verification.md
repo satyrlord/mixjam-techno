@@ -89,6 +89,9 @@ The capture cases include these views:
   automation. Track 9 of that song plays a Step synth sequence with its saved
   pattern. The clip shows the notes.
 - `command-list` opens the command list over the default song.
+- `fx-board` shows the four FX Returns cards. `fx-deep-edit`,
+  `fx-deep-edit-delay`, and `fx-deep-edit-reverb` open the editors for Drive,
+  Delay, and Reverb.
 - `mix-view` shows the Mix view of the score, with the lower panel on
   Mastering. `mix-view-dense` fills it with the full song. `mix-view-empty`
   shows it with no tracks. `mix-view-states` uses the song with the Mixer

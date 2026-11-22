@@ -321,6 +321,12 @@ pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
 impl MixJamApp {
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
         self.poll_application(ctx);
+        self.boards.fx_meter_display.sample(
+            self.session.playing_mix().then(|| self.session.fx_meters()),
+            self.session.options().meter_display_rate
+                == mixjam_techno::application::options::MeterDisplayRate::Reduced,
+            ctx.input(|input| input.time),
+        );
         let (pressed, held) = ctx.input(|i| {
             (
                 i.pointer.button_pressed(egui::PointerButton::Primary),

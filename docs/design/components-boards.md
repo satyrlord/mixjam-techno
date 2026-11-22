@@ -126,19 +126,23 @@ The empty Mixer shows one instruction that tells how to add a sound to the
 arrangement. The frontend sends edits to the application layer. Visual
 changes keep those commands.
 
-## FX returns board
+## FX returns board and Deep Edit
 
-The FX returns board shows four bus units side by side on a Marine board. If
-necessary, the row scrolls in both directions. Each raised unit identifies its
-bus and effect. It holds the effect and preset selectors, the settings, the
-return level, the input and limiter switches, and Clear tail. An empty unit
-asks the user to choose an effect. The enamel of each effect is:
+Four compact cards fit side by side on a Marine board in a 960-point window.
+If other panels reduce the room, the row scrolls horizontally. Each card has
+effect and preset selectors, up to four main controls, live stereo and
+gain-reduction meters, Power, Solo, Limiter, and Clear tail. Edit opens the bus
+in the floating FX Deep Edit window.
+The board toolbar also provides Clear all FX tails. The enamel of each effect is:
 
 - Echoform Delay: blue.
 - Aetherform Reverb: violet.
 - Emberform Drive: ember.
 
-An inactive or empty unit dims its enclosure and lamp.
+An inactive or empty unit dims its enclosure and lamp. FX Deep Edit groups the
+effect's controls and shows the transfer curve for Emberform Drive. Its bus
+buttons select the controls and meters for that bus. Link L/R pairs Echoform's
+left and right delay times in both Free and Sync modes.
 
 ## Shared shell and controls
 

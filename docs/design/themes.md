@@ -90,6 +90,11 @@ permits installable embedding. `tools/assets/prepare-fonts.py` checks this.
 The executable embeds every face. The font setup loads only the faces of the
 current theme, with the brand face and Inter.
 
+The FX rack and FX Deep Edit share the instrument painters in
+`src/ui/controls/instrument.rs`. The painters use `Material` to select the
+surface details. Studio has flat frames. Aero uses translucent frames and a
+blue scope. Vintage adds metal details, faceted lamps, and a green scope.
+
 **Code-only rendering.** Studio and Aero load no material bitmaps. All of
 their surfaces, dials, caps, bevels, and highlights are bounded painter
 geometry. The painters draw them each frame, with no texture creation and no

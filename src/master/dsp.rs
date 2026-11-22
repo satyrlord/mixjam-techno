@@ -536,7 +536,7 @@ impl PowerDetector {
 /// The taps at odd offsets from the centre of a Kaiser-windowed halfband
 /// low-pass with `2 TAPS - 1` taps. Its other taps are zero except the
 /// centre, which is one half. The taps sum to one half, so DC passes exactly.
-fn halfband<const TAPS: usize>(beta: f64) -> [f32; TAPS] {
+pub(crate) fn halfband<const TAPS: usize>(beta: f64) -> [f32; TAPS] {
     let middle = (TAPS - 1) as f64;
     let raw: [f64; TAPS] = std::array::from_fn(|j| {
         let offset = 2.0 * j as f64 - middle;
@@ -548,13 +548,13 @@ fn halfband<const TAPS: usize>(beta: f64) -> [f32; TAPS] {
 
 /// The outer stage, between the mix rate and twice it: 127 taps, which
 /// pass up to 20 kHz and stop from 24 kHz by about 90 dB.
-static OUTER: LazyLock<[f32; 64]> = LazyLock::new(|| {
+pub(crate) static OUTER: LazyLock<[f32; 64]> = LazyLock::new(|| {
     #[cfg(test)]
     TABLE_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     halfband(9.0)
 });
 /// The inner stage, between twice and four times the mix rate: 23 taps.
-static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| {
+pub(crate) static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| {
     #[cfg(test)]
     TABLE_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     halfband(9.0)
@@ -563,13 +563,13 @@ static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| {
 /// One channel of one halfband stage, up and down. `TAPS - 1` is odd, so
 /// every tap that the polyphase sums use is nonzero.
 #[derive(Clone, Copy)]
-struct Halfband<const TAPS: usize> {
+pub(crate) struct Halfband<const TAPS: usize> {
     input: History<TAPS>,
     even: History<TAPS>,
     odd: History<TAPS>,
 }
 impl<const TAPS: usize> Halfband<TAPS> {
-    const ZERO: Self = Self {
+    pub(crate) const ZERO: Self = Self {
         input: History::ZERO,
         even: History::ZERO,
         odd: History::ZERO,
@@ -577,13 +577,13 @@ impl<const TAPS: usize> Halfband<TAPS> {
 
     /// Two output samples for one input sample.
     #[inline]
-    fn up(&mut self, taps: &[f32; TAPS], sample: f32) -> [f32; 2] {
+    pub(crate) fn up(&mut self, taps: &[f32; TAPS], sample: f32) -> [f32; 2] {
         let input = self.input.push(sample);
         [2.0 * dot(taps, input), input[TAPS / 2 - 1]]
     }
     /// One output sample for two input samples.
     #[inline]
-    fn down(&mut self, taps: &[f32; TAPS], [even, odd]: [f32; 2]) -> f32 {
+    pub(crate) fn down(&mut self, taps: &[f32; TAPS], [even, odd]: [f32; 2]) -> f32 {
         let even = self.even.push(even);
         let odd = self.odd.push(odd);
         dot(taps, even) + 0.5 * odd[TAPS / 2]
@@ -758,12 +758,6 @@ impl DcBlocker {
         input: 0.0,
         output: 0.0,
     };
-
-    /// A blocker that has held `input` long enough for its output to die
-    /// away.
-    pub(crate) fn resting(input: f64) -> Self {
-        Self { input, output: 0.0 }
-    }
 
     #[inline]
     pub(crate) fn process(&mut self, sample: f64, pole: f64) -> f64 {

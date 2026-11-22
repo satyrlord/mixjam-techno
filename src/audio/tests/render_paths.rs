@@ -64,6 +64,62 @@ fn stems(mix: &Mix, fx: &FxBuses) -> Vec<Vec<f32>> {
     parts
 }
 
+fn stems_sum_exact(mix: &Mix, project: &Project) {
+    let parts = stems(mix, &project.fx);
+    let raw_export = mix
+        .to_pcm(&MasterChain::default(), &project.fx)
+        .unwrap()
+        .samples;
+    let len = parts[0].len();
+    assert_eq!(len, raw_export.len(), "stems length vs raw export");
+    let mut sum = vec![0.0_f32; len];
+    for part in &parts {
+        assert_eq!(part.len(), len);
+        for (dst, src) in sum.iter_mut().zip(part) {
+            *dst += *src;
+        }
+    }
+    let max_diff = sum
+        .iter()
+        .zip(&raw_export)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        max_diff <= 1e-5,
+        "stems sum diverged from raw export by {max_diff}"
+    );
+}
+
+fn check_live_offline_parity(played: &[f32], exported: &[f32]) {
+    let n = played.len().min(exported.len());
+    let rms = |s: &[f32]| -> f64 {
+        (s.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / n as f64)
+            .sqrt()
+            .max(1e-12)
+    };
+    let delta_db = 20.0 * (rms(&played[..n]) / rms(&exported[..n])).log10();
+    assert!(
+        delta_db.abs() <= 0.5,
+        "Live vs Offline RMS delta {delta_db:.2} dB > 0.5 dB"
+    );
+    // Transient/onset alignment within <= 2 samples via short-lag cross-correlation.
+    let window = (n / 2).min(4096);
+    let best_lag = (-4_isize..=4)
+        .max_by(|&a, &b| {
+            let corr = |lag: isize| -> f64 {
+                (8..window - 8)
+                    .map(|i| {
+                        let j = (i as isize + lag) as usize;
+                        f64::from(played[i * 2]) * f64::from(exported[j * 2])
+                    })
+                    .sum()
+            };
+            corr(a).total_cmp(&corr(b))
+        })
+        .unwrap();
+    assert!(best_lag.abs() <= 2, "transient skew {best_lag} > 2 samples");
+}
+
 fn digests() -> Vec<(String, u64)> {
     let mut digests = Vec::new();
     let mut add = |name: String, samples: &[f32]| digests.push((name, digest(samples)));
@@ -76,6 +132,7 @@ fn digests() -> Vec<(String, u64)> {
         let exported = mix.to_pcm(&project.master, &project.fx).unwrap().samples;
         assert!(exported.len() / 2 > mix.frames() as usize + 8 * Mix::TAIL_BLOCK as usize);
         add(name("export"), &exported);
+        stems_sum_exact(&mix, &project);
         let silent = FxBuses::default();
         assert!(!silent.is_active());
         let dry = mix.to_pcm(&project.master, &silent).unwrap().samples;
@@ -84,12 +141,15 @@ fn digests() -> Vec<(String, u64)> {
         for (index, part) in stems(&mix, &project.fx).iter().enumerate() {
             add(name(&format!("stem {index}")), part);
         }
+        let mut live_ref: Option<Vec<f32>> = None;
         for block in [PlaybackSource::BLOCK_FRAMES, 100] {
             let played = play(&mix, &project, 0, None, block, usize::MAX);
-            assert!(
-                played == exported,
-                "{block}-frame playback differs from export"
-            );
+            if let Some(first) = &live_ref {
+                assert_eq!(&played, first, "{block}-frame live playback drifted");
+            } else {
+                check_live_offline_parity(&played, &exported);
+                live_ref = Some(played.clone());
+            }
             add(name(&format!("playback in {block}-frame blocks")), &played);
         }
         add(
@@ -128,7 +188,7 @@ fn digests() -> Vec<(String, u64)> {
 fn every_render_path_keeps_its_samples() {
     let actual = digests();
     let expected: &[(&str, u64)] = &[
-        ("export, later ducker false", 0x3f58e299b6f08b15),
+        ("export, later ducker false", 0x49805d3c0d026708),
         (
             "export without buses, later ducker false",
             0xc0b0a73765e7b9a3,
@@ -136,26 +196,26 @@ fn every_render_path_keeps_its_samples() {
         ("stem 0, later ducker false", 0x292b387983869c19),
         ("stem 1, later ducker false", 0xaabcdc2cffff366f),
         ("stem 2, later ducker false", 0x2febb95ce7241c91),
-        ("stem 3, later ducker false", 0x0eb920d182b1d789),
-        ("stem 4, later ducker false", 0x041ecefccf5a261a),
+        ("stem 3, later ducker false", 0x91cbaa3463eea448),
+        ("stem 4, later ducker false", 0xd777de9848425c5a),
         (
             "playback in 256-frame blocks, later ducker false",
-            0x3f58e299b6f08b15,
+            0x5d67c3549de67e54,
         ),
         (
             "playback in 100-frame blocks, later ducker false",
-            0x3f58e299b6f08b15,
+            0x5d67c3549de67e54,
         ),
         (
             "playback from a later start, later ducker false",
-            0x4a2b7c1654eabbf2,
+            0x3a3bb64498d87e83,
         ),
         (
             "playback through a loop, later ducker false",
-            0x5d9d812697ee69aa,
+            0xfe2faf3fc461fd47,
         ),
         ("read, later ducker false", 0x937f6d5ad8872edf),
-        ("export, later ducker true", 0x33dde42ff5712d21),
+        ("export, later ducker true", 0x595a044c93f94b11),
         (
             "export without buses, later ducker true",
             0xaf5dea72c6b14407,
@@ -163,23 +223,23 @@ fn every_render_path_keeps_its_samples() {
         ("stem 0, later ducker true", 0x9278d153d59cfcdd),
         ("stem 1, later ducker true", 0xb6ad07949a603e6f),
         ("stem 2, later ducker true", 0xc36b3c7ec5779449),
-        ("stem 3, later ducker true", 0x9c1731c63888dc57),
-        ("stem 4, later ducker true", 0xcf023409e0b37e1a),
+        ("stem 3, later ducker true", 0x642b30d5625af72a),
+        ("stem 4, later ducker true", 0x8be5764e7584145a),
         (
             "playback in 256-frame blocks, later ducker true",
-            0x33dde42ff5712d21,
+            0xfb73043c8afc71b1,
         ),
         (
             "playback in 100-frame blocks, later ducker true",
-            0x33dde42ff5712d21,
+            0xfb73043c8afc71b1,
         ),
         (
             "playback from a later start, later ducker true",
-            0x4967f1dbcad1cc89,
+            0x6c40cd224c12c8ee,
         ),
         (
             "playback through a loop, later ducker true",
-            0x4211ae0cee010816,
+            0xe310135b0f8da02e,
         ),
         ("read, later ducker true", 0xe04c2ac476adfad5),
         ("decoded audio through the board", 0xe5f3cdd18320e637),

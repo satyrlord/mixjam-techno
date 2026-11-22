@@ -362,20 +362,50 @@ pub(crate) fn dial(
     spec: Dial<'_>,
     enabled: bool,
 ) {
+    draw_dial(ui, positions, value, spec, enabled, WELL, 11.5);
+}
+
+pub(crate) fn compact_dial(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    value: &mut f64,
+    spec: Dial<'_>,
+    enabled: bool,
+) {
+    draw_dial(
+        ui,
+        positions,
+        value,
+        spec,
+        enabled,
+        Vec2::new(46.0, WELL.y),
+        10.0,
+    );
+}
+
+fn draw_dial(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    value: &mut f64,
+    spec: Dial<'_>,
+    enabled: bool,
+    well_size: Vec2,
+    label_size: f32,
+) {
     let [center, well, label] = positions;
     let range = spec.range;
     ui.painter().text(
         label,
         Align2::CENTER_CENTER,
         spec.label,
-        FontId::proportional(11.5),
+        FontId::proportional(label_size),
         if ui.visuals().dark_mode {
             roles().legend
         } else {
             roles().ink
         },
     );
-    controls::well(ui, Rect::from_center_size(well, WELL));
+    controls::well(ui, Rect::from_center_size(well, well_size));
     let (low, high) = (decimal(range.low), decimal(range.high));
     let hint = format!(
         "{}: {} to {}. {}",
@@ -422,6 +452,9 @@ pub(crate) fn dial(
         }
         ui.scope(|ui| {
             controls::value_style(ui);
+            if well_size.x < WELL.x {
+                ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
+            }
             let typed = *value;
             let format = spec.format;
             // Leaving the window parses the text it shows. Unchanged text is
@@ -439,7 +472,7 @@ pub(crate) fn dial(
                     }
                 });
             let response = ui.put(
-                Rect::from_center_size(well, WELL + Vec2::new(-2.0, 4.0)),
+                Rect::from_center_size(well, well_size + Vec2::new(-2.0, 4.0)),
                 entry,
             );
             reveal(name_control(response, &format!("{} value", spec.name))).hover_hint(&hint);

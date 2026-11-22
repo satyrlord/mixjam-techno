@@ -3,6 +3,37 @@ use super::*;
 use crate::application::render_worker::{RenderRequest, RenderResult};
 use std::sync::mpsc;
 
+#[test]
+fn fx_meters_are_idle_without_mix_playback() {
+    let app = fixture();
+    app.master.publish_fx_meter(
+        0,
+        FxBusMeterReading {
+            peak_l: 0.5,
+            tail_active: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        app.fx_meters(),
+        [FxBusMeterReading::default(); crate::fx::BUSES]
+    );
+}
+
+#[test]
+fn another_song_starts_with_the_fx_monitoring_solo_off() {
+    let mut app = fixture();
+    let mut project = app.project().clone();
+    project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform::default());
+    app.replace_project(project.clone());
+    app.toggle_fx_solo(0);
+    assert!(app.fx_solo(0));
+
+    project.title = "Another song".into();
+    app.replace_project(project);
+    assert!(!app.fx_solo(0));
+}
+
 fn clip_sound(clip: &Clip) -> ClipSound {
     ClipSound {
         id: clip.id,

@@ -12,11 +12,11 @@ fn unsupported_song_version_lists_all_supported_versions() {
         std::process::id()
     ));
     let mut document = fixture();
-    document["formatVersion"] = json!(27);
+    document["formatVersion"] = json!(song::FORMAT_VERSION + 1);
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let error = load_song(&path, &Library::empty()).unwrap_err();
     fs::remove_file(path).unwrap();
-    assert_eq!(error, "Only MixJam format versions 7 to 26 are supported.");
+    assert_eq!(error, "Only MixJam format versions 7 to 27 are supported.");
 }
 
 #[test]
@@ -287,13 +287,32 @@ fn wav_only_import_converts_clock_solo_and_monophonic_spans() {
 
 #[test]
 fn return_buses_and_sends_play_through_the_application_effects() {
-    let module = |value: serde_json::Value| {
-        let mut value = value;
+    let module = |mut value: serde_json::Value| {
+        let fields = value.as_object_mut().unwrap();
+        for key in [
+            "duckThresholdDb",
+            "linkTimes",
+            "smearPercent",
+            "filterResonance",
+            "bassMult",
+            "trebleMult",
+        ] {
+            fields.remove(key);
+        }
         value["id"] = json!("fx-module-1");
         value
     };
-    let delay = crate::fx::Echoform::preset("Dotted Motion").unwrap();
-    let reverb = crate::fx::Aetherform::preset("Vocal Plate").unwrap();
+    let mut delay = crate::fx::Echoform::preset("Dotted Motion").unwrap();
+    delay.time_ms_r = delay.time_ms_l;
+    delay.division_r = delay.division_l;
+    delay.link_times = true;
+    delay.duck_threshold_db = -27.0;
+    delay.smear_percent = 0.0;
+    delay.filter_resonance = 0.0;
+    let mut reverb = crate::fx::Aetherform::preset("Vocal Plate").unwrap();
+    reverb.bass_mult = 1.0;
+    reverb.treble_mult = 1.0;
+    reverb.duck_threshold_db = -27.0;
     let mut document = fixture();
     document["fxBuses"][1]["module"] =
         module(serde_json::to_value(crate::fx::Module::EchoformDelay(delay)).unwrap());
@@ -316,6 +335,17 @@ fn return_buses_and_sends_play_through_the_application_effects() {
     assert_eq!(buses[2].module, crate::fx::Module::AetherformReverb(reverb));
     assert!(!buses[2].powered && !buses[2].limiter);
     assert_eq!(project.tracks[0].sends, [0.0, 0.5, 0.25, 0.0]);
+    let mut later = document.clone();
+    later["fxBuses"][1]["module"]["linkTimes"] = json!(true);
+    assert_eq!(
+        convert(
+            serde_json::from_value(later).unwrap(),
+            Path::new("song.mixjam"),
+            &Library::empty(),
+        )
+        .unwrap_err(),
+        "Version 7 songs cannot contain FX version 27 parameter `linkTimes`."
+    );
     // A module of a known type with a setting out of range is refused.
     document["fxBuses"][1]["module"]["feedback"] = json!(500);
     let error = convert(
@@ -483,12 +513,12 @@ fn header_scanner_handles_reordered_keys_escapes_and_preserves_errors() {
     assert_eq!(loaded.title, saved.title);
 
     // Unsupported version & missing header fields fall back to identical error messages.
-    doc["formatVersion"] = json!(27);
+    doc["formatVersion"] = json!(song::FORMAT_VERSION + 1);
     let unsupported = dir.join("unsupported.mixjam");
     fs::write(&unsupported, serde_json::to_vec(&doc).unwrap()).unwrap();
     assert_eq!(
         load_song(&unsupported, &Library::empty()).unwrap_err(),
-        "Only MixJam format versions 7 to 26 are supported."
+        "Only MixJam format versions 7 to 27 are supported."
     );
 
     let missing_created = dir.join("missing-created.mixjam");

@@ -103,7 +103,7 @@ The Python tests check these items:
 - The `.mixjam` projection that artifact verification uses.
 - The change measurements of `tools/measure-change.py`.
 
-The projection reads formats 8 through 26. When a verification script writes a
+The projection reads formats 8 through 27. When a verification script writes a
 schema-4 JSON project for a render, the projection keeps these items:
 
 - The sections, the master pedalboard and its bypass.

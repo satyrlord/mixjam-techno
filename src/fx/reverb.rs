@@ -7,7 +7,7 @@
 //! has its damping, the character's colouring, and an all-pass inside the
 //! loop. A pitch shifter can feed the tail back an interval higher: the
 //! shimmer. The early and late sounds then blend at equal power, and the
-//! output is widened, ducked, and trimmed.
+//! output is widened and trimmed.
 //!
 //! A line's gain is `10^(-3 t / decay)` for its length `t` in seconds, so
 //! every line falls by 60 dB in the decay time whatever the size. The cuts
@@ -15,11 +15,12 @@
 //! circulation, and a hall would die in a fraction of its decay. The
 //! damping is designed per line from its length, so the tail falls by
 //! 60 dB at the high cut in a fixed share of the decay and in the decay
-//! below it. Size, model, and pre-delay changes crossfade between old and
+//! below it. Bass and treble shelves adjust the decay of their bands
+//! inside the loop. Size, model, and pre-delay changes crossfade between old and
 //! new read positions, never glide, so the pitch never bends.
-use super::parts::{AllPass, Ducker, Lfo, Line, OnePole, Tone, bound, drive, widen};
+use super::parts::{AllPass, Lfo, Line, OnePole, Tone, bound, drive, widen};
 use super::{Aetherform, ReverbCharacter, SpaceModel};
-use crate::master::dsp::{RATE, Smoothed, db_to_gain, flush};
+use crate::master::dsp::{Biquad, Coefficients, RATE, Smoothed, db_to_gain, flush};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 const LINES: usize = 8;
@@ -35,6 +36,8 @@ const INNER_MS: [f64; LINES] = [2.31, 3.07, 3.71, 4.39, 2.73, 3.41, 4.13, 4.87];
 const HIGH_CUT_DECAY: f64 = 0.6;
 /// The vintage character's darker share.
 const VINTAGE_HIGH_CUT_DECAY: f64 = 0.4;
+const BASS_DECAY_CORNER: f64 = 280.0;
+const TREBLE_DECAY_CORNER: f64 = 4500.0;
 
 /// The pole `b` of a line's damping, `y = (1 - b) x + b y'`, unity at 0 Hz.
 /// Its gain at the high cut, whose cosine of the angular frequency is
@@ -223,6 +226,10 @@ pub(super) struct Core {
     /// Each line's damping pole, and its last output.
     damping: [f64; LINES],
     damped: [f64; LINES],
+    bass_shelves: [Biquad; LINES],
+    treble_shelves: [Biquad; LINES],
+    bass_shaped: bool,
+    treble_shaped: bool,
     inner: [AllPass; LINES],
     /// Frames left of the crossfade after a retime.
     fade: usize,
@@ -238,7 +245,6 @@ pub(super) struct Core {
     target_ratio: f64,
     shimmer_send: f64,
     shimmer_level: Smoothed,
-    ducker: Ducker,
     mod_rate: f64,
     /// The requested swing, before the active delay lengths bound it.
     requested_depth: f64,
@@ -251,7 +257,6 @@ pub(super) struct Core {
     width: Smoothed,
     output: Smoothed,
     drive: Smoothed,
-    duck: Smoothed,
     vintage: Smoothed,
     bloomy: Smoothed,
     high_cut: f64,
@@ -290,6 +295,10 @@ impl Core {
             input_tone: [Tone::default(); 2],
             damping: [0.0; LINES],
             damped: [0.0; LINES],
+            bass_shelves: [Biquad::FLAT; LINES],
+            treble_shelves: [Biquad::FLAT; LINES],
+            bass_shaped: false,
+            treble_shaped: false,
             inner: INNER_MS.map(|ms| AllPass::new(ms / 1000.0)),
             fade: 0,
             queued: None,
@@ -301,7 +310,6 @@ impl Core {
             target_ratio: 2.0,
             shimmer_send: 0.0,
             shimmer_level: Smoothed::with_time(0.0, 0.04),
-            ducker: Ducker::new(),
             mod_rate: 0.0,
             requested_depth: 0.0,
             depth: smooth(0.0),
@@ -313,7 +321,6 @@ impl Core {
             width: smooth(1.0),
             output: smooth(0.0),
             drive: smooth(0.0),
-            duck: smooth(0.0),
             vintage: Smoothed::with_time(0.0, 0.02),
             bloomy: Smoothed::with_time(0.0, 0.02),
             high_cut: 20_000.0,
@@ -366,8 +373,27 @@ impl Core {
             HIGH_CUT_DECAY
         };
         let cosine = (2.0 * PI * high_cut.min(0.49 * RATE) / RATE).cos();
-        for (pole, circulation) in self.damping.iter_mut().zip(circulations) {
-            *pole = damping(circulation, decay, share, cosine);
+        let bass = f64::from(s.bass_mult);
+        let treble = f64::from(s.treble_mult);
+        self.bass_shaped = bass != 1.0;
+        self.treble_shaped = treble != 1.0;
+        for (i, circulation) in circulations.into_iter().enumerate() {
+            self.damping[i] = damping(circulation, decay, share, cosine);
+            // Add the difference in loss per circulation for each band's
+            // decay time. The shelves affect the loop, not the input cuts.
+            let loss = 60.0 * circulation / decay;
+            if self.bass_shaped {
+                let db = loss * (1.0 - bass.recip());
+                self.bass_shelves[i].set(Coefficients::low_shelf(BASS_DECAY_CORNER, 1.0, db));
+            } else {
+                self.bass_shelves[i].clear();
+            }
+            if self.treble_shaped {
+                let db = loss / share * (1.0 - treble.recip());
+                self.treble_shelves[i].set(Coefficients::high_shelf(TREBLE_DECAY_CORNER, 1.0, db));
+            } else {
+                self.treble_shelves[i].clear();
+            }
         }
         let bloom = s.character == ReverbCharacter::Bloom;
         self.vintage
@@ -390,8 +416,6 @@ impl Core {
         self.late_gain.set(balance.sin());
         self.width.set(f64::from(s.width_percent) / 100.0);
         self.drive.set(f64::from(s.drive_percent) / 100.0);
-        self.duck.set(f64::from(s.duck_amount_percent) / 100.0);
-        self.ducker.set_release(f64::from(s.duck_release_ms));
         self.output.set(if s.bypass {
             0.0
         } else {
@@ -472,7 +496,6 @@ impl Core {
             &mut self.width,
             &mut self.output,
             &mut self.drive,
-            &mut self.duck,
             &mut self.vintage,
             &mut self.bloomy,
             &mut self.shimmer_level,
@@ -492,12 +515,15 @@ impl Core {
             .chain(&mut self.input_tone)
             .for_each(Tone::clear);
         self.damped = [0.0; LINES];
+        self.bass_shelves
+            .iter_mut()
+            .chain(&mut self.treble_shelves)
+            .for_each(Biquad::clear);
         self.diffusers.iter_mut().flatten().for_each(AllPass::clear);
         self.bloom.iter_mut().flatten().for_each(AllPass::clear);
         self.inner.iter_mut().for_each(AllPass::clear);
         self.shifters.iter_mut().for_each(Shifter::clear);
         self.shimmer = [0.0; 2];
-        self.ducker.clear();
     }
     /// Move the modulation and the shimmer's read heads on by `frames`
     /// frames that the bus slept through, so their phases do not depend on
@@ -522,19 +548,7 @@ impl Core {
         0.5 - 0.5 * (PI * progress).cos()
     }
     #[inline]
-    #[cfg(test)]
     pub(super) fn process(&mut self, left: f64, right: f64) -> (f64, f64) {
-        self.process_keyed(left, right, None)
-    }
-    /// With a key, the ducking follows it instead of the input.
-    pub(super) fn process_keyed(
-        &mut self,
-        left: f64,
-        right: f64,
-        key: Option<(f64, f64)>,
-    ) -> (f64, f64) {
-        let (key_left, key_right) = key.unwrap_or((left, right));
-        let duck = self.ducker.gain(key_left, key_right, self.duck.next());
         let amount = self.drive.next();
         let input = [drive(left, amount), drive(right, amount)];
         let fading = self.fade > 0;
@@ -635,7 +649,14 @@ impl Core {
         let householder = taps.iter().sum::<f64>() * 2.0 / LINES as f64;
         for (i, tap) in taps.iter().enumerate() {
             let injected = feed[i % 2] * signs[i / 2] * 0.5;
-            let sample = bound(self.gains[i] * (tap - householder) + injected);
+            let mut feedback = self.gains[i] * (tap - householder);
+            if self.bass_shaped {
+                feedback = self.bass_shelves[i].process(0, feedback);
+            }
+            if self.treble_shaped {
+                feedback = self.treble_shelves[i].process(0, feedback);
+            }
+            let sample = bound(feedback + injected);
             self.lines[i].push(sample as f32);
         }
         // The shimmer: an interval change waits until the old one has faded.
@@ -672,7 +693,7 @@ impl Core {
             early[1] * early_gain + late[1] * late_gain,
             self.width.next(),
         );
-        let level = self.output.next() * duck;
+        let level = self.output.next();
         (l * level, r * level)
     }
 }

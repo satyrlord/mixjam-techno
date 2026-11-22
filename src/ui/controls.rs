@@ -12,6 +12,8 @@ mod textures;
 mod buttons;
 #[path = "controls/clip_fields.rs"]
 mod clip_fields;
+#[path = "controls/instrument.rs"]
+pub(super) mod instrument;
 #[path = "controls/knobs.rs"]
 mod knobs;
 #[path = "controls/readouts.rs"]

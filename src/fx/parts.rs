@@ -1,6 +1,7 @@
 //! Parts that the delay and the reverb share. Delay lines live on the heap
 //! and are sized when an effect is built, so processing never allocates.
-use crate::master::dsp::{LookaheadGain, RATE, db_to_gain, flush, gain_to_db, pole};
+use super::RenderQuality;
+use crate::master::dsp::{LookaheadGain, RATE, TruePeak, db_to_gain, flush, gain_to_db, pole};
 use std::f64::consts::{PI, TAU};
 
 /// A delay line of one channel, read at fractional positions with cubic
@@ -132,9 +133,9 @@ impl Lfo {
     }
 }
 
-/// Lowers the wet sound while the dry input is loud. A stereo-linked peak
-/// follower with a 7 ms attack; the gain falls by up to 24 dB along a soft
-/// knee between -42 and -12 dBFS.
+/// Lowers the wet sound while the dry or key input is loud. A stereo-linked
+/// peak follower with a 1 ms attack; the gain falls by up to 24 dB along a
+/// 30 dB soft knee centered on `threshold_db`.
 #[derive(Clone, Copy)]
 pub(super) struct Ducker {
     envelope: f64,
@@ -145,7 +146,7 @@ impl Ducker {
     pub(super) fn new() -> Self {
         Self {
             envelope: 0.0,
-            attack: 1.0 - pole(0.007),
+            attack: 1.0 - pole(0.001),
             release: 0.0,
         }
     }
@@ -155,9 +156,15 @@ impl Ducker {
     pub(super) fn set_release(&mut self, ms: f64) {
         self.release = 1.0 - pole(ms / 1000.0);
     }
-    /// The wet gain for this input frame at `amount` from 0 to 1.
+    /// The wet gain and reduction in dB at `amount` (0..1) and `threshold_db` (-48..0).
     #[inline]
-    pub(super) fn gain(&mut self, left: f64, right: f64, amount: f64) -> f64 {
+    pub(super) fn gain_at(
+        &mut self,
+        left: f64,
+        right: f64,
+        amount: f64,
+        threshold_db: f64,
+    ) -> (f64, f64) {
         let level = left.abs().max(right.abs());
         let rate = if level > self.envelope {
             self.attack
@@ -166,12 +173,18 @@ impl Ducker {
         };
         self.envelope = flush(self.envelope + (level - self.envelope) * rate);
         if amount <= 0.0 || self.envelope < 1e-5 {
-            return 1.0;
+            return (1.0, 0.0);
         }
         let db = gain_to_db(self.envelope);
-        let x = ((db + 42.0) / 30.0).clamp(0.0, 1.0);
+        let x = ((db - (threshold_db - 15.0)) / 30.0).clamp(0.0, 1.0);
         let knee = x * x * (3.0 - 2.0 * x);
-        db_to_gain(-24.0 * amount * knee)
+        let gr_db = 24.0 * amount * knee;
+        (db_to_gain(-gr_db), gr_db)
+    }
+    #[cfg(test)]
+    #[inline]
+    pub(super) fn gain(&mut self, left: f64, right: f64, amount: f64) -> f64 {
+        self.gain_at(left, right, amount, -27.0).0
     }
 }
 
@@ -210,69 +223,137 @@ pub(super) fn widen(left: f64, right: f64, width: f64) -> (f64, f64) {
 /// The frames whose gain needs the safety limiter compares: its lookahead
 /// and the frame now arriving.
 const NEEDS: usize = super::LOOKAHEAD + 1;
+const TP_SPREAD: usize = TruePeak::DELAY;
+const OFFLINE_NEEDS: usize = super::LOOKAHEAD + 1 + 2 * TP_SPREAD;
 
 /// The safety limiter's ceiling, in dBFS.
 pub fn return_limiter_ceiling_dbfs() -> f64 {
     gain_to_db(SafetyLimiter::CEILING)
 }
 
-/// A return's safety limiter: stereo-linked, -1 dBFS ceiling, `LOOKAHEAD`
-/// frames of lookahead, and a 100 ms release. It always delays the return
-/// by its lookahead, on or off, so switching it never moves the sound; the
-/// effects shorten their own delays by as much.
+/// A return's safety limiter: stereo-linked, -1 dBFS live / -1.0 dBTP offline
+/// ceiling, lookahead detection, and a 100 ms release.
 pub(super) struct SafetyLimiter {
     delays: [Line; 2],
     gain: LookaheadGain<f64, { super::LOOKAHEAD }, NEEDS>,
+    offline_delays: [Line; 2],
+    offline_gain: LookaheadGain<f64, { super::LOOKAHEAD }, OFFLINE_NEEDS>,
+    detectors: [TruePeak; 2],
 }
 impl SafetyLimiter {
     const CEILING: f64 = 0.891_250_938_133_745_5; // -1 dBFS
+    const TRUE_PEAK_CEILING: f64 = 0.889_201_055_065_978_5; // -1.02 dBFS margin for <= -1.0 dBTP
+    pub(super) const OFFLINE_LATENCY: usize = super::LOOKAHEAD + 2 * TP_SPREAD;
 
     pub(super) fn new() -> Self {
         let lookahead = super::LOOKAHEAD;
         Self {
             delays: [Line::new(lookahead), Line::new(lookahead)],
             gain: LookaheadGain::new(NEEDS, pole(0.1)),
+            offline_delays: [
+                Line::new(Self::OFFLINE_LATENCY),
+                Line::new(Self::OFFLINE_LATENCY),
+            ],
+            offline_gain: LookaheadGain::new(OFFLINE_NEEDS, pole(0.1)),
+            detectors: [TruePeak::ZERO; 2],
         }
     }
     pub(super) fn clear(&mut self) {
         self.delays.iter_mut().for_each(Line::clear);
         self.gain.clear();
+        self.offline_delays.iter_mut().for_each(Line::clear);
+        self.offline_gain.clear();
+        self.detectors = [TruePeak::ZERO; 2];
     }
-    /// The frame `LOOKAHEAD` ago, limited when `on`.
+    /// Run the lookahead limiter for `quality` and return `(left, right, gr_db)`.
+    #[inline]
+    pub(super) fn process_quality(
+        &mut self,
+        left: f64,
+        right: f64,
+        on: bool,
+        quality: RenderQuality,
+    ) -> (f64, f64, f64) {
+        match quality {
+            RenderQuality::Live => {
+                let lookahead = super::LOOKAHEAD;
+                self.delays[0].push(left as f32);
+                self.delays[1].push(right as f32);
+                let delayed = (
+                    f64::from(self.delays[0].at(lookahead + 1)),
+                    f64::from(self.delays[1].at(lookahead + 1)),
+                );
+                let level = left.abs().max(right.abs());
+                let need = if on && level > Self::CEILING {
+                    Self::CEILING / level
+                } else {
+                    1.0
+                };
+                let gain = self.gain.push(need);
+                let gr_db = if gain < 1.0 { -gain_to_db(gain) } else { 0.0 };
+                (delayed.0 * gain, delayed.1 * gain, gr_db)
+            }
+            RenderQuality::Offline => {
+                let latency = Self::OFFLINE_LATENCY;
+                self.offline_delays[0].push(left as f32);
+                self.offline_delays[1].push(right as f32);
+                let delayed = (
+                    f64::from(self.offline_delays[0].at(latency + 1)),
+                    f64::from(self.offline_delays[1].at(latency + 1)),
+                );
+                let tp_l = f64::from(self.detectors[0].push(left as f32));
+                let tp_r = f64::from(self.detectors[1].push(right as f32));
+                let peak = tp_l.max(tp_r);
+                let need = if on && peak > Self::TRUE_PEAK_CEILING {
+                    Self::TRUE_PEAK_CEILING / peak
+                } else {
+                    1.0
+                };
+                let gain = self.offline_gain.push(need);
+                let (out_l, out_r) = if on {
+                    (
+                        (delayed.0 * gain).clamp(-Self::CEILING, Self::CEILING),
+                        (delayed.1 * gain).clamp(-Self::CEILING, Self::CEILING),
+                    )
+                } else {
+                    delayed
+                };
+                let gr_db = if gain < 1.0 { -gain_to_db(gain) } else { 0.0 };
+                (out_l, out_r, gr_db)
+            }
+        }
+    }
+    /// The frame `LOOKAHEAD` ago in live mode, limited when `on`.
+    #[cfg(test)]
     #[inline]
     pub(super) fn process(&mut self, left: f64, right: f64, on: bool) -> (f64, f64) {
-        let lookahead = super::LOOKAHEAD;
-        self.delays[0].push(left as f32);
-        self.delays[1].push(right as f32);
-        let delayed = (
-            f64::from(self.delays[0].at(lookahead + 1)),
-            f64::from(self.delays[1].at(lookahead + 1)),
-        );
-        let level = left.abs().max(right.abs());
-        let need = if on && level > Self::CEILING {
-            Self::CEILING / level
-        } else {
-            1.0
-        };
-        let gain = self.gain.push(need);
-        (delayed.0 * gain, delayed.1 * gain)
+        let (l, r, _) = self.process_quality(left, right, on, RenderQuality::Live);
+        (l, r)
     }
 }
 
 /// A drive return's safety ceiling, which adds no latency: stereo-linked,
 /// unchanged up to -3.5 dBFS, then bending toward -1 dBFS and never past it.
-/// Off, it passes the frame unchanged.
+/// Off, it passes the frame unchanged. Returns `(left, right, gr_db)`.
 #[inline]
-pub(super) fn ceiling(left: f64, right: f64, on: bool) -> (f64, f64) {
+pub(super) fn ceiling_with_gr(left: f64, right: f64, on: bool) -> (f64, f64, f64) {
     const KNEE: f64 = 0.668_343_917_568_740_6; // -3.5 dBFS
     let peak = left.abs().max(right.abs());
     if !on || peak <= KNEE {
-        return (left, right);
+        return (left, right, 0.0);
     }
     // A hair under the ceiling, so rounding cannot pass it.
     let room = SafetyLimiter::CEILING * (1.0 - 1e-9) - KNEE;
     let gain = (KNEE + room * ((peak - KNEE) / room).tanh()) / peak;
-    (left * gain, right * gain)
+    let gr_db = if gain < 1.0 { -gain_to_db(gain) } else { 0.0 };
+    (left * gain, right * gain, gr_db)
+}
+
+#[cfg(test)]
+#[inline]
+pub(super) fn ceiling(left: f64, right: f64, on: bool) -> (f64, f64) {
+    let (l, r, _) = ceiling_with_gr(left, right, on);
+    (l, r)
 }
 
 /// A Schroeder all-pass of fixed length: it smears a sound in time
@@ -283,9 +364,12 @@ pub(super) struct AllPass {
 }
 impl AllPass {
     pub(super) fn new(seconds: f64) -> Self {
+        Self::with_modulation(seconds, 0)
+    }
+    pub(super) fn with_modulation(seconds: f64, extra_frames: usize) -> Self {
         let length = (seconds * RATE).round().max(1.0) as usize;
         Self {
-            line: Line::new(length),
+            line: Line::new(length + extra_frames),
             length,
         }
     }
@@ -295,6 +379,15 @@ impl AllPass {
     #[inline]
     pub(super) fn process(&mut self, input: f64, gain: f64) -> f64 {
         let delayed = f64::from(self.line.at(self.length));
+        self.filter(input, gain, delayed)
+    }
+    #[inline]
+    pub(super) fn process_modulated(&mut self, input: f64, gain: f64, offset: f64) -> f64 {
+        let delayed = self.line.read(self.length as f64 + offset);
+        self.filter(input, gain, delayed)
+    }
+    #[inline]
+    fn filter(&mut self, input: f64, gain: f64, delayed: f64) -> f64 {
         let v = input + gain * delayed;
         self.line.push(flush(v) as f32);
         delayed - gain * v

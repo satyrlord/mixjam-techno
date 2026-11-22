@@ -188,7 +188,7 @@ class SongTests(unittest.TestCase):
         # Sixteenths from bar 2: left, right, and back to the knob.
         song.automate(1, 'pan', [(2, -1), (2.0625, 1), (2.125, 0.25)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         self.assertEqual(document['lanes'][0]['pan'], 0.25)
         # The lane rests at the knob until its first point.
         self.assertEqual(document['lanes'][0]['automation']['pan'],
@@ -213,7 +213,7 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'repeat', [(2, 8), (2.25, 16), (2.375, 32), (2.5, 0)])
         song.automate(1, 'repeat', [(4, 4), (4.5, 64), (4.75, 0)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         # The lane is off before its first point, so no resting points are added.
         self.assertEqual(document['lanes'][0]['automation']['repeat'],
                          [dict(tick=256, value=8.0), dict(tick=320, value=16.0),
@@ -240,12 +240,12 @@ class SongTests(unittest.TestCase):
             song = mixjam.Song('repeat cache')
             song.clip(1, source, 0, 96)
             document = song.document()
-            self.assertEqual(document['formatVersion'], 26)
+            self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
             self.assertIsNotNone(render.source_fingerprints(document))
             key = render.lane_key(document, [1], False)
             document['lanes'][0]['automation'] = {'repeat': [dict(tick=0, value=16.0), dict(tick=64, value=0.0)]}
             self.assertNotEqual(render.lane_key(document, [1], False), key)
-            document['formatVersion'] = 27
+            document['formatVersion'] = mixjam.FORMAT_VERSION + 1
             self.assertIsNone(render.source_fingerprints(document))
 
     def test_hold_rests_at_neutral_until_the_first_point(self):
@@ -305,7 +305,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 26)
+        self.assertEqual(song.document()['formatVersion'], mixjam.FORMAT_VERSION)
 
     def test_drive_checks_its_ranges_and_saves_as_the_app_does(self):
         song = mixjam.Song('drive')
@@ -313,7 +313,7 @@ class SongTests(unittest.TestCase):
         self.assertEqual(song.lanes[0]['drive'], dict(on=True, amount=18.0, character=25.0, mix=40.0,
                                                       focus=98.0, output=0.0))
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         self.assertEqual(document['lanes'][0]['drive']['focus'], 98.0)
         for settings in ({'amount': -1}, {'amount': 25}, {'character': 101}, {'mix': -0.5}, {'mix': 101},
                          {'focus': 19}, {'focus': 2001}, {'output': 12.5}, {'output': float('nan')}):
@@ -342,7 +342,7 @@ class SongTests(unittest.TestCase):
             key = render.lane_key(document, [1], False)
             song.drive(1, amount=18)
             driven = song.document()
-            self.assertEqual(driven['formatVersion'], 26)
+            self.assertEqual(driven['formatVersion'], mixjam.FORMAT_VERSION)
             self.assertNotEqual(render.lane_key(driven, [1], False), key)
 
     def test_repeat_gate_steps_without_resting_points_and_checks_its_range(self):
@@ -351,7 +351,7 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'repeatgate', [(2, 25), (2.5, 60)])
         song.automate(1, 'repeatgate', [(4, 5)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         # The gate is full before its first point and acts only while repeat is
         # on, so it needs no resting points and may end anywhere.
         self.assertEqual(document['lanes'][0]['automation']['repeatGate'],
@@ -368,7 +368,7 @@ class SongTests(unittest.TestCase):
         song = mixjam.Song('tape-stop')
         song.automate(1, 'pitch', [(1.5, 0), (2, -4800), (2.0625, 0)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         # The lane is 0 before its first point, so no resting points are added.
         self.assertEqual(document['lanes'][0]['automation']['pitch'],
                          [dict(tick=128, value=0.0), dict(tick=256, value=-4800.0),
@@ -398,7 +398,7 @@ class SongTests(unittest.TestCase):
             song.clip(1, source, 512, 256)
             song.automate(1, 'compression', [(2.75, 100), (3, 0), (4, 0), (4.25, 100)])
             document = song.document()
-            self.assertEqual(document['formatVersion'], 26)
+            self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
             # The lane starts away from neutral only at its first point, which is at 100.
             self.assertEqual(document['lanes'][0]['automation']['compression'],
                              [dict(tick=448, value=100.0), dict(tick=512, value=0.0),
@@ -436,7 +436,7 @@ class SongTests(unittest.TestCase):
             song.clip(1, source, 0, 96)
             song.compressor(1)
             document = song.document()
-            self.assertEqual(document['formatVersion'], 26)
+            self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
             self.assertIsNotNone(render.source_fingerprints(document))
             key = render.lane_key(document, [1], False)
             for lane, values in [('pitch', (0.0, -4800.0)), ('compression', (100.0, 0.0))]:
@@ -452,7 +452,7 @@ class SongTests(unittest.TestCase):
         song.automate_return(3, [(16.75, 0.3), (17, 1.8)])
         song.automate_return(3, [(18.5, 0.3)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 26)
+        self.assertEqual(document['formatVersion'], mixjam.FORMAT_VERSION)
         self.assertEqual(document['fxBuses'][2]['returnAutomation'],
                          [dict(tick=4032, value=0.3), dict(tick=4096, value=1.8), dict(tick=4480, value=0.3)])
         self.assertEqual(document['fxBuses'][2]['returnLevel'], 0.3)

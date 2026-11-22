@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'runtime'))
-from mixjam_song import BOOSTER_KEYS, read_song
+from mixjam_song import BOOSTER_KEYS, FORMAT_VERSION, read_song
 
 
 class SongProjectionTests(unittest.TestCase):
@@ -39,6 +39,18 @@ class SongProjectionTests(unittest.TestCase):
                               for key, value in master.items()}
         document['master']['order'] = [earlier.get(name, name) for name in master['order']]
         self.assertEqual(self.project(document)['master'], master)
+
+    def test_version_27_projects_new_fx_settings(self):
+        document = self.document(27)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        module = dict(type='emberform-drive', levelMatch=False, duckThresholdDb=-18.0)
+        throw = [dict(tick=256, value=0.75)]
+        document['fxBuses'][0].update(module=module, returnAutomation=throw)
+        projected = self.project(document)
+        self.assertEqual(projected['fx'][0]['module'], module)
+        self.assertEqual(projected['return_automation'][0], throw)
 
     def test_version_11_preserves_booster_and_adds_disabled_pedals(self):
         document = self.document(11)
@@ -145,7 +157,7 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(27))
+            self.project(self.document(FORMAT_VERSION + 1))
 
     def test_version_24_keeps_pitch_automation_in_the_json_project(self):
         document = self.document(24)

@@ -691,25 +691,38 @@ fn mixer_sends_and_the_effects_module_edit_the_fx_buses() {
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     for name in [
+        "Clear all FX tails",
         "FX 1 effect",
-        "FX 1 duck key",
+        "FX 1 solo",
+        "Deep edit FX 1",
         "FX 2 preset",
-        "FX 2 duck key",
-        "FX 2 space",
-        "FX 2 shimmer",
         "Clear FX 2 tail",
-        "FX 2 bypass",
         "FX 4 limiter",
     ] {
         accessible_node(&output, name);
     }
+    app.fx_deep_edit = Some(1);
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for name in [
+        "Deep edit bus 1",
+        "Deep edit bus 2",
+        "Deep edit duck key",
+        "Deep edit space",
+        "Deep edit shimmer",
+        "Deep edit bypass",
+    ] {
+        accessible_node(&output, name);
+    }
     assert!(
-        accessible_node(&output, "FX 2 shimmer amount")
+        accessible_node(&output, "Deep edit shimmer amount")
             .1
             .is_disabled(),
         "the amount waits for Shimmer"
     );
-    set(&ctx, &mut app, &output, "FX 2 decay", 5.0);
+    set(&ctx, &mut app, &output, "Deep edit decay", 5.0);
     let Module::AetherformReverb(reverb) = app.session.project().fx.buses[1].module else {
         panic!("FX 2 holds the reverb")
     };
@@ -725,11 +738,186 @@ fn mixer_sends_and_the_effects_module_edit_the_fx_buses() {
     };
     assert_eq!(reverb.decay_seconds, 2.8, "Undo restores the decay.");
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    set(&ctx, &mut app, &output, "FX 2 duck key", 4.0);
+    set(&ctx, &mut app, &output, "Deep edit duck key", 4.0);
     let Module::AetherformReverb(reverb) = app.session.project().fx.buses[1].module else {
         panic!("FX 2 holds the reverb")
     };
     assert_eq!(reverb.duck_key, 4);
+    app.fx_deep_edit = None;
+}
+
+#[test]
+fn fx_deep_edit_tab_changes_the_control_target() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let output = click_named(&ctx, &mut app, "Deep edit FX 1");
+    let old_power = accessible_node(&output, "Deep edit power").0;
+    let output = click_named(&ctx, &mut app, "Deep edit bus 2");
+    assert_eq!(app.fx_deep_edit, Some(1));
+    assert_ne!(accessible_node(&output, "Deep edit power").0, old_power);
+
+    click_named(&ctx, &mut app, "Deep edit power");
+    let buses = &app.session.project().fx.buses;
+    assert!(buses[0].powered);
+    assert!(!buses[1].powered);
+}
+
+#[test]
+fn fx_deep_edit_is_listed_as_an_agent_window() {
+    let (ctx, mut app, port) = agent_fixture();
+    app.boards.module = BottomModule::FxReturns;
+    let opened = agent(&ctx, &mut app, &port, &["click", "target=Deep edit FX 1"]);
+    assert_eq!(opened["windows"], serde_json::json!(["FX Deep Edit"]));
+    let closed = agent(
+        &ctx,
+        &mut app,
+        &port,
+        &["click", "target=Close FX Deep Edit"],
+    );
+    assert_eq!(closed["windows"], serde_json::json!([]));
+}
+
+#[test]
+fn fx_linked_delay_edits_both_channels_and_undoes_one_free_time_gesture() {
+    use mixjam_techno::application::fx::{Division, Echoform, Module};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.session.hold_gestures();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    buses.buses[0].module = Module::EchoformDelay(Echoform::default());
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+
+    choose(&ctx, &mut app, "FX 1 left division", "1/2");
+    click_named(&ctx, &mut app, "Deep edit FX 1");
+    let output = click_named(&ctx, &mut app, "Deep edit link times");
+    assert!(
+        accessible_node(&output, "Deep edit right division")
+            .1
+            .is_disabled()
+    );
+    for name in ["Deep edit left time", "Deep edit right time"] {
+        assert!(accessible_node(&output, name).1.is_disabled());
+    }
+    choose(&ctx, &mut app, "Deep edit left division", "1/2.");
+    let delay = |app: &MixJamApp| {
+        let Module::EchoformDelay(delay) = app.session.project().fx.buses[0].module else {
+            panic!("FX 1 holds the delay");
+        };
+        delay
+    };
+    assert_eq!(delay(&app).division_l, Division::HalfDotted);
+    assert_eq!(delay(&app).division_r, Division::HalfDotted);
+
+    let output = click_named(&ctx, &mut app, "Deep edit sync");
+    assert!(
+        accessible_node(&output, "Deep edit right time")
+            .1
+            .is_disabled()
+    );
+    let initial = delay(&app);
+    let (target, _) = accessible_node(&output, "Deep edit left time");
+    for value in [800.0, 900.0] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::SetValue,
+                    target,
+                    data: Some(egui::accesskit::ActionData::NumericValue(value)),
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+        let current = delay(&app);
+        assert_eq!([current.time_ms_l, current.time_ms_r], [value as f32; 2]);
+    }
+    let command = egui::Modifiers::COMMAND;
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Z, command)],
+        command,
+    );
+    assert_eq!(delay(&app), initial);
+}
+
+#[test]
+fn fx_meters_expose_their_values_to_assistive_technology() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let readout = accessible_node(&output, "FX 1 return meters")
+        .1
+        .value()
+        .unwrap();
+    assert!(
+        readout.contains("Left peak silent, RMS silent"),
+        "{readout}"
+    );
+    assert!(readout.contains("Ducker reduction 0.0 dB"), "{readout}");
+    assert!(readout.contains("Limiter reduction 0.0 dB"), "{readout}");
+    assert!(readout.contains("Tail idle"), "{readout}");
+    let output = click_named(&ctx, &mut app, "Deep edit FX 1");
+    assert_eq!(
+        accessible_node(&output, "Deep edit return meters")
+            .1
+            .value(),
+        Some(readout)
+    );
+}
+
+#[test]
+fn fx_empty_bus_cannot_solo_in_the_rack_or_deep_edit() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let output = click_named(&ctx, &mut app, "FX 1 solo");
+    assert!(accessible_node(&output, "FX 1 solo").1.is_disabled());
+    assert!(!app.session.fx_solo(0));
+    let output = click_named(&ctx, &mut app, "Deep edit FX 1");
+    assert!(accessible_node(&output, "Deep edit solo").1.is_disabled());
+}
+
+#[test]
+fn fx_rack_shows_all_four_cards_at_the_smallest_window_size() {
+    use mixjam_techno::application::fx::{Division, Echoform, Module};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    buses.buses[0].module = Module::EchoformDelay(Echoform {
+        division_l: Division::SixteenthTriplet,
+        ..Echoform::default()
+    });
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+    let size = Vec2::new(960.0, 720.0);
+    let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    for _ in 0..3 {
+        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let edits: Vec<_> = screen(&output)
+        .texts()
+        .filter(|text| text.label() == "Edit" && text.rect().center().x > 100.0)
+        .collect();
+    assert_eq!(edits.len(), 4);
+    assert!(edits.into_iter().all(|text| text.whole()));
+    for label in ["1/16T", "Custom", "Delay"] {
+        assert!(
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text)
+                if text.galley.job.text == label && !text.galley.elided)
+            }),
+            "{label} must fit in its selector"
+        );
+    }
+    assert_eq!(
+        accessible_node(&output, "FX 1 effect").1.value(),
+        Some("Echoform Delay")
+    );
 }
 
 /// Each drag runs again with the primary button, which must move the

@@ -10,7 +10,9 @@ fn versions_before_17_reject_a_lane_ducker() {
         timestamp(0),
     ))
     .unwrap();
+    let mut expected = project;
     document["formatVersion"] = 16.into();
+    before_version_27(&mut document, &mut expected);
     let reopened: Document = serde_json::from_value(document.clone()).unwrap();
     assert_eq!(
         reopened.into_project().unwrap_err(),
@@ -21,7 +23,6 @@ fn versions_before_17_reject_a_lane_ducker() {
         .unwrap()
         .remove("ducker");
     let reopened: Document = serde_json::from_value(document.clone()).unwrap();
-    let mut expected = project;
     expected.tracks[5].ducker = Default::default();
     assert_eq!(reopened.into_project().unwrap(), expected);
     // The pedals' keys are new in version 17 too.
@@ -125,7 +126,7 @@ fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened, project);
     // Version 22 and earlier reject each key, even when it holds nothing.
@@ -147,6 +148,7 @@ fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
     ];
     let without = |document: &serde_json::Value| {
         let mut earlier = document.clone();
+        strip_v27_fx_doc(&mut earlier);
         earlier["fxBuses"][1]
             .as_object_mut()
             .unwrap()
@@ -181,6 +183,7 @@ fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
     let mut earlier = without(&document);
     earlier["formatVersion"] = 22.into();
     let mut expected = project.clone();
+    before_version_27(&mut earlier, &mut expected);
     expected.return_automation = Default::default();
     expected.tracks[5].automation.repeat_gate.clear();
     expected.clips[0].reverse = false;
@@ -306,6 +309,7 @@ fn only_version_20_lanes_hold_pan_automation() {
     ] {
         let mut earlier = document.clone();
         earlier["formatVersion"] = 19.into();
+        strip_v27_fx_doc(&mut earlier);
         earlier["lanes"][5]["automation"]["pan"] = pan;
         assert_eq!(
             parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
@@ -314,6 +318,7 @@ fn only_version_20_lanes_hold_pan_automation() {
     }
     let mut earlier = document.clone();
     earlier["formatVersion"] = 19.into();
+    strip_v27_fx_doc(&mut earlier);
     earlier["lanes"][5]["automation"]
         .as_object_mut()
         .unwrap()
@@ -359,7 +364,7 @@ fn only_version_24_lanes_hold_pitch_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 23 rejects the key, even as an empty list, and opens the
@@ -370,6 +375,7 @@ fn only_version_24_lanes_hold_pitch_automation() {
     ] {
         let mut earlier = document.clone();
         earlier["formatVersion"] = 23.into();
+        strip_v27_fx_doc(&mut earlier);
         earlier["lanes"][5]["automation"]["pitch"] = pitch;
         assert_eq!(
             parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
@@ -378,6 +384,7 @@ fn only_version_24_lanes_hold_pitch_automation() {
     }
     let mut earlier = document.clone();
     earlier["formatVersion"] = 23.into();
+    strip_v27_fx_doc(&mut earlier);
     earlier["lanes"][5]["automation"]
         .as_object_mut()
         .unwrap()
@@ -435,7 +442,7 @@ fn only_version_21_lanes_hold_repeat_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 20 rejects the key, even as an empty list, and opens the
@@ -446,6 +453,7 @@ fn only_version_21_lanes_hold_repeat_automation() {
     ] {
         let mut earlier = document.clone();
         earlier["formatVersion"] = 20.into();
+        strip_v27_fx_doc(&mut earlier);
         earlier["lanes"][5]["automation"]["repeat"] = repeat;
         assert_eq!(
             parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
@@ -454,6 +462,7 @@ fn only_version_21_lanes_hold_repeat_automation() {
     }
     let mut earlier = document.clone();
     earlier["formatVersion"] = 20.into();
+    strip_v27_fx_doc(&mut earlier);
     earlier["lanes"][5]["automation"]
         .as_object_mut()
         .unwrap()
@@ -559,7 +568,7 @@ fn only_version_22_lanes_hold_a_drive() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 21 and earlier reject the key, on or off, and open the
@@ -568,6 +577,7 @@ fn only_version_22_lanes_hold_a_drive() {
         for lane in [5, 8] {
             let mut earlier = document.clone();
             earlier["formatVersion"] = version.into();
+            strip_v27_fx_doc(&mut earlier);
             earlier["lanes"]
                 .as_array_mut()
                 .unwrap()
@@ -585,6 +595,7 @@ fn only_version_22_lanes_hold_a_drive() {
     }
     let mut earlier = document.clone();
     earlier["formatVersion"] = 21.into();
+    strip_v27_fx_doc(&mut earlier);
     for lane in earlier["lanes"].as_array_mut().unwrap() {
         lane.as_object_mut().unwrap().remove("drive");
     }
@@ -667,6 +678,7 @@ fn only_version_19_songs_hold_sections() {
     for version in [18, 19] {
         let mut explicit_empty = document.clone();
         explicit_empty["formatVersion"] = version.into();
+        strip_v27_fx_doc(&mut explicit_empty);
         explicit_empty["song"]["sections"] = serde_json::json!([]);
         let result = parse(&serde_json::to_vec(&explicit_empty).unwrap());
         if version == 18 {
@@ -733,10 +745,36 @@ fn only_version_25_songs_hold_the_emberform_drive() {
         parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
         "Version 24 songs cannot contain the Emberform Drive."
     );
-    // Without the drive, version 24 opens the same buses.
+    // Without the drive, version 24 opens the same buses with migrated v27 defaults.
     earlier["fxBuses"][2]["module"] = serde_json::json!({"type": "empty"});
+    for bus in earlier["fxBuses"].as_array_mut().unwrap() {
+        if let Some(module) = bus
+            .get_mut("module")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for key in [
+                "levelMatch",
+                "linkTimes",
+                "smearPercent",
+                "filterResonance",
+                "bassMult",
+                "trebleMult",
+                "duckThresholdDb",
+            ] {
+                module.remove(key);
+            }
+        }
+    }
     let mut expected = project.fx;
     expected.buses[2].module = crate::fx::Module::Empty;
+    for bus in &mut expected.buses {
+        match &mut bus.module {
+            crate::fx::Module::EchoformDelay(d) => d.duck_threshold_db = -27.0,
+            crate::fx::Module::AetherformReverb(r) => r.duck_threshold_db = -27.0,
+            crate::fx::Module::EmberformDrive(d) => d.duck_threshold_db = -27.0,
+            crate::fx::Module::Empty => {}
+        }
+    }
     assert_eq!(
         parse(&serde_json::to_vec(&earlier).unwrap()).unwrap().fx,
         expected
@@ -752,7 +790,7 @@ fn only_version_26_lanes_hold_compression_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], 27);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 25 rejects the key, even as an empty list.
@@ -762,6 +800,7 @@ fn only_version_26_lanes_hold_compression_automation() {
     ] {
         let mut earlier = document.clone();
         earlier["formatVersion"] = 25.into();
+        strip_v27_fx_doc(&mut earlier);
         earlier["lanes"][5]["automation"]["compression"] = compression;
         assert_eq!(
             parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
@@ -783,5 +822,137 @@ fn only_version_26_lanes_hold_compression_automation() {
     assert_eq!(
         parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err(),
         "The automation points must be JSON objects."
+    );
+}
+
+#[test]
+fn only_version_27_holds_v27_fx_parameters_and_earlier_versions_migrate_losslessly() {
+    use crate::fx::{Aetherform, Division, Echoform, Emberform, Module};
+    let mut project = project();
+    project.fx.buses[0].module = Module::EmberformDrive(Emberform {
+        level_match: false,
+        duck_threshold_db: -33.0,
+        ..Emberform::default()
+    });
+    project.fx.buses[1].module = Module::EchoformDelay(Echoform {
+        time_ms_l: 250.0,
+        time_ms_r: 250.0,
+        division_l: Division::Eighth,
+        division_r: Division::Eighth,
+        link_times: false,
+        smear_percent: 35.0,
+        filter_resonance: 42.0,
+        duck_threshold_db: -31.0,
+        ..Echoform::default()
+    });
+    project.fx.buses[2].module = Module::AetherformReverb(Aetherform {
+        bass_mult: 0.65,
+        treble_mult: 1.25,
+        duck_threshold_db: -18.0,
+        ..Aetherform::default()
+    });
+    let document = serde_json::to_value(Document::new(
+        &project,
+        "2020-01-02T03:04:05Z".into(),
+        timestamp(0),
+    ))
+    .unwrap();
+    assert_eq!(document["formatVersion"], 27);
+    assert_eq!(
+        parse(&serde_json::to_vec(&document).unwrap()).unwrap().fx,
+        project.fx
+    );
+
+    for (bus_idx, key) in [
+        (0, "levelMatch"),
+        (0, "duckThresholdDb"),
+        (1, "linkTimes"),
+        (1, "smearPercent"),
+        (1, "filterResonance"),
+        (2, "bassMult"),
+        (2, "trebleMult"),
+    ] {
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 26.into();
+        for (idx, b) in earlier["fxBuses"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .enumerate()
+        {
+            let m = b["module"].as_object_mut().unwrap();
+            for k in [
+                "levelMatch",
+                "linkTimes",
+                "smearPercent",
+                "filterResonance",
+                "bassMult",
+                "trebleMult",
+                "duckThresholdDb",
+            ] {
+                if !(idx == bus_idx && k == key) {
+                    m.remove(k);
+                }
+            }
+        }
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+            format!("Version 26 songs cannot contain FX version 27 parameter `{key}`.")
+        );
+    }
+
+    let mut legacy = document;
+    legacy["formatVersion"] = 26.into();
+    // Both spellings represent the same free time.
+    legacy["fxBuses"][1]["module"]["timeMsL"] = 250.into();
+    for b in legacy["fxBuses"].as_array_mut().unwrap() {
+        if let Some(m) = b
+            .get_mut("module")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for k in [
+                "levelMatch",
+                "linkTimes",
+                "smearPercent",
+                "filterResonance",
+                "bassMult",
+                "trebleMult",
+                "duckThresholdDb",
+            ] {
+                m.remove(k);
+            }
+        }
+    }
+    let reopened = parse(&serde_json::to_vec(&legacy).unwrap()).unwrap();
+    assert_eq!(
+        reopened.fx.buses[0].module,
+        Module::EmberformDrive(Emberform {
+            level_match: true,
+            duck_threshold_db: -27.0,
+            ..Emberform::default()
+        })
+    );
+    assert_eq!(
+        reopened.fx.buses[1].module,
+        Module::EchoformDelay(Echoform {
+            time_ms_l: 250.0,
+            time_ms_r: 250.0,
+            division_l: Division::Eighth,
+            division_r: Division::Eighth,
+            link_times: true,
+            smear_percent: 0.0,
+            filter_resonance: 0.0,
+            duck_threshold_db: -27.0,
+            ..Echoform::default()
+        })
+    );
+    assert_eq!(
+        reopened.fx.buses[2].module,
+        Module::AetherformReverb(Aetherform {
+            bass_mult: 1.0,
+            treble_mult: 1.0,
+            duck_threshold_db: -27.0,
+            ..Aetherform::default()
+        })
     );
 }

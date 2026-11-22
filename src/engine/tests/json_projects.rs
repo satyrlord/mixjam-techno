@@ -59,6 +59,71 @@ fn earlier_json_master_keys_keep_the_board_settings_and_order() {
 }
 
 #[test]
+fn earlier_json_fx_open_with_migration_defaults() {
+    use crate::fx::{Aetherform, Echoform, Emberform, Module};
+    let mut project = Project::default();
+    let delay = Echoform::default();
+    for (bus, module) in project.fx.buses.iter_mut().zip([
+        Module::EchoformDelay(Echoform {
+            time_ms_r: delay.time_ms_l,
+            division_r: delay.division_l,
+            link_times: true,
+            duck_threshold_db: -27.0,
+            ..delay
+        }),
+        Module::AetherformReverb(Aetherform {
+            bass_mult: 1.0,
+            treble_mult: 1.0,
+            duck_threshold_db: -27.0,
+            ..Aetherform::default()
+        }),
+        Module::EmberformDrive(Emberform {
+            level_match: true,
+            duck_threshold_db: -27.0,
+            ..Emberform::default()
+        }),
+        Module::EchoformDelay(Echoform {
+            link_times: false,
+            duck_threshold_db: -8.0,
+            smear_percent: 32.0,
+            ..delay
+        }),
+    ]) {
+        bus.module = module;
+    }
+    let mut earlier = serde_json::to_value(&project).unwrap();
+    for bus in &mut earlier["fx"].as_array_mut().unwrap()[..3] {
+        let module = bus["module"].as_object_mut().unwrap();
+        for key in [
+            "duckThresholdDb",
+            "linkTimes",
+            "smearPercent",
+            "filterResonance",
+            "bassMult",
+            "trebleMult",
+            "levelMatch",
+        ] {
+            module.remove(key);
+        }
+    }
+    let reverb = &mut earlier["fx"][1];
+    *reverb = serde_json::json!([
+        reverb["module"].take(),
+        reverb["powered"].take(),
+        reverb["returnLevel"].take(),
+        reverb["limiter"].take(),
+    ]);
+    let json = serde_json::to_string(&earlier).unwrap();
+    assert_eq!(Project::parse_json(json.as_bytes()).unwrap(), project);
+    let duplicate = json.replacen("\"feedback\":", "\"feedback\":20,\"feedback\":", 1);
+    assert!(
+        Project::parse_json(duplicate.as_bytes())
+            .unwrap_err()
+            .contains("duplicate field")
+    );
+}
+
+#[test]
 fn paired_native_labels_and_signed_track_levels_survive_json() {
     let mut project = Project::default();
     project.tracks[31].set_legacy_gain(-2.0 / 65536.0);

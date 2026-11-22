@@ -1,5 +1,8 @@
 //! The Aetherform Reverb's settings, controls, and presets.
-use super::range::{KEY_RANGE, Range, is_own, log_range, range};
+use super::range::{
+    KEY_RANGE, Range, duck_amount_range, duck_release_range, duck_threshold_range, is_own,
+    log_range, output_range, range,
+};
 use serde::{Deserialize, Serialize};
 
 /// The shape of the space: its delay lengths and early reflections.
@@ -75,6 +78,12 @@ pub struct Aetherform {
     /// track as it sounds after its fader.
     #[serde(default, skip_serializing_if = "is_own")]
     pub duck_key: u8,
+    /// Sidechain/self ducking threshold in dBFS.
+    pub duck_threshold_db: f32,
+    /// Low-frequency decay multiplier relative to midband decay.
+    pub bass_mult: f32,
+    /// High-frequency decay damping multiplier inside the tank.
+    pub treble_mult: f32,
     pub output_db: f32,
     pub bypass: bool,
 }
@@ -84,6 +93,8 @@ pub struct Aetherform {
 pub enum ReverbParam {
     PreDelay,
     Decay,
+    BassMult,
+    TrebleMult,
     Size,
     Drive,
     Width,
@@ -95,15 +106,18 @@ pub enum ReverbParam {
     ModRate,
     ModDepth,
     ShimmerAmount,
+    DuckThreshold,
     DuckAmount,
     DuckRelease,
     DuckKey,
     Output,
 }
 impl ReverbParam {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 20] = [
         Self::PreDelay,
         Self::Decay,
+        Self::BassMult,
+        Self::TrebleMult,
         Self::Size,
         Self::Drive,
         Self::Width,
@@ -115,6 +129,7 @@ impl ReverbParam {
         Self::ModRate,
         Self::ModDepth,
         Self::ShimmerAmount,
+        Self::DuckThreshold,
         Self::DuckAmount,
         Self::DuckRelease,
         Self::DuckKey,
@@ -125,6 +140,8 @@ impl ReverbParam {
         match self {
             Self::PreDelay => range(0.0, 250.0, d.pre_delay_ms, 1.0),
             Self::Decay => log_range(0.2, 30.0, d.decay_seconds, 0.01),
+            Self::BassMult => range(0.25, 2.5, d.bass_mult, 0.05),
+            Self::TrebleMult => range(0.2, 1.5, d.treble_mult, 0.05),
             Self::Size => range(5.0, 100.0, d.size_percent, 1.0),
             Self::Drive => range(0.0, 100.0, d.drive_percent, 1.0),
             Self::Width => range(0.0, 200.0, d.width_percent, 1.0),
@@ -136,16 +153,19 @@ impl ReverbParam {
             Self::ModRate => log_range(0.05, 3.0, d.mod_rate_hz, 0.01),
             Self::ModDepth => range(0.0, 100.0, d.mod_depth_percent, 1.0),
             Self::ShimmerAmount => range(0.0, 100.0, d.shimmer_amount_percent, 1.0),
-            Self::DuckAmount => range(0.0, 100.0, d.duck_amount_percent, 1.0),
-            Self::DuckRelease => log_range(50.0, 2500.0, d.duck_release_ms, 1.0),
+            Self::DuckThreshold => duck_threshold_range(d.duck_threshold_db),
+            Self::DuckAmount => duck_amount_range(d.duck_amount_percent),
+            Self::DuckRelease => duck_release_range(d.duck_release_ms),
             Self::DuckKey => KEY_RANGE,
-            Self::Output => range(-24.0, 12.0, d.output_db, 0.1),
+            Self::Output => output_range(d.output_db),
         }
     }
     pub fn get(self, reverb: &Aetherform) -> f32 {
         match self {
             Self::PreDelay => reverb.pre_delay_ms,
             Self::Decay => reverb.decay_seconds,
+            Self::BassMult => reverb.bass_mult,
+            Self::TrebleMult => reverb.treble_mult,
             Self::Size => reverb.size_percent,
             Self::Drive => reverb.drive_percent,
             Self::Width => reverb.width_percent,
@@ -157,6 +177,7 @@ impl ReverbParam {
             Self::ModRate => reverb.mod_rate_hz,
             Self::ModDepth => reverb.mod_depth_percent,
             Self::ShimmerAmount => reverb.shimmer_amount_percent,
+            Self::DuckThreshold => reverb.duck_threshold_db,
             Self::DuckAmount => reverb.duck_amount_percent,
             Self::DuckRelease => reverb.duck_release_ms,
             Self::DuckKey => f32::from(reverb.duck_key),
@@ -173,6 +194,8 @@ impl ReverbParam {
         *match self {
             Self::PreDelay => &mut reverb.pre_delay_ms,
             Self::Decay => &mut reverb.decay_seconds,
+            Self::BassMult => &mut reverb.bass_mult,
+            Self::TrebleMult => &mut reverb.treble_mult,
             Self::Size => &mut reverb.size_percent,
             Self::Drive => &mut reverb.drive_percent,
             Self::Width => &mut reverb.width_percent,
@@ -184,6 +207,7 @@ impl ReverbParam {
             Self::ModRate => &mut reverb.mod_rate_hz,
             Self::ModDepth => &mut reverb.mod_depth_percent,
             Self::ShimmerAmount => &mut reverb.shimmer_amount_percent,
+            Self::DuckThreshold => &mut reverb.duck_threshold_db,
             Self::DuckAmount => &mut reverb.duck_amount_percent,
             Self::DuckRelease => &mut reverb.duck_release_ms,
             Self::DuckKey => unreachable!(),
@@ -222,6 +246,9 @@ impl Aetherform {
         duck_amount_percent: 28.0,
         duck_release_ms: 720.0,
         duck_key: 0,
+        duck_threshold_db: -24.0,
+        bass_mult: 1.0,
+        treble_mult: 1.0,
         output_db: -1.5,
         bypass: false,
     };

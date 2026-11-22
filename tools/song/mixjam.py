@@ -1,4 +1,4 @@
-"""Write format-26 .mixjam songs from Python.
+"""Write .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path. The writer links it as an imported sample by path.
@@ -53,7 +53,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 26
+FORMAT_VERSION = 27
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -866,6 +866,7 @@ def load_board(path, trim=None):
 _DELAY = dict(type='echoform-delay', mode='sync', divisionL='1/4', divisionR='1/8.', timeMsL=420.0,
               timeMsR=610.0, feedback=68.0, pingPong=True, width=142.0, lowCut=160.0, highCut=7800.0,
               modRate=0.38, modDepth=5.4, character='tape', drive=0.0, duckAmount=34.0, duckRelease=620.0,
+              duckThresholdDb=-24.0, linkTimes=False, smearPercent=0.0, filterResonance=0.0,
               outputDb=-1.5, bypass=False)
 _DELAYS = {
     'Wide Tape Echo': ({}, 0.82),
@@ -881,7 +882,8 @@ _REVERB = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.0, 
                lateBalancePercent=72.0, lowCutHz=180.0, highCutHz=8600.0, diffusionPercent=78.0,
                densityPercent=84.0, earlyReflectionsEnabled=True, modRateHz=0.32, modDepthPercent=18.0,
                shimmerEnabled=False, shimmerAmountPercent=24.0, shimmerIntervalSemitones=12,
-               duckAmountPercent=28.0, duckReleaseMs=720.0, outputDb=-1.5, bypass=False)
+               duckAmountPercent=28.0, duckReleaseMs=720.0, duckThresholdDb=-24.0,
+               bassMult=1.0, trebleMult=1.0, outputDb=-1.5, bypass=False)
 _REVERBS = {
     'Warm Chamber': ({}, 0.88),
     'Dark Hall': (dict(spaceModel='hall', character='vintage', preDelayMs=38.0, decaySeconds=5.6, sizePercent=88.0,
@@ -899,7 +901,7 @@ _REVERBS = {
 
 _DRIVE = dict(type='emberform-drive', shape='tube', driveDb=12.0, asymmetryPercent=20.0, lowCutHz=90.0,
               highCutHz=12000.0, bits=8, crushRateHz=11025.0, widthPercent=100.0, duckAmountPercent=0.0,
-              duckReleaseMs=250.0, outputDb=0.0, bypass=False)
+              duckReleaseMs=250.0, duckThresholdDb=-24.0, levelMatch=True, outputDb=0.0, bypass=False)
 _DRIVES = {
     'Warm Tube': ({}, 0.45),
     'Tape Glue': (dict(shape='tape', driveDb=9.0, asymmetryPercent=10.0, lowCutHz=30.0, highCutHz=15000.0), 0.35),

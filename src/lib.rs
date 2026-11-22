@@ -27,6 +27,7 @@ pub mod runtime_data;
 pub mod sample_edit;
 mod source_tempo;
 pub mod synth;
+mod unique_json;
 mod wav;
 
 /// Application version: manual major and build-time Git commit count.

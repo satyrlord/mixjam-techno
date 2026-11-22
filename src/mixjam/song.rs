@@ -56,6 +56,10 @@
 //! - Version 26 adds the Compression lane, `compression` in a lane's
 //!   `automation`. Earlier songs have the compressor fully in and reject
 //!   the key.
+//! - Version 27 adds `levelMatch`, `duckThresholdDb`, `linkTimes`,
+//!   `smearPercent`, `filterResonance`, `bassMult`, and `trebleMult` to FX
+//!   bus modules. Earlier songs open with migration defaults and
+//!   reject those keys.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -71,4 +75,4 @@ mod writing;
 pub(super) use reading::parse;
 pub(super) use writing::save;
 
-pub(super) const FORMAT_VERSION: u32 = 26;
+pub(super) const FORMAT_VERSION: u32 = 27;

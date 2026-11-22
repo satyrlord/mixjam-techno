@@ -324,6 +324,9 @@ fn every_name() -> BTreeSet<String> {
     app.eq_track = Some(0);
     names(&context, &mut app, &mut found);
     app.eq_track = None;
+    app.fx_deep_edit = Some(0);
+    names(&context, &mut app, &mut found);
+    app.fx_deep_edit = None;
 
     app.selection.sample = Some(1);
     let windows: [fn(&mut MixJamApp) -> &mut bool; 10] = [

@@ -19,11 +19,13 @@ fn version_17_ducker_thresholds_move_by_the_master_gain() {
     // Version 18 keeps the saved threshold.
     assert_eq!(open(&document), project);
     document["formatVersion"] = 17.into();
+    let mut base_expected = project.clone();
+    before_version_27(&mut document, &mut base_expected);
     let opened = open(&document);
-    let raised = opened.tracks[5].ducker.threshold - project.tracks[5].ducker.threshold;
+    let raised = opened.tracks[5].ducker.threshold - base_expected.tracks[5].ducker.threshold;
     assert!((raised - 6.0206).abs() < 1e-3, "{raised} dB");
     // Nothing else changes, and lanes without a ducker keep the default.
-    let mut expected = project.clone();
+    let mut expected = base_expected.clone();
     expected.tracks[5].ducker.threshold = opened.tracks[5].ducker.threshold;
     assert_eq!(opened, expected);
     // A ducker that is off moves too. The range holds the threshold, and
@@ -80,6 +82,7 @@ fn versions_before_18_reject_a_compressor_a_width_and_a_second_peak() {
     // Lane 5's ducker threshold moves by the master gain, as
     // `version_17_ducker_thresholds_move_by_the_master_gain` checks.
     let mut opened = expected.clone();
+    before_version_27(&mut earlier, &mut opened);
     opened.tracks[5].ducker.threshold =
         threshold_without_master_gain(opened.tracks[5].ducker.threshold, opened.master_gain);
     assert_eq!(
@@ -242,9 +245,11 @@ fn earlier_versions_reject_explicit_own_input_keys() {
     for effect in [false, true] {
         let mut document = base.clone();
         document["formatVersion"] = 16.into();
+        strip_v27_fx_doc(&mut document);
         if effect {
             let module = crate::fx::Module::EchoformDelay(Default::default());
             document["fxBuses"][0]["module"] = serde_json::to_value(module).unwrap();
+            strip_v27_fx_doc(&mut document);
             document["fxBuses"][0]["module"]["duckKey"] = 0.into();
         } else {
             document["master"]["limiter"]["key"] = 0.into();
@@ -520,6 +525,7 @@ fn version_14_songs_open_with_every_eq_off_and_the_board_in_use() {
         serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
     document["formatVersion"] = 14.into();
     with_earlier_booster_keys(&mut document);
+    before_version_27(&mut document, &mut expected);
     assert_eq!(
         parse(&serde_json::to_vec(&document).unwrap()).unwrap(),
         expected
@@ -544,12 +550,14 @@ fn version_12_to_15_boards_keep_their_earlier_booster_keys() {
     let current =
         serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
     let mut earlier = current.clone();
+    let mut earlier_expected = expected.clone();
     earlier["formatVersion"] = 15.into();
     with_earlier_booster_keys(&mut earlier);
+    before_version_27(&mut earlier, &mut earlier_expected);
     // The same board opens from either key set, each at its own version.
     assert_eq!(
         parse(&serde_json::to_vec(&earlier).unwrap()).unwrap(),
-        expected
+        earlier_expected
     );
     assert_eq!(
         parse(&serde_json::to_vec(&current).unwrap()).unwrap(),

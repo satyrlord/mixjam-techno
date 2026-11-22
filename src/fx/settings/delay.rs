@@ -128,6 +128,14 @@ pub struct Echoform {
     /// track as it sounds after its fader.
     #[serde(default, skip_serializing_if = "is_own")]
     pub duck_key: u8,
+    /// Sidechain/self ducking threshold in dBFS.
+    pub duck_threshold_db: f32,
+    /// Link left and right time/division controls.
+    pub link_times: bool,
+    /// Feedback diffusion smear in percent.
+    pub smear_percent: f32,
+    /// Resonance of the loop HP/LP filters in percent.
+    pub filter_resonance: f32,
     /// The level of the repeats, in dB.
     pub output_db: f32,
     /// Silence the output while the loop keeps running.
@@ -143,9 +151,12 @@ pub enum DelayParam {
     Width,
     LowCut,
     HighCut,
+    FilterResonance,
+    Smear,
     ModRate,
     ModDepth,
     Drive,
+    DuckThreshold,
     DuckAmount,
     DuckRelease,
     DuckKey,
@@ -153,16 +164,19 @@ pub enum DelayParam {
 }
 
 impl DelayParam {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 16] = [
         Self::TimeL,
         Self::TimeR,
         Self::Feedback,
         Self::Width,
         Self::LowCut,
         Self::HighCut,
+        Self::FilterResonance,
+        Self::Smear,
         Self::ModRate,
         Self::ModDepth,
         Self::Drive,
+        Self::DuckThreshold,
         Self::DuckAmount,
         Self::DuckRelease,
         Self::DuckKey,
@@ -177,9 +191,12 @@ impl DelayParam {
             Self::Width => range(0.0, 200.0, defaults.width, 1.0),
             Self::LowCut => log_range(20.0, 2000.0, defaults.low_cut, 1.0),
             Self::HighCut => log_range(1000.0, 20_000.0, defaults.high_cut, 10.0),
+            Self::FilterResonance => range(0.0, 100.0, defaults.filter_resonance, 1.0),
+            Self::Smear => range(0.0, 100.0, defaults.smear_percent, 1.0),
             Self::ModRate => log_range(0.05, 8.0, defaults.mod_rate, 0.01),
             Self::ModDepth => range(0.0, 20.0, defaults.mod_depth, 0.1),
             Self::Drive => range(0.0, 100.0, defaults.drive, 1.0),
+            Self::DuckThreshold => range(-48.0, 0.0, defaults.duck_threshold_db, 0.5),
             Self::DuckAmount => range(0.0, 100.0, defaults.duck_amount, 1.0),
             Self::DuckRelease => log_range(50.0, 2500.0, defaults.duck_release, 1.0),
             Self::DuckKey => KEY_RANGE,
@@ -194,9 +211,12 @@ impl DelayParam {
             Self::Width => delay.width,
             Self::LowCut => delay.low_cut,
             Self::HighCut => delay.high_cut,
+            Self::FilterResonance => delay.filter_resonance,
+            Self::Smear => delay.smear_percent,
             Self::ModRate => delay.mod_rate,
             Self::ModDepth => delay.mod_depth,
             Self::Drive => delay.drive,
+            Self::DuckThreshold => delay.duck_threshold_db,
             Self::DuckAmount => delay.duck_amount,
             Self::DuckRelease => delay.duck_release,
             Self::DuckKey => f32::from(delay.duck_key),
@@ -210,6 +230,11 @@ impl DelayParam {
             delay.duck_key = value.round() as u8;
             return;
         }
+        if delay.link_times && matches!(self, Self::TimeL | Self::TimeR) {
+            delay.time_ms_l = value;
+            delay.time_ms_r = value;
+            return;
+        }
         *match self {
             Self::TimeL => &mut delay.time_ms_l,
             Self::TimeR => &mut delay.time_ms_r,
@@ -217,9 +242,12 @@ impl DelayParam {
             Self::Width => &mut delay.width,
             Self::LowCut => &mut delay.low_cut,
             Self::HighCut => &mut delay.high_cut,
+            Self::FilterResonance => &mut delay.filter_resonance,
+            Self::Smear => &mut delay.smear_percent,
             Self::ModRate => &mut delay.mod_rate,
             Self::ModDepth => &mut delay.mod_depth,
             Self::Drive => &mut delay.drive,
+            Self::DuckThreshold => &mut delay.duck_threshold_db,
             Self::DuckAmount => &mut delay.duck_amount,
             Self::DuckRelease => &mut delay.duck_release,
             Self::DuckKey => unreachable!(),
@@ -254,6 +282,10 @@ impl Echoform {
         duck_amount: 34.0,
         duck_release: 620.0,
         duck_key: 0,
+        duck_threshold_db: -24.0,
+        link_times: false,
+        smear_percent: 0.0,
+        filter_resonance: 0.0,
         output_db: -1.5,
         bypass: false,
     };
@@ -370,13 +402,14 @@ impl Echoform {
     }
     /// The left and right delay times in seconds at a tempo.
     pub fn seconds(&self, bpm: f64) -> [f64; 2] {
-        match self.mode {
+        let [left, right] = match self.mode {
             TimeMode::Sync => [self.division_l.seconds(bpm), self.division_r.seconds(bpm)],
             TimeMode::Free => [
                 f64::from(self.time_ms_l) / 1000.0,
                 f64::from(self.time_ms_r) / 1000.0,
             ],
-        }
+        };
+        [left, if self.link_times { left } else { right }]
     }
     pub(in crate::fx) fn validate(&self) -> Result<(), String> {
         if !DelayParam::ALL
@@ -386,5 +419,33 @@ impl Echoform {
             return Err("An Echoform Delay setting is out of range.".into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linked_delay_mirrors_edits_and_uses_left_in_both_time_modes() {
+        let mut delay = Echoform {
+            link_times: true,
+            time_ms_l: 80.0,
+            time_ms_r: 160.0,
+            division_l: Division::Eighth,
+            division_r: Division::Quarter,
+            mode: TimeMode::Sync,
+            ..Echoform::default()
+        };
+        assert_eq!(delay.seconds(120.0), [0.25, 0.25]);
+        delay.mode = TimeMode::Free;
+        assert_eq!(delay.seconds(120.0), [0.08, 0.08]);
+        DelayParam::TimeL.set(&mut delay, 119.0);
+        assert_eq!([delay.time_ms_l, delay.time_ms_r], [119.0, 119.0]);
+        DelayParam::TimeR.set(&mut delay, 237.0);
+        assert_eq!([delay.time_ms_l, delay.time_ms_r], [237.0, 237.0]);
+        delay.link_times = false;
+        DelayParam::TimeR.set(&mut delay, 119.0);
+        assert_eq!(delay.seconds(120.0), [0.237, 0.119]);
     }
 }

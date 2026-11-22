@@ -1,45 +1,45 @@
-//! One unit of the FX returns board: its selectors, the effect's switches,
-//! its dials, and the bus's own switches.
-use super::faces::{Face, Slot, columns, delay_face, drive_face, knob, reverb_face, slots};
-use super::master::{Dial, Format, dial, enamel_of, enclosure_of, heading, lamp};
+//! Layer 1 compact FX bus card and shared selector/switch helpers for Layer 2.
+use super::faces::{Slot, dial_slot, macro_slots};
+use super::master::{enamel_of, enclosure_of};
 use super::*;
-use mixjam_techno::application::KnobRange;
+use super::{CARD_CELL, DIALS_Y, FOOTER_Y, PADDING, SELECT_Y, UNIT_HEIGHT, enamel};
+use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::{
-    Aetherform, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division, Echoform,
-    Emberform, FxBus, Module, Range, ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel,
-    TimeMode,
+    Aetherform, DelayParam, Division, Echoform, Emberform, FxBus, Module, TimeMode,
 };
 
-/// A switch on the enamel with its label printed beside it. Returns the
-/// switch's response.
-fn switch(
+pub(super) enum CardAction {
+    None,
+    ClearTail,
+    ToggleSolo,
+    OpenDeepEdit,
+}
+
+pub(super) fn at(rect: Rect, x: f32, y: f32) -> Pos2 {
+    rect.min + Vec2::new(x, y)
+}
+
+pub(super) fn bus_switch(
     ui: &mut egui::Ui,
-    at: Pos2,
+    pos: Pos2,
     name: &str,
     label: &str,
     value: &mut bool,
     hint: &str,
+    ink_on_light: bool,
 ) -> Response {
-    let rect = Rect::from_min_size(at, Vec2::new(30.0, 24.0));
-    let response = controls::toggle_at(ui, rect, name, "", value);
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *value, name)
-    });
-    ui.painter().text(
-        Pos2::new(rect.right() + 2.0, rect.center().y),
-        Align2::LEFT_CENTER,
+    controls::instrument::bat_toggle(
+        ui,
+        Rect::from_min_size(pos, Vec2::new(30.0, 22.0)),
+        name,
         label,
-        FontId::proportional(11.5),
-        roles().ink,
-    );
-    response.hover_hint(format!(
-        "{name}: {}. {hint}",
-        if *value { "on" } else { "off" }
-    ))
+        value,
+        hint,
+        ink_on_light,
+    )
 }
 
-/// A list of choices at `rect`, named for assistive technology.
-fn choice<T: Copy + PartialEq>(
+pub(super) fn choice<T: Copy + PartialEq>(
     ui: &mut egui::Ui,
     rect: Rect,
     name: &str,
@@ -47,13 +47,33 @@ fn choice<T: Copy + PartialEq>(
     options: &[(T, &str)],
     hint: &str,
 ) {
+    choice_with_label(ui, rect, name, value, options, hint, |label| label);
+}
+
+fn choice_with_label<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    value: &mut T,
+    options: &[(T, &str)],
+    hint: &str,
+    display_label: fn(&str) -> &str,
+) {
     let current = options
         .iter()
         .find(|(option, _)| option == value)
         .map_or("", |(_, label)| *label);
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        let mut selected = egui::RichText::new(display_label(current));
+        if rect.width() < 120.0 {
+            let spacing = ui.spacing_mut();
+            spacing.button_padding.x = 3.0;
+            spacing.icon_width = 9.0;
+            spacing.icon_spacing = 2.0;
+            selected = selected.size(11.0);
+        }
         let response = egui::ComboBox::from_id_salt(name)
-            .selected_text(current)
+            .selected_text(selected)
             .width(rect.width())
             .truncate()
             .show_ui(ui, |ui| {
@@ -65,47 +85,19 @@ fn choice<T: Copy + PartialEq>(
                 }
             })
             .response;
-        name_control(response, name).hover_hint(hint);
+        form::choice_named(&response, name, current);
+        response.hover_hint(hint);
     });
 }
 
-/// One dial of a unit, from its lettering `face` and the setting's `range`
-/// and `current` value. The new value when the person changed it.
-fn face_dial(
+pub(super) fn module_and_preset_combos(
     ui: &mut egui::Ui,
-    positions: [Pos2; 3],
-    bus_name: &str,
-    face: Face,
-    range: Range,
-    current: f32,
-    enabled: bool,
-) -> Option<f32> {
-    let mut value = f64::from(current);
-    let before = value;
-    dial(
-        ui,
-        positions,
-        &mut value,
-        Dial {
-            name: &format!("{bus_name} {}", face.name),
-            label: face.label,
-            hint: face.hint,
-            range: knob(range),
-            format: face.format,
-            choices: &[],
-        },
-        enabled,
-    );
-    (value != before).then_some(value as f32)
-}
-
-/// A point of the unit at `x` and `y` from its top left corner.
-fn at(rect: Rect, x: f32, y: f32) -> Pos2 {
-    rect.min + Vec2::new(x, y)
-}
-
-/// The selectors of the effect and of its preset.
-fn selectors(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
+    effect_rect: Rect,
+    preset_rect: Rect,
+    prefix: &str,
+    bus: &mut FxBus,
+    compact: bool,
+) {
     let mut kind = match bus.module {
         Module::Empty => 0,
         Module::EchoformDelay(_) => 1,
@@ -113,10 +105,10 @@ fn selectors(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
         Module::EmberformDrive(_) => 3,
     };
     let before = kind;
-    choice(
+    choice_with_label(
         ui,
-        Rect::from_min_size(at(rect, PADDING, SELECT_Y), Vec2::new(176.0, 26.0)),
-        &format!("{bus_name} effect"),
+        effect_rect,
+        &format!("{prefix} effect"),
         &mut kind,
         &[
             (0, "Empty"),
@@ -126,6 +118,11 @@ fn selectors(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
         ],
         "The effect on this bus. A new effect starts from its first preset; the old one's \
          tail is cut.",
+        if compact {
+            compact_effect_label
+        } else {
+            |label| label
+        },
     );
     if kind != before {
         bus.module = match kind {
@@ -149,12 +146,11 @@ fn selectors(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
         }
         choice(
             ui,
-            Rect::from_min_size(at(rect, PADDING + 186.0, SELECT_Y), Vec2::new(170.0, 26.0)),
-            &format!("{bus_name} preset"),
+            preset_rect,
+            &format!("{prefix} preset"),
             &mut chosen,
             &with_custom,
-            "Load a factory preset: it sets every control but the duck key, \
-             and the return level.",
+            "Load a factory preset. It sets the effect controls and return level, and keeps the duck key.",
         );
         if chosen != current {
             bus.load_preset(chosen);
@@ -162,316 +158,130 @@ fn selectors(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
     }
 }
 
-/// The effect's own switches and choices.
-fn effect_row(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
-    match &mut bus.module {
-        Module::Empty => {
-            ui.painter().text(
-                at(rect, rect.width() / 2.0, DIALS_Y + ROW),
-                Align2::CENTER_CENTER,
-                "Choose an effect for this bus.",
-                FontId::proportional(13.0),
-                roles().ink,
-            );
-        }
-        Module::EchoformDelay(delay) => {
-            let mut sync = delay.mode == TimeMode::Sync;
-            switch(
-                ui,
-                at(rect, PADDING, MODE_Y),
-                &format!("{bus_name} sync"),
-                "Sync",
-                &mut sync,
-                "On, the times are note lengths at the song's tempo; off, the Time dials set \
-                 them in milliseconds.",
-            );
-            delay.mode = if sync { TimeMode::Sync } else { TimeMode::Free };
-            let divisions: Vec<(Division, &str)> = Division::ALL
-                .iter()
-                .map(|division| (*division, division.label()))
-                .collect();
-            ui.add_enabled_ui(sync, |ui| {
-                choice(
-                    ui,
-                    Rect::from_min_size(at(rect, PADDING + 76.0, MODE_Y), Vec2::new(66.0, 24.0)),
-                    &format!("{bus_name} left division"),
-                    &mut delay.division_l,
-                    &divisions,
-                    "The left delay as a note length: dotted lasts half as long again, \
-                     triplet two thirds.",
-                );
-                choice(
-                    ui,
-                    Rect::from_min_size(at(rect, PADDING + 150.0, MODE_Y), Vec2::new(66.0, 24.0)),
-                    &format!("{bus_name} right division"),
-                    &mut delay.division_r,
-                    &divisions,
-                    "The right delay as a note length.",
-                );
-            });
-            switch(
-                ui,
-                at(rect, PADDING + 228.0, MODE_Y),
-                &format!("{bus_name} ping-pong"),
-                "Ping-pong",
-                &mut delay.ping_pong,
-                "Repeats cross from side to side.",
-            );
-            choice(
-                ui,
-                Rect::from_min_size(at(rect, PADDING + 324.0, MODE_Y), Vec2::new(92.0, 24.0)),
-                &format!("{bus_name} character"),
-                &mut delay.character,
-                &[
-                    (DelayCharacter::Digital, "Digital"),
-                    (DelayCharacter::Analog, "Analog"),
-                    (DelayCharacter::Tape, "Tape"),
-                ],
-                "Digital repeats stay clean; Analog warms and softens them; Tape saturates, \
-                 darkens, and wavers.",
-            );
-        }
-        Module::AetherformReverb(reverb) => {
-            choice(
-                ui,
-                Rect::from_min_size(at(rect, PADDING, MODE_Y), Vec2::new(112.0, 24.0)),
-                &format!("{bus_name} space"),
-                &mut reverb.space_model,
-                &SpaceModel::ALL.map(|model| (model, model.label())),
-                "The shape of the space: its reflections and delay lengths.",
-            );
-            choice(
-                ui,
-                Rect::from_min_size(at(rect, PADDING + 120.0, MODE_Y), Vec2::new(112.0, 24.0)),
-                &format!("{bus_name} character"),
-                &mut reverb.character,
-                &[
-                    (ReverbCharacter::Natural, "Natural"),
-                    (ReverbCharacter::Vintage, "Vintage"),
-                    (ReverbCharacter::Bloom, "Bloom"),
-                ],
-                "Natural is neutral; Vintage saturates and darkens the tail; Bloom swells in \
-                 slowly and opens up.",
-            );
-            switch(
-                ui,
-                at(rect, PADDING + 242.0, MODE_Y),
-                &format!("{bus_name} early reflections"),
-                "Early",
-                &mut reverb.early_reflections_enabled,
-                "The first discrete reflections of the space.",
-            );
-            switch(
-                ui,
-                at(rect, PADDING + 322.0, MODE_Y),
-                &format!("{bus_name} shimmer"),
-                "Shimmer",
-                &mut reverb.shimmer_enabled,
-                "Feeds the tail back pitched up by the interval.",
-            );
-            let intervals: Vec<(u8, String)> = SHIMMER_INTERVALS
-                .iter()
-                .map(|semitones| (*semitones, format!("+{semitones}")))
-                .collect();
-            let labels: Vec<(u8, &str)> = intervals
-                .iter()
-                .map(|(value, label)| (*value, label.as_str()))
-                .collect();
-            ui.add_enabled_ui(reverb.shimmer_enabled, |ui| {
-                choice(
-                    ui,
-                    Rect::from_min_size(at(rect, PADDING + 418.0, MODE_Y), Vec2::new(76.0, 24.0)),
-                    &format!("{bus_name} shimmer interval"),
-                    &mut reverb.shimmer_interval_semitones,
-                    &labels,
-                    "The shimmer's pitch step in semitones: a fifth, an octave, an octave and \
-                     a fifth, or two octaves.",
-                );
-            });
-        }
-        Module::EmberformDrive(drive) => {
-            choice(
-                ui,
-                Rect::from_min_size(at(rect, PADDING, MODE_Y), Vec2::new(132.0, 24.0)),
-                &format!("{bus_name} type"),
-                &mut drive.shape,
-                &DistortionShape::ALL.map(|shape| (shape, shape.label())),
-                "The curve: Tube and Tape are warm, Overdrive crunches, Fuzz buzzes, Hard \
-                 clip cuts, Foldback rings, Rectifier adds the octave, Bitcrush steps.",
-            );
-        }
+fn compact_effect_label(label: &str) -> &str {
+    match label {
+        "Echoform Delay" => "Delay",
+        "Aetherform Reverb" => "Reverb",
+        "Emberform Drive" => "Drive",
+        _ => label,
     }
 }
 
-/// The dials, in two rows.
-fn dial_grid(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) {
-    let all = slots(&bus.module);
-    let per_row = columns(&bus.module).max(1);
-    for (slot_index, slot) in all.iter().enumerate() {
-        let (column, row) = (slot_index % per_row, slot_index / per_row);
-        let in_row = if row == 0 {
-            per_row.min(all.len())
-        } else {
-            all.len() - per_row
-        };
-        let left = (rect.width() - in_row as f32 * CELL) / 2.0;
-        let x = left + (column as f32 + 0.5) * CELL;
-        let y = DIALS_Y + 22.0 + row as f32 * ROW;
-        let positions = [at(rect, x, y), at(rect, x, y + 38.0), at(rect, x, y + 60.0)];
-        match slot {
-            Slot::Return => {
-                let mut value = f64::from((bus.return_level * 100.0).round());
-                let before = value;
-                dial(
-                    ui,
-                    positions,
-                    &mut value,
-                    Dial {
-                        name: &format!("{bus_name} return level"),
-                        label: "Return",
-                        hint: "The level of the effect's sound in the mix.",
-                        range: KnobRange {
-                            low: 0.0,
-                            high: 100.0,
-                            default: 100.0,
-                            step: 1.0,
-                            logarithmic: false,
-                        },
-                        format: Format::whole("%"),
-                        choices: &[],
-                    },
-                    true,
-                );
-                if value != before {
-                    bus.return_level = (value / 100.0) as f32;
-                }
-            }
-            Slot::Delay(param) => {
-                let Module::EchoformDelay(delay) = &mut bus.module else {
-                    continue;
-                };
-                let enabled = !matches!(param, DelayParam::TimeL | DelayParam::TimeR)
-                    || delay.mode == TimeMode::Free;
-                let face = delay_face(*param);
-                let current = param.get(delay);
-                if let Some(value) = face_dial(
-                    ui,
-                    positions,
-                    bus_name,
-                    face,
-                    param.range(),
-                    current,
-                    enabled,
-                ) {
-                    param.set(delay, value);
-                }
-            }
-            Slot::Reverb(param) => {
-                let Module::AetherformReverb(reverb) = &mut bus.module else {
-                    continue;
-                };
-                let enabled = *param != ReverbParam::ShimmerAmount || reverb.shimmer_enabled;
-                let face = reverb_face(*param);
-                let current = param.get(reverb);
-                if let Some(value) = face_dial(
-                    ui,
-                    positions,
-                    bus_name,
-                    face,
-                    param.range(),
-                    current,
-                    enabled,
-                ) {
-                    param.set(reverb, value);
-                }
-            }
-            Slot::Drive(param) => {
-                let Module::EmberformDrive(drive) = &mut bus.module else {
-                    continue;
-                };
-                let enabled = !matches!(param, DistortionParam::Bits | DistortionParam::CrushRate)
-                    || drive.shape == DistortionShape::Bitcrush;
-                let face = drive_face(*param);
-                let current = param.get(drive);
-                if let Some(value) = face_dial(
-                    ui,
-                    positions,
-                    bus_name,
-                    face,
-                    param.range(),
-                    current,
-                    enabled,
-                ) {
-                    param.set(drive, value);
-                }
-            }
-        }
-    }
-}
-
-/// The bus's own switches, and Clear Tail. True when Clear Tail was pressed.
-fn footer(ui: &mut egui::Ui, rect: Rect, bus_name: &str, bus: &mut FxBus) -> bool {
-    let mut cleared = false;
-    let footer = FOOTER_Y + 14.0;
-    switch(
+pub(super) fn note_division(ui: &mut egui::Ui, rect: Rect, name: &str, division: &mut Division) {
+    choice(
         ui,
-        at(rect, PADDING, footer),
+        rect,
+        name,
+        division,
+        &Division::ALL.map(|division| (division, division.label())),
+        "Delay time as a note length at the song tempo.",
+    );
+}
+
+pub(super) fn left_division(ui: &mut egui::Ui, rect: Rect, prefix: &str, delay: &mut Echoform) {
+    let before = delay.division_l;
+    note_division(
+        ui,
+        rect,
+        &format!("{prefix} left division"),
+        &mut delay.division_l,
+    );
+    if delay.link_times && delay.division_l != before {
+        delay.division_r = delay.division_l;
+    }
+}
+
+fn card_header(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    bus_name: &str,
+    bus: &mut FxBus,
+    solo: bool,
+    sounding: bool,
+    tail_active: bool,
+) -> CardAction {
+    let mut action = CardAction::None;
+    bus_switch(
+        ui,
+        at(rect, 6.0, 7.0),
         &format!("{bus_name} power"),
-        "Input",
+        "",
         &mut bus.powered,
         "Off stops new sound into the effect; its tail rings out.",
+        true,
     );
-    switch(
-        ui,
-        at(rect, PADDING + 80.0, footer),
-        &format!("{bus_name} limiter"),
-        "Limiter",
-        &mut bus.limiter,
-        "Holds the return under -1 dBFS.",
-    );
-    let bypass = match &mut bus.module {
-        Module::EchoformDelay(delay) => Some(&mut delay.bypass),
-        Module::AetherformReverb(reverb) => Some(&mut reverb.bypass),
-        Module::EmberformDrive(drive) => Some(&mut drive.bypass),
-        Module::Empty => None,
+    let lamp_color = if sounding && tail_active {
+        roles().lamp_on
+    } else if sounding {
+        roles().lamp_good
+    } else {
+        roles().lamp_off
     };
-    if let Some(bypass) = bypass {
-        switch(
-            ui,
-            at(rect, PADDING + 172.0, footer),
-            &format!("{bus_name} bypass"),
-            "Bypass",
-            bypass,
-            "Silences the effect while it keeps running, so its tail returns when Bypass goes \
-             off.",
-        );
-        let button = Rect::from_min_size(
-            at(rect, rect.width() - PADDING - 96.0, footer),
-            Vec2::new(96.0, 26.0),
-        );
-        let label = format!("Clear {bus_name} tail");
-        let response = controls::button_at(
-            ui,
-            button,
-            &label,
-            "Clear tail",
-            controls::ButtonRole::Secondary,
-            true,
-        );
-        if name_control(response, &label)
-            .hover_hint(
-                "Cut the effect's ringing tail now. This is not an edit and cannot be undone.",
+    controls::instrument::jewel_lamp(ui, at(rect, 39.0, 17.0), 4.2, sounding, lamp_color);
+
+    ui.painter().text(
+        at(rect, 47.0, 17.0),
+        Align2::LEFT_CENTER,
+        bus_name,
+        FontId::proportional(11.5),
+        roles().ink,
+    );
+    let right = rect.width() - PADDING;
+    let mut solo_val = solo;
+    if ui
+        .add_enabled_ui(bus.is_active(), |ui| {
+            bus_switch(
+                ui,
+                at(rect, right - 118.0, 7.0),
+                &format!("{bus_name} solo"),
+                "S",
+                &mut solo_val,
+                "Monitor only soloed FX returns during playback.",
+                true,
             )
-            .clicked()
-        {
-            cleared = true;
-        }
+        })
+        .inner
+        .changed()
+    {
+        action = CardAction::ToggleSolo;
     }
-    cleared
+    bus_switch(
+        ui,
+        at(rect, right - 82.0, 7.0),
+        &format!("{bus_name} limiter"),
+        "L",
+        &mut bus.limiter,
+        "Limits return peaks to -1 dBFS during playback and -1 dBTP in exports.",
+        true,
+    );
+    let edit_rect = Rect::from_min_size(at(rect, right - 40.0, 6.0), Vec2::new(40.0, 22.0));
+    let edit_name = format!("Deep edit {bus_name}");
+    let edit_resp = controls::button_at(
+        ui,
+        edit_rect,
+        &edit_name,
+        "Edit",
+        controls::ButtonRole::Secondary,
+        true,
+    );
+    if name_control(edit_resp, &edit_name)
+        .hover_hint("Open all parameters, scopes, and telemetry in FX Deep Edit.")
+        .clicked()
+    {
+        action = CardAction::OpenDeepEdit;
+    }
+    action
 }
 
-/// One bus's unit. True when Clear Tail was pressed.
-pub(super) fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
+/// Paint one compact Layer 1 card.
+pub(super) fn unit(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    index: usize,
+    bus: &mut FxBus,
+    meter: FxBusMeterReading,
+    solo: bool,
+) -> CardAction {
     let bus_name = format!("FX {}", index + 1);
     let sounding = bus.powered && !bus.module.is_empty();
     enclosure_of(
@@ -481,15 +291,93 @@ pub(super) fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus)
         sounding,
         index as u64 + 21,
     );
-    heading(ui, rect, &bus_name, bus.module.label(), roles().ink);
-    lamp(ui, at(rect, rect.width() - 18.0, 19.0), sounding);
-    let mut cleared = false;
+    let mut action = CardAction::None;
     ui.scope(|ui| {
         ui.visuals_mut().dark_mode = false;
-        selectors(ui, rect, &bus_name, bus);
-        effect_row(ui, rect, &bus_name, bus);
-        dial_grid(ui, rect, &bus_name, bus);
-        cleared = footer(ui, rect, &bus_name, bus);
+        action = card_header(ui, rect, &bus_name, bus, solo, sounding, meter.tail_active);
+
+        let inner_w = rect.width() - 2.0 * PADDING;
+        let effect_w = ((inner_w - 6.0) * 0.56).max(80.0);
+        let preset_w = (inner_w - 6.0 - effect_w).max(80.0);
+        module_and_preset_combos(
+            ui,
+            Rect::from_min_size(at(rect, PADDING, SELECT_Y), Vec2::new(effect_w, 24.0)),
+            Rect::from_min_size(
+                at(rect, PADDING + effect_w + 6.0, SELECT_Y),
+                Vec2::new(preset_w, 24.0),
+            ),
+            &bus_name,
+            bus,
+            true,
+        );
+
+        let slots = macro_slots(&bus.module);
+        let left = (rect.width() - slots.len() as f32 * CARD_CELL) / 2.0;
+        for (i, slot) in slots.iter().enumerate() {
+            let x = left + (i as f32 + 0.5) * CARD_CELL;
+            let y = DIALS_Y + 20.0;
+            let positions = [at(rect, x, y), at(rect, x, y + 36.0), at(rect, x, y + 58.0)];
+            if let (Slot::Delay(DelayParam::TimeL), Module::EchoformDelay(delay)) =
+                (slot, &mut bus.module)
+                && delay.mode == TimeMode::Sync
+            {
+                synced_time_macro(ui, positions, &bus_name, delay);
+            } else {
+                dial_slot(ui, positions, &bus_name, bus, slot, true);
+            }
+        }
+
+        let footer_y = FOOTER_Y.min(UNIT_HEIGHT - 44.0);
+        let clear_w = 76.0;
+        let meter_w = if bus.module.is_empty() {
+            inner_w
+        } else {
+            (inner_w - clear_w - 6.0).max(80.0)
+        };
+        controls::instrument::meter_bar(
+            ui,
+            Rect::from_min_size(at(rect, PADDING, footer_y), Vec2::new(meter_w, 24.0)),
+            &format!("{bus_name} return meters"),
+            meter,
+        );
+        if !bus.module.is_empty() {
+            let clear_rect = Rect::from_min_size(
+                at(rect, rect.width() - PADDING - clear_w, footer_y),
+                Vec2::new(clear_w, 24.0),
+            );
+            let clear_label = format!("Clear {bus_name} tail");
+            let clear_resp = controls::button_at(
+                ui,
+                clear_rect,
+                &clear_label,
+                "Clear tail",
+                controls::ButtonRole::Secondary,
+                true,
+            );
+            if name_control(clear_resp, &clear_label)
+                .hover_hint("Cut the effect's ringing tail now. Not an edit.")
+                .clicked()
+            {
+                action = CardAction::ClearTail;
+            }
+        }
     });
-    cleared
+    action
+}
+
+fn synced_time_macro(ui: &mut egui::Ui, positions: [Pos2; 3], bus: &str, delay: &mut Echoform) {
+    let [center, _, label] = positions;
+    left_division(
+        ui,
+        Rect::from_center_size(center, Vec2::new(CARD_CELL - 2.0, 24.0)),
+        bus,
+        delay,
+    );
+    ui.painter().text(
+        label,
+        Align2::CENTER_CENTER,
+        if delay.link_times { "Time" } else { "Time L" },
+        FontId::proportional(10.0),
+        roles().ink,
+    );
 }

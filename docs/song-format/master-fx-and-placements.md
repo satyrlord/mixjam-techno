@@ -87,8 +87,26 @@ A `module` is one of these:
 | `widthPercent` | 0 to 200 |
 | `duckAmountPercent` | 0 to 100 |
 | `duckReleaseMs` | 50 to 2500 |
+| `duckThresholdDb` | -48 to 0 dBFS, from version 27 |
+| `levelMatch` | `true` or `false`, from version 27 |
 | `outputDb` | -24 to 12 |
 | `bypass` | `true` or `false` |
+
+Version 27 adds these settings:
+
+| Module | Key | Value | Migration default |
+| --- | --- | --- | --- |
+| All effects | `duckThresholdDb` | -48 to 0 dBFS | -27 dBFS |
+| `echoform-delay` | `linkTimes` | `true` or `false` | `true` when both free times and both sync divisions match |
+| `echoform-delay` | `smearPercent` | 0 to 100 | 0 |
+| `echoform-delay` | `filterResonance` | 0 to 100 | 0 |
+| `aetherform-reverb` | `bassMult` | 0.25 to 2.5 | 1 |
+| `aetherform-reverb` | `trebleMult` | 0.2 to 1.5 | 1 |
+| `emberform-drive` | `levelMatch` | `true` or `false` | `true` |
+
+Earlier native songs and known version-7 modules reject version-27 keys. The
+reader applies the migration defaults to effects from those files. Earlier JSON
+projects use the same defaults for any missing version-27 effect settings.
 
 From version 17, any effect can hold `duckKey`. This is the track from 1 to 64
 whose sound ducks the effect, instead of the input of the effect. An effect

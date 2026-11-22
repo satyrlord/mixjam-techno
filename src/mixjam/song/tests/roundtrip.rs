@@ -31,7 +31,7 @@ fn zero_length_fades_keep_their_selected_curves_on_roundtrip() {
 }
 
 #[test]
-fn saved_song_is_a_version_26_document_that_reopens_unchanged() {
+fn saved_song_is_a_version_27_document_that_reopens_unchanged() {
     let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
     let path = root.join("song.mixjam");
@@ -39,7 +39,7 @@ fn saved_song_is_a_version_26_document_that_reopens_unchanged() {
     save(&project, &path).unwrap();
     let text = fs::read_to_string(&path).unwrap();
     let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(document["formatVersion"], 26);
+    assert_eq!(document["formatVersion"], 27);
     assert_eq!(document["appVersion"], crate::APP_VERSION);
     assert_eq!(
         document["song"]["sections"],

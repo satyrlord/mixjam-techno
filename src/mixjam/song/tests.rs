@@ -309,6 +309,43 @@ fn earlier_document(expected: &mut Project, version: u32) -> serde_json::Value {
     document
 }
 
+/// Strip version 27 FX parameters from a document snapshot when simulating
+/// pre-27 versions, updating expected migrated FX defaults accordingly.
+fn strip_v27_fx_doc(document: &mut serde_json::Value) {
+    if let Some(buses) = document["fxBuses"].as_array_mut() {
+        for bus in buses {
+            if let Some(module) = bus
+                .get_mut("module")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                for key in [
+                    "levelMatch",
+                    "linkTimes",
+                    "smearPercent",
+                    "filterResonance",
+                    "bassMult",
+                    "trebleMult",
+                    "duckThresholdDb",
+                ] {
+                    module.remove(key);
+                }
+            }
+        }
+    }
+}
+
+fn before_version_27(document: &mut serde_json::Value, expected: &mut Project) {
+    strip_v27_fx_doc(document);
+    for bus in &mut expected.fx.buses {
+        match &mut bus.module {
+            crate::fx::Module::EchoformDelay(d) => d.duck_threshold_db = -27.0,
+            crate::fx::Module::AetherformReverb(r) => r.duck_threshold_db = -27.0,
+            crate::fx::Module::EmberformDrive(d) => d.duck_threshold_db = -27.0,
+            crate::fx::Module::Empty => {}
+        }
+    }
+}
+
 /// The board of a version 11 to 15 document: the Booster pedals'
 /// current keys, in the record and its order, changed to the earlier ones.
 fn with_earlier_booster_keys(document: &mut serde_json::Value) {

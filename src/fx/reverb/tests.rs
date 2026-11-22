@@ -137,6 +137,30 @@ fn the_high_cut_shortens_the_decay_above_it() {
 }
 
 #[test]
+fn bass_and_treble_controls_change_their_own_tail_bands() {
+    let base = Aetherform {
+        space_model: SpaceModel::Hall,
+        decay_seconds: 2.0,
+        late_balance_percent: 100.0,
+        ..neutral()
+    };
+    let measure = |settings, hz| rt60(&burst_curve(&mut reverb(settings), hz, 6.0));
+    let bass = Aetherform {
+        bass_mult: 0.4,
+        ..base
+    };
+    let treble = Aetherform {
+        treble_mult: 0.3,
+        ..base
+    };
+    assert!(measure(&bass, 125.0) < 0.75 * measure(&base, 125.0));
+    assert!(measure(&treble, 8000.0) < 0.75 * measure(&base, 8000.0));
+    let mid = measure(&base, 1000.0);
+    assert!((measure(&bass, 1000.0) - mid).abs() <= 0.3);
+    assert!((measure(&treble, 1000.0) - mid).abs() <= 0.3);
+}
+
+#[test]
 fn size_does_not_change_the_decay_and_models_differ() {
     let measure = |size: f32, model| {
         let settings = Aetherform {

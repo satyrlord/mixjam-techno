@@ -11,13 +11,18 @@
 //! The effects are this application's own designs. The delay's and the
 //! reverb's controls, ranges and presets follow the return modules of the
 //! MixJam Electron app, whose v7 projects saved them; that app had no drive.
+mod adaa;
 mod delay;
 mod distortion;
+pub(crate) mod migration;
+mod oversample;
 mod parts;
 mod processor;
 mod reverb;
 mod settings;
 
+pub(crate) use adaa::sample_transfer_curve;
+pub use oversample::RenderQuality;
 pub use parts::return_limiter_ceiling_dbfs;
 pub(crate) use processor::{LOOKAHEAD, TAIL_LIMIT};
 pub use processor::{Lanes, ReturnLanes, ReturnsProcessor};
