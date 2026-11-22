@@ -338,7 +338,11 @@ fn before_version_27(document: &mut serde_json::Value, expected: &mut Project) {
     strip_v27_fx_doc(document);
     for bus in &mut expected.fx.buses {
         match &mut bus.module {
-            crate::fx::Module::EchoformDelay(d) => d.duck_threshold_db = -27.0,
+            crate::fx::Module::EchoformDelay(d) => {
+                d.smear_percent = 0.0;
+                d.filter_resonance = 0.0;
+                d.duck_threshold_db = -27.0;
+            }
             crate::fx::Module::AetherformReverb(r) => r.duck_threshold_db = -27.0,
             crate::fx::Module::EmberformDrive(d) => d.duck_threshold_db = -27.0,
             crate::fx::Module::Empty => {}

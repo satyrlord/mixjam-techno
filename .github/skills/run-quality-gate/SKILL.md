@@ -53,8 +53,12 @@ invent a pass.
 ## 3. Run the checks that apply
 
 1. Run each command in the [Checks](../../../docs/DEVELOPMENT.md#checks) section
-   of `docs/DEVELOPMENT.md`. Run the release build only when the built
-   executable matters.
+   of `docs/DEVELOPMENT.md`. Do not run `cargo llvm-cov` unless the user
+   explicitly invokes `run-quality-gate` and orders coverage or a full quality
+   gate (set `MIXJAM_ALLOW_LLVM_COV=1` and pass `--lcov` to
+   `tools/measure-change.py` only then; otherwise run
+   `python tools/measure-change.py` without `--lcov`). Run the release build
+   only when the built executable matters.
    Completion criterion: Each command has a current result, or a reason that it
    does not apply.
 2. For native font assets, run the font check in

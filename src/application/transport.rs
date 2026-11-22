@@ -39,6 +39,15 @@ impl Session {
     pub fn fx_drive_curve(settings: &crate::fx::Emberform, points: &mut [f32]) {
         crate::fx::sample_transfer_curve(settings, points);
     }
+
+    /// Sample normalized `(norm_time, left_amp, right_amp)` echo impulses for Echoform Delay.
+    pub fn fx_delay_taps(
+        settings: &crate::fx::Echoform,
+        bpm: f64,
+        taps: &mut [(f32, f32, f32)],
+    ) -> usize {
+        crate::fx::sample_delay_taps(settings, bpm, taps)
+    }
     pub fn is_previewing(&self) -> bool {
         self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
     }

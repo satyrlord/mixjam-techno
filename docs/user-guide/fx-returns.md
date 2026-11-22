@@ -26,7 +26,10 @@ The bus controls:
 ## Echoform Delay and Aetherform Reverb
 
 - In Echoform Delay, **Link L/R** makes the left control set both channels in
-  Free and Sync modes. **Smear** spreads the repeats, and **Resonance** shapes
+  Free and Sync modes. **Tap & Decay** previews the stereo repeat pattern.
+  Left repeats appear above the center line. Right repeats appear below it.
+  **Character** selects **Digital**, **Analog** with saturation, or **Tape**
+  with wow and flutter. **Smear** spreads the repeats, and **Resonance** shapes
   the repeat filters.
 - In Aetherform Reverb, **Bass** and **Treble** change how long the
   low and high frequencies ring relative to the main decay time.

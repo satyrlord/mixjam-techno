@@ -21,20 +21,32 @@ fn bay_accent(module: &Module) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
-fn draw_dial_grid(ui: &mut egui::Ui, rect: Rect, cols: usize, bus: &mut FxBus, slots: &[Slot]) {
+fn draw_dial_grid_with(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    cols: usize,
+    cell_w: f32,
+    compact: bool,
+    bus: &mut FxBus,
+    slots: &[Slot],
+) {
     let cols = cols.max(1);
     for (i, slot) in slots.iter().enumerate() {
         let col = i % cols;
         let row = i / cols;
-        let x = rect.left() + 14.0 + (col as f32 + 0.5) * CELL_W;
+        let x = rect.left() + 14.0 + (col as f32 + 0.5) * cell_w;
         let y = rect.top() + 44.0 + row as f32 * ROW_H;
         let positions = [
             Pos2::new(x, y),
             Pos2::new(x, y + 34.0),
             Pos2::new(x, y + 54.0),
         ];
-        dial_slot(ui, positions, PREFIX, bus, slot, false);
+        dial_slot(ui, positions, PREFIX, bus, slot, compact);
     }
+}
+
+fn draw_dial_grid(ui: &mut egui::Ui, rect: Rect, cols: usize, bus: &mut FxBus, slots: &[Slot]) {
+    draw_dial_grid_with(ui, rect, cols, CELL_W, false, bus, slots);
 }
 
 fn bus_tabs(ui: &mut egui::Ui, bus_index: &mut usize, meters: &[FxBusMeterReading; BUSES]) {
@@ -231,15 +243,23 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     );
 }
 
-fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color32) {
-    let time_bay = Rect::from_min_size(area.min, Vec2::new(420.0, 178.0));
-    let duck_bay = Rect::from_min_size(
-        area.min + Vec2::new(430.0, 0.0),
-        Vec2::new((area.width() - 430.0).max(250.0), 178.0),
+fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, accent: Color32) {
+    let left_w = 468.0;
+    let top_h = 178.0;
+    let bot_h = 146.0;
+    let right_w = (area.width() - left_w - 10.0).max(220.0);
+    let time_bay = Rect::from_min_size(area.min, Vec2::new(left_w, top_h));
+    let scope_bay = Rect::from_min_size(
+        area.min + Vec2::new(left_w + 10.0, 0.0),
+        Vec2::new(right_w, top_h),
     );
     let tone_bay = Rect::from_min_size(
-        area.min + Vec2::new(0.0, 188.0),
-        Vec2::new(area.width(), 142.0),
+        area.min + Vec2::new(0.0, top_h + 10.0),
+        Vec2::new(left_w, bot_h),
+    );
+    let duck_bay = Rect::from_min_size(
+        area.min + Vec2::new(left_w + 10.0, top_h + 10.0),
+        Vec2::new(right_w, bot_h),
     );
 
     controls::instrument::bay(ui, time_bay, "Time & Feedback", accent, false);
@@ -325,10 +345,12 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     );
 
     controls::instrument::bay(ui, duck_bay, "Post-Limiter Ducker", accent, false);
-    draw_dial_grid(
+    draw_dial_grid_with(
         ui,
         duck_bay,
         4,
+        55.0,
+        true,
         bus,
         &[
             Slot::Delay(DelayParam::DuckKey),
@@ -338,11 +360,13 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
         ],
     );
 
-    controls::instrument::bay(ui, tone_bay, "Tone, Diffusion & Modulation", accent, false);
-    draw_dial_grid(
+    controls::instrument::bay(ui, tone_bay, "Tone, Smear & Mod", accent, false);
+    draw_dial_grid_with(
         ui,
         tone_bay,
         9,
+        49.0,
+        true,
         bus,
         &[
             Slot::Delay(DelayParam::LowCut),
@@ -356,6 +380,19 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
             Slot::Delay(DelayParam::Output),
         ],
     );
+
+    if let Module::EchoformDelay(delay) = &bus.module {
+        let mut taps = [(0.0_f32, 0.0_f32, 0.0_f32); 32];
+        let count = Session::fx_delay_taps(delay, bpm, &mut taps);
+        controls::instrument::delay_scope_frame(
+            ui,
+            scope_bay,
+            "Tap & Decay",
+            &taps[..count],
+            delay.ping_pong,
+            accent,
+        );
+    }
 }
 
 fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color32) {
@@ -483,6 +520,27 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
     );
 }
 
+fn draw_module_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64) {
+    let ui = &mut ui.new_child(egui::UiBuilder::new().id_salt("fx-bays").max_rect(area));
+    let accent = bay_accent(&bus.module);
+    match bus.module {
+        Module::Empty => {
+            controls::instrument::bay(ui, area, "Empty Bus", accent, false);
+            ui.painter().text(
+                area.center(),
+                Align2::CENTER_CENTER,
+                "Choose Echoform Delay, Aetherform Reverb,\n\
+                 or Emberform Drive above.",
+                FontId::proportional(13.0),
+                roles().legend,
+            );
+        }
+        Module::EmberformDrive(_) => drive_workspace(ui, area, bus, accent),
+        Module::EchoformDelay(_) => delay_workspace(ui, area, bus, bpm, accent),
+        Module::AetherformReverb(_) => reverb_workspace(ui, area, bus, accent),
+    }
+}
+
 impl MixJamApp {
     /// Floating Layer 2 FX Deep Edit workspace showing all parameters, live curves, and meters.
     pub(in super::super) fn fx_deep_edit_window(&mut self, ctx: &egui::Context) {
@@ -491,6 +549,7 @@ impl MixJamApp {
         };
         let mut open = true;
         let buses = self.session.project().fx;
+        let bpm = self.session.project().bpm;
         let mut draft = buses;
         let solos: [bool; BUSES] = std::array::from_fn(|index| self.session.fx_solo(index));
         let meters = self.boards.fx_meter_display.read();
@@ -517,26 +576,7 @@ impl MixJamApp {
                     let area = ui
                         .allocate_exact_size(Vec2::new(724.0, 340.0), Sense::hover())
                         .0;
-                    // Fixed-position controls stay inside the allocated workspace.
-                    let ui =
-                        &mut ui.new_child(egui::UiBuilder::new().id_salt("fx-bays").max_rect(area));
-                    let accent = bay_accent(&bus.module);
-                    match bus.module {
-                        Module::Empty => {
-                            controls::instrument::bay(ui, area, "Empty Bus", accent, false);
-                            ui.painter().text(
-                                area.center(),
-                                Align2::CENTER_CENTER,
-                                "Choose Echoform Delay, Aetherform Reverb,\n\
-                                 or Emberform Drive above.",
-                                FontId::proportional(13.0),
-                                roles().legend,
-                            );
-                        }
-                        Module::EmberformDrive(_) => drive_workspace(ui, area, bus, accent),
-                        Module::EchoformDelay(_) => delay_workspace(ui, area, bus, accent),
-                        Module::AetherformReverb(_) => reverb_workspace(ui, area, bus, accent),
-                    }
+                    draw_module_workspace(ui, area, bus, bpm);
                 });
             });
 

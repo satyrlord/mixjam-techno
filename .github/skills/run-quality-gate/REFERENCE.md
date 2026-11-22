@@ -10,9 +10,12 @@ Use the phase rule for the scope:
   identity, and import and export cases under the supported feature sets.
 - For frontend work, run the Rust tests that apply and a release build. Then
   run the native captures and inspect each capture size.
-- For final release evidence, run every check in step 3 of `SKILL.md`. Run the
-  asset checks for every folder in `assets/`. Also run the manual native, audio,
-  and compatibility procedures that apply.
+- For final release evidence, run every check in step 3 of `SKILL.md`. Run
+  `cargo llvm-cov` (with `MIXJAM_ALLOW_LLVM_COV=1` and `measure-change.py
+  --lcov`) only when the user explicitly invokes `run-quality-gate` and orders
+  a full quality gate or coverage run. Run the asset checks for every folder in
+  `assets/`. Also run the manual native, audio, and compatibility procedures
+  that apply.
 - For asset work, run the check of each affected asset folder.
 
 ## Stop conditions

@@ -49,11 +49,14 @@ and stems:
 - `RenderQuality::Live` keeps zero dry latency compensation (Emberform Drive
   uses 2x polyphase IIR oversampling and an instant soft safety ceiling, while
   Delay and Reverb use the 220-frame lookahead safety limiter with internal
-  pre-delay/tap compensation).
+  pre-delay/tap compensation; Echoform Delay uses 2x IIR saturation and cubic
+  delay interpolation).
 - `RenderQuality::Offline` runs Emberform Drive with 8x/16x linear-phase FIR
-  oversampling and ADAA2. The safety limiter uses 4x true-peak lookahead with
-  a -1.02 dBTP target when enabled. The dry path and master key tracks use the
-  same delay (`ReturnsProcessor::latency_samples`, up to 324 frames).
+  oversampling and ADAA2, and Echoform Delay with 8x FIR ADAA2 input
+  saturation and 16-tap Blackman-sinc read interpolation (`323` frames total).
+  The safety limiter uses 4x true-peak lookahead with a -1.02 dBTP target when
+  enabled. The dry path and master key tracks use the same delay
+  (`ReturnsProcessor::latency_samples`, up to 324 frames).
 
 The post-limiter ducker runs after the safety stage and aligns to delayed dry or
 key transients within 2 ms. Live playback publishes per-bus peak, RMS, Ducker GR,

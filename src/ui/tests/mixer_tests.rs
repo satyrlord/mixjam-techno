@@ -845,6 +845,66 @@ fn fx_linked_delay_edits_both_channels_and_undoes_one_free_time_gesture() {
 }
 
 #[test]
+fn fx_delay_deep_edit_controls_and_scope_cover_all_bays() {
+    use mixjam_techno::application::fx::{DelayCharacter, Echoform, Module};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    buses.buses[0].module = Module::EchoformDelay(Echoform::default());
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+
+    let output = click_named(&ctx, &mut app, "Deep edit FX 1");
+    assert!(screen(&output).shows("Tap & Decay"));
+    assert!(screen(&output).shows("L/R PING"));
+
+    let (target, _) = accessible_node(&output, "Deep edit ping-pong");
+    let output = frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target,
+                data: None,
+            },
+        )],
+        egui::Modifiers::NONE,
+    );
+    assert!(screen(&output).shows("L/R DUAL"));
+    for (name, val) in [
+        ("Deep edit smear", 36.0),
+        ("Deep edit filter resonance", 44.0),
+        ("Deep edit drive", 25.0),
+        ("Deep edit duck amount", 48.0),
+    ] {
+        let (target, _) = accessible_node(&output, name);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::SetValue,
+                    target,
+                    data: Some(egui::accesskit::ActionData::NumericValue(val)),
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+    }
+    choose(&ctx, &mut app, "Deep edit delay character", "Analog");
+    let Module::EchoformDelay(delay) = app.session.project().fx.buses[0].module else {
+        panic!("FX 1 holds Echoform Delay");
+    };
+    assert!(!delay.ping_pong);
+    assert_eq!(delay.smear_percent, 36.0);
+    assert_eq!(delay.filter_resonance, 44.0);
+    assert_eq!(delay.drive, 25.0);
+    assert_eq!(delay.duck_amount, 48.0);
+    assert_eq!(delay.character, DelayCharacter::Analog);
+}
+
+#[test]
 fn fx_meters_expose_their_values_to_assistive_technology() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();

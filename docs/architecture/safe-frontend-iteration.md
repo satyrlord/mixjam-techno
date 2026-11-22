@@ -46,8 +46,9 @@ them:
   `automation::set_point` and `moved_point` keep one point for each tick, in
   order.
 - FX presets: `FxBus::load_preset` and `FxBus::matching_preset`.
-- FX monitoring and the Drive transfer curve: `Session::fx_meters`,
-  `Session::fx_solo`, `Session::toggle_fx_solo`, and `Session::fx_drive_curve`.
+- FX monitoring and Deep Edit scopes: `Session::fx_meters`,
+  `Session::fx_solo`, `Session::toggle_fx_solo`, `Session::fx_drive_curve`,
+  and `Session::fx_delay_taps`.
 - Duckers: `Ducker::set_key` stops a ducker from using its own track as its
   key.
 - The board delay: `MasterChain::latency_ms`.

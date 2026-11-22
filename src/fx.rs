@@ -22,6 +22,7 @@ mod reverb;
 mod settings;
 
 pub(crate) use adaa::sample_transfer_curve;
+pub(crate) use delay::sample_delay_taps;
 pub use oversample::RenderQuality;
 pub use parts::return_limiter_ceiling_dbfs;
 pub(crate) use processor::{LOOKAHEAD, TAIL_LIMIT};

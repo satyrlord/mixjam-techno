@@ -92,6 +92,15 @@ class ChangeDiffTests(unittest.TestCase):
             (self.root / 'src' / 'a.rs').write_text('fn a() {}\nfn b() {}\n', encoding='utf-8')
             self.assertEqual(measure.main(arguments), 1)
 
+    def test_invalid_base_and_revision_range_fail_the_worktree_measurement(self):
+        (self.root / 'src' / 'a.rs').write_text('fn a() {}\nfn b() {}\n', encoding='utf-8')
+        with mock.patch.object(measure, 'ROOT', self.root), \
+                mock.patch.object(measure, 'OUTPUT', self.root / 'out'):
+            for base in ('missing-review-base', 'HEAD..HEAD'):
+                with self.subTest(base=base), redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(measure.main(['--base', base]), 1)
+                    self.assertIn(base, output.getvalue())
+
     def test_coverage_older_than_a_changed_file_gives_a_warning(self):
         lcov = self.root / 'lcov.info'
         lcov.write_text('', encoding='utf-8')
@@ -211,6 +220,45 @@ class DuplicationTests(unittest.TestCase):
         sources = {'src/a.rs': '', 'src/d.rs': '', 'src/e.rs': ''}
         clones = measure.clones_touching(report, 'src', {'src/a.rs': {5}}, sources.get)
         self.assertEqual([(c.first, c.second) for c in clones], [(('src/a.rs', 1, 8), ('src/d.rs', 40, 47))])
+
+    def test_fast_mode_without_lcov_checks_complexity_and_clones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_git(root, 'init', '-q')
+            for key, value in (('user.email', 'a@b.c'), ('user.name', 'a')):
+                run_git(root, 'config', key, value)
+            (root / 'src').mkdir()
+            (root / 'src' / 'a.rs').write_text('fn a() {}\n', encoding='utf-8')
+            run_git(root, 'add', '.')
+            run_git(root, 'commit', '-q', '-m', 'base')
+            (root / 'src' / 'a.rs').write_text('fn a() {\n  let x = 1;\n}\n', encoding='utf-8')
+            output = root / 'tmp' / 'measure'
+            ok_unit = {'src/a.rs': space('src/a.rs', 1, 3, 4, kind='unit', children=[space('a', 1, 3, 4)])}
+            bad_unit = {'src/a.rs': space('src/a.rs', 1, 3, 12, kind='unit', children=[space('a', 1, 3, 12)])}
+            no_clones = {'duplicates': []}
+            with mock.patch.object(measure, 'ROOT', root), mock.patch.object(measure, 'OUTPUT', output), \
+                    mock.patch.object(measure, 'duplication_report', return_value=no_clones), \
+                    redirect_stdout(io.StringIO()):
+                with mock.patch.object(measure, 'complexity_units', return_value=ok_unit):
+                    self.assertEqual(measure.main([]), 0)
+                with mock.patch.object(measure, 'complexity_units', return_value=bad_unit):
+                    self.assertEqual(measure.main([]), 1)
+
+    def test_cargo_wrapper_blocks_llvm_cov_without_explicit_opt_in(self):
+        script = ROOT / 'tools' / 'runtime' / 'cargo.ps1'
+        env = {k: v for k, v in os.environ.items() if k != 'MIXJAM_ALLOW_LLVM_COV'}
+        with tempfile.TemporaryDirectory() as tmp:
+            # Without the adjacent toolchain script, a guard failure cannot run Cargo.
+            isolated = Path(tmp) / script.name
+            isolated.write_bytes(script.read_bytes())
+            for leading in ([], ['+stable', '--config', 'net.offline=true', '--color', 'never']):
+                with self.subTest(leading=leading):
+                    res = subprocess.run(
+                        ['pwsh', '-NoProfile', '-File', str(isolated), *leading, 'llvm-cov', '--version'],
+                        capture_output=True, text=True, env=env, check=False,
+                    )
+                    self.assertEqual(res.returncode, 1)
+                    self.assertIn("Blocked 'cargo llvm-cov'", res.stderr)
 
 
 if __name__ == '__main__':

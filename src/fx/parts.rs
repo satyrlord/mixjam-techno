@@ -13,9 +13,9 @@ pub(super) struct Line {
     write: usize,
 }
 impl Line {
-    /// A line that reaches at least `frames` back.
+    /// A line that reaches at least `frames` back, with 16-tap sinc margin.
     pub(super) fn new(frames: usize) -> Self {
-        let size = (frames + 4).next_power_of_two();
+        let size = (frames + 16).next_power_of_two();
         Self {
             buffer: vec![0.0; size].into_boxed_slice(),
             mask: size - 1,
@@ -54,6 +54,80 @@ impl Line {
         let c2 = -(f + 1.0) * f * (f - 2.0) / 2.0;
         let c3 = (f + 1.0) * f * (f - 1.0) / 6.0;
         c0 * a + c1 * b + c2 * c + c3 * d
+    }
+    /// 16-tap Blackman-windowed sinc interpolation for transparent offline high-frequency reads.
+    #[inline]
+    pub(super) fn read_sinc(&self, delay: f64) -> f64 {
+        if delay < 8.0 || delay > (self.buffer.len() - 9) as f64 {
+            return self.read(delay);
+        }
+        let whole = delay.floor();
+        let f = delay - whole;
+        let n = whole as usize;
+        if f < 1e-9 {
+            return f64::from(self.at(n));
+        }
+        let mut sum = 0.0;
+        let mut norm = 0.0;
+        for k in -7_isize..=8 {
+            let x = f - k as f64;
+            let sinc = if x.abs() < 1e-9 {
+                1.0
+            } else {
+                (PI * x).sin() / (PI * x)
+            };
+            let u = x / 8.0;
+            let w = 0.42 + 0.5 * (PI * u).cos() + 0.08 * (2.0 * PI * u).cos();
+            let tap = w * sinc;
+            sum += tap * f64::from(self.at((n as isize + k) as usize));
+            norm += tap;
+        }
+        sum / norm
+    }
+}
+
+/// Zero-delay-feedback TPT state-variable filter with soft peak saturation at high resonance.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Svf {
+    g: f64,
+    k: f64,
+    ic1: f64,
+    ic2: f64,
+}
+impl Svf {
+    pub(super) fn tune(&mut self, hz: f64, q: f64) {
+        self.g = (PI * hz.clamp(10.0, 0.49 * RATE) / RATE).tan();
+        self.k = 1.0 / q.clamp(0.5, 6.0);
+    }
+    pub(super) fn clear(&mut self) {
+        self.ic1 = 0.0;
+        self.ic2 = 0.0;
+    }
+    #[inline]
+    fn step(&mut self, x: f64) -> (f64, f64, f64) {
+        let a1 = 1.0 / (1.0 + self.g * (self.g + self.k));
+        let a2 = self.g * a1;
+        let a3 = self.g * a2;
+        let v3 = x - self.ic2;
+        let raw_v1 = a1 * self.ic1 + a2 * v3;
+        let v1 = if self.k < 1.2 {
+            2.0 * (0.5 * raw_v1).tanh()
+        } else {
+            raw_v1
+        };
+        let v2 = self.ic2 + a2 * self.ic1 + a3 * v3;
+        self.ic1 = flush(2.0 * v1 - self.ic1);
+        self.ic2 = flush(2.0 * v2 - self.ic2);
+        let high = x - self.k * v1 - v2;
+        (v2, v1, high)
+    }
+    #[inline]
+    pub(super) fn low(&mut self, x: f64) -> f64 {
+        self.step(x).0
+    }
+    #[inline]
+    pub(super) fn high(&mut self, x: f64) -> f64 {
+        self.step(x).2
     }
 }
 
@@ -485,5 +559,59 @@ mod tests {
             gain = ducker.gain(0.0, 0.0, 1.0);
         }
         assert!(gain > 0.99);
+    }
+
+    #[test]
+    fn read_sinc_preserves_high_frequencies_at_half_sample_delay() {
+        let mut line = Line::new(64);
+        let freq = 12_000.0;
+        for i in 0..48 {
+            line.push((TAU * freq * i as f64 / RATE).sin() as f32);
+        }
+        let exact = line.read_sinc(20.0);
+        assert!((exact - f64::from(line.at(20))).abs() < 1e-6);
+        // Measure steady-state amplitude across 236 samples at half-sample delay.
+        let mut line = Line::new(512);
+        let mut energy = 0.0;
+        for i in 0..300 {
+            line.push((TAU * freq * i as f64 / RATE).sin() as f32);
+            if i >= 64 {
+                energy += line.read_sinc(20.5).powi(2);
+            }
+        }
+        let rms = (energy / 236.0).sqrt();
+        let db_err = 20.0 * (rms / std::f64::consts::FRAC_1_SQRT_2).log10();
+        assert!(db_err.abs() < 0.15, "12 kHz sinc droop {db_err:.3} dB");
+    }
+
+    #[test]
+    fn svf_low_and_high_boost_at_resonance_and_stay_bounded() {
+        let mut lp = Svf::default();
+        lp.tune(2000.0, 4.0);
+        let mut hp = Svf::default();
+        hp.tune(2000.0, 4.0);
+        let measure = |f: &mut Svf, low: bool, hz: f64| -> f64 {
+            f.clear();
+            let mut sum = 0.0;
+            for i in 0..4410 {
+                let x = 0.1 * (TAU * hz * i as f64 / RATE).sin();
+                let y = if low { f.low(x) } else { f.high(x) };
+                if i >= 2205 {
+                    sum += y * y;
+                }
+            }
+            (sum / 2205.0).sqrt()
+        };
+        assert!(measure(&mut lp, true, 2000.0) > 2.5 * measure(&mut lp, true, 200.0));
+        assert!(measure(&mut hp, false, 2000.0) > 2.5 * measure(&mut hp, false, 12_000.0));
+        assert!(measure(&mut lp, true, 12_000.0) < 0.1 * measure(&mut lp, true, 200.0));
+        assert!(measure(&mut hp, false, 200.0) < 0.1 * measure(&mut hp, false, 12_000.0));
+
+        lp.clear();
+        for i in 0..4410 {
+            let x = 10.0 * (TAU * 2000.0 * i as f64 / RATE).sin();
+            let y = lp.low(x);
+            assert!(y.is_finite() && y.abs() < 15.0, "{y}");
+        }
     }
 }

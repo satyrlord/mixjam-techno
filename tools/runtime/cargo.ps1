@@ -3,6 +3,27 @@
 param([Parameter(ValueFromRemainingArguments=$true)][string[]]$CargoArguments)
 
 $ErrorActionPreference = 'Stop'
+
+$subcommand = $null
+for ($index = 0; $index -lt $CargoArguments.Length; $index++) {
+    $arg = $CargoArguments[$index]
+    if ($arg -eq '--') { break }
+    if ($arg -cin '--config', '--color', '--explain', '-C', '-Z') {
+        $index++
+        continue
+    }
+    if ($arg -and $arg -notlike '-*' -and $arg -notlike '+*') {
+        $subcommand = $arg
+        break
+    }
+}
+if ($subcommand -eq 'llvm-cov' -and $env:MIXJAM_ALLOW_LLVM_COV -ne '1') {
+    [Console]::Error.WriteLine(
+        "Blocked 'cargo llvm-cov': coverage runs are disabled by default due to runtime cost. Set MIXJAM_ALLOW_LLVM_COV=1 only when the owner explicitly invokes run-quality-gate and asks for a full gate or coverage run."
+    )
+    exit 1
+}
+
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $toolchainRoot = Join-Path (& (Join-Path $PSScriptRoot 'local-data-root.ps1')) 'toolchain'
 

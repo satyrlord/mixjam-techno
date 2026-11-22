@@ -1,4 +1,4 @@
-"""Measure a change for the ub-mode skill: CRAP scores and duplication.
+"""Measure a change for the ub-mode skill: complexity and duplication.
 
 Usage, from the repository root:
 
@@ -7,7 +7,8 @@ Usage, from the repository root:
 The script compares the worktree, untracked Rust files included, with REV
 (default HEAD). It reports two results for the changed lines:
 
-- The CRAP score of each changed production function. CRAP is
+- The cyclomatic complexity of each changed production function. With
+  --lcov, report the CRAP score instead. CRAP is
   complexity^2 * (1 - coverage)^3 + complexity, with the cyclomatic complexity
   of rust-code-analysis-cli and the line coverage of the cargo-llvm-cov LCOV
   file. A score of 10 or more is a finding.
@@ -17,8 +18,8 @@ The script compares the worktree, untracked Rust files included, with REV
 Only the files in src/ are measured. Test code is not measured: files under a
 tests folder, files named tests.rs or *_tests.rs, the files of external
 #[cfg(test)] modules and their child modules, and inline #[cfg(test)] items.
-The exit code is 1 if there is a finding, or if a changed file has no coverage
-file or a tool is missing, otherwise 0.
+The exit code is 1 if there is a finding, Git cannot read the change, or a
+required tool or the requested coverage file is missing. Otherwise it is 0.
 """
 import argparse
 import codecs
@@ -217,13 +218,16 @@ def crap(complexity, coverage):
 
 
 def crap_rows(path, unit, source, coverage, changed):
-    """The CRAP rows of the production functions of `path` that hold a changed line."""
+    """The complexity / CRAP rows of the production functions of `path` that hold a changed line."""
     tests = test_ranges(source)
-    lines = coverage.get(path, {})
+    lines = coverage.get(path, {}) if coverage is not None else None
     rows = []
     for function in functions(unit):
         span = range(function.start, function.end + 1)
         if in_ranges(function.start, function.end, tests) or not changed.intersection(span):
+            continue
+        if lines is None:
+            rows.append(CrapRow(path, function.name, function.start, function.complexity, None, None))
             continue
         measured = [lines[line] for line in span if line in lines]
         fraction = sum(1 for count in measured if count > 0) / len(measured) if measured else None
@@ -254,18 +258,24 @@ def clones_touching(report, scan_root, changed, source_of, test_files=frozenset(
     return found
 
 
-def git(root, *arguments):
-    return subprocess.run(['git', '-C', str(root), '-c', 'core.quotePath=false', *arguments],
-                          capture_output=True, text=True, encoding='utf-8', check=False).stdout
+def git(root, *arguments, expected_status=(0,)):
+    result = subprocess.run(['git', '-C', str(root), '-c', 'core.quotePath=false', *arguments],
+                            capture_output=True, text=True, encoding='utf-8', check=False)
+    if result.returncode not in expected_status:
+        command = ' '.join(arguments)
+        raise ValueError(f'Git {command} failed. {result.stderr.strip()}')
+    return result.stdout
 
 
 def change_diff(base, root=None):
     """The diff of the worktree against `base`, with untracked Rust files as new files."""
     root = root or ROOT
-    diff = git(root, 'diff', *DIFF_OPTIONS, base, '--', '*.rs')
+    tree = git(root, 'rev-parse', '--verify', '--end-of-options', f'{base}^{{tree}}').strip()
+    diff = git(root, 'diff', *DIFF_OPTIONS, tree, '--', '*.rs')
     untracked = git(root, 'ls-files', '-z', '--others', '--exclude-standard', '--', '*.rs')
     for path in filter(None, untracked.split('\0')):
-        diff += git(root, 'diff', *DIFF_OPTIONS, '--no-index', '--', '/dev/null', path)
+        diff += git(root, 'diff', *DIFF_OPTIONS, '--no-index', '--', '/dev/null', path,
+                    expected_status=(0, 1))
     return diff
 
 
@@ -304,13 +314,39 @@ def duplication_report():
     return json.loads((folder / 'jscpd-report.json').read_text(encoding='utf-8'))
 
 
+def report_scores(rows, with_coverage):
+    findings = 0
+    header = 'CRAP scores' if with_coverage else 'Complexity scores (coverage skipped; pass --lcov for CRAP)'
+    print(f'\n{header} of {len(rows)} changed functions (limit {CRAP_LIMIT}):')
+    for row in sorted(rows, key=lambda r: -(r.crap if r.crap is not None else r.complexity)):
+        if with_coverage:
+            if row.crap is None:
+                print(f'  not measured  {row.path}:{row.start} {row.name} (no instrumented lines)')
+                continue
+            failed = row.crap >= CRAP_LIMIT
+            findings += failed
+            mark = 'FINDING' if failed else 'ok'
+            print(f'  {mark:7} {row.crap:6.1f}  {row.path}:{row.start} {row.name} '
+                  f'(complexity {row.complexity:.0f}, coverage {row.coverage:.0%})')
+        else:
+            failed = row.complexity >= CRAP_LIMIT
+            findings += failed
+            mark = 'FINDING' if failed else 'ok'
+            print(f'  {mark:7} {row.complexity:6.0f}  {row.path}:{row.start} {row.name}')
+    return findings
+
+
 def main(arguments=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--base', default='HEAD', help='the revision to compare with')
-    parser.add_argument('--lcov', default=str(OUTPUT / 'lcov.info'), help='the cargo-llvm-cov LCOV file')
+    parser.add_argument('--lcov', default=None, help='optional cargo-llvm-cov LCOV file for full CRAP scoring')
     options = parser.parse_args(arguments)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    diff = change_diff(options.base)
+    try:
+        diff = change_diff(options.base)
+    except ValueError as error:
+        print(error)
+        return 1
     everything = {path.relative_to(ROOT).as_posix(): path.read_text(encoding='utf-8')
                   for path in (ROOT / 'src').rglob('*.rs')}
     test_files = test_module_files(everything)
@@ -320,28 +356,21 @@ def main(arguments=None):
     if not changed:
         print('\nFindings: 0')
         return 0
-    lcov = Path(options.lcov)
-    if not lcov.is_file():
-        print(f'No coverage file at {lcov}. Run the coverage command of docs/DEVELOPMENT.md first.')
-        return 1
-    stale = stale_files(lcov, ROOT, changed)
-    if stale:
-        print(f'WARNING: {len(stale)} changed files are newer than the coverage file, so the coverage '
-              f'and the line numbers can be wrong. Run the coverage command again. {", ".join(stale)}')
-    coverage = parse_lcov(lcov.read_text(encoding='utf-8'), ROOT)
+    coverage = None
+    if options.lcov is not None:
+        lcov = Path(options.lcov)
+        if not lcov.is_file():
+            print(f'No coverage file at {lcov}. Run cargo llvm-cov first (only when explicitly ordered).')
+            return 1
+        stale = stale_files(lcov, ROOT, changed)
+        if stale:
+            print(f'WARNING: {len(stale)} changed files are newer than the coverage file, so the coverage '
+                  f'and the line numbers can be wrong. Run the coverage command again. {", ".join(stale)}')
+        coverage = parse_lcov(lcov.read_text(encoding='utf-8'), ROOT)
     sources = {path: (ROOT / path).read_text(encoding='utf-8') for path in changed}
     rows = [row for path, unit in complexity_units(changed).items()
             for row in crap_rows(path, unit, sources[path], coverage, changed[path])]
-    findings = 0
-    print(f'\nCRAP scores of {len(rows)} changed functions (limit {CRAP_LIMIT}):')
-    for row in sorted(rows, key=lambda row: -(row.crap if row.crap is not None else -1)):
-        if row.crap is None:
-            print(f'  not measured  {row.path}:{row.start} {row.name} (no instrumented lines)')
-            continue
-        mark = 'FINDING' if row.crap >= CRAP_LIMIT else 'ok'
-        findings += row.crap >= CRAP_LIMIT
-        print(f'  {mark:7} {row.crap:6.1f}  {row.path}:{row.start} {row.name} '
-              f'(complexity {row.complexity:.0f}, coverage {row.coverage:.0%})')
+    findings = report_scores(rows, coverage is not None)
 
     def source_of(path):
         file = ROOT / path

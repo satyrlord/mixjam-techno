@@ -43,10 +43,11 @@ fn kind(module: &Module) -> Kind {
 }
 
 impl Kind {
-    /// Effect core latency before SafetyLimiter (`Offline` Drive oversampling only).
+    /// Effect core latency before SafetyLimiter (`Offline` FIR oversampling).
     fn effect_latency(self, quality: RenderQuality) -> usize {
         match (self, quality) {
             (Self::Drive, RenderQuality::Offline) => distortion::Core::OFFLINE_LATENCY,
+            (Self::Delay, RenderQuality::Offline) => delay::Core::OFFLINE_LATENCY,
             _ => 0,
         }
     }
@@ -58,7 +59,10 @@ impl Kind {
             (Self::Drive, RenderQuality::Live) => 0,
             (Self::Drive, RenderQuality::Offline) => MAX_OFFLINE_LATENCY,
             (Self::Delay | Self::Reverb, RenderQuality::Live) => LOOKAHEAD,
-            (Self::Delay | Self::Reverb, RenderQuality::Offline) => SafetyLimiter::OFFLINE_LATENCY,
+            (Self::Delay, RenderQuality::Offline) => {
+                delay::Core::OFFLINE_LATENCY + SafetyLimiter::OFFLINE_LATENCY
+            }
+            (Self::Reverb, RenderQuality::Offline) => SafetyLimiter::OFFLINE_LATENCY,
         }
     }
 }
@@ -245,6 +249,106 @@ impl Bus {
         self.settings.module.duck_key()
     }
 
+    #[inline]
+    fn ensure_awake(&mut self, fed: bool) -> bool {
+        if self.awake {
+            return true;
+        }
+        if !fed || self.kind == Kind::Empty {
+            self.slept += 1;
+            return false;
+        }
+        match self.kind {
+            Kind::Delay => self.delay.skip(self.slept),
+            Kind::Reverb => self.reverb.skip(self.slept),
+            Kind::Drive | Kind::Empty => {}
+        }
+        self.awake = true;
+        self.quiet = 0;
+        self.slept = 0;
+        true
+    }
+
+    #[inline]
+    fn process_effect(&mut self, left: f64, right: f64) -> (f64, f64) {
+        match self.kind {
+            Kind::Empty => (0.0, 0.0),
+            Kind::Delay => self.delay.process_with_quality(left, right, self.quality),
+            Kind::Reverb => self.reverb.process(left, right),
+            Kind::Drive => self.drive.process_with_quality(left, right, self.quality),
+        }
+    }
+
+    #[inline]
+    fn limit_and_align(&mut self, wet_l: f64, wet_r: f64, lane: Option<f64>) -> (f64, f64, f64) {
+        let level = match lane {
+            Some(value) => {
+                self.level.hold(value);
+                value
+            }
+            None => self.level.next(),
+        };
+        let (lim_l, lim_r, lim_gr) = match (self.kind, self.quality) {
+            (Kind::Drive, RenderQuality::Live) => {
+                ceiling_with_gr(wet_l * level, wet_r * level, self.settings.limiter)
+            }
+            _ => self.limiter.process_quality(
+                wet_l * level,
+                wet_r * level,
+                self.settings.limiter,
+                self.quality,
+            ),
+        };
+        let aligned_l = delay_sample(&mut self.pad[0], lim_l, self.pad_frames);
+        let aligned_r = delay_sample(&mut self.pad[1], lim_r, self.pad_frames);
+        (aligned_l, aligned_r, lim_gr)
+    }
+
+    #[inline]
+    fn apply_cut(&mut self, out: &mut (f64, f64), bpm: f64) -> bool {
+        if self.cut == 0 {
+            return true;
+        }
+        self.cut -= 1;
+        if self.cut == 0 {
+            self.sleep(bpm);
+            return false;
+        }
+        let scale = self.cut as f64 / CUT as f64;
+        out.0 *= scale;
+        out.1 *= scale;
+        true
+    }
+
+    #[inline]
+    fn update_sleep(&mut self, fed: bool, bpm: f64) {
+        let (activity, wait) = match self.kind {
+            Kind::Delay => (
+                self.delay.activity(),
+                SLEEP_AFTER
+                    + self.delay.silent_gap()
+                    + MAX_OFFLINE_LATENCY.saturating_sub(self.kind.effect_latency(self.quality)),
+            ),
+            Kind::Reverb => (
+                self.reverb.activity(),
+                SLEEP_AFTER + self.total_wet_latency(),
+            ),
+            Kind::Drive => (
+                self.drive.activity(),
+                SLEEP_AFTER + self.total_wet_latency(),
+            ),
+            Kind::Empty => (0.0, SLEEP_AFTER),
+        };
+        if fed || activity > SILENCE {
+            self.quiet = 0;
+        } else {
+            self.quiet += 1;
+            if self.quiet > wait {
+                self.sleep(bpm);
+            }
+        }
+    }
+
     /// Returns `(left, right, ducker_gr_db, limiter_gr_db)`.
     #[inline]
     fn process(
@@ -268,46 +372,11 @@ impl Bus {
         let key_l = delay_sample(&mut self.key_delay[0], raw_key_l, key_latency);
         let key_r = delay_sample(&mut self.key_delay[1], raw_key_r, key_latency);
 
-        if !self.awake {
-            if !fed || self.kind == Kind::Empty {
-                self.slept += 1;
-                return (0.0, 0.0, 0.0, 0.0);
-            }
-            match self.kind {
-                Kind::Delay => self.delay.skip(self.slept),
-                Kind::Reverb => self.reverb.skip(self.slept),
-                Kind::Drive | Kind::Empty => {}
-            }
-            self.awake = true;
-            self.quiet = 0;
-            self.slept = 0;
+        if !self.ensure_awake(fed) {
+            return (0.0, 0.0, 0.0, 0.0);
         }
-        let (wet_l, wet_r) = match self.kind {
-            Kind::Empty => (0.0, 0.0),
-            Kind::Delay => self.delay.process(left, right),
-            Kind::Reverb => self.reverb.process(left, right),
-            Kind::Drive => self.drive.process_with_quality(left, right, self.quality),
-        };
-        let level = match lane {
-            Some(value) => {
-                self.level.hold(value);
-                value
-            }
-            None => self.level.next(),
-        };
-        let (lim_l, lim_r, lim_gr) = match (self.kind, self.quality) {
-            (Kind::Drive, RenderQuality::Live) => {
-                ceiling_with_gr(wet_l * level, wet_r * level, self.settings.limiter)
-            }
-            _ => self.limiter.process_quality(
-                wet_l * level,
-                wet_r * level,
-                self.settings.limiter,
-                self.quality,
-            ),
-        };
-        let aligned_l = delay_sample(&mut self.pad[0], lim_l, self.pad_frames);
-        let aligned_r = delay_sample(&mut self.pad[1], lim_r, self.pad_frames);
+        let (wet_l, wet_r) = self.process_effect(left, right);
+        let (aligned_l, aligned_r, lim_gr) = self.limit_and_align(wet_l, wet_r, lane);
         let (duck_gain, raw_duck_gr) = self.ducker.gain_at(
             key_l,
             key_r,
@@ -316,40 +385,10 @@ impl Bus {
         );
         let duck_gr = if self.bypass { 0.0 } else { raw_duck_gr };
         let mut out = (aligned_l * duck_gain, aligned_r * duck_gain);
-
-        if self.cut > 0 {
-            self.cut -= 1;
-            if self.cut == 0 {
-                self.sleep(bpm);
-                return (0.0, 0.0, 0.0, 0.0);
-            }
-            let scale = self.cut as f64 / CUT as f64;
-            out.0 *= scale;
-            out.1 *= scale;
+        if !self.apply_cut(&mut out, bpm) {
+            return (0.0, 0.0, 0.0, 0.0);
         }
-        let (activity, wait) = match self.kind {
-            Kind::Delay => (
-                self.delay.activity(),
-                SLEEP_AFTER + self.delay.silent_gap() + self.total_wet_latency(),
-            ),
-            Kind::Reverb => (
-                self.reverb.activity(),
-                SLEEP_AFTER + self.total_wet_latency(),
-            ),
-            Kind::Drive => (
-                self.drive.activity(),
-                SLEEP_AFTER + self.total_wet_latency(),
-            ),
-            Kind::Empty => (0.0, SLEEP_AFTER),
-        };
-        if fed || activity > SILENCE {
-            self.quiet = 0;
-        } else {
-            self.quiet += 1;
-            if self.quiet > wait {
-                self.sleep(bpm);
-            }
-        }
+        self.update_sleep(fed, bpm);
         (out.0, out.1, duck_gr, lim_gr)
     }
 }

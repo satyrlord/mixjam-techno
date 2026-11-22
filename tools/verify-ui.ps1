@@ -225,8 +225,8 @@ mixer_project['clips'][0]['sample_id'] = samples[4]['id']
 echoform = dict(type='echoform-delay', mode='sync', divisionL='1/4', divisionR='1/8.',
                 timeMsL=420.0, timeMsR=610.0, feedback=68.0, pingPong=True, width=142.0,
                 lowCut=160.0, highCut=7800.0, modRate=0.38, modDepth=5.4, character='tape',
-                drive=0.0, duckAmount=34.0, duckRelease=620.0, duckThresholdDb=-24.0,
-                linkTimes=False, smearPercent=0.0, filterResonance=0.0, outputDb=-1.5, bypass=False)
+                drive=18.0, duckAmount=34.0, duckRelease=620.0, duckThresholdDb=-24.0,
+                linkTimes=False, smearPercent=24.0, filterResonance=38.0, outputDb=-1.5, bypass=False)
 aetherform = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.0,
                   decaySeconds=2.8, sizePercent=68.0, character='vintage', drivePercent=0.0,
                   widthPercent=148.0, lateBalancePercent=72.0, lowCutHz=180.0, highCutHz=8600.0,
@@ -251,8 +251,8 @@ fx_rack_project['title'] = 'FX returns'
 fx_rack_project['fx'] = [
     dict(module=emberform, powered=True, returnLevel=0.86, limiter=True),
     dict(module=aetherform, powered=True, returnLevel=0.88, limiter=True),
-    dict(module=echoform, powered=False, returnLevel=0.82, limiter=True),
-    dict(module=dict(type='empty'), powered=True, returnLevel=1.0, limiter=True),
+    dict(module=echoform, powered=True, returnLevel=0.82, limiter=True),
+    dict(module=dict(type='empty'), powered=False, returnLevel=1.0, limiter=True),
 ]
 fx_rack = write_project('fx-rack', fx_rack_project)
 # Faded clips, a pitched clip, and automation lanes on the first tracks.

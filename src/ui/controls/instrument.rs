@@ -280,14 +280,12 @@ fn meter_readout(reading: FxBusMeterReading) -> String {
     )
 }
 
-/// Recessed oscilloscope plotting `points` (`y(x)` over `[-1, 1]`).
-pub(in super::super) fn scope_frame(
+fn draw_scope_chrome(
     ui: &egui::Ui,
     rect: Rect,
     title: &str,
-    points: &[f32],
     accent: Color32,
-) {
+) -> (Rect, Color32, Color32, Color32) {
     let r = roles();
     let painter = ui.painter();
     let (bg, trace, grid) = match r.material {
@@ -319,7 +317,6 @@ pub(in super::super) fn scope_frame(
         Stroke::new(1.0_f32, r.well_edge),
         egui::StrokeKind::Inside,
     );
-
     let plot = rect.shrink2(Vec2::new(8.0, 18.0));
     painter.text(
         Pos2::new(rect.left() + 8.0, rect.top() + 9.0),
@@ -328,6 +325,25 @@ pub(in super::super) fn scope_frame(
         FontId::proportional(10.0),
         r.legend,
     );
+    let right_color = match r.material {
+        Material::Metal => Color32::from_rgb(236, 178, 86),
+        Material::Plastic => Color32::from_rgb(112, 184, 255),
+        Material::Flat => accent.gamma_multiply(0.72),
+    };
+    (plot, trace, grid, right_color)
+}
+
+/// Recessed oscilloscope plotting `points` (`y(x)` over `[-1, 1]`).
+pub(in super::super) fn scope_frame(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    points: &[f32],
+    accent: Color32,
+) {
+    let r = roles();
+    let painter = ui.painter();
+    let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
     // Center axes & linear reference line y = x.
     painter.line_segment(
         [plot.left_center(), plot.right_center()],
@@ -361,6 +377,66 @@ pub(in super::super) fn scope_frame(
             ));
         }
         painter.add(egui::Shape::line(poly, Stroke::new(1.8_f32, trace)));
+    }
+}
+
+/// Plot the magnitudes of `(norm_t, L, R)` taps in separate left and right lanes.
+pub(in super::super) fn delay_scope_frame(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    taps: &[(f32, f32, f32)],
+    ping_pong: bool,
+    accent: Color32,
+) {
+    let r = roles();
+    let painter = ui.painter();
+    let (plot, left_color, grid, right_color) = draw_scope_chrome(ui, rect, title, accent);
+    let mode_tag = if ping_pong { "L/R PING" } else { "L/R DUAL" };
+    painter.text(
+        Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
+        Align2::RIGHT_CENTER,
+        mode_tag,
+        FontId::proportional(9.0),
+        r.legend.gamma_multiply(0.85),
+    );
+    let mid_y = plot.center().y;
+    let half_h = plot.height() * 0.46;
+    painter.line_segment(
+        [
+            Pos2::new(plot.left(), mid_y),
+            Pos2::new(plot.right(), mid_y),
+        ],
+        Stroke::new(1.0_f32, grid),
+    );
+    for frac in [0.25_f32, 0.5, 0.75] {
+        let gx = plot.left() + plot.width() * frac;
+        painter.line_segment(
+            [Pos2::new(gx, plot.top()), Pos2::new(gx, plot.bottom())],
+            Stroke::new(1.0_f32, grid.gamma_multiply(0.6)),
+        );
+    }
+
+    for &(t, l_amp, r_amp) in taps {
+        let x = plot.left() + t.clamp(0.0, 1.0) * (plot.width() - 4.0) + 2.0;
+        let draw_stem = |amp: f32, dir: f32, color: Color32| {
+            let norm = amp.abs().min(1.25) / 1.25;
+            if norm <= 0.005 {
+                return;
+            }
+            let tip = Pos2::new(x, mid_y + dir * norm * half_h);
+            let base = Pos2::new(x, mid_y);
+            if r.material != Material::Flat {
+                painter.line_segment(
+                    [base, tip],
+                    Stroke::new(4.0_f32, color.gamma_multiply(0.26)),
+                );
+            }
+            painter.line_segment([base, tip], Stroke::new(2.0_f32, color));
+            painter.circle_filled(tip, 2.2, color);
+        };
+        draw_stem(l_amp, -1.0, left_color);
+        draw_stem(r_amp, 1.0, right_color);
     }
 }
 
@@ -421,7 +497,7 @@ mod tests {
 
     #[test]
     fn instrument_controls_render_telemetry_scope_and_all_materials() {
-        use super::{bay, jewel_lamp, meter_bar, scope_frame};
+        use super::{bay, delay_scope_frame, jewel_lamp, meter_bar, scope_frame};
         use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
         use mixjam_techno::application::FxBusMeterReading;
 
@@ -470,6 +546,7 @@ mod tests {
             let ctx = egui::Context::default();
             ctx.enable_accesskit();
             let meter_rect = Rect::from_min_size(Pos2::new(20.0, 260.0), Vec2::new(180.0, 24.0));
+            let delay_rect = Rect::from_min_size(Pos2::new(320.0, 330.0), Vec2::new(240.0, 140.0));
             for pass in 0..2 {
                 let raw = egui::RawInput {
                     screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(640.0, 480.0))),
@@ -519,9 +596,17 @@ mod tests {
                         );
                         scope_frame(
                             ui,
-                            Rect::from_min_size(Pos2::new(320.0, 220.0), Vec2::new(240.0, 160.0)),
+                            Rect::from_min_size(Pos2::new(320.0, 220.0), Vec2::new(240.0, 100.0)),
                             "Empty Scope",
                             &[],
+                            accent,
+                        );
+                        delay_scope_frame(
+                            ui,
+                            delay_rect,
+                            "Tap & Decay",
+                            &[(0.15, 1.0, -0.25)],
+                            true,
                             accent,
                         );
                     });
@@ -554,6 +639,15 @@ mod tests {
                             .iter()
                             .any(|s| matches!(s.shape, egui::Shape::Path(_))),
                         "{theme_kind:?}: scope_frame must emit polyline trace for 65 samples"
+                    );
+                    assert!(
+                        output.shapes.iter().any(|shape| matches!(
+                            &shape.shape,
+                            egui::Shape::Circle(tip)
+                                if delay_rect.contains(tip.center)
+                                    && tip.center.y > delay_rect.center().y
+                        )),
+                        "{theme_kind:?}: the inverted right tap must appear below the center line"
                     );
                 }
             }

@@ -119,13 +119,13 @@ Master available.
 
 ## FX returns board
 
-`src/ui/fx.rs` owns the FX returns board, with the unit faces and the unit
-drawing in `src/ui/fx/`. It puts the four buses in raised units on a Marine
-surface. Each unit has the effect and preset choices, the dials, the return
-level, the switches, and Clear tail. `src/ui/view/boards.rs` sends a changed
-bus set as an edit, and sends Clear tail to the session. The Edit button of a
-return strip in the Mixer shows the FX returns board and brings that bus into
-view.
+`src/ui/fx.rs` owns the FX returns board. `src/ui/fx/` draws four cards with
+effect and preset choices, macro dials, a return level, and switches. The Edit
+button on a card opens FX Deep Edit, which holds the full settings, the scope
+for Delay or Drive, and Clear tail. Populated cards also offer Clear tail.
+The board and the editor send settings through the session as edits. Clear
+tail calls the session separately. The Edit button on a Mixer return strip
+shows the FX returns board and brings that bus into view.
 
 ## The lower panel
 

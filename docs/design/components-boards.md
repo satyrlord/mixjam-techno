@@ -140,9 +140,10 @@ The board toolbar also provides Clear all FX tails. The enamel of each effect is
 - Emberform Drive: ember.
 
 An inactive or empty unit dims its enclosure and lamp. FX Deep Edit groups the
-effect's controls and shows the transfer curve for Emberform Drive. Its bus
-buttons select the controls and meters for that bus. Link L/R pairs Echoform's
-left and right delay times in both Free and Sync modes.
+effect's controls and shows the Emberform Drive transfer curve or the
+Echoform Delay stereo repeat preview. Its bus buttons select the controls and
+meters for that bus. Link L/R pairs Echoform's left and right delay times in
+both Free and Sync modes.
 
 ## Shared shell and controls
 

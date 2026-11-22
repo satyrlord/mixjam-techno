@@ -104,22 +104,22 @@ Do not report a change as complete before all three phases pass.
      the test.
    Completion criterion: Each test can fail when the behavior changes.
 
-4. Measure complexity, duplication, and coverage.
-   - Run the commands of
-     [Change measurements](../../../docs/DEVELOPMENT.md#change-measurements)
-     in their order. That section owns the commands and the tools. The
-     [run-quality-gate](../run-quality-gate/SKILL.md) skill owns the other
-     checks.
-   - Reduce each function that has a CRAP score of 10 or more. Split the
-     function, test it, or do both. Decide whether a case statement needs a
-     reduction.
+4. Measure complexity and duplication.
+   - Run `python tools/measure-change.py` from
+     [Change measurements](../../../docs/DEVELOPMENT.md#change-measurements).
+     Do not run `cargo llvm-cov` under `ub-mode`; `llvm-cov` is allowed only when
+     the user explicitly calls
+     [run-quality-gate](../run-quality-gate/SKILL.md) for a full gate or
+     coverage run.
+   - Reduce each changed production function with complexity 10 or more (or CRAP
+     score 10 or more when `--lcov` is explicitly ordered). Split the function,
+     test it, or do both.
    - Remove each duplication that `tools/measure-change.py` reports.
-   - Cover the uncovered lines of the change. Delete dead code.
    - If a tool is not installed, run
      `tools/runtime/install-quality-tools.ps1` or `npm ci`. Do not report a
      result from a tool that did not run.
-   Completion criterion: Each measurement has a current result, and each
-   finding is fixed or has a recorded reason.
+   Completion criterion: `python tools/measure-change.py` passes with zero
+   complexity findings and zero clones.
 
 5. Refactor only through the refactor mode of the
    [improve-codebase-architecture](../improve-codebase-architecture/SKILL.md)

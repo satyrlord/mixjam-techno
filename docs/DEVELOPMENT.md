@@ -116,30 +116,39 @@ It gives the Booster pedals their format-16 keys.
 
 ### Change measurements
 
-These commands measure an uncommitted change. Run them in this order:
+Run this command to measure complexity and duplication on an uncommitted
+change without running coverage:
 
 ~~~powershell
-.\tools\runtime\cargo.ps1 llvm-cov --workspace --all-targets --locked --lcov --output-path tmp/measure/lcov.info
 python tools/measure-change.py
 ~~~
 
+When the owner explicitly invokes `run-quality-gate` and asks for a full gate
+or coverage run, unlock `cargo llvm-cov` and pass `--lcov` for CRAP scoring:
+
+~~~powershell
+$env:MIXJAM_ALLOW_LLVM_COV = '1'
+.\tools\runtime\cargo.ps1 llvm-cov --workspace --all-targets --locked --lcov --output-path tmp/measure/lcov.info
+python tools/measure-change.py --lcov tmp/measure/lcov.info
+~~~
+
+`tools/runtime/cargo.ps1` blocks `llvm-cov` unless `MIXJAM_ALLOW_LLVM_COV`
+equals `1`.
+
 | Tool | Pinned version | Measures |
 | --- | --- | --- |
-| cargo-llvm-cov | 0.9.2 | The line coverage of the default test run |
+| cargo-llvm-cov | 0.9.2 | Explicit-only line coverage of the default run |
 | rust-code-analysis-cli | 0.0.25 | The cyclomatic complexity of each function |
 | jscpd | 5.4.3 | Copied token runs of 50 tokens or more in `src/` |
 
 `tools/measure-change.py` compares the worktree with `HEAD`, and includes the
-untracked Rust files. For each changed production function in `src/`, it
-reports the CRAP score:
-complexity² × (1 − coverage)³ + complexity. A score of 10 or more is a finding.
-Each jscpd clone that has a changed line in one of its copies is also a
-finding. The script does not measure test code: test files, the files of
-`#[cfg(test)]` modules, and inline `#[cfg(test)]` items. If a changed file is
-newer than the coverage file, the script gives a warning, because the line
-numbers can be wrong. The exit code is 1 if there is a finding, or if a
-production file changed and the coverage file or a tool is missing. Use
-`--base REV` to compare with a different revision.
+untracked Rust files. In default fast mode it checks cyclomatic complexity
+against limit 10 and reports each jscpd clone with a changed line. With
+`--lcov`, it computes `complexity² × (1 − coverage)³ + complexity` (limit 10).
+It skips test files, `#[cfg(test)]` modules, and inline `#[cfg(test)]` items.
+It warns if a changed file is newer than the coverage file. It exits 1 if it
+finds an issue, Git cannot read the change, or a required tool or requested
+coverage file is missing. Use `--base REV` to compare with a different revision.
 
 ## Visual assets
 
