@@ -1,8 +1,10 @@
 //! Layer 1 compact FX bus card and shared selector/switch helpers for Layer 2.
+use super::super::mixer::{Look, bus_solo, bus_switches};
 use super::faces::{Slot, dial_slot, macro_slots};
+use super::master::COMPACT_WELL;
 use super::master::{enamel_of, enclosure_of};
 use super::*;
-use super::{CARD_CELL, DIALS_Y, FOOTER_Y, PADDING, SELECT_Y, UNIT_HEIGHT, enamel};
+use super::{DIALS_Y, FOOTER_H, FOOTER_Y, MAX_CELL, PADDING, SELECT_Y, enamel};
 use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::{
     Aetherform, DelayParam, Division, Echoform, Emberform, FxBus, Module, TimeMode,
@@ -64,14 +66,7 @@ fn choice_with_label<T: Copy + PartialEq>(
         .find(|(option, _)| option == value)
         .map_or("", |(_, label)| *label);
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-        let mut selected = egui::RichText::new(display_label(current));
-        if rect.width() < 120.0 {
-            let spacing = ui.spacing_mut();
-            spacing.button_padding.x = 3.0;
-            spacing.icon_width = 9.0;
-            spacing.icon_spacing = 2.0;
-            selected = selected.size(11.0);
-        }
+        let selected = choice_style(ui, rect, display_label(current));
         let response = egui::ComboBox::from_id_salt(name)
             .selected_text(selected)
             .width(rect.width())
@@ -89,6 +84,24 @@ fn choice_with_label<T: Copy + PartialEq>(
         form::choice_named(&response, name, current);
         response.hover_hint(hint);
     });
+}
+
+/// Fits a choice's combo to `rect`: it keeps the height it is given, so it
+/// lines up with its row. A narrow choice takes smaller lettering and a
+/// smaller arrow; a note length in a dial's value row, the narrowest, takes
+/// the smallest. Returns the lettering of the chosen `label`.
+fn choice_style(ui: &mut egui::Ui, rect: Rect, label: &str) -> egui::RichText {
+    ui.spacing_mut().interact_size.y = rect.height();
+    let selected = egui::RichText::new(label);
+    if rect.width() >= 120.0 {
+        return selected;
+    }
+    let tight = rect.width() < 60.0;
+    let spacing = ui.spacing_mut();
+    spacing.button_padding.x = if tight { 2.0 } else { 3.0 };
+    spacing.icon_width = if tight { 7.0 } else { 9.0 };
+    spacing.icon_spacing = if tight { 1.0 } else { 2.0 };
+    selected.size(if tight { 10.0 } else { 11.0 })
 }
 
 pub(super) fn module_and_preset_combos(
@@ -192,70 +205,55 @@ pub(super) fn left_division(ui: &mut egui::Ui, rect: Rect, prefix: &str, delay: 
     }
 }
 
+/// The header row: the bus name and its In switch at the left; S, Lim, and
+/// Edit at the right. In, S, and Lim are the mixer's quiet bus switches, so
+/// a bus reads the same on its return strip, in the Mix view, and here.
 fn card_header(
     ui: &mut egui::Ui,
     rect: Rect,
     bus_name: &str,
     bus: &mut FxBus,
     solo: bool,
-    sounding: bool,
-    tail_active: bool,
 ) -> CardAction {
     let mut action = CardAction::None;
-    bus_switch(
-        ui,
-        at(rect, 6.0, 7.0),
-        &format!("{bus_name} power"),
-        "",
-        &mut bus.powered,
-        "Off stops new sound into the effect; its tail rings out.",
-        true,
-    );
-    let lamp_color = if sounding && tail_active {
-        roles().lamp_on
-    } else if sounding {
-        roles().lamp_good
-    } else {
-        roles().lamp_off
-    };
-    controls::instrument::jewel_lamp(ui, at(rect, 39.0, 17.0), 4.2, sounding, lamp_color);
-
-    ui.painter().text(
-        at(rect, 47.0, 17.0),
+    let switch = |x: f32, width: f32| Rect::from_min_size(at(rect, x, 6.0), Vec2::new(width, 22.0));
+    let name = ui.painter().text(
+        at(rect, PADDING, 17.0),
         Align2::LEFT_CENTER,
         bus_name,
         FontId::proportional(11.5),
         roles().ink,
     );
     let right = rect.width() - PADDING;
+    // The key face sits 2 points inside the button and keeps 6 points
+    // either side of its 13-point label.
+    let edit_w = ui
+        .fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap("Edit".into(), FontId::proportional(13.0), Color32::WHITE)
+                .size()
+                .x
+        })
+        .ceil()
+        + 16.0;
+    let input = switch(name.right() - rect.left() + 8.0, 28.0);
+    let limiter = switch(right - edit_w - 4.0 - 32.0, 32.0);
+    bus_switches(ui, [input, limiter], Look::Quiet, bus_name, bus);
     let mut solo_val = solo;
     if ui
         .add_enabled_ui(bus.is_active(), |ui| {
-            bus_switch(
+            bus_solo(
                 ui,
-                at(rect, right - 118.0, 7.0),
-                &format!("{bus_name} solo"),
-                "S",
+                switch(limiter.left() - rect.left() - 4.0 - 24.0, 24.0),
+                bus_name,
                 &mut solo_val,
-                "Monitor only soloed FX returns during playback.",
-                true,
             )
         })
         .inner
-        .changed()
     {
         action = CardAction::ToggleSolo;
     }
-    bus_switch(
-        ui,
-        at(rect, right - 82.0, 7.0),
-        &format!("{bus_name} limiter"),
-        "L",
-        &mut bus.limiter,
-        "Limits return peaks to -1 dBFS during playback and -1 dBTP in exports.",
-        true,
-    );
-    let edit_rect = Rect::from_min_size(at(rect, right - 40.0, 6.0), Vec2::new(40.0, 22.0));
+    let edit_rect = switch(right - edit_w, edit_w);
     let edit_name = format!("Deep edit {bus_name}");
     let edit_resp = controls::button_at(
         ui,
@@ -295,11 +293,12 @@ pub(super) fn unit(
     let mut action = CardAction::None;
     ui.scope(|ui| {
         ui.visuals_mut().dark_mode = false;
-        action = card_header(ui, rect, &bus_name, bus, solo, sounding, meter.tail_active);
+        action = card_header(ui, rect, &bus_name, bus, solo);
 
+        // The effect's short name needs less room than a preset's name.
         let inner_w = rect.width() - 2.0 * PADDING;
-        let effect_w = ((inner_w - 6.0) * 0.56).max(80.0);
-        let preset_w = (inner_w - 6.0 - effect_w).max(80.0);
+        let effect_w = ((inner_w - 6.0) * 0.38).round();
+        let preset_w = inner_w - 6.0 - effect_w;
         module_and_preset_combos(
             ui,
             Rect::from_min_size(at(rect, PADDING, SELECT_Y), Vec2::new(effect_w, 24.0)),
@@ -312,23 +311,27 @@ pub(super) fn unit(
             true,
         );
 
+        // The dials share the card's width in equal columns, up to MAX_CELL
+        // each; a value window, 2 points inside its well, leaves 4 points
+        // between its neighbours.
         let slots = macro_slots(&bus.module);
-        let left = (rect.width() - slots.len() as f32 * CARD_CELL) / 2.0;
+        let cell = (inner_w / slots.len() as f32).min(MAX_CELL);
+        let well = (cell - 2.0).min(COMPACT_WELL);
+        let left = (rect.width() - slots.len() as f32 * cell) / 2.0;
         for (i, slot) in slots.iter().enumerate() {
-            let x = left + (i as f32 + 0.5) * CARD_CELL;
+            let x = left + (i as f32 + 0.5) * cell;
             let y = DIALS_Y + 20.0;
             let positions = [at(rect, x, y), at(rect, x, y + 36.0), at(rect, x, y + 58.0)];
             if let (Slot::Delay(DelayParam::TimeL), Module::EchoformDelay(delay)) =
                 (slot, &mut bus.module)
                 && delay.mode == TimeMode::Sync
             {
-                synced_time_macro(ui, positions, &bus_name, delay);
+                synced_time_macro(ui, positions, well, &bus_name, delay);
             } else {
-                dial_slot(ui, positions, &bus_name, bus, slot, true);
+                dial_slot(ui, positions, &bus_name, bus, slot, Some(well));
             }
         }
 
-        let footer_y = FOOTER_Y.min(UNIT_HEIGHT - 44.0);
         let clear_w = 76.0;
         let meter_w = if bus.module.is_empty() {
             inner_w
@@ -337,14 +340,15 @@ pub(super) fn unit(
         };
         controls::instrument::meter_bar(
             ui,
-            Rect::from_min_size(at(rect, PADDING, footer_y), Vec2::new(meter_w, 24.0)),
+            Rect::from_min_size(at(rect, PADDING, FOOTER_Y), Vec2::new(meter_w, FOOTER_H)),
             &format!("{bus_name} return meters"),
             meter,
+            bus.module.ducks(),
         );
         if !bus.module.is_empty() {
             let clear_rect = Rect::from_min_size(
-                at(rect, rect.width() - PADDING - clear_w, footer_y),
-                Vec2::new(clear_w, 24.0),
+                at(rect, rect.width() - PADDING - clear_w, FOOTER_Y),
+                Vec2::new(clear_w, FOOTER_H),
             );
             let clear_label = format!("Clear {bus_name} tail");
             let clear_resp = controls::button_at(
@@ -366,11 +370,49 @@ pub(super) fn unit(
     action
 }
 
-fn synced_time_macro(ui: &mut egui::Ui, positions: [Pos2; 3], bus: &str, delay: &mut Echoform) {
-    let [center, _, label] = positions;
+/// The left time in Sync mode: a dial that steps through the note lengths,
+/// over the note length's list in the value row.
+fn synced_time_macro(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    well: f32,
+    bus: &str,
+    delay: &mut Echoform,
+) {
+    let [center, value, label] = positions;
+    let steps: [f64; Division::ALL.len()] = std::array::from_fn(|index| index as f64);
+    let current = Division::ALL
+        .iter()
+        .position(|division| *division == delay.division_l)
+        .unwrap_or(0);
+    let mut step = current as f64;
+    let name = format!("{bus} left division dial");
+    let response = controls::rotary(
+        ui,
+        Rect::from_center_size(center, Vec2::splat(44.0)),
+        &mut step,
+        controls::RotarySpec {
+            name: &name,
+            low: 0.0,
+            high: steps[steps.len() - 1],
+            reset: current as f64,
+            step: 1.0,
+            decimals: 0,
+            logarithmic: false,
+            choices: &steps,
+        },
+    );
+    name_control(response, &name).hover_hint("Turn to step the note length.");
+    let chosen = Division::ALL[(step.round() as usize).min(steps.len() - 1)];
+    if chosen != delay.division_l {
+        delay.division_l = chosen;
+        if delay.link_times {
+            delay.division_r = chosen;
+        }
+    }
     left_division(
         ui,
-        Rect::from_center_size(center, Vec2::new(CARD_CELL - 2.0, 24.0)),
+        Rect::from_center_size(value, Vec2::new(well - 2.0, 24.0)),
         bus,
         delay,
     );

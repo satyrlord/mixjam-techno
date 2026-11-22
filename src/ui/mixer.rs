@@ -19,8 +19,8 @@ use artwork::*;
 pub(super) use artwork::{row_surface, row_surface_each};
 use buttons::*;
 pub(super) use buttons::{
-    Look, bus_switches, bypass_button, center_button, edit_button, eq_button, pan_slider,
-    polarity_button, send_knob, switch_button, unity_button,
+    LIMITER_HINT, Look, bus_solo, bus_switches, bypass_button, center_button, edit_button,
+    eq_button, pan_slider, polarity_button, send_knob, switch_button, unity_button,
 };
 use gain::*;
 pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value, gain_value_in};

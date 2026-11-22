@@ -71,6 +71,16 @@ impl Module {
             Self::EmberformDrive(drive) => drive.duck_key,
         }
     }
+    /// Whether the ducker can push the effect down: a nonzero duck amount.
+    pub fn ducks(&self) -> bool {
+        let amount = match self {
+            Self::Empty => 0.0,
+            Self::EchoformDelay(delay) => delay.duck_amount,
+            Self::AetherformReverb(reverb) => reverb.duck_amount_percent,
+            Self::EmberformDrive(drive) => drive.duck_amount_percent,
+        };
+        amount > 0.0
+    }
     /// The effect's factory presets and the return level each sets, in
     /// percent. An empty bus has none.
     pub fn presets(&self) -> &'static [(&'static str, f32)] {

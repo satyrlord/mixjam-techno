@@ -26,7 +26,7 @@ mod units;
 use board::*;
 pub(super) use board::{bypass_switch, preset_selector, show, status};
 use dials::*;
-pub(super) use dials::{Dial, Format, compact_dial, decimal, dial};
+pub(super) use dials::{COMPACT_WELL, Dial, Format, compact_dial, decimal, dial};
 use enclosure::*;
 pub(super) use enclosure::{enamel_of, enclosure_of};
 pub(super) use layout::MODULE_HEIGHT;

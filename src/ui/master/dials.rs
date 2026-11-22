@@ -365,12 +365,18 @@ pub(crate) fn dial(
     draw_dial(ui, positions, value, spec, enabled, WELL, 11.5);
 }
 
+/// The value well of a compact dial where its column has the room.
+pub(crate) const COMPACT_WELL: f32 = 46.0;
+
+/// A small-lettered dial whose value well is `well_width` points wide, so a
+/// row of dials fits the width its columns have.
 pub(crate) fn compact_dial(
     ui: &mut egui::Ui,
     positions: [Pos2; 3],
     value: &mut f64,
     spec: Dial<'_>,
     enabled: bool,
+    well_width: f32,
 ) {
     draw_dial(
         ui,
@@ -378,7 +384,7 @@ pub(crate) fn compact_dial(
         value,
         spec,
         enabled,
-        Vec2::new(46.0, WELL.y),
+        Vec2::new(well_width, WELL.y),
         10.0,
     );
 }
@@ -419,72 +425,131 @@ fn draw_dial(
         }
     );
     ui.add_enabled_ui(enabled, |ui| {
-        let before = *value;
-        let response = controls::rotary(
-            ui,
-            Rect::from_center_size(center, Vec2::splat(44.0)),
-            value,
-            controls::RotarySpec {
-                name: spec.name,
-                low,
-                high,
-                reset: decimal(range.default),
-                step: decimal(range.step),
-                decimals: if range.step < 1.0 { 1 } else { 0 },
-                logarithmic: range.logarithmic,
-                choices: spec.choices,
-            },
-        );
-        // A drag, a reset, or a value set by assistive technology names a
-        // place on the dial, which takes the nearest step. Only a key, wheel,
-        // or increment step rounds on in its direction. A drag names its
-        // place again every frame, so rounding it by direction would flip
-        // between the two steps around it.
-        let absolute = response.dragged()
-            || response.double_clicked()
-            || ui.input(|input| {
-                input.num_accesskit_action_requests(response.id, egui::accesskit::Action::SetValue)
-                    > 0
-            });
-        reveal(response).hover_hint(&hint);
-        if spec.choices.is_empty() && *value != before {
-            *value = on_grid(*value, (!absolute).then_some(before), &range);
-        }
+        dial_rotary(ui, center, value, &spec, &hint);
         ui.scope(|ui| {
-            controls::value_style(ui);
-            if well_size.x < WELL.x {
-                ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
-            }
-            let typed = *value;
-            let format = spec.format;
-            // Leaving the window parses the text it shows. Unchanged text is
-            // no edit, so a saved value between the shown digits stays.
-            let entry = egui::DragValue::new(value)
-                .range(low..=high)
-                .speed(decimal(range.step))
-                .update_while_editing(false)
-                .custom_formatter(move |value, _| format.show(value))
-                .custom_parser(move |text| {
-                    if text.trim() == format.show(typed).trim() {
-                        Some(typed)
-                    } else {
-                        format.read(text, high)
-                    }
-                });
-            let response = ui.put(
-                Rect::from_center_size(well, well_size + Vec2::new(-2.0, 4.0)),
-                entry,
-            );
-            reveal(name_control(response, &format!("{} value", spec.name))).hover_hint(&hint);
-            if *value != typed {
-                *value = if spec.choices.is_empty() {
-                    on_grid(*value, None, &range)
-                } else if *value < (low + high) / 2.0 {
-                    low
-                } else {
-                    high
-                };
-            }
+            value_window(
+                ui,
+                Rect::from_center_size(well, well_size),
+                value,
+                &spec,
+                &hint,
+            )
         });
     });
+}
+
+/// A dial's rotary at `center`; its value moves on the knob's grid.
+fn dial_rotary(ui: &mut egui::Ui, center: Pos2, value: &mut f64, spec: &Dial<'_>, hint: &str) {
+    let range = spec.range;
+    let before = *value;
+    let response = controls::rotary(
+        ui,
+        Rect::from_center_size(center, Vec2::splat(44.0)),
+        value,
+        controls::RotarySpec {
+            name: spec.name,
+            low: decimal(range.low),
+            high: decimal(range.high),
+            reset: decimal(range.default),
+            step: decimal(range.step),
+            decimals: if range.step < 1.0 { 1 } else { 0 },
+            logarithmic: range.logarithmic,
+            choices: spec.choices,
+        },
+    );
+    // A drag, a reset, or a value set by assistive technology names a
+    // place on the dial, which takes the nearest step. Only a key, wheel,
+    // or increment step rounds on in its direction. A drag names its
+    // place again every frame, so rounding it by direction would flip
+    // between the two steps around it.
+    let absolute = response.dragged()
+        || response.double_clicked()
+        || ui.input(|input| {
+            input.num_accesskit_action_requests(response.id, egui::accesskit::Action::SetValue) > 0
+        });
+    reveal(response).hover_hint(hint);
+    if spec.choices.is_empty() && *value != before {
+        *value = on_grid(*value, (!absolute).then_some(before), &range);
+    }
+}
+
+/// A dial's value window in its `well`: it shows the value and takes a
+/// typed one, with or without the unit.
+fn value_window(ui: &mut egui::Ui, well: Rect, value: &mut f64, spec: &Dial<'_>, hint: &str) {
+    let range = spec.range;
+    let (low, high) = (decimal(range.low), decimal(range.high));
+    controls::value_style(ui);
+    if well.width() < WELL.x {
+        ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
+    }
+    let typed = *value;
+    let format = spec.format;
+    let level = shortening(ui, well, &format.show(typed));
+    let show = move |value: f64| shorten(&format.show(value), level);
+    // Leaving the window parses the text it shows. Unchanged text is no
+    // edit, so a saved value between the shown digits stays.
+    let entry = egui::DragValue::new(value)
+        .range(low..=high)
+        .speed(decimal(range.step))
+        .update_while_editing(false)
+        .custom_formatter(move |value, _| show(value))
+        .custom_parser(move |text| {
+            if text.trim() == show(typed).trim() {
+                Some(typed)
+            } else {
+                format.read(text, high)
+            }
+        });
+    let response = ui.put(
+        Rect::from_center_size(well.center(), well.size() + Vec2::new(-2.0, 4.0)),
+        entry,
+    );
+    reveal(name_control(response, &format!("{} value", spec.name))).hover_hint(hint);
+    if *value != typed {
+        *value = typed_onto_dial(*value, spec);
+    }
+}
+
+/// How far a value window in `well` shortens `text` so that it keeps 3
+/// points clear of the well's frame, in the font the window uses. See
+/// `shorten` for the levels.
+fn shortening(ui: &mut egui::Ui, well: Rect, text: &str) -> u8 {
+    let font = ui
+        .style()
+        .override_font_id
+        .clone()
+        .unwrap_or_else(|| FontId::proportional(13.0));
+    let room = well.width() - 6.0;
+    (0..2)
+        .find(|&level| {
+            let shown = shorten(text, level);
+            ui.fonts_mut(|fonts| fonts.layout_no_wrap(shown, font.clone(), Color32::WHITE))
+                .size()
+                .x
+                <= room
+        })
+        .unwrap_or(2)
+}
+
+/// A value's text at shortening `level`: 0 keeps it, 1 writes kilohertz as
+/// "k" ("7.80k"), 2 also drops the space before a unit ("12.0dB").
+fn shorten(text: &str, level: u8) -> String {
+    match level {
+        0 => text.to_owned(),
+        1 => text.replace(" kHz", "k"),
+        _ => text.replace(" kHz", "k").replace(' ', ""),
+    }
+}
+
+/// A typed value on the knob's grid, or, for a dial of two choices, the
+/// nearer end.
+fn typed_onto_dial(value: f64, spec: &Dial<'_>) -> f64 {
+    let (low, high) = (decimal(spec.range.low), decimal(spec.range.high));
+    if spec.choices.is_empty() {
+        on_grid(value, None, &spec.range)
+    } else if value < (low + high) / 2.0 {
+        low
+    } else {
+        high
+    }
 }

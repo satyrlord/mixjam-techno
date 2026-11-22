@@ -224,40 +224,64 @@ pub(crate) fn bus_switches(
             ("Limiter", "Lim"),
             format!("{name} limiter"),
             &mut bus.limiter,
-            "Holds the return under -1 dBFS.",
+            LIMITER_HINT,
         ),
     ] {
         let response = if look.quiet() {
-            let response = face(ui, rect, &key, scale, None);
-            let lamp = Pos2::new(rect.left() + 6.0 * scale, rect.center().y);
-            let label_at = rect.center() + Vec2::new(4.0, 0.0) * scale;
-            if *on {
-                ui.painter()
-                    .circle_filled(lamp, 2.0 * scale, roles().lamp_on);
-                text(ui, label_at, short, 10.0 * scale, roles().muted);
-            } else {
-                // Off gives no light: a hollow lamp and a struck label.
-                ui.painter().circle_stroke(
-                    lamp,
-                    2.0 * scale,
-                    Stroke::new(1.0 * scale, roles().muted),
-                );
-                struck_text(ui, label_at, short, 10.0 * scale, roles().muted);
-            }
-            response
+            lamp_face(ui, rect, &key, short, *on)
         } else {
             button(ui, rect, label, &key, scale, *on)
         };
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, &key)
-        });
-        if response
-            .hover_hint(format!("{key}: {}. {hint}", if *on { "on" } else { "off" }))
-            .clicked()
-        {
-            *on = !*on;
-        }
+        toggle(response, &key, on, hint);
     }
+}
+
+/// What a bus's limiter does, for every place that shows its switch.
+pub(crate) const LIMITER_HINT: &str =
+    "Limits return peaks to -1 dBFS during playback and -1 dBTP in exports.";
+
+/// A quiet bus switch's face: a short label with a lamp, lit while `on`.
+/// Off, the exception, gives no light: a hollow lamp and a struck label.
+fn lamp_face(ui: &mut egui::Ui, rect: Rect, key: &str, short: &str, on: bool) -> Response {
+    let response = face(ui, rect, key, 1.0, None);
+    let lamp = Pos2::new(rect.left() + 6.0, rect.center().y);
+    let label_at = rect.center() + Vec2::new(4.0, 0.0);
+    if on {
+        ui.painter().circle_filled(lamp, 2.0, roles().lamp_on);
+        text(ui, label_at, short, 10.0, roles().muted);
+    } else {
+        ui.painter()
+            .circle_stroke(lamp, 2.0, Stroke::new(1.0_f32, roles().muted));
+        struck_text(ui, label_at, short, 10.0, roles().muted);
+    }
+    response
+}
+
+/// A switch's checked state, its on/off hint, and its toggle on a click.
+fn toggle(response: Response, key: &str, on: &mut bool, hint: &str) -> bool {
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, key)
+    });
+    let clicked = response
+        .hover_hint(format!("{key}: {}. {hint}", if *on { "on" } else { "off" }))
+        .clicked();
+    if clicked {
+        *on = !*on;
+    }
+    clicked
+}
+
+/// A bus's quiet Solo, "{name} solo", drawn as a track's quiet Solo: its
+/// letter, with its face Accent while on. Returns whether it changed.
+pub(crate) fn bus_solo(ui: &mut egui::Ui, rect: Rect, name: &str, on: &mut bool) -> bool {
+    let key = format!("{name} solo");
+    let response = quiet_switch(ui, rect, &key, TrackSwitch::Solo, *on);
+    toggle(
+        response,
+        &key,
+        on,
+        "While any FX return is soloed, only soloed returns sound during playback.",
+    )
 }
 
 /// "Edit {name}": shows the bus on the FX returns board. Returns whether it

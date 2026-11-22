@@ -108,13 +108,18 @@ const MARGIN: f32 = 6.0;
 const GAP: f32 = 8.0;
 const UNIT_TOP: f32 = 8.0;
 const CARD_MIN_WIDTH: f32 = 198.0;
-const UNIT_HEIGHT: f32 = 236.0;
+const UNIT_HEIGHT: f32 = 200.0;
 const HEADER: f32 = 34.0;
-const CARD_CELL: f32 = 48.0;
+/// The widest a dial's column grows on a wide card, so the dials stay a
+/// group and do not drift to the card's edges.
+const MAX_CELL: f32 = 72.0;
 const PADDING: f32 = 8.0;
 const SELECT_Y: f32 = HEADER + 4.0;
 const DIALS_Y: f32 = SELECT_Y + 32.0;
-const FOOTER_Y: f32 = 196.0;
+/// The meter row, 8 points under the dial labels.
+const FOOTER_Y: f32 = 162.0;
+/// The meter row's height: room for three lettered lanes.
+const FOOTER_H: f32 = 26.0;
 const ROW_HEIGHT: f32 = UNIT_TOP + UNIT_HEIGHT + 16.0;
 const BOARD_INSET: f32 = 2.0;
 /// Lower panel preferred height showing the full 4-card macro rack cleanly.
@@ -131,6 +136,16 @@ pub(super) fn enamel(module: &Module) -> [u8; 3] {
         Module::EchoformDelay(_) => DELAY_ENAMEL,
         Module::AetherformReverb(_) => REVERB_ENAMEL,
         Module::EmberformDrive(_) => DRIVE_ENAMEL,
+    }
+}
+
+/// The board's action for a press on bus `index`'s card, if any.
+fn board_action(pressed: CardAction, index: usize) -> Option<Action> {
+    match pressed {
+        CardAction::ClearTail => Some(Action::ClearTail(index)),
+        CardAction::ToggleSolo => Some(Action::ToggleSolo(index)),
+        CardAction::OpenDeepEdit => Some(Action::OpenDeepEdit(index)),
+        CardAction::None => None,
     }
 }
 
@@ -183,21 +198,24 @@ pub(super) fn show(
                 Pos2::new(bounds.left() + left, bounds.top() + UNIT_TOP),
                 Vec2::new(card_w, UNIT_HEIGHT),
             );
-            ui.push_id(("fx-unit", index), |ui| {
-                match unit(
-                    ui,
-                    rect,
-                    index,
-                    &mut draft.buses[index],
-                    meters[index],
-                    solos[index],
-                ) {
-                    CardAction::ClearTail => action = Action::ClearTail(index),
-                    CardAction::ToggleSolo => action = Action::ToggleSolo(index),
-                    CardAction::OpenDeepEdit => action = Action::OpenDeepEdit(index),
-                    CardAction::None => {}
-                }
-            });
+            // A child Ui, unlike a scope, leaves the row's height alone, so
+            // the scroll area holds exactly the row.
+            let mut card = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt(("fx-unit", index))
+                    .max_rect(rect),
+            );
+            let pressed = unit(
+                &mut card,
+                rect,
+                index,
+                &mut draft.buses[index],
+                meters[index],
+                solos[index],
+            );
+            if let Some(pressed) = board_action(pressed, index) {
+                action = pressed;
+            }
         }
     });
     view::name_scroll_area(&content, "effects-scroll", "Effects");

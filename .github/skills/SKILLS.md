@@ -24,7 +24,6 @@ first sentence of that description. If you change a description, change its row.
 | [operate-app](operate-app/SKILL.md) | Operate the running MixJam Techno window through its agent control channel. |
 | [run-quality-gate](run-quality-gate/SKILL.md) | Run or repair MixJam Techno's documented Rust and native-artifact checks. |
 | [song-review](song-review/SKILL.md) | Review, rate, or master a song made with MixJam Techno. |
-| [ub-mode](ub-mode/SKILL.md) | Apply the reduced engineering principles to every code change. |
 
 The writing policy for all skills is in
 [deslop/PROSE.md](deslop/PROSE.md#writing-policy-asd-ste100).

@@ -964,7 +964,11 @@ fn fx_rack_shows_all_four_cards_at_the_smallest_window_size() {
         .filter(|text| text.label() == "Edit" && text.rect().center().x > 100.0)
         .collect();
     assert_eq!(edits.len(), 4);
-    assert!(edits.into_iter().all(|text| text.whole()));
+    assert!(
+        edits
+            .into_iter()
+            .all(|text| text.whole() && !text.shape().galley.elided)
+    );
     for label in ["1/16T", "Custom", "Delay"] {
         assert!(
             output.shapes.iter().any(|shape| {
@@ -978,6 +982,211 @@ fn fx_rack_shows_all_four_cards_at_the_smallest_window_size() {
         accessible_node(&output, "FX 1 effect").1.value(),
         Some("Echoform Delay")
     );
+}
+
+/// The meter's D lane shows only while the bus's ducker can act.
+#[test]
+fn fx_meter_shows_the_ducker_lane_only_while_the_bus_ducks() {
+    use mixjam_techno::application::fx::{Echoform, Module};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    for (bus, duck_amount) in [(0, 0.0), (1, 30.0)] {
+        buses.buses[bus].module = Module::EchoformDelay(Echoform {
+            duck_amount,
+            ..Echoform::default()
+        });
+    }
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+    let size = Vec2::new(1440.0, 1000.0);
+    frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    let s = screen(&output);
+    let meter = |bus: usize| s.within(s.node(&format!("FX {bus} return meters")).rect());
+    assert!(!meter(1).shows("D"), "a bus without ducking hides D");
+    assert!(meter(2).shows("D"), "a ducking bus shows D");
+}
+
+/// In Sync mode the left time's dial steps through the note lengths, and its
+/// value row shows the one it chose.
+#[test]
+fn fx_synced_time_dial_steps_the_note_length() {
+    use mixjam_techno::application::fx::{Division, Echoform, Module, TimeMode};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::FxReturns;
+    let mut buses = app.session.project().fx;
+    buses.buses[0].module = Module::EchoformDelay(Echoform {
+        mode: TimeMode::Sync,
+        division_l: Division::ALL[0],
+        ..Echoform::default()
+    });
+    app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "FX 1 left division dial");
+    press(&ctx, &mut app, egui::Key::ArrowUp, egui::Modifiers::NONE);
+    let Module::EchoformDelay(delay) = app.session.project().fx.buses[0].module else {
+        panic!("FX 1 keeps its delay");
+    };
+    assert_eq!(delay.division_l, Division::ALL[1]);
+}
+
+/// Each card at the smallest and a large window: the header labels clear
+/// every switch, the controls stay inside the card, the preset reads whole,
+/// the value windows keep apart in one row, and the meter names its lanes
+/// right under the dial labels.
+#[test]
+fn fx_cards_lay_out_without_collisions_or_dead_space() {
+    use mixjam_techno::application::fx::{Aetherform, Echoform, Emberform, Module};
+    let sizes = [Vec2::new(960.0, 720.0), Vec2::new(1440.0, 1000.0)];
+    for (theme, size) in themes_in_turn().flat_map(|theme| sizes.map(|size| (theme, size))) {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.boards.module = BottomModule::FxReturns;
+        let mut buses = app.session.project().fx;
+        buses.buses[0].module = Module::EchoformDelay(Echoform::default());
+        buses.buses[1].module = Module::AetherformReverb(Aetherform::default());
+        buses.buses[2].module = Module::EmberformDrive(Emberform::default());
+        buses.buses[3].module = Module::AetherformReverb(Aetherform::default());
+        for (bus, preset) in [
+            "Wide Tape Echo",
+            "Warm Chamber",
+            "Warm Tube",
+            "Endless Cathedral",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert!(buses.buses[bus].load_preset(preset));
+        }
+        app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+        // The lower panel opens at its default height, as the app starts.
+        ctx.data_mut(|data| {
+            data.remove::<egui::containers::panel::PanelState>(egui::Id::new("sounds"))
+        });
+        let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let s = screen(&output);
+        for bus in 1..=4 {
+            let rect = |part: &str| s.node(&format!("FX {bus} {part}")).rect();
+            let (power, solo, limiter) = (rect("power"), rect("solo"), rect("limiter"));
+            let edit = s.node(&format!("Deep edit FX {bus}")).rect();
+            let meter = rect("return meters");
+            // The bus name opens the header row, left of its In switch.
+            let name = s
+                .texts()
+                .filter(|text| text.label() == format!("FX {bus}"))
+                .map(|text| text.rect())
+                .find(|name| {
+                    solo.y_range().contains(name.center().y) && name.right() < power.left()
+                })
+                .unwrap_or_else(|| panic!("FX {bus} names its card"));
+            let card = Rect::from_x_y_ranges(
+                name.left() - 8.0..=edit.right() + 8.0,
+                edit.top() - 6.0..=meter.bottom(),
+            );
+            let at = format!("FX {bus} in {theme:?} at {size:?}, card {card:?}");
+            let header = Rect::from_x_y_ranges(card.x_range(), solo.y_range());
+            let controls = [power, solo, limiter, edit];
+            for text in s.within(header).texts() {
+                assert!(
+                    !text.shape().galley.elided,
+                    "{at}: {:?} is cut off",
+                    text.label()
+                );
+                for control in controls {
+                    assert!(
+                        control.contains_rect(text.rect())
+                            || !text.rect().shrink(0.5).intersects(control),
+                        "{at}: {:?} {:?} touches {control:?}",
+                        text.label(),
+                        text.rect()
+                    );
+                }
+            }
+            assert!(s.within(header).shows("Lim"), "{at}: Lim names the limiter");
+            for control in [rect("effect"), rect("preset"), meter] {
+                assert!(
+                    control.left() >= card.left() + 7.5 && control.right() <= card.right() - 7.5,
+                    "{at}: {control:?} leaves the card's padding"
+                );
+            }
+            let values: Vec<Rect> = s
+                .within(card)
+                .nodes()
+                .filter(|node| {
+                    node.node()
+                        .label()
+                        .is_some_and(|label| label.starts_with("FX ") && label.ends_with(" value"))
+                })
+                .map(|node| node.rect())
+                .collect();
+            let mut row = values.clone();
+            if let Some(division) = s.find_node(&format!("FX {bus} left division")) {
+                row.push(division.rect());
+            }
+            row.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            assert_eq!(row.len(), 4, "{at}: four controls in the value row");
+            for pair in row.windows(2) {
+                assert!(
+                    pair[1].left() - pair[0].right() >= 4.0,
+                    "{at}: value windows {:?} and {:?} crowd",
+                    pair[0],
+                    pair[1]
+                );
+                assert!(
+                    (pair[1].center().y - pair[0].center().y).abs() < 1.0,
+                    "{at}: {:?} and {:?} share one row",
+                    pair[0],
+                    pair[1]
+                );
+            }
+            // A value keeps clear of its window's frame.
+            for window in &row {
+                for text in s.within(*window).texts() {
+                    assert!(
+                        window
+                            .shrink2(Vec2::new(2.0, 0.0))
+                            .x_range()
+                            .contains(text.rect().left())
+                            && text.rect().right() <= window.right() - 2.0,
+                        "{at}: {:?} {:?} overflows {window:?}",
+                        text.label(),
+                        text.rect()
+                    );
+                }
+            }
+            for lane in ["L", "R"] {
+                let letter = s.within(meter).text(lane);
+                let size = letter.shape().galley.job.sections[0].format.font_id.size;
+                assert!(size >= 8.5, "{at}: lane {lane} is lettered at {size} pt");
+            }
+            let labels = s.within(card).text("Return").rect();
+            assert!(
+                meter.top() - labels.bottom() <= 16.0,
+                "{at}: {:.0} points of dead space over the meter",
+                meter.top() - labels.bottom()
+            );
+        }
+        assert!(
+            s.find_node("Effects vertical scroll bar").is_none(),
+            "the cards fit the board's height in {theme:?} at {size:?}"
+        );
+        for preset in ["Wide Tape Echo", "Warm Chamber", "Warm Tube"]
+            .into_iter()
+            .chain((size.x > 1000.0).then_some("Endless Cathedral"))
+        {
+            let text = s.text(preset);
+            assert!(
+                !text.shape().galley.elided && text.whole(),
+                "{preset} reads whole at {size:?}"
+            );
+        }
+    }
 }
 
 /// Each drag runs again with the primary button, which must move the

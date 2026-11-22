@@ -70,50 +70,6 @@ pub(in super::super) fn bay(
     );
 }
 
-/// Faceted jewel pilot lamp (Metal), translucent orb (Plastic), or crisp indicator (Flat).
-pub(in super::super) fn jewel_lamp(
-    ui: &egui::Ui,
-    center: Pos2,
-    radius: f32,
-    lit: bool,
-    color: Color32,
-) {
-    let r = roles();
-    let painter = ui.painter();
-    if lit {
-        painter.circle_filled(center, radius + 4.5, color.gamma_multiply(0.22));
-    }
-    painter.circle_filled(center, radius + 1.6, r.ink);
-    let body = if lit { color } else { r.lamp_off };
-    painter.circle_filled(center, radius, body);
-    if lit {
-        match r.material {
-            Material::Metal => {
-                // Multi-facet diamond specular cut for vintage test-gear jewel lamps.
-                let f = radius * 0.52;
-                painter.add(egui::Shape::convex_polygon(
-                    vec![
-                        center + Vec2::new(0.0, -f),
-                        center + Vec2::new(f, 0.0),
-                        center + Vec2::new(0.0, f),
-                        center + Vec2::new(-f, 0.0),
-                    ],
-                    Color32::from_white_alpha(120),
-                    Stroke::NONE,
-                ));
-            }
-            Material::Plastic => {
-                painter.circle_filled(
-                    center + Vec2::new(-radius * 0.3, -radius * 0.3),
-                    radius * 0.35,
-                    Color32::from_white_alpha(200),
-                );
-            }
-            Material::Flat => {}
-        }
-    }
-}
-
 /// Toggle switch styled cleanly for chassis hardware across all three themes.
 pub(in super::super) fn bat_toggle(
     ui: &mut egui::Ui,
@@ -159,11 +115,13 @@ pub(in super::super) fn bat_toggle(
 }
 
 /// Compact stereo peak and gain-reduction meters with a numeric readout.
+/// The ducker's lane shows only on a bus that `ducks`.
 pub(in super::super) fn meter_bar(
     ui: &egui::Ui,
     rect: Rect,
     name: &str,
     reading: FxBusMeterReading,
+    ducks: bool,
 ) {
     let response = ui.interact(rect, ui.id().with(name), egui::Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name));
@@ -195,35 +153,74 @@ pub(in super::super) fn meter_bar(
         egui::StrokeKind::Inside,
     );
 
-    let inner = rect.shrink(3.0);
-    let lane_h = ((inner.height() - 4.0) / 3.0).max(2.5);
-    let norm = |amp: f32| {
-        if amp <= 1e-5 {
-            0.0
-        } else {
-            let db = 20.0 * amp.log10();
-            ((db + 48.0) / 48.0).clamp(0.0, 1.0)
-        }
-    };
-    let gr_norm = |db: f32| (db / 24.0).clamp(0.0, 1.0);
+    let inner = rect.shrink(2.5);
+    meter_lanes(painter, inner, reading, well_bg, ducks);
+    meter_end(painter, inner, reading);
+}
 
-    let levels = [
-        (norm(reading.peak_l), r.lamp_good),
-        (norm(reading.peak_r), r.lamp_good),
-        (gr_norm(reading.ducker_gr_db), r.lamp_warn),
-    ];
-    for (row, (fill_frac, base_color)) in levels.into_iter().enumerate() {
-        let y0 = inner.top() + row as f32 * (lane_h + 2.0);
-        let track = Rect::from_min_max(
-            Pos2::new(inner.left(), y0),
-            Pos2::new(inner.right() - 8.0, y0 + lane_h),
-        );
-        if fill_frac > 0.0 {
-            let color = if row < 2 && fill_frac > 0.92 {
+/// How far a peak of amplitude `amp` fills its lane, from -48 to 0 dBFS.
+fn peak_fraction(amp: f32) -> f32 {
+    if amp <= 1e-5 {
+        return 0.0;
+    }
+    ((20.0 * amp.log10() + 48.0) / 48.0).clamp(0.0, 1.0)
+}
+
+/// How far a gain reduction of `db` fills its lane: all of it at 24 dB.
+fn reduction_fraction(db: f32) -> f32 {
+    (db / 24.0).clamp(0.0, 1.0)
+}
+
+/// The meter's lanes, each behind its letter: the L and R peaks over -48 to
+/// 0 dBFS, then, on a bus that `ducks`, D, the ducker's gain reduction.
+fn meter_lanes(
+    painter: &egui::Painter,
+    inner: Rect,
+    reading: FxBusMeterReading,
+    well_bg: Color32,
+    ducks: bool,
+) {
+    let r = roles();
+    let lanes = Rect::from_min_max(Pos2::new(inner.left() + 10.0, inner.top()), inner.max);
+    let count = if ducks { 3 } else { 2 };
+    let lane_h = ((lanes.height() - 2.0 * (count - 1) as f32) / count as f32).max(2.5);
+    // A peak lane turns to the peak colour over 92% of its length.
+    let peak = |amp: f32| {
+        let fill = peak_fraction(amp);
+        (
+            fill,
+            if fill > 0.92 {
                 r.lamp_peak
             } else {
-                base_color
-            };
+                r.lamp_good
+            },
+        )
+    };
+    let ((l, l_color), (r_fill, r_color)) = (peak(reading.peak_l), peak(reading.peak_r));
+    let levels = [
+        ("L", l, l_color),
+        ("R", r_fill, r_color),
+        ("D", reduction_fraction(reading.ducker_gr_db), r.lamp_warn),
+    ];
+    let track_at = |row: usize| {
+        let y0 = lanes.top() + row as f32 * (lane_h + 2.0);
+        Rect::from_min_max(
+            Pos2::new(lanes.left(), y0),
+            Pos2::new(lanes.right() - 8.0, y0 + lane_h),
+        )
+    };
+    for (row, (letter, fill_frac, color)) in levels.into_iter().take(count).enumerate() {
+        let track = track_at(row);
+        // A silent lane still shows its track, so the meter reads as one.
+        painter.rect_filled(track, 1.0, r.well_edge.gamma_multiply(0.35));
+        painter.text(
+            Pos2::new(inner.left() + 4.5, track.center().y),
+            Align2::CENTER_CENTER,
+            letter,
+            FontId::proportional(8.5),
+            r.legend.gamma_multiply(0.85),
+        );
+        if fill_frac > 0.0 {
             let fill = Rect::from_min_max(
                 track.min,
                 Pos2::new(track.left() + track.width() * fill_frac, track.max.y),
@@ -231,8 +228,23 @@ pub(in super::super) fn meter_bar(
             painter.rect_filled(fill, 1.0, color);
         }
     }
+    // Breaks at -24 and -12 dB split the peak lanes into segments.
+    let (top, bottom) = (track_at(0), track_at(1));
+    for db in [-24.0, -12.0] {
+        let x = top.left() + top.width() * (db + 48.0) / 48.0;
+        painter.line_segment(
+            [Pos2::new(x, top.top()), Pos2::new(x, bottom.bottom())],
+            Stroke::new(1.0_f32, well_bg),
+        );
+    }
+}
+
+/// The meter's right end: the limiter's gain reduction while it acts, else
+/// a dot lit while the tail rings.
+fn meter_end(painter: &egui::Painter, inner: Rect, reading: FxBusMeterReading) {
+    let r = roles();
     if reading.limiter_gr_db > 0.1 {
-        let lim_frac = gr_norm(reading.limiter_gr_db);
+        let lim_frac = reduction_fraction(reading.limiter_gr_db);
         let lim_rect = Rect::from_min_max(
             Pos2::new(
                 inner.right() - 6.0,
@@ -497,7 +509,7 @@ mod tests {
 
     #[test]
     fn instrument_controls_render_telemetry_scope_and_all_materials() {
-        use super::{bay, delay_scope_frame, jewel_lamp, meter_bar, scope_frame};
+        use super::{bay, delay_scope_frame, meter_bar, scope_frame};
         use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
         use mixjam_techno::application::FxBusMeterReading;
 
@@ -574,9 +586,6 @@ mod tests {
                             accent,
                             false,
                         );
-                        jewel_lamp(ui, Pos2::new(320.0, 30.0), 4.2, true, roles().lamp_on);
-                        jewel_lamp(ui, Pos2::new(340.0, 30.0), 4.2, false, roles().lamp_off);
-
                         for (idx, (name, reading, _)) in readings.iter().enumerate() {
                             let y = 260.0 + idx as f32 * 30.0;
                             meter_bar(
@@ -584,6 +593,7 @@ mod tests {
                                 Rect::from_min_size(Pos2::new(20.0, y), Vec2::new(180.0, 24.0)),
                                 name,
                                 *reading,
+                                idx == 0,
                             );
                         }
 

@@ -33,120 +33,145 @@ pub(super) fn macro_slots(module: &Module) -> &'static [Slot] {
     }
 }
 
-/// Shared dial painter and setter for any `Slot` (used by both Layer 1 and Deep Edit).
+/// Shared dial painter and setter for any `Slot` (used by both Layer 1 and
+/// Deep Edit). `compact` is the value well's width of a compact dial; none
+/// draws the full dial.
 pub(super) fn dial_slot(
     ui: &mut egui::Ui,
     positions: [Pos2; 3],
     prefix: &str,
     bus: &mut FxBus,
     slot: &Slot,
-    compact: bool,
+    compact: Option<f32>,
 ) {
-    let draw = if compact { compact_dial } else { dial };
-    match slot {
-        Slot::Return => {
-            let mut value = f64::from((bus.return_level * 100.0).round());
-            let before = value;
-            draw(
-                ui,
-                positions,
-                &mut value,
-                Dial {
-                    name: &format!("{prefix} return level"),
-                    label: "Return",
-                    hint: "The level of the effect's sound in the mix.",
-                    range: KnobRange {
-                        low: 0.0,
-                        high: 100.0,
-                        default: 100.0,
-                        step: 1.0,
-                        logarithmic: false,
-                    },
-                    format: Format::whole("%"),
-                    choices: &[],
-                },
-                true,
-            );
-            if value != before {
-                bus.return_level = (value / 100.0) as f32;
-            }
-        }
-        Slot::Delay(param) => {
-            let Module::EchoformDelay(delay) = &mut bus.module else {
-                return;
-            };
-            let enabled = match param {
-                DelayParam::TimeL => delay.mode == mixjam_techno::application::fx::TimeMode::Free,
-                DelayParam::TimeR => {
-                    delay.mode == mixjam_techno::application::fx::TimeMode::Free
-                        && !delay.link_times
-                }
-                _ => true,
-            };
-            if let Some(value) = draw_face_dial(
-                draw,
-                ui,
-                positions,
-                prefix,
-                delay_face(*param),
-                (param.range(), param.get(delay)),
-                enabled,
-            ) {
+    let draw = Draw {
+        compact,
+        ui,
+        positions,
+        prefix,
+    };
+    match (slot, &mut bus.module) {
+        (Slot::Return, _) => return_dial(draw, &mut bus.return_level),
+        (Slot::Delay(param), Module::EchoformDelay(delay)) => {
+            let shown = (param.range(), param.get(delay));
+            let enabled = delay_dial_enabled(*param, delay);
+            if let Some(value) = draw_face_dial(draw, delay_face(*param), shown, enabled) {
                 param.set(delay, value);
             }
         }
-        Slot::Reverb(param) => {
-            let Module::AetherformReverb(reverb) = &mut bus.module else {
-                return;
-            };
-            let enabled = *param != ReverbParam::ShimmerAmount || reverb.shimmer_enabled;
-            if let Some(value) = draw_face_dial(
-                draw,
-                ui,
-                positions,
-                prefix,
-                reverb_face(*param),
-                (param.range(), param.get(reverb)),
-                enabled,
-            ) {
+        (Slot::Reverb(param), Module::AetherformReverb(reverb)) => {
+            let shown = (param.range(), param.get(reverb));
+            let enabled = reverb_dial_enabled(*param, reverb);
+            if let Some(value) = draw_face_dial(draw, reverb_face(*param), shown, enabled) {
                 param.set(reverb, value);
             }
         }
-        Slot::Drive(param) => {
-            let Module::EmberformDrive(drive) = &mut bus.module else {
-                return;
-            };
-            let enabled = !matches!(param, DistortionParam::Bits | DistortionParam::CrushRate)
-                || drive.shape == mixjam_techno::application::fx::DistortionShape::Bitcrush;
-            if let Some(value) = draw_face_dial(
-                draw,
-                ui,
-                positions,
-                prefix,
-                drive_face(*param),
-                (param.range(), param.get(drive)),
-                enabled,
-            ) {
+        (Slot::Drive(param), Module::EmberformDrive(drive)) => {
+            let shown = (param.range(), param.get(drive));
+            let enabled = drive_dial_enabled(*param, drive);
+            if let Some(value) = draw_face_dial(draw, drive_face(*param), shown, enabled) {
                 param.set(drive, value);
             }
         }
+        // A slot of another effect than the bus's has no dial.
+        _ => {}
+    }
+}
+
+/// Whether the delay's dial for `param` acts: the times only in Free mode,
+/// and the right time only while it is not linked to the left.
+fn delay_dial_enabled(param: DelayParam, delay: &mixjam_techno::application::fx::Echoform) -> bool {
+    let free = delay.mode == mixjam_techno::application::fx::TimeMode::Free;
+    match param {
+        DelayParam::TimeL => free,
+        DelayParam::TimeR => free && !delay.link_times,
+        _ => true,
+    }
+}
+
+/// Whether the reverb's dial for `param` acts: the shimmer amount only
+/// while Shimmer is on.
+fn reverb_dial_enabled(
+    param: ReverbParam,
+    reverb: &mixjam_techno::application::fx::Aetherform,
+) -> bool {
+    param != ReverbParam::ShimmerAmount || reverb.shimmer_enabled
+}
+
+/// Whether the drive's dial for `param` acts: the crusher's bits and rate
+/// only with the Bitcrush type.
+fn drive_dial_enabled(
+    param: DistortionParam,
+    drive: &mixjam_techno::application::fx::Emberform,
+) -> bool {
+    !matches!(param, DistortionParam::Bits | DistortionParam::CrushRate)
+        || drive.shape == mixjam_techno::application::fx::DistortionShape::Bitcrush
+}
+
+/// Where and how a slot's dial is drawn.
+struct Draw<'a, 'b> {
+    /// The compact value well's width; none draws the full dial.
+    compact: Option<f32>,
+    ui: &'a mut egui::Ui,
+    positions: [Pos2; 3],
+    /// The bus's name, which starts each dial's name.
+    prefix: &'b str,
+}
+
+/// Draws `spec` as `draw` says, compact or full.
+fn draw_spec(draw: Draw<'_, '_>, value: &mut f64, spec: Dial<'_>, enabled: bool) {
+    let Draw {
+        compact,
+        ui,
+        positions,
+        ..
+    } = draw;
+    match compact {
+        Some(well) => compact_dial(ui, positions, value, spec, enabled, well),
+        None => dial(ui, positions, value, spec, enabled),
+    }
+}
+
+/// The bus's return level, in whole percent.
+fn return_dial(draw: Draw<'_, '_>, level: &mut f32) {
+    let mut value = f64::from((*level * 100.0).round());
+    let before = value;
+    let prefix = draw.prefix;
+    draw_spec(
+        draw,
+        &mut value,
+        Dial {
+            name: &format!("{prefix} return level"),
+            label: "Return",
+            hint: "The level of the effect's sound in the mix.",
+            range: KnobRange {
+                low: 0.0,
+                high: 100.0,
+                default: 100.0,
+                step: 1.0,
+                logarithmic: false,
+            },
+            format: Format::whole("%"),
+            choices: &[],
+        },
+        true,
+    );
+    if value != before {
+        *level = (value / 100.0) as f32;
     }
 }
 
 fn draw_face_dial(
-    draw: fn(&mut egui::Ui, [Pos2; 3], &mut f64, Dial<'_>, bool),
-    ui: &mut egui::Ui,
-    positions: [Pos2; 3],
-    prefix: &str,
+    draw: Draw<'_, '_>,
     face: Face,
     (range, current): (Range, f32),
     enabled: bool,
 ) -> Option<f32> {
     let mut value = f64::from(current);
     let before = value;
-    draw(
-        ui,
-        positions,
+    let prefix = draw.prefix;
+    draw_spec(
+        draw,
         &mut value,
         Dial {
             name: &format!("{prefix} {}", face.name),

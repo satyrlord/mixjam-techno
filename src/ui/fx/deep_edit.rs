@@ -41,7 +41,14 @@ fn draw_dial_grid_with(
             Pos2::new(x, y + 34.0),
             Pos2::new(x, y + 54.0),
         ];
-        dial_slot(ui, positions, PREFIX, bus, slot, compact);
+        dial_slot(
+            ui,
+            positions,
+            PREFIX,
+            bus,
+            slot,
+            compact.then_some(super::master::COMPACT_WELL),
+        );
     }
 }
 
@@ -49,7 +56,12 @@ fn draw_dial_grid(ui: &mut egui::Ui, rect: Rect, cols: usize, bus: &mut FxBus, s
     draw_dial_grid_with(ui, rect, cols, CELL_W, false, bus, slots);
 }
 
-fn bus_tabs(ui: &mut egui::Ui, bus_index: &mut usize, meters: &[FxBusMeterReading; BUSES]) {
+fn bus_tabs(
+    ui: &mut egui::Ui,
+    bus_index: &mut usize,
+    meters: &[FxBusMeterReading; BUSES],
+    ducks: [bool; BUSES],
+) {
     ui.horizontal(|ui| {
         for i in 0..BUSES {
             let label = format!("FX {}", i + 1);
@@ -68,7 +80,13 @@ fn bus_tabs(ui: &mut egui::Ui, bus_index: &mut usize, meters: &[FxBusMeterReadin
         let meter_rect = ui
             .allocate_exact_size(Vec2::new(138.0, 24.0), Sense::hover())
             .0;
-        controls::instrument::meter_bar(ui, meter_rect, "Deep edit return meters", m);
+        controls::instrument::meter_bar(
+            ui,
+            meter_rect,
+            "Deep edit return meters",
+            m,
+            ducks[*bus_index],
+        );
         ui.label(if m.tail_active {
             "Tail: Active"
         } else {
@@ -120,7 +138,7 @@ fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool
         &format!("{PREFIX} limiter"),
         "Limiter",
         &mut bus.limiter,
-        "Limits return peaks to -1 dBFS during playback and -1 dBTP in exports.",
+        super::super::mixer::LIMITER_HINT,
         false,
     );
     if let Some(bypass) = match &mut bus.module {
@@ -566,7 +584,8 @@ impl MixJamApp {
             .max_height((ctx.viewport_rect().height() - 40.0).max(320.0))
             .constrain_to(bounds)
             .show(ctx, |ui| {
-                bus_tabs(ui, &mut bus_index, &meters);
+                let ducks = draft.buses.map(|bus| bus.module.ducks());
+                bus_tabs(ui, &mut bus_index, &meters, ducks);
                 ui.push_id((generation, bus_index), |ui| {
                     let bus = &mut draft.buses[bus_index];
                     let (cleared, toggled) = header_bar(ui, bus, solos[bus_index]);

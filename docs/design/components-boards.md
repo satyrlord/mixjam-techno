@@ -128,18 +128,39 @@ changes keep those commands.
 
 ## FX returns board and Deep Edit
 
-Four compact cards fit side by side on a Marine board in a 960-point window.
-If other panels reduce the room, the row scrolls horizontally. Each card has
-effect and preset selectors, up to four main controls, live stereo and
-gain-reduction meters, Power, Solo, Limiter, and Clear tail. Edit opens the bus
-in the floating FX Deep Edit window.
-The board toolbar also provides Clear all FX tails. The enamel of each effect is:
+Four compact cards, each 200 points high, fit side by side on a Marine board in
+a 960-point window. At the lower panel's default height the cards fit the
+board's height, with no vertical scroll bar. If other panels reduce the room,
+the row scrolls horizontally. From top to bottom, each card has these rows:
+
+1. The header: the bus name and In at the left; S, Lim, and Edit at the right.
+   In, S, and Lim are the quiet bus switches of the Mix view, with the same
+   labels, lamps, and struck-off state. Edit opens the bus in the floating FX
+   Deep Edit window. Its width follows its label, so the full word shows.
+2. The effect and preset selectors, at about 38% and 62% of the width. The
+   effect shows its short name, such as Delay.
+3. Up to four main dials in equal columns, at most 72 points each. Each value
+   window keeps 4 points from its neighbours. When a value does not fit its
+   window, the window writes kilohertz as "k", such as "7.80k", and then drops
+   the space before the unit, such as "12.0dB". In Sync mode, the delay's time
+   dial steps through the note lengths, and the note length sits in the value
+   row.
+4. The return meters and Clear tail, 26 points high. The meter has lanes with
+   8.5-point letters: L and R peaks from -48 to 0 dBFS, with breaks at -24 and
+   -12 dB, and D for the ducker's gain reduction. The D lane shows only while
+   the bus's duck amount is above zero. A silent lane still shows its track.
+   The right
+   end shows the limiter's gain reduction, or a dot that lights while the tail
+   rings.
+
+The board toolbar also provides Clear all FX tails. The enamel of each effect
+is:
 
 - Echoform Delay: blue.
 - Aetherform Reverb: violet.
 - Emberform Drive: ember.
 
-An inactive or empty unit dims its enclosure and lamp. FX Deep Edit groups the
+An inactive or empty unit dims its enclosure. FX Deep Edit groups the
 effect's controls and shows the Emberform Drive transfer curve or the
 Echoform Delay stereo repeat preview. Its bus buttons select the controls and
 meters for that bus. Link L/R pairs Echoform's left and right delay times in
