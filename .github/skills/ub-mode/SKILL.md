@@ -104,7 +104,7 @@ Do not report a change as complete before all three phases pass.
      the test.
    Completion criterion: Each test can fail when the behavior changes.
 
-4. Measure complexity, duplication, and test strength.
+4. Measure complexity, duplication, and coverage.
    - Run the commands of
      [Change measurements](../../../docs/DEVELOPMENT.md#change-measurements)
      in their order. That section owns the commands and the tools. The
@@ -114,8 +114,7 @@ Do not report a change as complete before all three phases pass.
      function, test it, or do both. Decide whether a case statement needs a
      reduction.
    - Remove each duplication that `tools/measure-change.py` reports.
-   - Cover the uncovered lines of the change. Kill each mutant that cargo-mutants
-     reports as missed. Delete dead code.
+   - Cover the uncovered lines of the change. Delete dead code.
    - If a tool is not installed, run
      `tools/runtime/install-quality-tools.ps1` or `npm ci`. Do not report a
      result from a tool that did not run.

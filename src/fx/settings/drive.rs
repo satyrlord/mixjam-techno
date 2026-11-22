@@ -1,7 +1,6 @@
 //! The Emberform Drive's settings, controls, and presets.
 use super::range::{
-    KEY_RANGE, Range, duck_amount_range, duck_release_range, duck_threshold_range, is_own,
-    log_range, output_range, range,
+    CommonRanges, Range, high_cut_range, is_own, log_range, low_cut_range, range, width_range,
 };
 use serde::{Deserialize, Serialize};
 
@@ -117,22 +116,32 @@ impl DistortionParam {
         Self::DuckKey,
         Self::Output,
     ];
-    pub const fn range(self) -> Range {
+    const RANGES: [Range; 12] = {
         let d = Emberform::DEFAULT;
-        match self {
-            Self::Drive => range(0.0, 48.0, d.drive_db, 0.5),
-            Self::Asymmetry => range(0.0, 100.0, d.asymmetry_percent, 1.0),
-            Self::LowCut => log_range(20.0, 2000.0, d.low_cut_hz, 1.0),
-            Self::HighCut => log_range(1000.0, 20_000.0, d.high_cut_hz, 10.0),
-            Self::Bits => range(1.0, 16.0, d.bits as f32, 1.0),
-            Self::CrushRate => log_range(500.0, 44_100.0, d.crush_rate_hz, 10.0),
-            Self::Width => range(0.0, 200.0, d.width_percent, 1.0),
-            Self::DuckThreshold => duck_threshold_range(d.duck_threshold_db),
-            Self::DuckAmount => duck_amount_range(d.duck_amount_percent),
-            Self::DuckRelease => duck_release_range(d.duck_release_ms),
-            Self::DuckKey => KEY_RANGE,
-            Self::Output => output_range(d.output_db),
-        }
+        CommonRanges::new(
+            d.duck_threshold_db,
+            d.duck_amount_percent,
+            d.duck_release_ms,
+            d.output_db,
+        )
+        .table([
+            (Self::Drive as usize, range(0.0, 48.0, d.drive_db, 0.5)),
+            (
+                Self::Asymmetry as usize,
+                range(0.0, 100.0, d.asymmetry_percent, 1.0),
+            ),
+            (Self::LowCut as usize, low_cut_range(d.low_cut_hz)),
+            (Self::HighCut as usize, high_cut_range(d.high_cut_hz)),
+            (Self::Bits as usize, range(1.0, 16.0, d.bits as f32, 1.0)),
+            (
+                Self::CrushRate as usize,
+                log_range(500.0, 44_100.0, d.crush_rate_hz, 10.0),
+            ),
+            (Self::Width as usize, width_range(d.width_percent)),
+        ])
+    };
+    pub const fn range(self) -> Range {
+        Self::RANGES[self as usize]
     }
     pub fn get(self, drive: &Emberform) -> f32 {
         match self {
@@ -345,5 +354,51 @@ impl Emberform {
             return Err("An Emberform Drive setting is out of range.".into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_drive_params_roundtrip_clamp_and_validate() {
+        let mut drive = Emberform::default();
+        for param in DistortionParam::ALL {
+            let range = param.range();
+            let mid = (range.low + range.high) * 0.5;
+            let expected = if matches!(param, DistortionParam::Bits | DistortionParam::DuckKey) {
+                mid.round()
+            } else {
+                mid
+            };
+            param.set(&mut drive, mid);
+            assert!(
+                (param.get(&drive) - expected).abs() < 1e-4,
+                "{param:?}: {} != {expected}",
+                param.get(&drive)
+            );
+            param.set(&mut drive, range.low - 100.0);
+            assert_eq!(param.get(&drive), range.low, "{param:?} lower bound");
+            param.set(&mut drive, range.high + 100.0);
+            assert_eq!(param.get(&drive), range.high, "{param:?} upper bound");
+            param.set(&mut drive, f32::NAN);
+            assert_eq!(param.get(&drive), range.default, "{param:?} NaN default");
+        }
+        DistortionParam::Bits.set(&mut drive, 4.6);
+        assert_eq!(drive.bits, 5);
+        DistortionParam::DuckKey.set(&mut drive, 3.4);
+        assert_eq!(drive.duck_key, 3);
+
+        for (name, _) in Emberform::PRESETS {
+            let preset = Emberform::preset(name).expect(name);
+            assert!(preset.validate().is_ok(), "preset {name} invalid");
+        }
+        assert!(Emberform::preset("Does Not Exist").is_none());
+        let bad = Emberform {
+            drive_db: 999.0,
+            ..Emberform::default()
+        };
+        assert!(bad.validate().is_err());
     }
 }

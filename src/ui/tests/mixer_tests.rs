@@ -971,3 +971,96 @@ fn a_secondary_drag_moves_no_fader_and_no_send() {
         assert_ne!(mix(&app), before, "The primary button must move {name}.");
     }
 }
+
+#[test]
+fn fx_deep_edit_drive_workspace_edits_parameters_and_renders_across_themes() {
+    use mixjam_techno::application::fx::{DistortionShape, Module};
+    each_theme(|theme| {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.boards.module = BottomModule::FxReturns;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+
+        choose(&ctx, &mut app, "FX 1 effect", "Emberform Drive");
+        choose(&ctx, &mut app, "FX 1 preset", "Drum Crunch");
+        let Module::EmberformDrive(drive) = app.session.project().fx.buses[0].module else {
+            panic!("{theme:?}: FX 1 must hold Emberform Drive");
+        };
+        assert_eq!(drive.shape, DistortionShape::Overdrive);
+        assert_eq!(drive.drive_db, 24.0);
+
+        click_named(&ctx, &mut app, "Clear all FX tails");
+        assert!(matches!(
+            app.session.project().fx.buses[0].module,
+            Module::EmberformDrive(_)
+        ));
+
+        click_named(&ctx, &mut app, "Deep edit FX 1");
+        choose(&ctx, &mut app, "Deep edit drive type", "Bitcrush");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            !accessible_node(&output, "Deep edit bits").1.is_disabled(),
+            "{theme:?}: bits must be enabled under Bitcrush"
+        );
+        assert!(
+            !accessible_node(&output, "Deep edit crush rate")
+                .1
+                .is_disabled(),
+            "{theme:?}: crush rate must be enabled under Bitcrush"
+        );
+
+        for (control, value) in [("Deep edit bits", 6.0), ("Deep edit drive", 20.0)] {
+            let (target, _) = accessible_node(&output, control);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::SetValue,
+                        target,
+                        data: Some(egui::accesskit::ActionData::NumericValue(value)),
+                    },
+                )],
+                egui::Modifiers::NONE,
+            );
+        }
+        let Module::EmberformDrive(drive) = app.session.project().fx.buses[0].module else {
+            panic!("{theme:?}: FX 1 must still hold Emberform Drive");
+        };
+        assert_eq!(drive.bits, 6);
+        assert_eq!(drive.drive_db, 20.0);
+
+        choose(&ctx, &mut app, "Deep edit drive type", "Tube");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            accessible_node(&output, "Deep edit bits").1.is_disabled(),
+            "{theme:?}: bits must disable outside Bitcrush"
+        );
+        assert!(
+            accessible_node(&output, "Deep edit crush rate")
+                .1
+                .is_disabled(),
+            "{theme:?}: crush rate must disable outside Bitcrush"
+        );
+
+        click_named(&ctx, &mut app, "Deep edit level match");
+        let Module::EmberformDrive(drive) = app.session.project().fx.buses[0].module else {
+            panic!("{theme:?}: FX 1 must hold Emberform Drive");
+        };
+        assert!(!drive.level_match);
+
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)],
+            egui::Modifiers::COMMAND,
+        );
+        let Module::EmberformDrive(drive) = app.session.project().fx.buses[0].module else {
+            panic!("{theme:?}: FX 1 must still hold Emberform Drive");
+        };
+        assert!(
+            drive.level_match,
+            "{theme:?}: Ctrl+Z must restore level match"
+        );
+    });
+}

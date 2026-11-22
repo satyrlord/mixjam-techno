@@ -1,5 +1,7 @@
 //! The Echoform Delay's settings, controls, and presets.
-use super::range::{KEY_RANGE, Range, is_own, log_range, range};
+use super::range::{
+    CommonRanges, Range, high_cut_range, is_own, log_range, low_cut_range, range, width_range,
+};
 use serde::{Deserialize, Serialize};
 
 /// A delay time as a note length: straight, dotted (one and a half), or
@@ -182,26 +184,45 @@ impl DelayParam {
         Self::DuckKey,
         Self::Output,
     ];
+    const RANGES: [Range; 16] = {
+        let d = Echoform::DEFAULT;
+        CommonRanges::new(
+            d.duck_threshold_db,
+            d.duck_amount,
+            d.duck_release,
+            d.output_db,
+        )
+        .table([
+            (
+                Self::TimeL as usize,
+                log_range(1.0, 2000.0, d.time_ms_l, 1.0),
+            ),
+            (
+                Self::TimeR as usize,
+                log_range(1.0, 2000.0, d.time_ms_r, 1.0),
+            ),
+            (Self::Feedback as usize, range(0.0, 110.0, d.feedback, 1.0)),
+            (Self::Width as usize, width_range(d.width)),
+            (Self::LowCut as usize, low_cut_range(d.low_cut)),
+            (Self::HighCut as usize, high_cut_range(d.high_cut)),
+            (
+                Self::FilterResonance as usize,
+                range(0.0, 100.0, d.filter_resonance, 1.0),
+            ),
+            (
+                Self::Smear as usize,
+                range(0.0, 100.0, d.smear_percent, 1.0),
+            ),
+            (
+                Self::ModRate as usize,
+                log_range(0.05, 8.0, d.mod_rate, 0.01),
+            ),
+            (Self::ModDepth as usize, range(0.0, 20.0, d.mod_depth, 0.1)),
+            (Self::Drive as usize, range(0.0, 100.0, d.drive, 1.0)),
+        ])
+    };
     pub const fn range(self) -> Range {
-        let defaults = Echoform::DEFAULT;
-        match self {
-            Self::TimeL => log_range(1.0, 2000.0, defaults.time_ms_l, 1.0),
-            Self::TimeR => log_range(1.0, 2000.0, defaults.time_ms_r, 1.0),
-            Self::Feedback => range(0.0, 110.0, defaults.feedback, 1.0),
-            Self::Width => range(0.0, 200.0, defaults.width, 1.0),
-            Self::LowCut => log_range(20.0, 2000.0, defaults.low_cut, 1.0),
-            Self::HighCut => log_range(1000.0, 20_000.0, defaults.high_cut, 10.0),
-            Self::FilterResonance => range(0.0, 100.0, defaults.filter_resonance, 1.0),
-            Self::Smear => range(0.0, 100.0, defaults.smear_percent, 1.0),
-            Self::ModRate => log_range(0.05, 8.0, defaults.mod_rate, 0.01),
-            Self::ModDepth => range(0.0, 20.0, defaults.mod_depth, 0.1),
-            Self::Drive => range(0.0, 100.0, defaults.drive, 1.0),
-            Self::DuckThreshold => range(-48.0, 0.0, defaults.duck_threshold_db, 0.5),
-            Self::DuckAmount => range(0.0, 100.0, defaults.duck_amount, 1.0),
-            Self::DuckRelease => log_range(50.0, 2500.0, defaults.duck_release, 1.0),
-            Self::DuckKey => KEY_RANGE,
-            Self::Output => range(-24.0, 12.0, defaults.output_db, 0.1),
-        }
+        Self::RANGES[self as usize]
     }
     pub fn get(self, delay: &Echoform) -> f32 {
         match self {

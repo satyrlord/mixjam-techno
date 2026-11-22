@@ -75,6 +75,7 @@ fn choice_with_label<T: Copy + PartialEq>(
         let response = egui::ComboBox::from_id_salt(name)
             .selected_text(selected)
             .width(rect.width())
+            .height(320.0)
             .truncate()
             .show_ui(ui, |ui| {
                 for (option, label) in options {

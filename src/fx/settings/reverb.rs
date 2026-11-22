@@ -1,7 +1,6 @@
 //! The Aetherform Reverb's settings, controls, and presets.
 use super::range::{
-    KEY_RANGE, Range, duck_amount_range, duck_release_range, duck_threshold_range, is_own,
-    log_range, output_range, range,
+    CommonRanges, Range, high_cut_range, is_own, log_range, low_cut_range, range, width_range,
 };
 use serde::{Deserialize, Serialize};
 
@@ -135,30 +134,64 @@ impl ReverbParam {
         Self::DuckKey,
         Self::Output,
     ];
-    pub const fn range(self) -> Range {
+    const RANGES: [Range; 20] = {
         let d = Aetherform::DEFAULT;
-        match self {
-            Self::PreDelay => range(0.0, 250.0, d.pre_delay_ms, 1.0),
-            Self::Decay => log_range(0.2, 30.0, d.decay_seconds, 0.01),
-            Self::BassMult => range(0.25, 2.5, d.bass_mult, 0.05),
-            Self::TrebleMult => range(0.2, 1.5, d.treble_mult, 0.05),
-            Self::Size => range(5.0, 100.0, d.size_percent, 1.0),
-            Self::Drive => range(0.0, 100.0, d.drive_percent, 1.0),
-            Self::Width => range(0.0, 200.0, d.width_percent, 1.0),
-            Self::LateBalance => range(0.0, 100.0, d.late_balance_percent, 1.0),
-            Self::LowCut => log_range(20.0, 2000.0, d.low_cut_hz, 1.0),
-            Self::HighCut => log_range(1000.0, 20_000.0, d.high_cut_hz, 10.0),
-            Self::Diffusion => range(0.0, 100.0, d.diffusion_percent, 1.0),
-            Self::Density => range(0.0, 100.0, d.density_percent, 1.0),
-            Self::ModRate => log_range(0.05, 3.0, d.mod_rate_hz, 0.01),
-            Self::ModDepth => range(0.0, 100.0, d.mod_depth_percent, 1.0),
-            Self::ShimmerAmount => range(0.0, 100.0, d.shimmer_amount_percent, 1.0),
-            Self::DuckThreshold => duck_threshold_range(d.duck_threshold_db),
-            Self::DuckAmount => duck_amount_range(d.duck_amount_percent),
-            Self::DuckRelease => duck_release_range(d.duck_release_ms),
-            Self::DuckKey => KEY_RANGE,
-            Self::Output => output_range(d.output_db),
-        }
+        CommonRanges::new(
+            d.duck_threshold_db,
+            d.duck_amount_percent,
+            d.duck_release_ms,
+            d.output_db,
+        )
+        .table([
+            (
+                Self::PreDelay as usize,
+                range(0.0, 250.0, d.pre_delay_ms, 1.0),
+            ),
+            (
+                Self::Decay as usize,
+                log_range(0.2, 30.0, d.decay_seconds, 0.01),
+            ),
+            (Self::BassMult as usize, range(0.25, 2.5, d.bass_mult, 0.05)),
+            (
+                Self::TrebleMult as usize,
+                range(0.2, 1.5, d.treble_mult, 0.05),
+            ),
+            (Self::Size as usize, range(5.0, 100.0, d.size_percent, 1.0)),
+            (
+                Self::Drive as usize,
+                range(0.0, 100.0, d.drive_percent, 1.0),
+            ),
+            (Self::Width as usize, width_range(d.width_percent)),
+            (
+                Self::LateBalance as usize,
+                range(0.0, 100.0, d.late_balance_percent, 1.0),
+            ),
+            (Self::LowCut as usize, low_cut_range(d.low_cut_hz)),
+            (Self::HighCut as usize, high_cut_range(d.high_cut_hz)),
+            (
+                Self::Diffusion as usize,
+                range(0.0, 100.0, d.diffusion_percent, 1.0),
+            ),
+            (
+                Self::Density as usize,
+                range(0.0, 100.0, d.density_percent, 1.0),
+            ),
+            (
+                Self::ModRate as usize,
+                log_range(0.05, 3.0, d.mod_rate_hz, 0.01),
+            ),
+            (
+                Self::ModDepth as usize,
+                range(0.0, 100.0, d.mod_depth_percent, 1.0),
+            ),
+            (
+                Self::ShimmerAmount as usize,
+                range(0.0, 100.0, d.shimmer_amount_percent, 1.0),
+            ),
+        ])
+    };
+    pub const fn range(self) -> Range {
+        Self::RANGES[self as usize]
     }
     pub fn get(self, reverb: &Aetherform) -> f32 {
         match self {

@@ -1,6 +1,6 @@
 #requires -Version 7.0
 # Installs the measurement tools of the ub-mode skill into the local toolchain:
-# mutation testing, line coverage, and function complexity. Run
+# line coverage and function complexity. Run
 # install-rust.ps1 first. The duplication tool, jscpd, is an npm development
 # dependency: `npm ci` installs it.
 $ErrorActionPreference = 'Stop'
@@ -22,7 +22,6 @@ try {
 }
 
 $tools = [ordered]@{
-    'cargo-mutants' = '27.1.0'
     'cargo-llvm-cov' = '0.9.2'
     'rust-code-analysis-cli' = '0.0.25'
 }

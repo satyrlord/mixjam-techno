@@ -121,7 +121,6 @@ These commands measure an uncommitted change. Run them in this order:
 ~~~powershell
 .\tools\runtime\cargo.ps1 llvm-cov --workspace --all-targets --locked --lcov --output-path tmp/measure/lcov.info
 python tools/measure-change.py
-.\tools\runtime\mutants.ps1 -MutantsArguments @('--in-diff','tmp/measure/change.diff','--','--lib')
 ~~~
 
 | Tool | Pinned version | Measures |
@@ -129,11 +128,10 @@ python tools/measure-change.py
 | cargo-llvm-cov | 0.9.2 | The line coverage of the default test run |
 | rust-code-analysis-cli | 0.0.25 | The cyclomatic complexity of each function |
 | jscpd | 5.4.3 | Copied token runs of 50 tokens or more in `src/` |
-| cargo-mutants | 27.1.0 | Code changes that no test detects |
 
 `tools/measure-change.py` compares the worktree with `HEAD`, and includes the
-untracked Rust files. It writes the diff to `tmp/measure/change.diff`. For each
-changed production function in `src/`, it reports the CRAP score:
+untracked Rust files. For each changed production function in `src/`, it
+reports the CRAP score:
 complexity² × (1 − coverage)³ + complexity. A score of 10 or more is a finding.
 Each jscpd clone that has a changed line in one of its copies is also a
 finding. The script does not measure test code: test files, the files of
@@ -142,15 +140,6 @@ newer than the coverage file, the script gives a warning, because the line
 numbers can be wrong. The exit code is 1 if there is a finding, or if a
 production file changed and the coverage file or a tool is missing. Use
 `--base REV` to compare with a different revision.
-
-`tools/runtime/mutants.ps1` runs cargo-mutants. With `--in-diff`, it changes
-only the functions that the diff touches. It builds and tests each mutant in a
-copy of the tree, so one mutant takes about as long as one build and test run.
-The copy has no `.git` folder. Thus the script sets `GIT_DIR` to this checkout
-for the version in `build.rs`. It keeps the built dependencies in
-`target/mutants/` between runs. A missed mutant is a finding: add a test that
-fails for it, or show that the mutant does not change the behavior. The results
-are in `tmp/measure/mutants.out/`.
 
 ## Visual assets
 

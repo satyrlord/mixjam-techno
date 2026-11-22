@@ -5,8 +5,7 @@ Usage, from the repository root:
     python tools/measure-change.py [--base REV] [--lcov FILE]
 
 The script compares the worktree, untracked Rust files included, with REV
-(default HEAD). It writes that diff to tmp/measure/change.diff for
-`cargo mutants --in-diff`. It then reports two results for the changed lines:
+(default HEAD). It reports two results for the changed lines:
 
 - The CRAP score of each changed production function. CRAP is
   complexity^2 * (1 - coverage)^3 + complexity, with the cyclomatic complexity
@@ -312,13 +311,12 @@ def main(arguments=None):
     options = parser.parse_args(arguments)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     diff = change_diff(options.base)
-    (OUTPUT / 'change.diff').write_text(diff, encoding='utf-8')
     everything = {path.relative_to(ROOT).as_posix(): path.read_text(encoding='utf-8')
                   for path in (ROOT / 'src').rglob('*.rs')}
     test_files = test_module_files(everything)
     changed = {path: lines for path, lines in changed_lines(diff).items()
                if path.startswith('src/') and not is_test_path(path, test_files)}
-    print(f'Changed production Rust files: {len(changed)}. Diff: {OUTPUT / "change.diff"}')
+    print(f'Changed production Rust files: {len(changed)}.')
     if not changed:
         print('\nFindings: 0')
         return 0

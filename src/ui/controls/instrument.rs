@@ -418,4 +418,146 @@ mod tests {
         }
         theme::paint_as(Theme::Studio);
     }
+
+    #[test]
+    fn instrument_controls_render_telemetry_scope_and_all_materials() {
+        use super::{bay, jewel_lamp, meter_bar, scope_frame};
+        use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
+        use mixjam_techno::application::FxBusMeterReading;
+
+        let points: Vec<f32> = (0..65).map(|i| (i as f32 / 32.0) - 1.0).collect();
+        let readings = [
+            (
+                "Hot meter",
+                FxBusMeterReading {
+                    peak_l: 0.25,
+                    rms_l: 0.1,
+                    peak_r: 0.98,
+                    rms_r: 0.5,
+                    ducker_gr_db: 6.0,
+                    limiter_gr_db: 3.5,
+                    tail_active: true,
+                },
+                &[
+                    "dBFS",
+                    "Ducker reduction 6.0 dB",
+                    "Limiter reduction 3.5 dB",
+                    "Tail active",
+                ][..],
+            ),
+            (
+                "Active tail meter",
+                FxBusMeterReading {
+                    peak_l: 0.1,
+                    rms_l: 0.05,
+                    peak_r: 0.1,
+                    rms_r: 0.05,
+                    ducker_gr_db: 0.0,
+                    limiter_gr_db: 0.0,
+                    tail_active: true,
+                },
+                &["Tail active"][..],
+            ),
+            (
+                "Idle meter",
+                FxBusMeterReading::default(),
+                &["Left peak silent, RMS silent", "Tail idle"][..],
+            ),
+        ];
+
+        for theme_kind in [Theme::Studio, Theme::Aero, Theme::Vintage] {
+            theme::paint_as(theme_kind);
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let meter_rect = Rect::from_min_size(Pos2::new(20.0, 260.0), Vec2::new(180.0, 24.0));
+            for pass in 0..2 {
+                let raw = egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(640.0, 480.0))),
+                    events: if pass == 1 {
+                        vec![egui::Event::PointerMoved(meter_rect.center())]
+                    } else {
+                        vec![]
+                    },
+                    ..Default::default()
+                };
+                let output = ctx.run(raw, |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let accent = Color32::from_rgb(234, 164, 120);
+                        bay(
+                            ui,
+                            Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(280.0, 110.0)),
+                            "Drive & Curve",
+                            accent,
+                            true,
+                        );
+                        bay(
+                            ui,
+                            Rect::from_min_size(Pos2::new(20.0, 140.0), Vec2::new(280.0, 110.0)),
+                            "Tone",
+                            accent,
+                            false,
+                        );
+                        jewel_lamp(ui, Pos2::new(320.0, 30.0), 4.2, true, roles().lamp_on);
+                        jewel_lamp(ui, Pos2::new(340.0, 30.0), 4.2, false, roles().lamp_off);
+
+                        for (idx, (name, reading, _)) in readings.iter().enumerate() {
+                            let y = 260.0 + idx as f32 * 30.0;
+                            meter_bar(
+                                ui,
+                                Rect::from_min_size(Pos2::new(20.0, y), Vec2::new(180.0, 24.0)),
+                                name,
+                                *reading,
+                            );
+                        }
+
+                        scope_frame(
+                            ui,
+                            Rect::from_min_size(Pos2::new(320.0, 50.0), Vec2::new(240.0, 160.0)),
+                            "Transfer Curve",
+                            &points,
+                            accent,
+                        );
+                        scope_frame(
+                            ui,
+                            Rect::from_min_size(Pos2::new(320.0, 220.0), Vec2::new(240.0, 160.0)),
+                            "Empty Scope",
+                            &[],
+                            accent,
+                        );
+                    });
+                });
+                if pass == 1 {
+                    let update = output
+                        .platform_output
+                        .accesskit_update
+                        .expect("accesskit update");
+                    for (name, _, expected_parts) in readings {
+                        let value = update
+                            .nodes
+                            .iter()
+                            .find_map(|(_, node)| {
+                                (node.label() == Some(name))
+                                    .then(|| node.value().map(str::to_owned))
+                                    .flatten()
+                            })
+                            .unwrap_or_else(|| panic!("{theme_kind:?}: missing {name}"));
+                        for part in expected_parts {
+                            assert!(
+                                value.contains(part),
+                                "{theme_kind:?} {name}: {value:?} missing {part:?}"
+                            );
+                        }
+                    }
+                    assert!(
+                        output
+                            .shapes
+                            .iter()
+                            .any(|s| matches!(s.shape, egui::Shape::Path(_))),
+                        "{theme_kind:?}: scope_frame must emit polyline trace for 65 samples"
+                    );
+                }
+            }
+        }
+        theme::paint_as(Theme::Studio);
+    }
 }
