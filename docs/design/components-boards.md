@@ -126,6 +126,16 @@ The empty Mixer shows one instruction that tells how to add a sound to the
 arrangement. The frontend sends edits to the application layer. Visual
 changes keep those commands.
 
+## Mastering board and Deep Edit
+
+The compact Mastering board docks Input at the left and Output at the right.
+Its pedal cards scroll between those units. A card shows its main dials, the
+power switch, and Edit. The signal-order strip scrolls to a card on click and
+opens its editor on double-click. The floating Mastering deep edit window
+uses the shared shell and gives each pedal access to its full set of controls.
+The Studio cards use graphite, Aero uses molded plastic, and Vintage uses
+dark anodized metal. All three use the same layout and controls.
+
 ## FX returns board and Deep Edit
 
 Four compact cards, each 200 points high, fit side by side on a Marine board in

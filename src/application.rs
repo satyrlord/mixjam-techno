@@ -15,7 +15,8 @@ pub use crate::{
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
         EQ_BAND_MAX, EQ_FREQUENCIES, FxBusMeterReading, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob,
-        KnobRange, MasterChain, MeterReading, OVER_DBTP, PedalKind, VU_REFERENCE_DBFS, presets,
+        KnobRange, LimiterStyle, MasterChain, MeterReading, OVER_DBTP, PedalKind,
+        VU_REFERENCE_DBFS, presets, sample_saturation_curve,
     },
     peaks::{PeakState, Peaks},
     products::Product,

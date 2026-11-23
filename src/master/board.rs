@@ -2,11 +2,13 @@
 //! pedals that are on, in the board's order.
 use super::booster::{self, clamp16};
 use super::{MasterChain, PedalKind, dsp, pedals};
+use crate::fx::RenderQuality;
+use crate::playback_quality::Oversampling;
 
 /// Playback keeps this delay even as pedals switch, so the timeline and
 /// both sides of a crossfade stay aligned. Export uses only active delays.
 pub(super) const LIVE_LATENCY: usize =
-    4 * dsp::Oversampler::LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY;
+    4 * pedals::LIVE_SAT_LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY;
 
 /// A stereo frame between two pedals.
 #[derive(Clone, Copy)]
@@ -61,6 +63,8 @@ impl Frame {
 pub(super) struct Board {
     pub(super) chain: MasterChain,
     pub(super) live: bool,
+    render_quality: RenderQuality,
+    latency: usize,
     pub(super) padding: [dsp::Delay<LIVE_LATENCY>; 2],
     /// Whether any pedal is on.
     pub(super) active: bool,
@@ -88,13 +92,23 @@ pub(super) type KeyFrame = [Option<(f32, f32)>; 4];
 impl Board {
     #[cfg(test)]
     pub(super) fn new() -> Self {
-        Self::with_quality(crate::playback_quality::Oversampling::FourX)
+        Self::offline()
     }
 
-    pub(super) fn with_quality(quality: crate::playback_quality::Oversampling) -> Self {
+    pub(super) fn offline() -> Self {
+        Self::build(RenderQuality::Offline, Oversampling::FourX)
+    }
+
+    pub(super) fn with_quality(quality: Oversampling) -> Self {
+        Self::build(RenderQuality::Live, quality)
+    }
+
+    fn build(render_quality: RenderQuality, live_os: Oversampling) -> Self {
         Self {
             chain: MasterChain::default(),
             live: false,
+            render_quality,
+            latency: 0,
             padding: [dsp::Delay::ZERO; 2],
             key_delays: [[dsp::Delay::ZERO; 2]; 4],
             key_lags: [0; 4],
@@ -102,13 +116,13 @@ impl Board {
             equalizer: booster::Equalizer::new(),
             compressor: booster::Compressor::at_load(),
             wide: booster::Wide::new(),
-            soft_clip: pedals::SoftClip::with_quality(quality),
-            tube: pedals::Tube::with_quality(quality),
+            soft_clip: pedals::SoftClip::with_render_quality(render_quality, live_os),
+            tube: pedals::Tube::with_render_quality(render_quality, live_os),
             trim_eq: pedals::TrimEq::new(),
             bus_compressor: pedals::BusCompressor::new(),
-            maximizer: pedals::Maximizer::with_quality(quality),
+            maximizer: pedals::Maximizer::with_render_quality(render_quality, live_os),
             lift_eq: pedals::LiftEq::new(),
-            tape: pedals::Tape::with_quality(quality),
+            tape: pedals::Tape::with_render_quality(render_quality, live_os),
             imaging: pedals::Imaging::new(),
             multiband: pedals::Multiband::new(),
             limiter: pedals::Limiter::new(),
@@ -119,12 +133,23 @@ impl Board {
     /// state, and the mastering pedals glide to their new settings.
     pub(super) fn apply(&mut self, chain: &MasterChain) {
         let old = self.chain;
-        // Leaving bypass switches on every pedal that is on.
         let switched_on = |kind| chain.runs(kind) && !old.runs(kind);
+        self.apply_boosters(chain, switched_on);
+        self.apply_mastering(chain);
+        // Leaving bypass switches on every pedal that is on.
+        for kind in PedalKind::ALL.into_iter().filter(|kind| switched_on(*kind)) {
+            self.clear(kind);
+        }
+        self.chain = *chain;
+        self.active = PedalKind::ALL.into_iter().any(|kind| chain.runs(kind));
+        self.update_timing();
+    }
+
+    fn apply_boosters(&mut self, chain: &MasterChain, switched_on: impl Fn(PedalKind) -> bool) {
         if switched_on(PedalKind::BoosterEq) {
             self.equalizer.clear();
         }
-        if chain.booster_eq.bands != old.booster_eq.bands {
+        if chain.booster_eq.bands != self.chain.booster_eq.bands {
             self.equalizer.set(&chain.booster_eq.bands);
         }
         if switched_on(PedalKind::BoosterCompressor) {
@@ -137,7 +162,9 @@ impl Board {
             self.wide.clear();
         }
         self.wide.set(chain.booster_wide.spread);
+    }
 
+    fn apply_mastering(&mut self, chain: &MasterChain) {
         self.soft_clip.set(&chain.soft_clip);
         self.tube.set(&chain.tube);
         self.trim_eq.set(&chain.trim_eq);
@@ -148,19 +175,30 @@ impl Board {
         self.imaging.set(&chain.imaging);
         self.multiband.set(&chain.multiband);
         self.limiter.set(&chain.limiter);
-        for kind in PedalKind::ALL {
-            if switched_on(kind) {
-                self.clear(kind);
-            }
-        }
-        self.chain = *chain;
-        self.active = PedalKind::ALL.into_iter().any(|kind| chain.runs(kind));
+    }
+
+    fn update_timing(&mut self) {
+        self.key_lags = [0; 4];
         let mut lag = 0;
-        for kind in chain.order.into_iter().filter(|kind| chain.runs(*kind)) {
+        for kind in self
+            .chain
+            .order
+            .into_iter()
+            .filter(|kind| self.chain.runs(*kind))
+        {
             if let Some(index) = PedalKind::KEYED.iter().position(|keyed| *keyed == kind) {
                 self.key_lags[index] = lag;
             }
-            lag += kind.latency();
+            lag += kind.latency_for(self.render_quality);
+        }
+        self.latency = lag;
+    }
+
+    pub(super) fn latency(&self) -> usize {
+        if self.live {
+            LIVE_LATENCY
+        } else {
+            self.latency
         }
     }
     /// Where each keyed pedal finds its key among `keys`: `None` for its
@@ -221,7 +259,7 @@ impl Board {
         }
         let (left, right) = self.run(Frame::Audio(left, right), delayed).audio();
         if self.live {
-            let padding = LIVE_LATENCY - self.chain.latency();
+            let padding = LIVE_LATENCY - self.latency;
             (
                 self.padding[0].push_delayed(left, padding),
                 self.padding[1].push_delayed(right, padding),

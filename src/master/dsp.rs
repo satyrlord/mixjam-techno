@@ -15,6 +15,7 @@ pub(crate) fn prepare_tables() {
     LazyLock::force(&OUTER);
     LazyLock::force(&INNER);
     LazyLock::force(&PHASES);
+    crate::fx::oversample::prepare_tables();
 }
 
 /// The mix rate, in frames per second.
@@ -222,6 +223,22 @@ fn kaiser(position: f64, half: f64, beta: f64) -> f64 {
 #[inline]
 fn dot<const N: usize>(a: &[f32; N], b: &[f32; N]) -> f32 {
     a.iter().zip(b).map(|(a, b)| a * b).sum()
+}
+
+/// Four independent sums let the compiler vectorize the live saturation FIR.
+#[inline]
+fn dot_lanes<const N: usize>(a: &[f32; N], b: &[f32; N]) -> f32 {
+    let mut sums = [0.0; 4];
+    let (a, a_tail) = a.as_chunks::<4>();
+    let (b, b_tail) = b.as_chunks::<4>();
+    for (a, b) in a.iter().zip(b) {
+        sums[0] += a[0] * b[0];
+        sums[1] += a[1] * b[1];
+        sums[2] += a[2] * b[2];
+        sums[3] += a[3] * b[3];
+    }
+    let tail: f32 = a_tail.iter().zip(b_tail).map(|(a, b)| a * b).sum();
+    (sums[0] + sums[1]) + (sums[2] + sums[3]) + tail
 }
 
 /// The last `N` samples of a filter's input, newest first. Each sample is
@@ -578,15 +595,51 @@ impl<const TAPS: usize> Halfband<TAPS> {
     /// Two output samples for one input sample.
     #[inline]
     pub(crate) fn up(&mut self, taps: &[f32; TAPS], sample: f32) -> [f32; 2] {
-        let input = self.input.push(sample);
-        [2.0 * dot(taps, input), input[TAPS / 2 - 1]]
+        self.up_filtered::<false, TAPS>(taps, sample)
+    }
+
+    #[inline]
+    fn up_filtered<const GROUPED: bool, const USED: usize>(
+        &mut self,
+        taps: &[f32; USED],
+        sample: f32,
+    ) -> [f32; 2] {
+        let dot = if GROUPED {
+            dot_lanes::<USED>
+        } else {
+            dot::<USED>
+        };
+        let input = self
+            .input
+            .push(sample)
+            .first_chunk()
+            .expect("FIR taps fit the history");
+        [2.0 * dot(taps, input), input[USED / 2 - 1]]
     }
     /// One output sample for two input samples.
     #[inline]
     pub(crate) fn down(&mut self, taps: &[f32; TAPS], [even, odd]: [f32; 2]) -> f32 {
-        let even = self.even.push(even);
+        self.down_filtered::<false, TAPS>(taps, [even, odd])
+    }
+
+    #[inline]
+    fn down_filtered<const GROUPED: bool, const USED: usize>(
+        &mut self,
+        taps: &[f32; USED],
+        [even, odd]: [f32; 2],
+    ) -> f32 {
+        let dot = if GROUPED {
+            dot_lanes::<USED>
+        } else {
+            dot::<USED>
+        };
+        let even = self
+            .even
+            .push(even)
+            .first_chunk()
+            .expect("FIR taps fit the history");
         let odd = self.odd.push(odd);
-        dot(taps, even) + 0.5 * odd[TAPS / 2]
+        dot(taps, even) + 0.5 * odd[USED / 2]
     }
 }
 
@@ -604,23 +657,11 @@ pub(crate) struct Oversampler {
 impl Oversampler {
     /// 63 frames for the outer stage and 6 for the inner one.
     pub(crate) const LATENCY: usize = 69;
-    pub(crate) const ZERO: Self = Self {
-        outer: Halfband::ZERO,
-        inner: Halfband::ZERO,
-        held: 0.0,
-    };
 
+    #[cfg(test)]
     #[inline]
-    pub(crate) fn process(&mut self, sample: f32, mut curve: impl FnMut(f32) -> f32) -> f32 {
-        let (outer, inner) = (&*OUTER, &*INNER);
-        let [a, b] = self.outer.up(outer, sample);
-        let [p0, p1] = self.inner.up(inner, a);
-        let [p2, p3] = self.inner.up(inner, b);
-        let c = self.inner.down(inner, [curve(p0), curve(p1)]);
-        let d = self.inner.down(inner, [curve(p2), curve(p3)]);
-        let pair = [self.held, c];
-        self.held = d;
-        self.outer.down(outer, pair)
+    pub(crate) fn process(&mut self, sample: f32, curve: impl FnMut(f32) -> f32) -> f32 {
+        self.process_with_outer::<false, 64>(sample, &OUTER, curve)
     }
 
     /// Run two curves on the same upsampled input, with separate output
@@ -652,6 +693,51 @@ impl Oversampler {
             output[index] = state.outer.down(outer, pair);
         }
         output
+    }
+}
+
+impl Oversampler {
+    pub(crate) const ZERO: Self = Self {
+        outer: Halfband::ZERO,
+        inner: Halfband::ZERO,
+        held: 0.0,
+    };
+
+    #[inline]
+    pub(crate) fn process_live_saturation<const TAPS: usize>(
+        &mut self,
+        sample: f32,
+        outer: &[f32; TAPS],
+        nonlinear: bool,
+        curve: impl FnMut(f32) -> f32,
+    ) -> f32 {
+        if nonlinear {
+            self.process_with_outer::<true, TAPS>(sample, outer, curve)
+        } else {
+            self.process_with_outer::<false, TAPS>(sample, outer, curve)
+        }
+    }
+
+    #[inline]
+    fn process_with_outer<const GROUPED: bool, const TAPS: usize>(
+        &mut self,
+        sample: f32,
+        outer: &[f32; TAPS],
+        mut curve: impl FnMut(f32) -> f32,
+    ) -> f32 {
+        let inner = &*INNER;
+        let [a, b] = self.outer.up_filtered::<GROUPED, TAPS>(outer, sample);
+        let [p0, p1] = self.inner.up_filtered::<GROUPED, 12>(inner, a);
+        let [p2, p3] = self.inner.up_filtered::<GROUPED, 12>(inner, b);
+        let c = self
+            .inner
+            .down_filtered::<GROUPED, 12>(inner, [curve(p0), curve(p1)]);
+        let d = self
+            .inner
+            .down_filtered::<GROUPED, 12>(inner, [curve(p2), curve(p3)]);
+        let pair = [self.held, c];
+        self.held = d;
+        self.outer.down_filtered::<GROUPED, TAPS>(outer, pair)
     }
 }
 

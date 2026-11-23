@@ -52,6 +52,43 @@ class SongProjectionTests(unittest.TestCase):
         self.assertEqual(projected['fx'][0]['module'], module)
         self.assertEqual(projected['return_automation'][0], throw)
 
+    def test_version_28_projects_master_settings_and_earlier_versions_reject_them(self):
+        document = self.document(28)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        fields = {'busCompressor': {'scHpfHz': 110.0, 'mix': 65.0, 'makeupDb': 2.5},
+                  'limiter': {'style': 'modern'}}
+        for pedal, settings in fields.items():
+            document['master'][pedal].update(settings)
+        self.assertEqual(self.project(document)['master'], document['master'])
+
+        document['formatVersion'] = 27
+        for pedal, settings in fields.items():
+            for field in settings:
+                del document['master'][pedal][field]
+        self.assertEqual(self.project(document)['master'], document['master'])
+        for pedal, settings in fields.items():
+            for field in settings:
+                with self.subTest(pedal=pedal, field=field):
+                    altered = copy.deepcopy(document)
+                    altered['master'][pedal][field] = settings[field]
+                    with self.assertRaisesRegex(RuntimeError, 'cannot contain v28 master parameters'):
+                        self.project(altered)
+
+    def test_master_and_pedals_require_named_fields(self):
+        for version in (27, 28):
+            document = self.document(version)
+            earlier = self.project(self.document())
+            document['fxBuses'] = earlier['fx']
+            document['master'] = []
+            with self.assertRaisesRegex(RuntimeError, 'master pedalboard must be a JSON object'):
+                self.project(document)
+            document['master'] = earlier['master']
+            document['master']['busCompressor'] = [True, -16, 2, 10, 300, 0, 170, 44, 3]
+            with self.assertRaisesRegex(RuntimeError, 'master pedals must be JSON objects'):
+                self.project(document)
+
     def test_version_11_preserves_booster_and_adds_disabled_pedals(self):
         document = self.document(11)
         defaults = self.project(self.document())['master']
@@ -155,9 +192,14 @@ class SongProjectionTests(unittest.TestCase):
             document['fxBuses'] = self.project(self.document())['fx']
             self.assertEqual(self.project(document)['master'], current, version)
 
-    def test_unknown_version_still_rejects(self):
-        with self.assertRaises(RuntimeError):
-            self.project(self.document(FORMAT_VERSION + 1))
+    def test_unsupported_version_rejects(self):
+        earlier = self.project(self.document())
+        for version in (7, float(FORMAT_VERSION), FORMAT_VERSION + 1):
+            with self.subTest(version=version):
+                document = self.document(version)
+                document.update(master=earlier['master'], fxBuses=earlier['fx'])
+                with self.assertRaisesRegex(RuntimeError, 'is not a format version'):
+                    self.project(document)
 
     def test_version_24_keeps_pitch_automation_in_the_json_project(self):
         document = self.document(24)

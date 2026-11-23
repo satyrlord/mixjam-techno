@@ -357,6 +357,7 @@ pub(in super::super) fn scope_frame(
     let r = roles();
     let painter = ui.painter();
     let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
+    let y = |val: f32| plot.center().y - val.clamp(-1.2, 1.2) * (plot.height() * 0.4);
     // Center axes & linear reference line y = x.
     painter.line_segment(
         [plot.left_center(), plot.right_center()],
@@ -367,7 +368,10 @@ pub(in super::super) fn scope_frame(
         Stroke::new(1.0_f32, grid),
     );
     painter.line_segment(
-        [plot.left_bottom(), plot.right_top()],
+        [
+            Pos2::new(plot.left(), y(-1.0)),
+            Pos2::new(plot.right(), y(1.0)),
+        ],
         Stroke::new(1.0_f32, grid),
     );
 
@@ -375,8 +379,7 @@ pub(in super::super) fn scope_frame(
         let denom = (points.len() - 1) as f32;
         let to_screen = |i: usize, val: f32| {
             let x = plot.left() + (i as f32 / denom) * plot.width();
-            let y = plot.center().y - (val.clamp(-1.2, 1.2) / 1.2) * (plot.height() * 0.48);
-            Pos2::new(x, y)
+            Pos2::new(x, y(val))
         };
         let poly: Vec<Pos2> = points
             .iter()
@@ -609,6 +612,28 @@ mod tests {
     use super::super::contrast;
     use super::roles;
     use mixjam_techno::application::options::Theme;
+
+    #[test]
+    fn transfer_scope_reference_matches_an_identity_curve() {
+        use super::{Color32, Pos2, Rect, Vec2, egui, scope_frame};
+
+        let ctx = egui::Context::default();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let rect = Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(240.0, 160.0));
+                scope_frame(ui, rect, "Transfer curve", &[-1.0, 1.0], Color32::GRAY);
+            });
+        });
+        let trace = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Path(path) if path.points.len() == 2 => Some(path.points.as_slice()),
+            _ => None,
+        });
+        let trace = trace.expect("The transfer scope draws a trace.");
+        assert!(output.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::LineSegment { points, .. } if points.as_slice() == trace
+        )));
+    }
 
     #[test]
     fn instrument_palette_meets_contrast_targets_across_all_three_themes() {

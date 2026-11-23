@@ -2,7 +2,8 @@
 
 ## Master pedalboard
 
-`master` holds these keys:
+`master` and its individual pedal records are JSON objects. `master` holds
+these keys:
 
 - `trim`, the gain before the first pedal, from -24 to 24 dB.
 - `order`, the signal path from the mixer to the output.
@@ -32,6 +33,19 @@ pedal keys are:
 `key`, from version 17, is the track from 1 to 64 that the dynamics pedal
 listens to. The value 0 is the own input of the pedal. A pedal whose key is 0
 omits it.
+
+Version 28 adds these saved values:
+
+| Pedal | Key | Valid values | Default |
+| --- | --- | --- | --- |
+| `busCompressor` | `scHpfHz` | 20 to 250 Hz | 20 Hz |
+| `busCompressor` | `mix` | 0 to 100 percent | 100 percent |
+| `busCompressor` | `makeupDb` | 0 to 12 dB | 0 dB |
+| `limiter` | `style` | `transparent`, `punchy`, `modern` | `transparent` |
+
+Earlier songs reject these keys, including explicit defaults. The reader uses
+the defaults for missing keys. The writer omits values at their defaults.
+The settings are stored for the planned dynamics upgrade.
 
 Versions 11 to 15 name the three Booster pedals with earlier keys, in the
 record and in `order`. `BOOSTER_KEYS` in `src/mixjam/song/migration.rs` lists

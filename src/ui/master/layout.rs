@@ -3,26 +3,23 @@
 use super::*;
 
 pub(super) const MARGIN: f32 = 8.0;
-pub(super) const INPUT_WIDTH: f32 = 150.0;
-pub(super) const OUTPUT_WIDTH: f32 = 200.0;
-pub(super) const CABLE: f32 = 26.0;
-pub(super) const PEDAL_TOP: f32 = 10.0;
-pub(super) const PEDAL_HEIGHT: f32 = 304.0;
-pub(super) const HEADER: f32 = 36.0;
-pub(super) const FOOTER_TOP: f32 = 260.0;
+pub(super) const INPUT_WIDTH: f32 = 128.0;
+pub(super) const OUTPUT_WIDTH: f32 = 172.0;
+pub(super) const CABLE: f32 = 18.0;
+pub(super) const PEDAL_TOP: f32 = 6.0;
+pub(super) const PEDAL_HEIGHT: f32 = 176.0;
+pub(super) const HEADER: f32 = 28.0;
+pub(super) const FOOTER_TOP: f32 = 144.0;
 /// The height of the cables and sockets, through the middle of the pedals.
-pub(super) const SIGNAL_Y: f32 = PEDAL_TOP + 150.0;
-/// One knob with its value well and label, and the pitch of knob rows.
-pub(super) const CELL: f32 = 62.0;
-pub(super) const ROW: f32 = 96.0;
-pub(super) const PEDAL_PADDING: f32 = 14.0;
+pub(super) const SIGNAL_Y: f32 = PEDAL_TOP + 88.0;
+/// One knob with its value well and label.
+pub(super) const CELL: f32 = 52.0;
+pub(super) const PEDAL_PADDING: f32 = 10.0;
 /// Room under the pedals for their shadows and the row's scroll bar.
-pub(super) const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 20.0;
+pub(super) const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 10.0;
 /// One row of chips under the pedals and their shadows.
-pub(super) const STRIP_HEIGHT: f32 = 30.0;
+pub(super) const STRIP_HEIGHT: f32 = 28.0;
 pub(super) const BOARD_HEIGHT: f32 = ROW_HEIGHT + STRIP_HEIGHT;
-/// The gain-reduction lamps above a dynamics pedal's knobs.
-pub(super) const LAMP_ROW: f32 = 28.0;
 pub(super) const WELL: Vec2 = Vec2::new(56.0, 20.0);
 
 pub(super) fn name(kind: PedalKind) -> &'static str {
@@ -73,35 +70,58 @@ pub(super) fn short_name(kind: PedalKind) -> &'static str {
     }
 }
 
-/// The line under the pedal's name: where it comes from or what it does.
-pub(super) fn family(kind: PedalKind) -> &'static str {
-    match kind {
-        PedalKind::BoosterEq | PedalKind::BoosterCompressor | PedalKind::BoosterWide => "Booster",
-        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Tape => "Saturation",
-        PedalKind::TrimEq | PedalKind::LiftEq => "Equaliser",
-        PedalKind::Imaging => "Stereo",
-        PedalKind::Limiter => "Dynamics, always last",
-        _ => "Dynamics",
-    }
+const HERO_KNOBS: [(PedalKind, &[Knob]); 13] = [
+    (PedalKind::BoosterEq, &[]),
+    (
+        PedalKind::BoosterCompressor,
+        &[Knob::BoosterDrive, Knob::BoosterSpeed, Knob::BoosterGain],
+    ),
+    (PedalKind::BoosterWide, &[Knob::BoosterSpread]),
+    (
+        PedalKind::SoftClip,
+        &[Knob::SoftClipAmount, Knob::SoftClipCeiling],
+    ),
+    (PedalKind::Tube, &[Knob::TubeDrive, Knob::TubeMix]),
+    (
+        PedalKind::TrimEq,
+        &[Knob::TrimEqHighPass, Knob::TrimEqMud, Knob::TrimEqHarsh],
+    ),
+    (
+        PedalKind::BusCompressor,
+        &[
+            Knob::CompressorThreshold,
+            Knob::CompressorRatio,
+            Knob::CompressorAttack,
+        ],
+    ),
+    (PedalKind::Maximizer, &[Knob::MaximizerBoost]),
+    (PedalKind::LiftEq, &[Knob::LiftLow, Knob::LiftAir]),
+    (PedalKind::Tape, &[Knob::TapeDrive]),
+    (
+        PedalKind::Imaging,
+        &[Knob::ImagingWidth, Knob::ImagingMonoBelow],
+    ),
+    (
+        PedalKind::Multiband,
+        &[Knob::MultibandLow, Knob::MultibandMid, Knob::MultibandHigh],
+    ),
+    (
+        PedalKind::Limiter,
+        &[Knob::LimiterGain, Knob::LimiterCeiling],
+    ),
+];
+
+/// Hero dials shown on a pedal's compact lower-board card (1–3 per card).
+pub(super) fn hero_knobs(kind: PedalKind) -> &'static [Knob] {
+    HERO_KNOBS
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map_or(&[], |(_, knobs)| *knobs)
 }
 
-/// Knob columns and rows of a pedal.
-pub(super) fn grid(kind: PedalKind) -> (usize, usize) {
-    match kind {
-        PedalKind::BoosterEq => (5, 2),
-        PedalKind::BoosterWide | PedalKind::Maximizer => (1, 1),
-        PedalKind::BusCompressor => (3, 2),
-        PedalKind::BoosterCompressor
-        | PedalKind::TrimEq
-        | PedalKind::Multiband
-        | PedalKind::Limiter => (2, 2),
-        _ => (2, 1),
-    }
-}
-
-/// The dials on a pedal's face: its knobs, and the tape's speed selector.
-pub(super) fn dial_count(kind: PedalKind) -> usize {
-    kind.knobs().len() + usize::from(kind == PedalKind::Tape)
+/// The dials on a compact pedal card: its hero knobs, plus tape speed.
+pub(super) fn card_dial_count(kind: PedalKind) -> usize {
+    hero_knobs(kind).len() + usize::from(kind == PedalKind::Tape)
 }
 
 /// The reductions in dB at which a dynamics pedal's lamps light.
@@ -114,8 +134,11 @@ pub(super) fn reduction_lamps(kind: PedalKind) -> Option<[f32; 6]> {
 }
 
 pub(super) fn pedal_width(kind: PedalKind) -> f32 {
-    let (columns, _) = grid(kind);
-    (columns as f32 * CELL + 2.0 * PEDAL_PADDING).max(132.0)
+    if kind == PedalKind::BoosterEq {
+        return 144.0;
+    }
+    let cols = card_dial_count(kind).max(1);
+    (cols as f32 * CELL + 2.0 * PEDAL_PADDING).max(144.0)
 }
 
 /// Each pedal's left edge along the row, after its cable, and the end of

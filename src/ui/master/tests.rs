@@ -6,19 +6,34 @@ fn ink_stays_legible_on_every_enamel_lit_or_off() {
         theme::paint_as(theme);
         for kind in PedalKind::ALL {
             for on in [true, false] {
-                // A metal pedal that is on is checked where its finish is
-                // darkest, a plastic one where its shading is.
-                let darkest = match roles().material {
+                // Legacy enamel contrast (kept for shared parts).
+                let darkest_enamel = match roles().material {
                     theme::Material::Metal if on => lit(enamel(kind, on), -(GRAIN_DIP + SHEEN_DIP)),
                     theme::Material::Plastic => {
                         enamel(kind, on).lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE)
                     }
                     _ => enamel(kind, on),
                 };
-                let ratio = controls::contrast(darkest, roles().ink);
+                let ratio_enamel = controls::contrast(darkest_enamel, roles().ink);
                 assert!(
-                    ratio >= 5.0,
-                    "{} {} ({on}) gives {ratio:.2}:1",
+                    ratio_enamel >= 5.0,
+                    "{} {} enamel ({on}) gives {ratio_enamel:.2}:1",
+                    options::labels::theme(theme),
+                    name(kind)
+                );
+                // 3-theme Mastering faceplate contrast (Studio flat dark, Aero molded, Vintage anodized).
+                let darkest_face = match roles().material {
+                    theme::Material::Metal if on => {
+                        lit(master_face_color(kind, on), -(GRAIN_DIP + SHEEN_DIP))
+                    }
+                    theme::Material::Plastic => master_face_color(kind, on)
+                        .lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE),
+                    _ => master_face_color(kind, on),
+                };
+                let ratio_face = controls::contrast(darkest_face, master_face_ink());
+                assert!(
+                    ratio_face >= 5.0,
+                    "{} {} master faceplate ({on}) gives {ratio_face:.2}:1",
                     options::labels::theme(theme),
                     name(kind)
                 );

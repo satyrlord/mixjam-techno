@@ -43,8 +43,9 @@ with the active preferences.
   rate, without a Pitch lane, sounds the same with both settings. When a sound
   plays slower, tones near its highest frequency can still lose level or make
   unwanted tones.
-- Normal exports, track exports, and song-tool renders always use 4x and
-  High. While one of these three settings is lower, Options shows **Playback
+- Exports and song-tool renders use 4x for track Drive and High for sample
+  playback. Renders through the master pedalboard use 8x master saturation.
+  While one of these three settings is lower, Options shows **Playback
   quality reduced; exports use full quality**. The status bar shows **Reduced
   quality**. Select it to open Options.
 - **Playback buffer target**: **Automatic**, **20 ms**, or **40 ms**. The

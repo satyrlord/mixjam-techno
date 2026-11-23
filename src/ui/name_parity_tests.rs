@@ -106,6 +106,121 @@ const RENAMED: &[(&str, &str)] = &[
         "label	The height of each arrangement row. Apply changes it at once, even while a song plays.",
         "label	The height of each arrangement row. Apply resizes the rows, even while a song plays.",
     ),
+    // Master Pedalboard Upgrade Phase 1: secondary knobs moved into Mastering deep edit.
+    (
+        "slider\tBooster EQ 60 Hz",
+        "slider\tDeep edit Booster EQ 60 Hz",
+    ),
+    (
+        "number\tBooster EQ 60 Hz value",
+        "number\tDeep edit Booster EQ 60 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 80 Hz",
+        "slider\tDeep edit Booster EQ 80 Hz",
+    ),
+    (
+        "number\tBooster EQ 80 Hz value",
+        "number\tDeep edit Booster EQ 80 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 160 Hz",
+        "slider\tDeep edit Booster EQ 160 Hz",
+    ),
+    (
+        "number\tBooster EQ 160 Hz value",
+        "number\tDeep edit Booster EQ 160 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 320 Hz",
+        "slider\tDeep edit Booster EQ 320 Hz",
+    ),
+    (
+        "number\tBooster EQ 320 Hz value",
+        "number\tDeep edit Booster EQ 320 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 640 Hz",
+        "slider\tDeep edit Booster EQ 640 Hz",
+    ),
+    (
+        "number\tBooster EQ 640 Hz value",
+        "number\tDeep edit Booster EQ 640 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 1100 Hz",
+        "slider\tDeep edit Booster EQ 1100 Hz",
+    ),
+    (
+        "number\tBooster EQ 1100 Hz value",
+        "number\tDeep edit Booster EQ 1100 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 2200 Hz",
+        "slider\tDeep edit Booster EQ 2200 Hz",
+    ),
+    (
+        "number\tBooster EQ 2200 Hz value",
+        "number\tDeep edit Booster EQ 2200 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 4500 Hz",
+        "slider\tDeep edit Booster EQ 4500 Hz",
+    ),
+    (
+        "number\tBooster EQ 4500 Hz value",
+        "number\tDeep edit Booster EQ 4500 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 9000 Hz",
+        "slider\tDeep edit Booster EQ 9000 Hz",
+    ),
+    (
+        "number\tBooster EQ 9000 Hz value",
+        "number\tDeep edit Booster EQ 9000 Hz value",
+    ),
+    (
+        "slider\tBooster EQ 12000 Hz",
+        "slider\tDeep edit Booster EQ 12000 Hz",
+    ),
+    (
+        "number\tBooster EQ 12000 Hz value",
+        "number\tDeep edit Booster EQ 12000 Hz value",
+    ),
+    (
+        "slider\tBooster compressor key",
+        "slider\tDeep edit Booster compressor key",
+    ),
+    (
+        "number\tBooster compressor key value",
+        "number\tDeep edit Booster compressor key value",
+    ),
+    (
+        "slider\tBus compressor key",
+        "slider\tDeep edit Bus compressor key",
+    ),
+    (
+        "number\tBus compressor key value",
+        "number\tDeep edit Bus compressor key value",
+    ),
+    (
+        "slider\tBus compressor release",
+        "slider\tDeep edit Bus compressor release",
+    ),
+    (
+        "number\tBus compressor release value",
+        "number\tDeep edit Bus compressor release value",
+    ),
+    ("slider\tLimiter key", "slider\tDeep edit Limiter key"),
+    (
+        "number\tLimiter key value",
+        "number\tDeep edit Limiter key value",
+    ),
+    ("slider\tMultiband key", "slider\tDeep edit Multiband key"),
+    (
+        "number\tMultiband key value",
+        "number\tDeep edit Multiband key value",
+    ),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {
@@ -327,6 +442,11 @@ fn every_name() -> BTreeSet<String> {
     app.fx_deep_edit = Some(0);
     names(&context, &mut app, &mut found);
     app.fx_deep_edit = None;
+    for kind in mixjam_techno::application::PedalKind::ALL {
+        app.master_deep_edit = Some(kind);
+        names(&context, &mut app, &mut found);
+    }
+    app.master_deep_edit = None;
 
     app.selection.sample = Some(1);
     let windows: [fn(&mut MixJamApp) -> &mut bool; 10] = [

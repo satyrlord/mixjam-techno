@@ -343,13 +343,14 @@ pub(super) const MASTERING: &[Block] = &[
     ]),
     Facts(&[
         "Key, on the Booster compressor, Bus compressor, Multiband, and Limiter, sets what the pedal listens to. Own is the mix; a track number is that track after its fader. A muted key is silent.",
-        "Some pedals delay the sound by a few milliseconds. The board's state beside Preset shows the total, and exports remove it.",
+        "The board status shows the active pedals' export delay. The application removes this delay from the exported sound.",
     ]),
     Heading("Order"),
     Facts(&[
         "Drag a pedal by its name to move it; near either end the row scrolls. The arrow buttons move a pedal one place. Each move is one Undo step.",
         "The Limiter cannot move. It always runs last, just before the Output unit, so no pedal can raise the peaks it holds.",
-        "The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip.",
+        "Select a pedal in the strip below the board to bring it into view.",
+        "Select Edit on a pedal or double-click its entry in the strip. Mastering deep edit shows the pedal's full controls and the master meters.",
     ]),
     Heading("Bypass and songs"),
     Facts(&[

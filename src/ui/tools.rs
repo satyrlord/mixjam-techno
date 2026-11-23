@@ -201,6 +201,7 @@ impl MixJamApp {
         self.sample_libraries_window(ctx);
         self.eq_window(ctx);
         self.fx_deep_edit_window(ctx);
+        self.master_deep_edit_window(ctx);
         album_review::show(
             ctx,
             &mut self.album_review.open,

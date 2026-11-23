@@ -262,7 +262,7 @@ fn compressor(threshold: f32, ratio: f32, attack: f32, release: f32) -> BusCompr
         ratio,
         attack,
         release,
-        key: 0,
+        ..BusCompressor::default()
     }
 }
 fn maximizer(boost: f32) -> Maximizer {
@@ -301,7 +301,7 @@ fn limiter(gain: f32) -> Limiter {
         on: true,
         gain,
         ceiling: -1.0,
-        key: 0,
+        ..Limiter::default()
     }
 }
 

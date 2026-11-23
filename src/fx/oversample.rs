@@ -3,18 +3,23 @@
 use crate::master::dsp::{Halfband, INNER, OUTER, halfband};
 use std::sync::LazyLock;
 
-/// Selects speed vs ultra-high-oversampling quality across FX buses.
+/// Selects playback or export processing for the effects and master board.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RenderQuality {
-    /// Zero-PDC minimum-phase preview tuned under 1 ms per 256-frame block.
+    /// Playback with fixed master alignment and a smaller processing budget.
     #[default]
     Live,
-    /// High-ratio linear-phase FIR oversampling + exact integer dry PDC.
+    /// High-ratio linear-phase oversampling with integer delay compensation.
     Offline,
 }
 
 /// Inner high-rate stage for 8x/16x cascades: 15 taps (8 odd offsets).
 static OUTER_MID: LazyLock<[f32; 8]> = LazyLock::new(|| halfband(9.0));
+
+/// Force initialization of FX/master oversampler tap tables before audio starts.
+pub(crate) fn prepare_tables() {
+    LazyLock::force(&OUTER_MID);
+}
 
 #[inline]
 fn flush(v: f64) -> f64 {

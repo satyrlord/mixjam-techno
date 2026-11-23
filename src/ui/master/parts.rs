@@ -1,37 +1,6 @@
 //! Small hardware parts drawn on the board: lamps, patch sockets and cables,
-//! the move arrows, and the plate that heads each unit.
+//! and the move arrows.
 use super::*;
-
-/// A unit's or pedal's name with the smaller line under it.
-pub(crate) fn heading(ui: &egui::Ui, rect: Rect, title: &str, line: &str, color: Color32) {
-    let at = |y: f32| Pos2::new(rect.left() + PEDAL_PADDING, rect.top() + y);
-    // A long name shrinks until it clears the lamp.
-    let room = rect.width() - PEDAL_PADDING - 34.0;
-    let size = [14.0, 13.0, 12.0, 11.0]
-        .into_iter()
-        .find(|size| {
-            ui.painter()
-                .layout_no_wrap(title.into(), FontId::proportional(*size), color)
-                .size()
-                .x
-                <= room
-        })
-        .unwrap_or(11.0);
-    ui.painter().text(
-        at(15.0),
-        Align2::LEFT_CENTER,
-        title,
-        FontId::proportional(size),
-        color,
-    );
-    ui.painter().text(
-        at(30.0),
-        Align2::LEFT_CENTER,
-        line,
-        FontId::proportional(10.0),
-        color,
-    );
-}
 
 /// A socket for a patch cable.
 pub(super) fn jack(ui: &egui::Ui, center: Pos2) {

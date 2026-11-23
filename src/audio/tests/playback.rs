@@ -337,6 +337,7 @@ pub(super) fn busy_song() -> (Project, HashMap<u32, Pcm>) {
         attack: 5.0,
         release: 100.0,
         key: 3,
+        ..crate::master::BusCompressor::default()
     };
     project.master.multiband.on = true;
     project.master.limiter.on = true;

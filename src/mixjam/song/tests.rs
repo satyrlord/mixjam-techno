@@ -334,7 +334,23 @@ fn strip_v27_fx_doc(document: &mut serde_json::Value) {
     }
 }
 
+fn before_version_28(document: &mut serde_json::Value, expected: &mut Project) {
+    if let Some(comp) = document["master"]["busCompressor"].as_object_mut() {
+        for key in ["scHpfHz", "mix", "makeupDb"] {
+            comp.remove(key);
+        }
+    }
+    if let Some(lim) = document["master"]["limiter"].as_object_mut() {
+        lim.remove("style");
+    }
+    expected.master.bus_compressor.sc_hpf_hz = 20.0;
+    expected.master.bus_compressor.mix = 100.0;
+    expected.master.bus_compressor.makeup_db = 0.0;
+    expected.master.limiter.style = crate::master::LimiterStyle::Transparent;
+}
+
 fn before_version_27(document: &mut serde_json::Value, expected: &mut Project) {
+    before_version_28(document, expected);
     strip_v27_fx_doc(document);
     for bus in &mut expected.fx.buses {
         match &mut bus.module {

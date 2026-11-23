@@ -1,17 +1,20 @@
 //! The mastering pedals, designed for this application. Each works on
 //! normalized stereo floats with its own state, and each continuous setting
-//! glides to a new value. At full quality, pedals with a curve run it four
-//! times oversampled and delay the signal by `Oversampler::LATENCY`. Reduced
-//! playback runs their curves at the base rate with the same integer delay.
+//! glides to the new value. Saturation pedals use ADAA2 at 4x in standard
+//! playback, at the base rate in reduced playback, and at 8x in export.
 //! The limiter always keeps its lookahead and true-peak detector.
 mod dynamics;
 mod filters;
+mod sat_adaa;
 mod saturation;
 #[cfg(test)]
 mod tests;
 
 pub(super) use dynamics::{BusCompressor, Limiter, Multiband};
 pub(super) use filters::{Imaging, LiftEq, TrimEq};
+pub use sat_adaa::sample_saturation_curve;
+pub(super) use sat_adaa::{LIVE_SAT_LATENCY, OFFLINE_SAT_LATENCY};
+pub(super) use saturation::MAXIMIZER_OFFLINE_LATENCY;
 pub(super) use saturation::{Maximizer, SoftClip, Tape, Tube};
 
 /// How often a pedal whose filters glide recomputes their coefficients.

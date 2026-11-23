@@ -1,7 +1,7 @@
 # Version history
 
 Migration keeps the earlier settings within the limits below. A save of an
-earlier song writes version 27, which earlier builds cannot open.
+earlier song writes version 28, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ earlier song writes version 27, which earlier builds cannot open.
 | 25 | Adds the FX bus module `emberform-drive`. | No drive returns. |
 | 26 | Adds the lane automation `compression`. | The lane compressor fully in. |
 | 27 | Adds the FX settings `levelMatch`, `duckThresholdDb`, `linkTimes`, `smearPercent`, `filterResonance`, `bassMult`, and `trebleMult`. | `duckThresholdDb` at -27 dBFS, `levelMatch` on, `linkTimes` on when both time pairs match, and neutral smear, resonance, bass, and treble settings. |
+| 28 | Adds `scHpfHz`, `mix`, and `makeupDb` to `busCompressor`, and `style` to `limiter`. | 20 Hz, 100 percent, 0 dB, and `transparent`. |
 
 The reader moves the `threshold` of each saved lane `ducker` of an earlier song,
 on or off, by `-20 * log10(masterGain)` dB. It then holds the result to -60..0.

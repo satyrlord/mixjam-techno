@@ -113,6 +113,27 @@ fn oversampling_delays_audible_sound_by_whole_frames_without_coloring_it() {
 }
 
 #[test]
+fn live_saturation_grouped_fir_matches_scalar_to_rounding_precision() {
+    fn compare<const TAPS: usize>(taps: &[f32; TAPS]) {
+        let (mut scalar, mut grouped) = (Oversampler::ZERO, Oversampler::ZERO);
+        let mut input = sine(440.0, 0.7, 2000);
+        input.extend(sine(17_000.0, 0.9, 2000));
+        input.extend(std::iter::repeat_n(0.0, 128));
+        let shape = |x: f32| x / (1.0 + 4.0 * x * x).sqrt();
+        for (frame, sample) in input.into_iter().enumerate() {
+            let expected = scalar.process_live_saturation(sample, taps, false, shape);
+            let actual = grouped.process_live_saturation(sample, taps, true, shape);
+            assert!(
+                (actual - expected).abs() <= 2e-6,
+                "frame {frame}: {actual} vs {expected}"
+            );
+        }
+    }
+    compare::<64>(&OUTER);
+    compare(&halfband::<28>(6.0));
+}
+
+#[test]
 fn oversampling_keeps_curve_harmonics_from_folding_into_the_band() {
     // A hard clip of 15 kHz makes 45 kHz and 75 kHz, which would fold
     // to 0.9 kHz and 13.2 kHz at the mix rate. The analysis spans whole

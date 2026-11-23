@@ -4,6 +4,29 @@
 use super::*;
 
 #[test]
+fn mastering_pedal_reorder_requires_an_original_primary_press() {
+    let (ctx, mut app, output) = mastering_fixture(|_| {});
+    let from = effects_control_rect(&output, "Drag Booster EQ").center();
+    let to = effects_control_rect(&output, "Drag Booster compressor").right_center();
+    let none = egui::Modifiers::NONE;
+    button_at(&ctx, &mut app, from, egui::PointerButton::Secondary, true);
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], none);
+    pointer(&ctx, &mut app, to, true, none);
+    pointer(&ctx, &mut app, to, false, none);
+    button_at(&ctx, &mut app, to, egui::PointerButton::Secondary, false);
+    assert_eq!(app.session.project().master.order, PedalKind::ALL);
+    assert!(!app.session.unsaved());
+
+    drag(&ctx, &mut app, from, to, none);
+    assert_eq!(
+        app.session.project().master.order[..2],
+        [PedalKind::BoosterCompressor, PedalKind::BoosterEq]
+    );
+    assert!(app.session.history_step(false).unwrap());
+    assert_eq!(app.session.project().master.order, PedalKind::ALL);
+}
+
+#[test]
 fn mastering_dial_held_still_mid_drag_keeps_its_step() {
     let (ctx, mut app, _) = mastering_fixture(|master| master.bus_compressor.on = true);
     app.boards.master_reveal = Some(PedalKind::BusCompressor);
@@ -252,41 +275,10 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
         output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
     }
     let board = effects_control_rect(&output, "Mastering board");
-    assert!(
-        !board.contains_rect(effects_control_rect(&output, "Show Limiter")),
-        "The minimum window scrolls the strip below the pedals."
-    );
-    // The wheel scrolls the board down to the chips; choosing one scrolls
-    // the board back up to its whole pedal.
-    let inside = board.center();
-    frame_at_size(
-        &ctx,
-        &mut app,
-        vec![egui::Event::PointerMoved(inside)],
-        egui::Modifiers::NONE,
-        size,
-    );
-    for _ in 0..3 {
-        output = frame_at_size(
-            &ctx,
-            &mut app,
-            vec![egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: Vec2::new(0.0, -60.0),
-                modifiers: egui::Modifiers::NONE,
-            }],
-            egui::Modifiers::NONE,
-            size,
-        );
-    }
-    // Smooth scrolling spends the wheel over the following frames.
-    for _ in 0..30 {
-        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-    }
     let chip = effects_control_rect(&output, "Show Limiter");
     assert!(
         board.contains_rect(chip),
-        "The wheel must reach the strip: {chip:?} in {board:?}."
+        "The compact 960x720 board keeps both the pedals and strip in view."
     );
     for pressed in [true, false] {
         frame_at_size(
@@ -312,7 +304,7 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
     assert!(
         board.contains_rect(Rect::from_min_size(
             grip.min,
-            Vec2::new(grip.width(), 304.0)
+            Vec2::new(grip.width(), 176.0)
         )),
         "The whole Limiter must come into view: {grip:?} in {board:?}."
     );
@@ -359,7 +351,7 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
     assert!(
         board.contains_rect(Rect::from_min_size(
             grip.min,
-            Vec2::new(grip.width(), 304.0)
+            Vec2::new(grip.width(), 176.0)
         )),
         "Enter on a chip must bring the whole pedal into view: {grip:?} in {board:?}."
     );

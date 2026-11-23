@@ -794,7 +794,7 @@ fn only_version_26_lanes_hold_compression_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 27);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 25 rejects the key, even as an empty list.
@@ -861,7 +861,7 @@ fn only_version_27_holds_v27_fx_parameters_and_earlier_versions_migrate_lossless
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 27);
+    assert_eq!(document["formatVersion"], FORMAT_VERSION);
     assert_eq!(
         parse(&serde_json::to_vec(&document).unwrap()).unwrap().fx,
         project.fx

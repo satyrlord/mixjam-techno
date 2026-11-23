@@ -113,6 +113,8 @@ pub struct MixJamApp {
     pub(super) eq_track: Option<usize>,
     /// The FX bus open in the Deep Edit floating window, if any.
     pub(super) fx_deep_edit: Option<usize>,
+    /// The mastering pedal open in Mastering Deep Edit, if any.
+    pub(super) master_deep_edit: Option<PedalKind>,
     /// The Album Review window.
     pub(super) album_review: AlbumReviewWindow,
     /// The recording destination and the recorded take's discard.
@@ -442,6 +444,7 @@ impl MixJamApp {
                 "fx-deep-edit-delay" => Some(2),
                 _ => None,
             },
+            master_deep_edit: capture_setup::mastering_editor(&capture_view),
             album_review: AlbumReviewWindow {
                 open: capture_view.starts_with("album-review"),
                 state: album_review::capture_state(&capture_view),

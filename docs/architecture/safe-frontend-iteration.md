@@ -51,7 +51,8 @@ them:
   `Session::fx_delay_taps`, and `Session::fx_reverb_profile`.
 - Duckers: `Ducker::set_key` stops a ducker from using its own track as its
   key.
-- The board delay: `MasterChain::latency_ms`.
+- Mastering: `application::sample_saturation_curve` gives the pedal's static
+  transfer curve. `MasterChain::latency_ms` gives the export delay.
 
 If a design needs new application behavior, add a typed operation in
 `application.rs`. Do not expose a mutable project. Do not add a callback that

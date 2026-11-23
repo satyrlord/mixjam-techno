@@ -2,6 +2,223 @@
 //! brushed grain, sheen, scratches, and bevel.
 use super::*;
 
+/// Family accent stripe color (Amber/Copper saturation, Steel dynamics, Teal tone/stereo, Brass booster).
+pub(super) fn family_accent(kind: PedalKind) -> Color32 {
+    match kind {
+        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape => {
+            Color32::from_rgb(232, 152, 62)
+        }
+        PedalKind::BusCompressor | PedalKind::Multiband | PedalKind::Limiter => {
+            Color32::from_rgb(92, 172, 224)
+        }
+        PedalKind::TrimEq | PedalKind::LiftEq | PedalKind::Imaging => {
+            Color32::from_rgb(98, 198, 172)
+        }
+        PedalKind::BoosterEq | PedalKind::BoosterCompressor | PedalKind::BoosterWide => {
+            Color32::from_rgb(206, 178, 92)
+        }
+    }
+}
+
+/// True when the mastering faceplate uses a dark background and light legend ink.
+pub(super) fn master_face_dark_mode() -> bool {
+    matches!(
+        roles().material,
+        theme::Material::Flat | theme::Material::Metal
+    )
+}
+
+/// High-contrast silk-screen ink for mastering cards and chips.
+pub(super) fn master_face_ink() -> Color32 {
+    if master_face_dark_mode() {
+        roles().legend
+    } else {
+        roles().ink
+    }
+}
+
+fn vintage_anodized_rgb(kind: PedalKind, on: bool) -> Color32 {
+    if !on {
+        return Color32::from_rgb(29, 30, 29);
+    }
+    let [r, g, b] = match kind {
+        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape => {
+            [44, 37, 33]
+        }
+        PedalKind::BusCompressor | PedalKind::Multiband | PedalKind::Limiter => [33, 40, 46],
+        PedalKind::TrimEq | PedalKind::LiftEq | PedalKind::Imaging => [33, 43, 39],
+        _ => [42, 39, 32],
+    };
+    Color32::from_rgb(r, g, b)
+}
+
+/// 3-theme faceplate color for Mastering cards and chips:
+/// - `Metal` (`Vintage`): dark 1950s–70s anodized charcoal/espresso aluminum (no pastels!)
+/// - `Flat` (`Studio`): dark graphite faceplate
+/// - `Plastic` (`Aero`): light molded translucent enamel
+pub(super) fn master_face_color(kind: PedalKind, on: bool) -> Color32 {
+    match roles().material {
+        theme::Material::Metal => vintage_anodized_rgb(kind, on),
+        theme::Material::Flat => {
+            let [r, g, b] = if on { [40, 44, 50] } else { [28, 31, 35] };
+            Color32::from_rgb(r, g, b)
+        }
+        theme::Material::Plastic => {
+            enamel(kind, on).lerp_to_gamma(Color32::from_rgb(232, 240, 250), 0.35)
+        }
+    }
+}
+
+/// A signal-order chip with the same focus and appearance in both views.
+pub(super) fn signal_chip(
+    ui: &mut egui::Ui,
+    chip: Rect,
+    kind: PedalKind,
+    on: bool,
+    selected: bool,
+    label: &str,
+) -> Response {
+    let response = ui.interact(chip, ui.id().with(("signal-chip", kind)), Sense::click());
+    paint_signal_chip(ui, chip, kind, on, selected, response.hovered());
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            chip.expand(2.0),
+            5.0,
+            Stroke::new(2.0_f32, controls::focus_color(ui)),
+            egui::StrokeKind::Outside,
+        );
+    }
+    if response.gained_focus() {
+        response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
+    }
+    named(&response, egui::WidgetType::Button, label);
+    response
+}
+
+fn paint_signal_chip(
+    ui: &egui::Ui,
+    chip: Rect,
+    kind: PedalKind,
+    on: bool,
+    selected: bool,
+    hovered: bool,
+) {
+    let face = master_face_color(kind, on);
+    let ink = master_face_ink();
+    let accent = family_accent(kind);
+    let stripe = if on || selected {
+        accent
+    } else {
+        accent.gamma_multiply(0.30)
+    };
+    ui.painter().rect_filled(chip, 4.0, face);
+    ui.painter().rect_filled(
+        Rect::from_min_size(
+            chip.min + Vec2::new(2.0, 1.0),
+            Vec2::new(chip.width() - 4.0, 2.0),
+        ),
+        1.0,
+        stripe,
+    );
+    if hovered {
+        ui.painter()
+            .rect_filled(chip, 4.0, Color32::from_white_alpha(24));
+    }
+    let border_w = if selected { 1.8_f32 } else { 1.0_f32 };
+    let border_c = if selected {
+        accent
+    } else {
+        ink.gamma_multiply(0.35)
+    };
+    ui.painter().rect_stroke(
+        chip,
+        4.0,
+        Stroke::new(border_w, border_c),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().text(
+        chip.center() + Vec2::new(0.0, 1.0),
+        Align2::CENTER_CENTER,
+        short_name(kind),
+        FontId::proportional(10.5),
+        ink,
+    );
+}
+
+/// Draw the 3-theme Mastering card chassis (`Vintage` dark anodized metal with corner
+/// screws, `Studio` dark graphite, `Aero` light molded plastic) plus top family stripe.
+pub(super) fn master_enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
+    let face = master_face_color(kind, on);
+    let accent = family_accent(kind);
+    let painter = ui.painter();
+    match roles().material {
+        theme::Material::Flat => {
+            painter.rect_filled(rect, 4.0, face);
+            painter.rect_stroke(
+                rect,
+                4.0,
+                Stroke::new(
+                    1.0_f32,
+                    if on {
+                        accent.gamma_multiply(0.55)
+                    } else {
+                        roles().bay_edge
+                    },
+                ),
+                egui::StrokeKind::Inside,
+            );
+        }
+        theme::Material::Plastic => {
+            painter.add(
+                egui::epaint::Shadow {
+                    offset: [0, 3],
+                    blur: 8,
+                    spread: 0,
+                    color: Color32::from_black_alpha(100),
+                }
+                .as_shape(rect, egui::CornerRadius::same(10)),
+            );
+            theme::plastic(painter, rect, 10.0, face);
+        }
+        theme::Material::Metal => {
+            enclosure_of(ui, rect, face, on, kind as u64 + 1);
+            // Engraved bezel & 4 corner slotted chassis screws for 1950s–70s hardware feel.
+            painter.rect_stroke(
+                rect.shrink(4.0),
+                5.0,
+                Stroke::new(1.0_f32, Color32::from_white_alpha(26)),
+                egui::StrokeKind::Inside,
+            );
+            for offset in [
+                Vec2::new(6.0, 6.0),
+                Vec2::new(rect.width() - 6.0, 6.0),
+                Vec2::new(6.0, rect.height() - 6.0),
+                Vec2::new(rect.width() - 6.0, rect.height() - 6.0),
+            ] {
+                let c = rect.min + offset;
+                painter.circle_filled(c, 2.2, roles().well_edge);
+                painter.line_segment(
+                    [c - Vec2::new(1.3, 1.0), c + Vec2::new(1.3, 1.0)],
+                    Stroke::new(0.8_f32, Color32::from_black_alpha(160)),
+                );
+            }
+        }
+    }
+    let stripe = Rect::from_min_size(
+        rect.min + Vec2::new(8.0, 1.5),
+        Vec2::new((rect.width() - 16.0).max(8.0), 2.5),
+    );
+    painter.rect_filled(
+        stripe,
+        1.0,
+        if on {
+            accent
+        } else {
+            accent.gamma_multiply(0.30)
+        },
+    );
+}
+
 /// The painted enclosure of each pedal. Like stompboxes, each kind has its
 /// own enamel; it always appears with the pedal's printed name. The families
 /// share hues: golds for equalisers, blues and greens for dynamics, warm
@@ -77,23 +294,6 @@ pub(super) const GRAIN: [usize; 2] = [512, 256];
 const SHEEN_LEAN: f32 = 0.2;
 const ALUMINIUM: Color32 = Color32::from_rgb(236, 238, 240);
 
-/// A die-cast enclosure under light from the upper left. The body stands off
-/// the board: its side walls show below and to the right of the face, and it
-/// casts its shadow that way. The rounded bevel catches the light along the
-/// upper and left edges and falls into shade along the lower and right ones,
-/// and the face lightens a little toward the light. Text sits inside the
-/// bevel.
-///
-/// A pedal that is on shows its anodised aluminium: brushed grain, a metal
-/// sheen, and scratches where the bare metal shows. One that is off stays
-/// matte. The finish darkens the enamel by `GRAIN_DIP` and `SHEEN_DIP` at
-/// most, where the ink still keeps its contrast.
-pub(super) fn enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
-    enclosure_of(ui, rect, enamel(kind, on), on, kind as u64 + 1);
-}
-
-/// An enclosure of any enamel. `seed` picks its part of the grain and its
-/// scratches, so units side by side differ.
 pub(crate) fn enclosure_of(ui: &egui::Ui, rect: Rect, enamel: Color32, on: bool, seed: u64) {
     let painter = ui.painter();
     match roles().material {

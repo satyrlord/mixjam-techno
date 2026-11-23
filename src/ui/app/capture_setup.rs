@@ -26,12 +26,7 @@ pub(super) fn prepare_session(session: &mut Session, view: &str) {
     if let Err(error) = session.set_layout(layout) {
         eprintln!("{error}");
     }
-    if matches!(
-        view,
-        "master-active" | "master-reordered" | "master-end" | "master-metering" | "master-bypass"
-    ) {
-        master_board(session, view);
-    }
+    master_board(session, view);
     if matches!(view, "mixer-eq" | "mix-view-eq") {
         tamed_hi_hats(session);
     }
@@ -45,9 +40,31 @@ pub(super) fn prepare_session(session: &mut Session, view: &str) {
     }
 }
 
+pub(super) fn mastering_editor(view: &str) -> Option<PedalKind> {
+    match view {
+        "master-deep-edit" => Some(PedalKind::SoftClip),
+        "master-deep-edit-eq" => Some(PedalKind::BoosterEq),
+        "master-deep-edit-tape" => Some(PedalKind::Tape),
+        _ => None,
+    }
+}
+
 /// The Booster settings of a D4 factory song, and every mastering pedal at its
 /// default.
 fn master_board(session: &mut Session, view: &str) {
+    let editor = mastering_editor(view);
+    if editor.is_none()
+        && !matches!(
+            view,
+            "master-active"
+                | "master-reordered"
+                | "master-end"
+                | "master-metering"
+                | "master-bypass"
+        )
+    {
+        return;
+    }
     let mut chain = session.project().master;
     for kind in PedalKind::ALL {
         chain.set_on(kind, true);
@@ -60,14 +77,23 @@ fn master_board(session: &mut Session, view: &str) {
     ) = (1000, 1000);
     chain.booster_compressor.gain = 278;
     chain.booster_wide.spread = 444;
-    if view == "master-reordered" {
-        chain.move_pedal(9, 0);
-        chain.move_pedal(3, 5);
-        chain.booster_compressor.on = false;
-        chain.tube.on = false;
-    }
-    if view == "master-bypass" {
-        chain.bypass = true;
+    match (editor, view) {
+        (Some(PedalKind::SoftClip), _) => {
+            chain.soft_clip.amount = 6.0;
+            chain.soft_clip.ceiling = -1.0;
+        }
+        (Some(PedalKind::Tape), _) => {
+            chain.tape.drive = 6.5;
+            chain.tape.speed = 15;
+        }
+        (_, "master-reordered") => {
+            chain.move_pedal(9, 0);
+            chain.move_pedal(3, 5);
+            chain.booster_compressor.on = false;
+            chain.tube.on = false;
+        }
+        (_, "master-bypass") => chain.bypass = true,
+        _ => {}
     }
     let _ = session.edit(EditCommand::SetMaster(chain));
 }

@@ -93,6 +93,7 @@ impl MixJamApp {
             (self.sample_import.details_open, "Import details"),
             (self.effects.open, "Effect Studio"),
             (self.fx_deep_edit.is_some(), fx::DEEP_EDIT_TITLE),
+            (self.master_deep_edit.is_some(), master::DEEP_EDIT_TITLE),
             (self.board_shown(BottomModule::StepSynth), "Step synth"),
             (self.sample_edit.open, "Sample editor"),
             (self.stretch.open, "Time Stretcher"),

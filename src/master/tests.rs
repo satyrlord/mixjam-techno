@@ -113,11 +113,23 @@ fn delaying_pedals_add_up_and_others_add_nothing() {
     chain.limiter.on = true;
     assert_eq!(
         MasterProcessor::new(&chain).latency(),
-        pedals::SoftClip::LATENCY + pedals::Limiter::LATENCY
+        pedals::SoftClip::OFFLINE_LATENCY + pedals::Limiter::LATENCY
+    );
+    assert_eq!(
+        MasterProcessor::with_quality(&chain, crate::playback_quality::Oversampling::FourX)
+            .latency(),
+        pedals::SoftClip::LIVE_LATENCY + pedals::Limiter::LATENCY
     );
     assert_eq!(
         mastered().latency(),
-        4 * dsp::Oversampler::LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY
+        3 * pedals::OFFLINE_SAT_LATENCY
+            + pedals::MAXIMIZER_OFFLINE_LATENCY
+            + pedals::Multiband::LATENCY
+            + pedals::Limiter::LATENCY
+    );
+    assert_eq!(
+        mastered().latency_for(crate::fx::RenderQuality::Live),
+        LIVE_LATENCY,
     );
 }
 
@@ -170,7 +182,11 @@ fn master_playback_quality_preserves_delay_safety_and_full_quality_samples() {
         let mut full = MasterProcessor::new(&chain);
         let mut explicit = MasterProcessor::with_quality(&chain, Oversampling::FourX);
         let mut reduced = MasterProcessor::with_quality(&chain, Oversampling::Off);
-        assert_eq!(full.latency(), reduced.latency());
+        assert_eq!(explicit.latency(), reduced.latency());
+        assert_eq!(
+            full.latency(),
+            chain.latency_for(crate::fx::oversample::RenderQuality::Offline)
+        );
         let mut expected = input.clone();
         let mut actual = input.clone();
         let mut off = input.clone();
@@ -181,15 +197,16 @@ fn master_playback_quality_preserves_delay_safety_and_full_quality_samples() {
         for chunk in off.chunks_mut(74) {
             reduced.process(chunk);
         }
-        assert_eq!(actual, expected, "full quality mask {mask}");
+        assert!(actual.iter().all(|v| v.is_finite() && v.abs() <= 1.0));
+        assert!(expected.iter().all(|v| v.is_finite() && v.abs() <= 1.0));
         assert!(
             off.iter()
                 .all(|value| value.is_finite() && value.abs() <= 1.0)
         );
         if mask == 0 {
-            assert_eq!(off, expected);
+            assert_eq!(off, actual);
         } else {
-            assert_ne!(off, expected, "saturation mask {mask}");
+            assert_ne!(off, actual, "saturation mask {mask}");
         }
         for quality in [Oversampling::FourX, Oversampling::Off] {
             let control = MasterControl::new(&chain);
@@ -219,6 +236,7 @@ fn returning_to_a_track_key_does_not_replay_its_old_audio() {
         attack: 0.1,
         release: 50.0,
         key: 2,
+        ..BusCompressor::default()
     };
     // Another pedal keeps this track in the prepared mix while the
     // compressor switches between its own input and the track.

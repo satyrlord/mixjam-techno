@@ -53,7 +53,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 27
+FORMAT_VERSION = 28
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -804,10 +804,11 @@ PEDAL_DEFAULTS = {
     BOOSTER_EQ: dict(bands=[50] * 10), BOOSTER_COMPRESSOR: dict(drive=500, speed=500, gain=500),
     BOOSTER_WIDE: dict(spread=500), 'softClip': dict(amount=1.5, ceiling=-0.5), 'tube': dict(drive=2.5, mix=100.0),
     'trimEq': dict(highPass=20.0, mud=-1.5, harsh=-1.0),
-    'busCompressor': dict(threshold=-16.0, ratio=2.0, attack=10.0, release=300.0),
+    'busCompressor': dict(threshold=-16.0, ratio=2.0, attack=10.0, release=300.0,
+                          scHpfHz=20.0, mix=100.0, makeupDb=0.0),
     'maximizer': dict(boost=10.0), 'liftEq': dict(low=1.0, air=1.0), 'tape': dict(drive=2.0, speed=30),
     'imaging': dict(width=105.0, monoBelow=120.0), 'multiband': dict(low=20.0, mid=15.0, high=20.0),
-    'limiter': dict(gain=4.0, ceiling=-1.0),
+    'limiter': dict(gain=4.0, ceiling=-1.0, style='transparent'),
 }
 
 

@@ -15,7 +15,7 @@ mod adaa;
 mod delay;
 mod distortion;
 pub(crate) mod migration;
-mod oversample;
+pub(crate) mod oversample;
 mod parts;
 mod processor;
 mod reverb;

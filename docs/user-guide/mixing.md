@@ -118,7 +118,7 @@ master gain, and then export again.
 
 ## Mastering
 
-Mastering is the second board of the lower panel. It holds the master
+Select **Mastering** in the lower panel to open the master
 pedalboard:
 
 1. The mix goes into the **Input** unit. Use **Trim** to set its level against
@@ -138,6 +138,11 @@ The board holds 13 pedals:
 All pedals start off. To move a pedal, drag it by its name, or use its arrows.
 The Limiter always stays last. To scroll to a pedal, click it in the strip
 below the board.
+
+Select **Edit** on a pedal, or double-click its name in the strip, to open
+**Mastering deep edit**. Select a pedal in the window's signal-order strip
+to get its full set of controls. The window shows the master meters and, for
+the saturation pedals, a preview of the transfer curve.
 
 ### Key dials
 

@@ -10,7 +10,7 @@ import math
 from copy import deepcopy
 from pathlib import Path
 
-FORMAT_VERSION = 27
+FORMAT_VERSION = 28
 
 
 def _reference(reference):
@@ -34,11 +34,24 @@ def _current_booster_keys(master):
     return board
 
 
+def _saved_master(document, version):
+    master = document['master']
+    if not isinstance(master, dict):
+        raise RuntimeError('The master pedalboard must be a JSON object.')
+    if any(not isinstance(value, dict) for name, value in master.items()
+           if name not in ('bypass', 'trim', 'order')):
+        raise RuntimeError('The master pedals must be JSON objects.')
+    if version < 28 and (
+            {'scHpfHz', 'mix', 'makeupDb'}.intersection(master.get('busCompressor', {}))
+            or 'style' in master.get('limiter', {})):
+        raise RuntimeError(f'Version {version} songs cannot contain v28 master parameters.')
+    return master if version >= 16 else _current_booster_keys(master)
+
+
 def _master(document):
-    if document['formatVersion'] >= 16:
-        return document['master']
-    if document['formatVersion'] >= 12:
-        return _current_booster_keys(document['master'])
+    version = document['formatVersion']
+    if version >= 12:
+        return _saved_master(document, version)
     # Match MasterChain::default and the version-11 migration in song.rs.
     # Keep this projection usable as a schema-4 JSON input to the executable.
     pedals = {
@@ -58,8 +71,8 @@ def _master(document):
         'limiter': {'on': False, 'gain': 4.0, 'ceiling': -1.0},
     }
     master = {'trim': 0.0, 'order': list(pedals), **pedals}
-    if document['formatVersion'] == 11:
-        saved = _current_booster_keys(document['master'])
+    if version == 11:
+        saved = _saved_master(document, version)
         master['order'][:3] = saved['order']
         for _, name in BOOSTER_KEYS:
             master[name] = saved[name]
@@ -128,7 +141,7 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in range(8, FORMAT_VERSION + 1):
+    if type(version) is not int or version not in range(8, FORMAT_VERSION + 1):
         raise RuntimeError(f'{path} is not a format version 8 through {FORMAT_VERSION} .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,

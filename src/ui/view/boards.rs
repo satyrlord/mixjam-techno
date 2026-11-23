@@ -706,7 +706,9 @@ impl MixJamApp {
     }
 
     fn mastering_toolbar(&mut self, ui: &mut egui::Ui) {
-        if let Some(chain) = master::preset_selector(ui, &self.session.project().master) {
+        if let Some(chain) =
+            master::preset_selector(ui, &self.session.project().master, "Mastering preset")
+        {
             let result = self.session.edit(EditCommand::SetMaster(chain));
             self.apply(result);
         }
@@ -759,12 +761,11 @@ impl MixJamApp {
         }
     }
 
-    pub(in super::super) fn mastering(&mut self, ui: &mut egui::Ui) {
-        // A capture of the meters shows a fixed, representative reading.
+    fn master_metering(&mut self, ctx: &egui::Context) -> master::Metering {
         let sample = self.capture_view_is("master-metering");
         let reduced = self.session.options().meter_display_rate
             == mixjam_techno::application::options::MeterDisplayRate::Reduced;
-        let metering = master::Metering {
+        master::Metering {
             reduced,
             reading: if sample {
                 MeterReading {
@@ -785,11 +786,15 @@ impl MixJamApp {
                 self.boards.meter_display.sample(
                     self.session.master_meters(),
                     reduced,
-                    ui.input(|input| input.time),
+                    ctx.input(|input| input.time),
                 )
             },
             playing: sample || self.session.playing_mix(),
-        };
+        }
+    }
+
+    pub(in super::super) fn mastering(&mut self, ui: &mut egui::Ui) {
+        let metering = self.master_metering(ui.ctx());
         let reveal = self.boards.master_reveal.take();
         let chain = self.session.project().master;
         let action = ui
@@ -797,10 +802,46 @@ impl MixJamApp {
                 master::show(ui, &chain, &metering, reveal)
             })
             .inner;
-        if let master::Action::Change(chain) = action {
-            let result = self.session.edit(EditCommand::SetMaster(chain));
+        match action {
+            master::Action::Change(chain) => {
+                let result = self.session.edit(EditCommand::SetMaster(chain));
+                self.apply(result);
+            }
+            master::Action::OpenDeepEdit(kind) => {
+                self.master_deep_edit = Some(kind);
+                dialog::expand(ui.ctx(), master::DEEP_EDIT_TITLE);
+                ui.ctx().move_to_top(egui::LayerId::new(
+                    egui::Order::Middle,
+                    egui::Id::new(master::DEEP_EDIT_TITLE),
+                ));
+                ui.ctx().request_repaint();
+            }
+            master::Action::None => {}
+        }
+    }
+
+    pub(in super::super) fn master_deep_edit_window(&mut self, ctx: &egui::Context) {
+        let Some(mut active) = self.master_deep_edit else {
+            return;
+        };
+        let mut open = true;
+        let chain = self.session.project().master;
+        let live_os_4x = self.session.options().master_playback_oversampling
+            == mixjam_techno::application::options::Oversampling::FourX;
+        let metering = self.master_metering(ctx);
+        if let Some(updated) = master::show_deep_edit(
+            ctx,
+            &mut open,
+            &mut active,
+            &chain,
+            &metering,
+            live_os_4x,
+            self.boards.master_view_generation,
+        ) {
+            let result = self.session.edit(EditCommand::SetMaster(updated));
             self.apply(result);
         }
+        self.master_deep_edit = open.then_some(active);
     }
 }
 

@@ -128,7 +128,20 @@ fn playback_and_export_run_the_same_master_pedalboard() {
         Some(MasterControl::new(&delayed.master)),
     )
     .collect();
-    assert_eq!(played, exported.samples);
+    assert_eq!(played.len(), exported.samples.len());
+    // Live (4x FIR + ADAA2) and Offline (8x FIR + ADAA2) differ slightly on
+    // nonlinear Tube harmonics while staying tightly level- and phase-aligned.
+    let diff_rms = (played
+        .iter()
+        .zip(&exported.samples)
+        .map(|(a, b)| f64::from(*a - *b).powi(2))
+        .sum::<f64>()
+        / played.len().max(1) as f64)
+        .sqrt();
+    assert!(
+        diff_rms < 2e-3,
+        "Live vs Offline Tube RMS difference {diff_rms} exceeds tolerance"
+    );
 }
 
 #[test]

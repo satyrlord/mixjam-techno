@@ -2,6 +2,7 @@
 //! order, each knob's range and step, and how a knob reads and writes a
 //! chain.
 use super::{EQ_BAND_MAX, KNOB_MAX, MasterChain, pedals};
+use crate::fx::RenderQuality;
 use serde::{Deserialize, Serialize};
 
 /// One pedal of the board.
@@ -94,15 +95,21 @@ impl PedalKind {
         Self::Multiband,
         Self::Limiter,
     ];
-    /// The frames by which the pedal delays the sound while it is on.
+    /// The frames by which the pedal delays the sound while it is on in Offline export.
     pub fn latency(self) -> usize {
-        match self {
-            Self::SoftClip => pedals::SoftClip::LATENCY,
-            Self::Tube => pedals::Tube::LATENCY,
-            Self::Maximizer => pedals::Maximizer::LATENCY,
-            Self::Multiband => pedals::Multiband::LATENCY,
-            Self::Tape => pedals::Tape::LATENCY,
-            Self::Limiter => pedals::Limiter::LATENCY,
+        self.latency_for(RenderQuality::Offline)
+    }
+    /// The frames by which the pedal delays the sound for a given render quality.
+    pub fn latency_for(self, quality: RenderQuality) -> usize {
+        let sat = match quality {
+            RenderQuality::Live => pedals::LIVE_SAT_LATENCY,
+            RenderQuality::Offline => pedals::OFFLINE_SAT_LATENCY,
+        };
+        match (self, quality) {
+            (Self::Maximizer, RenderQuality::Offline) => pedals::MAXIMIZER_OFFLINE_LATENCY,
+            (Self::SoftClip | Self::Tube | Self::Maximizer | Self::Tape, _) => sat,
+            (Self::Multiband, _) => pedals::Multiband::LATENCY,
+            (Self::Limiter, _) => pedals::Limiter::LATENCY,
             _ => 0,
         }
     }

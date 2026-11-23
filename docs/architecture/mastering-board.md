@@ -8,7 +8,8 @@ module is a horizontal pedalboard in signal order:
 - The Output unit (loudness, true peak, OVER) stays at the right.
 - Between them, the pedal row scrolls, and painted cables join the pedals.
 - A strip below names each pedal in order and outlines the pedals in view. It
-  scrolls the row to the pedal that the user chooses.
+  scrolls the row to the pedal that the user chooses. A double-click opens that
+  pedal in Mastering deep edit.
 
 Keyboard focus also scrolls a control into view. Each pedal shows its name,
 lamp, dials, arrow buttons, and switch. The dynamics pedals also show their
@@ -17,13 +18,18 @@ of a pedal moves the pedal, with an insertion marker during the drag. The row
 scrolls near its ends. The arrow buttons give the same move to the keyboard,
 screen readers, and agents.
 
-A project or library replacement advances a frontend generation for the
-control identities of the board. Thus a held pedal or knob cannot edit the
-replacement project. This resets the board view. Meter latches keep a separate
-stable identity, so an OVER count that the user acknowledged does not come on
-again without another event.
+Each card shows its main controls. Its Edit button opens the selected pedal in
+the floating Mastering deep edit window. That window groups the full set of
+controls, the signal order, and the master meters. Saturation pedals also show
+their static transfer curves.
 
-The board edits a copy of the `MasterChain` of the project.
+A project or library replacement advances a frontend generation for the
+control identities of the board and Deep Edit. Thus a held pedal or knob
+cannot edit the replacement project. This resets the board view. Meter latches
+keep a separate stable identity, so an OVER count that the user acknowledged
+does not come on again without another event.
+
+The board and Deep Edit edit copies of the `MasterChain` of the project.
 `src/ui/view/boards.rs` sends a changed copy as `EditCommand::SetMaster` and
 gives the meter reading of the session to the board. The preset selector
 offers the factory boards of `src/master/presets.rs`, which the frontend gets

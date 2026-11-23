@@ -11,6 +11,8 @@ use mixjam_techno::application::{
 };
 #[path = "master/board.rs"]
 mod board;
+#[path = "master/deep_edit.rs"]
+mod deep_edit;
 #[path = "master/dials.rs"]
 mod dials;
 #[path = "master/enclosure.rs"]
@@ -25,20 +27,22 @@ mod pedal_face;
 mod units;
 use board::*;
 pub(super) use board::{bypass_switch, preset_selector, show, status};
+pub(super) use deep_edit::{DEEP_EDIT_TITLE, show_deep_edit};
 use dials::*;
 pub(super) use dials::{COMPACT_WELL, Dial, Format, compact_dial, decimal, dial};
 use enclosure::*;
 pub(super) use enclosure::{enamel_of, enclosure_of};
 pub(super) use layout::MODULE_HEIGHT;
 use layout::*;
+pub(super) use parts::lamp;
 use parts::*;
-pub(super) use parts::{heading, lamp};
 use pedal_face::*;
 use units::*;
 
 pub(super) enum Action {
     None,
     Change(MasterChain),
+    OpenDeepEdit(PedalKind),
 }
 
 /// What the meters show: the latest reading, and whether a mix plays.

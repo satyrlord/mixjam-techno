@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 27 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 28 is
 the current song format. The application writes only this version. Versions 8
-to 26 open and migrate. Version 7 is the earlier MixJam project format. It is
+to 27 open and migrate. Version 7 is the earlier MixJam project format. It is
 import-only: **Save** never replaces a version-7 file. `src/mixjam/song.rs`
 owns the format.
 
@@ -32,7 +32,7 @@ From version 11, a document also holds `master`. From version 13, it also holds
 `sourceSettings` holds, as text, the settings that the original product saved
 with an imported song. A song without such settings omits the key.
 
-A save to an existing file of version 8 to 27 keeps the `createdAt` of that
+A save to an existing file of version 8 to 28 keeps the `createdAt` of that
 file. The reader rejects a file larger than 1 GiB.
 
 Master settings reject duplicate fields. This includes nested fields and

@@ -5,6 +5,7 @@ use super::{
     BoosterCompressor, BoosterEq, BoosterWide, BusCompressor, Imaging, Knob, LiftEq, Limiter,
     Maximizer, Multiband, PedalKind, SoftClip, Tape, TrimEq, Tube,
 };
+use crate::fx::RenderQuality;
 use serde::{Deserialize, Serialize};
 
 /// The input trim, every pedal with its switch, and the order the signal
@@ -120,12 +121,17 @@ impl MasterChain {
             .filter(|kind| self.runs(*kind))
             .filter_map(|kind| usize::from(self.key(kind)).checked_sub(1))
     }
-    /// The frames by which the pedals that run delay the sound.
+    /// The frames by which the pedals that run delay the sound in Offline export.
     pub fn latency(&self) -> usize {
+        self.latency_for(RenderQuality::Offline)
+    }
+
+    /// The frames by which the pedals that run delay the sound for a render quality.
+    pub fn latency_for(&self, quality: RenderQuality) -> usize {
         self.order
             .iter()
             .filter(|kind| self.runs(**kind))
-            .map(|kind| kind.latency())
+            .map(|kind| kind.latency_for(quality))
             .sum()
     }
     /// The same delay in milliseconds at a sample rate.
@@ -147,12 +153,12 @@ impl MasterChain {
             self.order[to] = kind;
         }
     }
-    /// The one knob that differs from `other`, when no switch, speed, or
-    /// position differs too.
+    /// The one knob that differs from `other` when all other settings agree.
     pub fn changed_knob(&self, other: &Self) -> Option<Knob> {
         if self.bypass != other.bypass
             || self.order != other.order
             || self.tape.speed != other.tape.speed
+            || self.advanced_dynamics() != other.advanced_dynamics()
             || PedalKind::ALL
                 .into_iter()
                 .any(|kind| self.is_on(kind) != other.is_on(kind))
@@ -160,10 +166,16 @@ impl MasterChain {
             return None;
         }
         let mut changed = Knob::all().filter(|knob| knob.get(self) != knob.get(other));
-        match (changed.next(), changed.next()) {
-            (Some(knob), None) => Some(knob),
-            _ => None,
-        }
+        let knob = changed.next()?;
+        changed.next().is_none().then_some(knob)
+    }
+
+    fn advanced_dynamics(&self) -> ([f32; 3], super::LimiterStyle) {
+        let compressor = self.bus_compressor;
+        (
+            [compressor.sc_hpf_hz, compressor.mix, compressor.makeup_db],
+            self.limiter.style,
+        )
     }
     /// The trim as a gain: unity while the board is bypassed.
     pub(super) fn trim_gain(&self) -> f64 {
@@ -183,12 +195,21 @@ impl MasterChain {
         if self.order.last() != Some(&PedalKind::Limiter) {
             return Err("The limiter must be the last master pedal.".into());
         }
-        if !Knob::all().all(|knob| knob.range().contains(knob.get(self))) {
+        if !Knob::all().all(|knob| knob.range().contains(knob.get(self)))
+            || !self.advanced_dynamics_in_range()
+        {
             return Err("A master pedal setting is out of range.".into());
         }
         if ![15, 30].contains(&self.tape.speed) {
             return Err("The tape speed must be 15 or 30 inches per second.".into());
         }
         Ok(())
+    }
+
+    fn advanced_dynamics_in_range(&self) -> bool {
+        let compressor = self.bus_compressor;
+        (20.0..=250.0).contains(&compressor.sc_hpf_hz)
+            && (0.0..=100.0).contains(&compressor.mix)
+            && (0.0..=12.0).contains(&compressor.makeup_db)
     }
 }

@@ -39,10 +39,11 @@ pub use control::{FxBusMeterReading, MasterControl};
 pub use knobs::{Knob, KnobRange, PedalKind};
 pub(crate) use knobs::{range, ratio_range};
 pub use meters::{INPUT_PEAK_LAMP_DBFS, MeterReading, OVER_DBTP, VU_REFERENCE_DBFS};
+pub use pedals::sample_saturation_curve;
 pub use processor::MasterProcessor;
 pub use settings::{
     BoosterCompressor, BoosterEq, BoosterWide, BusCompressor, EQ_BAND_MAX, EQ_FREQUENCIES, Imaging,
-    KNOB_MAX, LiftEq, Limiter, Maximizer, Multiband, SoftClip, Tape, TrimEq, Tube,
+    KNOB_MAX, LiftEq, Limiter, LimiterStyle, Maximizer, Multiband, SoftClip, Tape, TrimEq, Tube,
 };
 
 #[cfg(test)]

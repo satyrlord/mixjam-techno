@@ -21,17 +21,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         "Multiband",
         "Limiter",
     ];
-    const BOOSTER_KNOBS: [&str; 14] = [
-        "Booster EQ 60 Hz",
-        "Booster EQ 80 Hz",
-        "Booster EQ 160 Hz",
-        "Booster EQ 320 Hz",
-        "Booster EQ 640 Hz",
-        "Booster EQ 1100 Hz",
-        "Booster EQ 2200 Hz",
-        "Booster EQ 4500 Hz",
-        "Booster EQ 9000 Hz",
-        "Booster EQ 12000 Hz",
+    const BOOSTER_KNOBS: [&str; 4] = [
         "Booster compressor drive",
         "Booster compressor speed",
         "Booster compressor gain",
@@ -56,7 +46,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         );
         assert_folded_assets(&ctx, &output, "Indigo");
         // The input and output units and the pedals stay in view however
-        // far the row scrolls. The minimum window scrolls the strip below.
+        // far the row scrolls.
         for name in ["Trim", "Trim value", "Clear OVER"] {
             assert!(
                 window.contains_rect(effects_control_rect(&output, name)),
@@ -67,7 +57,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         assert!(
             window.contains_rect(Rect::from_min_size(
                 first.min,
-                Vec2::new(first.width(), 304.0)
+                Vec2::new(first.width(), 176.0)
             )),
             "The pedals must fit."
         );
@@ -95,12 +85,9 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
             );
         }
         assert!(!accessible_node(&output, "Trim").1.is_disabled());
-        assert_eq!(
-            accessible_node(&output, "Booster EQ 1100 Hz value")
-                .1
-                .value(),
-            Some("+0.0"),
-            "EQ values read in decibels."
+        assert!(
+            !accessible_node(&output, "Edit Booster EQ").1.is_disabled(),
+            "Deep Edit trigger starts enabled."
         );
         assert_eq!(
             accessible_node(&output, "Limiter ceiling value").1.value(),
@@ -132,7 +119,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 format!("Drag {name}")
             };
             let grip = effects_control_rect(output, &header);
-            Rect::from_min_size(grip.min, Vec2::new(grip.width() + 30.0, 304.0))
+            Rect::from_min_size(grip.min, Vec2::new(grip.width() + 68.0, 176.0))
         };
         let input = effects_control_rect(&output, "Trim");
         let outlet = effects_control_rect(&output, "Clear OVER");
@@ -147,9 +134,9 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 .all(|pair| pair[0].right() < pair[1].left())
         );
         let dials: [&[&str]; 13] = [
-            &BOOSTER_KNOBS[..10],
-            &BOOSTER_KNOBS[10..13],
-            &BOOSTER_KNOBS[13..],
+            &[],
+            &BOOSTER_KNOBS[..3],
+            &BOOSTER_KNOBS[3..],
             &["Soft clip amount", "Soft clip ceiling"],
             &["Tube drive", "Tube mix"],
             &["Trim EQ high-pass", "Trim EQ mud", "Trim EQ harsh"],
@@ -157,7 +144,6 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 "Bus compressor threshold",
                 "Bus compressor ratio",
                 "Bus compressor attack",
-                "Bus compressor release",
                 "Bus compressor gain reduction 0.0 dB",
             ],
             &["Maximizer boost"],
@@ -440,7 +426,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         text_rect(
             &output,
-            "2 of 13 pedals on, trim -0.1 dB. Latency 4.8 ms, which exports remove.",
+            "2 of 13 pedals on, trim -0.1 dB. Export removes 4.8 ms of delay.",
         );
         for _ in 0..5 {
             assert!(app.session.history_step(false).unwrap());
@@ -645,6 +631,18 @@ fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
                     })
                     .inner;
                 assert!(matches!(action, master::Action::None));
+                assert!(
+                    master::show_deep_edit(
+                        ctx,
+                        &mut true,
+                        &mut PedalKind::Limiter,
+                        &chain,
+                        &metering,
+                        true,
+                        generation.get(),
+                    )
+                    .is_none()
+                );
             },
         )
     };
@@ -694,6 +692,23 @@ fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
     assert_eq!(
         accessible_node(&output, "Clear OVER").1.description(),
         Some("OVER: detected.")
+    );
+    let (target, deep_over) = accessible_node(&output, "Deep edit Clear OVER");
+    assert_eq!(deep_over.description(), Some("OVER: detected."));
+    render(
+        reading,
+        vec![egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target,
+                data: None,
+            },
+        )],
+    );
+    let output = render(reading, vec![]);
+    assert_eq!(
+        accessible_node(&output, "Clear OVER").1.description(),
+        Some("OVER: clear.")
     );
 }
 
@@ -849,7 +864,7 @@ fn mastering_knobs_take_the_wheel_once() {
     app.boards.module = BottomModule::Mastering;
     // A pedal's knobs work while it is on.
     let mut chain = app.session.project().master;
-    chain.booster_eq.on = true;
+    chain.soft_clip.on = true;
     app.session.edit(EditCommand::SetMaster(chain)).unwrap();
     let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     for _ in 0..3 {
@@ -857,9 +872,9 @@ fn mastering_knobs_take_the_wheel_once() {
     }
     for (name, modifiers) in [
         ("Trim", egui::Modifiers::NONE),
-        ("Booster EQ 60 Hz", egui::Modifiers::NONE),
+        ("Soft clip amount", egui::Modifiers::NONE),
         ("Trim", egui::Modifiers::SHIFT),
-        ("Booster EQ 60 Hz", egui::Modifiers::SHIFT),
+        ("Soft clip amount", egui::Modifiers::SHIFT),
     ] {
         let knob = effects_control_rect(&output, name).center();
         let before = app.session.project().master;
@@ -948,4 +963,165 @@ fn reduced_meter_needle_does_not_interpolate_between_display_samples() {
         ..reduced
     };
     assert_eq!(normal.repaint_delay(), Duration::from_millis(33));
+}
+
+#[test]
+fn mastering_compact_board_fits_960_by_720_with_no_overlap_across_themes() {
+    let size = Vec2::new(960.0, 720.0);
+    for _ in themes_in_turn() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.boards.module = BottomModule::Mastering;
+        let mut output = egui::FullOutput::default();
+        for _ in 0..4 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let board = effects_control_rect(&output, "Mastering board");
+        let trim = effects_control_rect(&output, "Trim");
+        let row = effects_control_rect(&output, "Drag Booster EQ");
+        let clear_over = effects_control_rect(&output, "Clear OVER");
+        let chip = effects_control_rect(&output, "Show Limiter");
+        assert!(board.contains_rect(trim), "Trim must fit inside board.");
+        assert!(
+            board.contains_rect(clear_over),
+            "Output Clear OVER must fit."
+        );
+        assert!(
+            board.contains_rect(chip),
+            "Signal chip strip must fit at 960x720."
+        );
+        assert!(
+            trim.right() < row.left(),
+            "Input and pedals must not overlap."
+        );
+        assert!(
+            row.right() < clear_over.left(),
+            "Pedals and Output must not overlap."
+        );
+    }
+}
+
+#[test]
+fn mastering_deep_edit_opens_edits_eq_and_saturation_with_undo() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    click_named(&ctx, &mut app, "Edit Booster EQ");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.master_deep_edit, Some(PedalKind::BoosterEq));
+    assert_eq!(
+        accessible_node(&output, "Deep edit Booster EQ 1100 Hz value")
+            .1
+            .value(),
+        Some("+0.0")
+    );
+    click_named(&ctx, &mut app, "Deep edit pedal power");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(app.session.project().master.booster_eq.on);
+    focus_control(&ctx, &mut app, &output, "Deep edit Booster EQ 60 Hz");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.booster_eq.bands[0] > 50);
+
+    click_named(&ctx, &mut app, "Deep edit select Tape");
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.master_deep_edit, Some(PedalKind::Tape));
+    click_named(&ctx, &mut app, "Deep edit pedal power");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(app.session.project().master.tape.on);
+    focus_control(&ctx, &mut app, &output, "Deep edit Tape drive");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::End, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.session.project().master.tape.drive, 10.0);
+    assert!(app.session.history_step(false).unwrap());
+    assert_eq!(
+        app.session.project().master.tape.drive,
+        MasterChain::default().tape.drive
+    );
+}
+
+#[test]
+fn mastering_deep_edit_does_not_carry_a_trim_drag_into_a_new_mix() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let output = click_named(&ctx, &mut app, "Edit Booster EQ");
+    let dial = effects_control_rect(&output, "Deep edit Trim").center();
+    let none = egui::Modifiers::NONE;
+    pointer(&ctx, &mut app, dial, true, none);
+    for rise in [15.0, 30.0] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(dial - Vec2::new(0.0, rise))],
+            none,
+        );
+    }
+    assert_ne!(app.session.project().master.trim, 0.0);
+
+    app.new_mix();
+    let end = dial - Vec2::new(0.0, 60.0);
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end)], none);
+    pointer(&ctx, &mut app, end, false, none);
+    assert_eq!(app.session.project().master.trim, 0.0);
+}
+
+#[test]
+fn mastering_deep_edit_keeps_telemetry_clear_and_scrolls_when_resized() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    click_named(&ctx, &mut app, "Edit Booster EQ");
+    let output = click_named(&ctx, &mut app, "Deep edit select Bus compressor");
+    let peak = accessible_label(&output, "True peak: - dBTP");
+    let over = effects_control_rect(&output, "Deep edit Clear OVER");
+    assert!(peak.bottom() < over.top());
+    let window = dialog::window_rect(&ctx, master::DEEP_EDIT_TITLE).unwrap();
+    let corner = window.right_bottom() - Vec2::splat(2.0);
+    let none = egui::Modifiers::NONE;
+    drag(
+        &ctx,
+        &mut app,
+        corner,
+        corner - Vec2::new(160.0, 160.0),
+        none,
+    );
+    let output = frame(&ctx, &mut app, vec![], none);
+    assert!(has_control(
+        &output,
+        "Mastering deep edit horizontal scroll bar"
+    ));
+    assert!(has_control(
+        &output,
+        "Mastering deep edit vertical scroll bar"
+    ));
+}
+
+#[test]
+fn mastering_strip_double_click_opens_the_chosen_pedal() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let none = egui::Modifiers::NONE;
+    frame(&ctx, &mut app, vec![], none);
+    let output = frame(&ctx, &mut app, vec![], none);
+    let chip = effects_control_rect(&output, "Show Limiter").center();
+    click(&ctx, &mut app, chip, none);
+    assert!(app.master_deep_edit.is_none());
+    click(&ctx, &mut app, chip, none);
+    assert_eq!(app.master_deep_edit, Some(PedalKind::Limiter));
 }

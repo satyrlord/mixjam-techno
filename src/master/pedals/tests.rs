@@ -50,6 +50,7 @@ fn limiter_key_detector_does_not_resume_old_audio() {
         gain: 0.0,
         ceiling: -1.0,
         key: 2,
+        ..settings::Limiter::default()
     });
     pedal.clear();
     for _ in 0..4000 {
@@ -120,8 +121,7 @@ fn neutral_settings_pass_the_mix_through() {
     let dry = run(&input, |l, r| tube.process(l, r));
     assert_eq!(&dry[Tube::LATENCY..], &input[..input.len() - Tube::LATENCY]);
 
-    // Below their curves, the soft clip and maximizer are the
-    // oversampling alone.
+    // At unity ceiling, Soft Clip leaves this quiet signal unchanged.
     let mut soft_clip = SoftClip::new();
     soft_clip.set(&settings::SoftClip {
         on: true,
@@ -136,7 +136,9 @@ fn neutral_settings_pass_the_mix_through() {
         boost: 0.0,
     });
     maximizer.clear();
-    assert_eq!(run(&quiet, |l, r| maximizer.process(l, r)), through);
+    // The Maximizer leaves the same program at unity gain below the knee.
+    let maximized = run(&quiet, |l, r| maximizer.process(l, r));
+    assert!((rms_db(&maximized) - rms_db(&through)).abs() < 0.05);
 
     let mut tape = Tape::new();
     tape.set(&settings::Tape {
@@ -164,6 +166,7 @@ fn neutral_settings_pass_the_mix_through() {
         attack: 10.0,
         release: 300.0,
         key: 0,
+        ..settings::BusCompressor::default()
     });
     compressor.clear();
     assert_eq!(run(&quiet, |l, r| compressor.process(l, r)), quiet);
@@ -335,6 +338,7 @@ fn bus_compressor_follows_its_static_curve() {
         attack: 1.0,
         release: 100.0,
         key: 0,
+        ..settings::BusCompressor::default()
     });
     compressor.clear();
     // A steady sine 10 dB over the threshold settles 7.5 dB lower.
@@ -395,6 +399,7 @@ fn limiter_holds_true_peak_under_the_ceiling() {
                 gain: 12.0,
                 ceiling,
                 key: 0,
+                ..settings::Limiter::default()
             });
             limiter.clear();
             let output = run(signal, |l, r| limiter.process(l, r));
@@ -427,6 +432,7 @@ fn limiter_keeps_quiet_sound_unchanged_after_its_delay() {
         gain: 0.0,
         ceiling: -1.0,
         key: 0,
+        ..settings::Limiter::default()
     });
     limiter.clear();
     let output = run(&input, |l, r| limiter.process(l, r));
@@ -455,6 +461,7 @@ fn lowering_the_limiter_ceiling_during_play_does_not_clip() {
         gain: 6.0,
         ceiling: 0.0,
         key: 0,
+        ..settings::Limiter::default()
     };
     limiter.set(&settings);
     limiter.clear();

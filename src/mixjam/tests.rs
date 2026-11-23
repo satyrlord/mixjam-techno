@@ -16,7 +16,7 @@ fn unsupported_song_version_lists_all_supported_versions() {
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let error = load_song(&path, &Library::empty()).unwrap_err();
     fs::remove_file(path).unwrap();
-    assert_eq!(error, "Only MixJam format versions 7 to 27 are supported.");
+    assert_eq!(error, "Only MixJam format versions 7 to 28 are supported.");
 }
 
 #[test]
@@ -518,7 +518,7 @@ fn header_scanner_handles_reordered_keys_escapes_and_preserves_errors() {
     fs::write(&unsupported, serde_json::to_vec(&doc).unwrap()).unwrap();
     assert_eq!(
         load_song(&unsupported, &Library::empty()).unwrap_err(),
-        "Only MixJam format versions 7 to 27 are supported."
+        "Only MixJam format versions 7 to 28 are supported."
     );
 
     let missing_created = dir.join("missing-created.mixjam");

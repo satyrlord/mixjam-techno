@@ -132,6 +132,40 @@ impl Default for TrimEq {
     }
 }
 
+fn default_sc_hpf_hz() -> f32 {
+    20.0
+}
+
+fn is_default_sc_hpf_hz(hz: &f32) -> bool {
+    *hz == 20.0
+}
+
+fn default_compressor_mix() -> f32 {
+    100.0
+}
+
+fn is_default_compressor_mix(mix: &f32) -> bool {
+    *mix == 100.0
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.0
+}
+
+/// Output limiting style of the master brickwall limiter.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LimiterStyle {
+    #[default]
+    Transparent,
+    Punchy,
+    Modern,
+}
+
+fn is_default_limiter_style(style: &LimiterStyle) -> bool {
+    *style == LimiterStyle::default()
+}
+
 /// A stereo-linked compressor for the whole mix.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -147,6 +181,21 @@ pub struct BusCompressor {
     /// What the detector follows: 0 is the pedal's input, 1 to 64 a track.
     #[serde(default, skip_serializing_if = "is_own")]
     pub key: u8,
+    /// Detector sidechain high-pass cutoff in Hz (`<= 20.5` bypassed).
+    #[serde(
+        default = "default_sc_hpf_hz",
+        skip_serializing_if = "is_default_sc_hpf_hz"
+    )]
+    pub sc_hpf_hz: f32,
+    /// Parallel wet blend in percent.
+    #[serde(
+        default = "default_compressor_mix",
+        skip_serializing_if = "is_default_compressor_mix"
+    )]
+    pub mix: f32,
+    /// Output makeup gain in dB.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub makeup_db: f32,
 }
 impl Default for BusCompressor {
     fn default() -> Self {
@@ -157,6 +206,9 @@ impl Default for BusCompressor {
             attack: Knob::CompressorAttack.range().default,
             release: Knob::CompressorRelease.range().default,
             key: 0,
+            sc_hpf_hz: 20.0,
+            mix: 100.0,
+            makeup_db: 0.0,
         }
     }
 }
@@ -278,6 +330,9 @@ pub struct Limiter {
     /// ceiling, so the mix gives way while the key peaks.
     #[serde(default, skip_serializing_if = "is_own")]
     pub key: u8,
+    /// Limiter release and transient character.
+    #[serde(default, skip_serializing_if = "is_default_limiter_style")]
+    pub style: LimiterStyle,
 }
 impl Default for Limiter {
     fn default() -> Self {
@@ -286,6 +341,7 @@ impl Default for Limiter {
             gain: Knob::LimiterGain.range().default,
             ceiling: Knob::LimiterCeiling.range().default,
             key: 0,
+            style: LimiterStyle::default(),
         }
     }
 }

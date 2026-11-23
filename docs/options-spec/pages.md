@@ -57,8 +57,9 @@ A larger internal render block of `PlaybackSource` also does not change it.
 
 ### Export rule
 
-Normal mix exports, stems, and song-tool renders always use 4x for Drive and
-the four master saturation processors. They also always read samples at High.
+Normal mix exports, stems, and song-tool renders use 4x for track Drive and
+read samples at High. When a render includes the master pedalboard, its four
+saturation pedals use 8x.
 They ignore the playback quality preferences. Preview attenuation and display
 preferences also have no effect on export. Headless rendering must stay
 independent of the settings folder of the user. An explicit draft-export mode

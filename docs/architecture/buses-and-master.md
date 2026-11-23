@@ -119,8 +119,13 @@ Master processors prepare the shared oversampling and true-peak filter tables
 before playback reaches the audio thread. The callback must not initialize or
 wait for those tables, at first playback or at later pedal switches. The
 mastering playback quality option changes only Soft clip, Tube, Maximizer, and
-Tape. When it is Off, their saturation runs at the base rate, with the same
-integer stage delay. The option does not change these items:
+Tape. Their saturation uses second-order antiderivative antialiasing. Playback
+uses a 4x FIR oversampler, or runs at the base rate with the option set to Off.
+Both playback paths have a 69-frame stage delay. Export uses an 8x
+linear-phase FIR oversampler with a 71-frame stage delay. The Maximizer
+uses a shorter 4x filter during playback to fit its output peak guard within
+the same stage delay. Its export delay is 107 frames, including the guard.
+The option does not change these items:
 
 - the limiter lookahead
 - the true-peak interpolation
@@ -147,8 +152,8 @@ to the fixed delay and still feeds the meters. A bypass switch crossfades as a
 pedal switch does. When the board leaves bypass, the pedals that are on start
 from a clear state.
 
-`MasterChain::latency` is the delay of the pedals that run, in frames.
-`MasterChain::latency_ms` gives it in milliseconds for the board. `Mix::to_pcm`
+`MasterChain::latency` is the sum of active offline pedal delays, in frames.
+`MasterChain::latency_ms` gives the export delay in milliseconds. `Mix::to_pcm`
 and `Mix::write_wav` run the pedals past the end by that delay and cut it from
 the start. Playback drops its fixed delay before the first sample and drains the
 same number of frames at the end. Thus the two stay on the timeline. Export and

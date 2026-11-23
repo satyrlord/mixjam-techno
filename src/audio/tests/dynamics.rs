@@ -582,6 +582,7 @@ fn a_keyed_bus_compressor_lowers_the_mix_while_its_key_track_sounds() {
         attack: 0.1,
         release: 50.0,
         key: 0,
+        ..crate::master::BusCompressor::default()
     };
     let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
     let open = render(&project);

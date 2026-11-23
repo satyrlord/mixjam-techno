@@ -11,8 +11,23 @@ pub(super) fn input_unit(
     metering: &Metering,
     lamps: &mut Lamps,
 ) {
-    controls::inset(ui, rect);
-    heading(ui, rect, "Input", "From the mixer", roles().legend);
+    unit_face(ui, rect, "Input");
+    input_meter(ui, rect, metering, lamps);
+    let x = rect.center().x - 6.0;
+    trim_dial(
+        ui,
+        [109.0, 141.0, 161.0].map(|y| Pos2::new(x, rect.top() + y)),
+        chain,
+        "Trim",
+    );
+
+    // The socket at the right edge sends the trimmed mix into the row.
+    let socket = Pos2::new(rect.right() - 10.0, rect.top() - PEDAL_TOP + SIGNAL_Y);
+    cable(ui, socket.x, rect.right() + 1.0, socket.y, [false, false]);
+    jack(ui, socket);
+}
+
+fn input_meter(ui: &egui::Ui, rect: Rect, metering: &Metering, lamps: &mut Lamps) {
     let now = ui.input(|input| input.time);
     let reading = &metering.reading;
     let live = metering.playing && reading.run > 0;
@@ -27,8 +42,8 @@ pub(super) fn input_unit(
         f32::NEG_INFINITY
     };
     let meter = Rect::from_min_size(
-        rect.min + Vec2::new(12.0, 44.0),
-        Vec2::new(rect.width() - 24.0, 74.0),
+        rect.min + Vec2::new(10.0, 24.0),
+        Vec2::new(rect.width() - 20.0, 44.0),
     );
     let needle = display_needle(
         ui.ctx(),
@@ -38,36 +53,26 @@ pub(super) fn input_unit(
     );
     vu_meter(ui, meter, needle);
     let lit = [0, 1].map(|side| live && now - lamps.peaks[side] < 0.4);
-    for (side, label) in ["L", "R"].into_iter().enumerate() {
-        let center = Pos2::new(
-            meter.center().x - 22.0 + 44.0 * side as f32,
-            meter.bottom() + 16.0,
-        );
-        led(ui, center, 4.5, lit[side], roles().lamp_peak);
-        ui.painter().text(
-            center + Vec2::new(if side == 0 { -12.0 } else { 12.0 }, 0.0),
-            Align2::CENTER_CENTER,
-            label,
-            FontId::proportional(11.0),
-            roles().legend,
-        );
-    }
-    ui.painter().text(
-        Pos2::new(meter.center().x, meter.bottom() + 16.0),
-        Align2::CENTER_CENTER,
-        "PEAK",
-        FontId::proportional(9.5),
-        roles().legend.gamma_multiply(0.75),
-    );
+    let peak_y = meter.bottom() + 9.0;
+    input_peaks(ui, Pos2::new(meter.center().x, peak_y), lit);
     let level = ui.interact(
         meter.union(Rect::from_center_size(
-            Pos2::new(meter.center().x, meter.bottom() + 16.0),
+            Pos2::new(meter.center().x, peak_y),
             Vec2::new(meter.width(), 12.0),
         )),
         ui.id().with("input-level"),
         Sense::hover(),
     );
-    let text = if live && vu.is_finite() {
+    named(
+        &level,
+        egui::WidgetType::Label,
+        &input_level_text(live, vu, lit),
+    );
+    level.hover_hint("0 VU is -18 dBFS. Peak lamps light at -1 dBFS.");
+}
+
+fn input_level_text(live: bool, vu: f32, lit: [bool; 2]) -> String {
+    if live && vu.is_finite() {
         format!(
             "Input level {} VU{}",
             show_level(vu),
@@ -80,24 +85,45 @@ pub(super) fn input_unit(
         )
     } else {
         "Input level: no mix playing".to_owned()
-    };
-    named(&level, egui::WidgetType::Label, &text);
-    level.hover_hint("0 VU is -18 dBFS. Peak lamps light at -1 dBFS.");
+    }
+}
 
-    let x = rect.center().x - 8.0;
+fn input_peaks(ui: &egui::Ui, center: Pos2, lit: [bool; 2]) {
+    for (side, label) in ["L", "R"].into_iter().enumerate() {
+        let center = Pos2::new(center.x - 20.0 + 40.0 * side as f32, center.y);
+        led(ui, center, 3.8, lit[side], roles().lamp_peak);
+        ui.painter().text(
+            center + Vec2::new(if side == 0 { -11.0 } else { 11.0 }, 0.0),
+            Align2::CENTER_CENTER,
+            label,
+            FontId::proportional(10.0),
+            roles().legend,
+        );
+    }
+    ui.painter().text(
+        center,
+        Align2::CENTER_CENTER,
+        "PEAK",
+        FontId::proportional(9.0),
+        roles().legend.gamma_multiply(0.75),
+    );
+}
+
+pub(super) fn trim_dial(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    chain: &mut MasterChain,
+    name: &str,
+) {
     let before = decimal(chain.trim);
     let mut value = before;
-    let (label, name, hint, format) = face(Knob::Trim);
+    let (label, _, hint, format) = face(Knob::Trim);
     dial(
         ui,
-        [
-            Pos2::new(x, rect.top() + 172.0),
-            Pos2::new(x, rect.top() + 210.0),
-            Pos2::new(x, rect.top() + 232.0),
-        ],
+        positions,
         &mut value,
         Dial {
-            name: &name,
+            name,
             label: &label,
             hint,
             range: Knob::Trim.range(),
@@ -109,21 +135,59 @@ pub(super) fn input_unit(
     if value != before {
         Knob::Trim.set(chain, value as f32);
     }
-
-    // The socket at the right edge sends the trimmed mix into the row.
-    let socket = Pos2::new(rect.right() - 12.0, rect.top() - PEDAL_TOP + SIGNAL_Y);
-    cable(ui, socket.x, rect.right() + 1.0, socket.y, [false, false]);
-    jack(ui, socket);
 }
 
 /// The output unit: the socket from the last pedal, the loudness readings,
 /// a loudness bar with the -14 LUFS delivery band, a true-peak bar with its
 /// -1 dBTP line, and the OVER lamp, which latches until it is clicked.
 pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut Lamps) {
-    controls::inset(ui, rect);
-    heading(ui, rect, "Output", "To playback and export", roles().legend);
+    unit_face(ui, rect, "Output");
     let reading = &metering.reading;
     let live = metering.playing && reading.run > 0;
+    let over = Rect::from_center_size(
+        rect.right_top() + Vec2::new(-32.0, 14.0),
+        Vec2::new(54.0, 22.0),
+    );
+    over_control(ui, over, "Clear OVER", reading, lamps);
+    output_readouts(ui, rect, reading, live);
+
+    let left = rect.left() + 26.0;
+    let right = rect.right() - 10.0;
+    let bar_bounds = Rect::from_min_max(
+        Pos2::new(left, rect.top() + 114.0),
+        Pos2::new(right, rect.top() + 124.0),
+    );
+    loudness_bar(ui, bar_bounds, reading, live);
+    let peak_bounds = Rect::from_min_max(
+        Pos2::new(left, rect.top() + 144.0),
+        Pos2::new(right, rect.top() + 153.0),
+    );
+    peak_bar(ui, peak_bounds, reading, live);
+
+    // The socket at the left edge takes the last pedal's output.
+    let socket = Pos2::new(rect.left() + 10.0, rect.top() - PEDAL_TOP + SIGNAL_Y);
+    cable(ui, rect.left() - 1.0, socket.x, socket.y, [false, false]);
+    jack(ui, socket);
+}
+
+fn unit_face(ui: &egui::Ui, rect: Rect, title: &str) {
+    controls::inset(ui, rect);
+    ui.painter().text(
+        Pos2::new(rect.left() + 10.0, rect.top() + 14.0),
+        Align2::LEFT_CENTER,
+        title,
+        FontId::proportional(13.5),
+        roles().legend,
+    );
+}
+
+pub(super) fn over_control(
+    ui: &egui::Ui,
+    over: Rect,
+    name: &str,
+    reading: &MeterReading,
+    lamps: &mut Lamps,
+) {
     if reading.run != lamps.run {
         (lamps.run, lamps.overs) = (reading.run, 0);
     }
@@ -131,27 +195,22 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         (lamps.overs, lamps.over) = (reading.overs, true);
     }
 
-    // The OVER lamp sits where a pedal's lamp would.
-    let over = Rect::from_center_size(
-        rect.right_top() + Vec2::new(-34.0, 19.0),
-        Vec2::new(56.0, 26.0),
-    );
     let response = ui.interact(over, ui.id().with("over-lamp"), Sense::click());
     if response.clicked() {
         lamps.over = false;
     }
     led(
         ui,
-        over.left_center() + Vec2::new(10.0, 0.0),
-        5.5,
+        over.left_center() + Vec2::new(9.0, 0.0),
+        5.0,
         lamps.over,
         roles().lamp_peak,
     );
     ui.painter().text(
-        over.left_center() + Vec2::new(22.0, 0.0),
+        over.left_center() + Vec2::new(20.0, 0.0),
         Align2::LEFT_CENTER,
         "OVER",
-        FontId::proportional(11.0),
+        FontId::proportional(10.5),
         roles().legend,
     );
     if response.has_focus() {
@@ -162,7 +221,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
             egui::StrokeKind::Outside,
         );
     }
-    named(&response, egui::WidgetType::Button, "Clear OVER");
+    named(&response, egui::WidgetType::Button, name);
     let state = if lamps.over {
         "OVER: detected."
     } else {
@@ -174,9 +233,12 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         "{state} Lights when the output's true peak passes {OVER_DBTP:.0} dBTP, and stays lit \
          until you click it."
     ));
+}
 
-    let rows: [(&str, f32, &str); 4] = [
+fn output_readouts(ui: &egui::Ui, rect: Rect, reading: &MeterReading, live: bool) {
+    let rows: [(&str, &str, f32, &str); 4] = [
         (
+            "Mom",
             "Momentary",
             if live {
                 reading.momentary
@@ -186,6 +248,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
             "LUFS",
         ),
         (
+            "Short",
             "Short-term",
             if live {
                 reading.short_term
@@ -194,26 +257,27 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
             },
             "LUFS",
         ),
-        ("Integrated", reading.integrated, "LUFS"),
-        ("True peak", reading.true_peak_max, "dBTP"),
+        ("Integ", "Integrated", reading.integrated, "LUFS"),
+        ("Peak", "True peak", reading.true_peak_max, "dBTP"),
     ];
-    for (index, (label, value, _)) in rows.iter().enumerate() {
-        let y = rect.top() + 56.0 + index as f32 * 28.0;
+    let compact_well = Vec2::new(50.0, 17.0);
+    for (index, (short_label, _, value, _)) in rows.iter().enumerate() {
+        let y = rect.top() + 36.0 + index as f32 * 20.0;
         ui.painter().text(
-            Pos2::new(rect.left() + 30.0, y),
+            Pos2::new(rect.left() + 26.0, y),
             Align2::LEFT_CENTER,
-            *label,
-            FontId::proportional(11.5),
+            *short_label,
+            FontId::proportional(11.0),
             roles().legend,
         );
-        let well = Rect::from_center_size(Pos2::new(rect.right() - 42.0, y), WELL);
+        let well = Rect::from_center_size(Pos2::new(rect.right() - 33.0, y), compact_well);
         controls::well(ui, well);
         let hot = index == 3 && *value > OVER_DBTP;
         ui.painter().text(
             well.center(),
             Align2::CENTER_CENTER,
             show_level(*value),
-            FontId::proportional(13.0),
+            FontId::proportional(11.5),
             if hot {
                 roles().lamp_peak
             } else {
@@ -223,15 +287,15 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
     }
     let summary = rows
         .iter()
-        .map(|(label, value, unit)| {
+        .map(|(_, label, value, unit)| {
             format!("{} {} {unit}", label.to_lowercase(), show_level(*value))
         })
         .collect::<Vec<_>>()
         .join(", ");
     let readings = ui.interact(
         Rect::from_min_max(
-            Pos2::new(rect.left() + 26.0, rect.top() + 44.0),
-            Pos2::new(rect.right() - 8.0, rect.top() + 152.0),
+            Pos2::new(rect.left() + 24.0, rect.top() + 26.0),
+            Pos2::new(rect.right() - 6.0, rect.top() + 106.0),
         ),
         ui.id().with("output-loudness"),
         Sense::hover(),
@@ -245,25 +309,20 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         "Momentary and short-term loudness follow the last 400 ms and 3 s. Integrated loudness \
          and the true peak cover the playback so far.",
     );
+}
 
-    // Bars: loudness from -36 to 0 LUFS with the -14 LUFS band, true peak
-    // from -24 to 0 dBTP with the -1 dBTP line.
-    let left = rect.left() + 30.0;
-    let right = rect.right() - 14.0;
-    let loudness = Rect::from_min_max(
-        Pos2::new(left, rect.top() + 178.0),
-        Pos2::new(right, rect.top() + 192.0),
-    );
-    let at = |bar: Rect, low: f32, value: f32| {
-        bar.left() + bar.width() * ((value - low) / -low).clamp(0.0, 1.0)
-    };
+fn at(bar: Rect, low: f32, value: f32) -> f32 {
+    bar.left() + bar.width() * ((value - low) / -low).clamp(0.0, 1.0)
+}
+
+fn loudness_bar(ui: &egui::Ui, loudness: Rect, reading: &MeterReading, live: bool) {
     bar(ui, loudness);
     if live && reading.momentary.is_finite() {
         let fill = Rect::from_min_max(
-            loudness.min + Vec2::new(2.0, 3.0),
+            loudness.min + Vec2::new(2.0, 2.5),
             Pos2::new(
                 at(loudness, -36.0, reading.momentary),
-                loudness.bottom() - 3.0,
+                loudness.bottom() - 2.5,
             ),
         );
         ui.painter()
@@ -286,8 +345,8 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         let x = at(loudness, -36.0, reading.short_term);
         ui.painter().add(egui::Shape::convex_polygon(
             vec![
-                Pos2::new(x - 4.0, loudness.bottom() + 6.0),
-                Pos2::new(x + 4.0, loudness.bottom() + 6.0),
+                Pos2::new(x - 3.5, loudness.bottom() + 5.0),
+                Pos2::new(x + 3.5, loudness.bottom() + 5.0),
                 Pos2::new(x, loudness.bottom()),
             ],
             controls::print_color(ui),
@@ -305,16 +364,14 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         ],
         -36.0,
     );
+}
 
-    let peak = Rect::from_min_max(
-        Pos2::new(left, rect.top() + 222.0),
-        Pos2::new(right, rect.top() + 232.0),
-    );
+fn peak_bar(ui: &egui::Ui, peak: Rect, reading: &MeterReading, live: bool) {
     bar(ui, peak);
     if live && reading.true_peak.is_finite() {
         let fill = Rect::from_min_max(
-            peak.min + Vec2::new(2.0, 2.5),
-            Pos2::new(at(peak, -24.0, reading.true_peak), peak.bottom() - 2.5),
+            peak.min + Vec2::new(2.0, 2.0),
+            Pos2::new(at(peak, -24.0, reading.true_peak), peak.bottom() - 2.0),
         );
         ui.painter()
             .rect_filled(fill, 1.0, roles().legend.gamma_multiply(0.85));
@@ -332,8 +389,8 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
     let line = at(peak, -24.0, OVER_DBTP);
     ui.painter().line_segment(
         [
-            Pos2::new(line, peak.top() - 3.0),
-            Pos2::new(line, peak.bottom() + 3.0),
+            Pos2::new(line, peak.top() - 2.5),
+            Pos2::new(line, peak.bottom() + 2.5),
         ],
         Stroke::new(2.0_f32, roles().lamp_peak),
     );
@@ -343,11 +400,6 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         &[(-24.0, "-24"), (-12.0, "-12"), (-1.0, "-1 dBTP")],
         -24.0,
     );
-
-    // The socket at the left edge takes the last pedal's output.
-    let socket = Pos2::new(rect.left() + 12.0, rect.top() - PEDAL_TOP + SIGNAL_Y);
-    cable(ui, rect.left() - 1.0, socket.x, socket.y, [false, false]);
-    jack(ui, socket);
 }
 
 /// A meter's dark track.
@@ -397,7 +449,7 @@ fn scale(ui: &egui::Ui, bar: Rect, marks: &[(f32, &str)], low: f32) {
 }
 
 /// A level as the meters print it.
-fn show_level(value: f32) -> String {
+pub(super) fn show_level(value: f32) -> String {
     if value.is_finite() {
         format!("{:.1}", value + 0.0)
     } else {
@@ -418,8 +470,8 @@ pub(super) fn vu_position(vu: f32) -> f32 {
 fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
     let painter = ui.painter().with_clip_rect(face.intersect(ui.clip_rect()));
     painter.rect_filled(face, 4.0, roles().meter_face);
-    let pivot = Pos2::new(face.center().x, face.bottom() + 22.0);
-    let radius = face.height() + 4.0;
+    let pivot = Pos2::new(face.center().x, face.bottom() + 16.0);
+    let radius = face.height() + 2.0;
     let point = |position: f32, reach: f32| {
         let angle = (-40.0 + 80.0 * position).to_radians();
         pivot + Vec2::new(angle.sin(), -angle.cos()) * reach
@@ -457,19 +509,19 @@ fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
         );
         if let Some(label) = label {
             painter.text(
-                point(position, radius - 17.0),
+                point(position, radius - 14.0),
                 Align2::CENTER_CENTER,
                 label,
-                FontId::proportional(9.5),
+                FontId::proportional(8.5),
                 roles().ink,
             );
         }
     }
     painter.text(
-        Pos2::new(face.center().x, face.bottom() - 11.0),
+        Pos2::new(face.center().x, face.bottom() - 6.5),
         Align2::CENTER_CENTER,
         "VU",
-        FontId::proportional(11.0),
+        FontId::proportional(9.0),
         roles().ink,
     );
     painter.line_segment(

@@ -32,22 +32,22 @@ pub struct MasterProcessor {
     unpublished: usize,
 }
 impl MasterProcessor {
-    /// Playback and export start with the Booster compressor's smoothed
-    /// controls at their targets, every mastering pedal at its settings,
-    /// and every other state cleared. The original starts the smoothed
-    /// controls at a fixed value when the library loads and never resets
-    /// them; here each playback starts as a settled original would.
+    /// Construct the offline export processor at 8x FIR + ADAA2 quality.
     pub fn new(chain: &MasterChain) -> Self {
-        Self::with_quality(chain, crate::playback_quality::Oversampling::FourX)
+        Self::from_board(chain, Board::offline())
     }
 
-    /// Construct playback saturation at an explicit quality. Exports use `new`.
+    /// Construct live playback saturation at an explicit oversampling quality.
     pub fn with_quality(
         chain: &MasterChain,
         quality: crate::playback_quality::Oversampling,
     ) -> Self {
+        Self::from_board(chain, Board::with_quality(quality))
+    }
+
+    fn from_board(chain: &MasterChain, board: Board) -> Self {
         dsp::prepare_tables();
-        let mut board = Box::new(Board::with_quality(quality));
+        let mut board = Box::new(board);
         board.apply(chain);
         board.settle();
         Self {
@@ -84,11 +84,7 @@ impl MasterProcessor {
     }
     /// The frames by which the output follows the input.
     pub fn latency(&self) -> usize {
-        if self.board.live {
-            LIVE_LATENCY
-        } else {
-            self.board.chain.latency()
-        }
+        self.board.latency()
     }
     fn update(&mut self, chain: &MasterChain) {
         self.trim.set(chain.trim_gain());

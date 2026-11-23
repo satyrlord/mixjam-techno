@@ -20,6 +20,41 @@ pub(in crate::mixjam) fn parse(bytes: &[u8]) -> Result<Project, String> {
         .into_project()
 }
 
+fn has_v28_master_keys(master: &serde_json::Value) -> bool {
+    let comp_has = master.get("busCompressor").is_some_and(|c| {
+        ["scHpfHz", "mix", "makeupDb"]
+            .into_iter()
+            .any(|k| c.get(k).is_some())
+    });
+    let lim_has = master
+        .get("limiter")
+        .is_some_and(|l| l.get("style").is_some());
+    comp_has || lim_has
+}
+
+fn check_master_record(version: u32, master: Option<&Saved<MasterChain>>) -> Result<(), String> {
+    let Some(master) = master.filter(|_| version >= 11) else {
+        return Ok(());
+    };
+    let json = master.json();
+    let fields = json
+        .as_object()
+        .ok_or("The master pedalboard must be a JSON object.")?;
+    // Serde accepts positional arrays for structs, which can hide newer
+    // fields from the checks of named keys.
+    if fields.iter().any(|(name, value)| {
+        !matches!(name.as_str(), "bypass" | "trim" | "order") && !value.is_object()
+    }) {
+        return Err("The master pedals must be JSON objects.".into());
+    }
+    if version < 28 && has_v28_master_keys(&json) {
+        return Err(format!(
+            "Version {version} songs cannot contain v28 master parameters."
+        ));
+    }
+    Ok(())
+}
+
 impl Document {
     pub(super) fn into_project(self) -> Result<Project, String> {
         if !(8..=FORMAT_VERSION).contains(&self.format_version) {
@@ -78,6 +113,7 @@ impl Document {
                 self.format_version
             ));
         }
+        check_master_record(self.format_version, self.master.as_ref())?;
         let invalid =
             |error: serde_json::Error| format!("The master pedalboard is invalid: {error}");
         let master = match (self.format_version, self.master) {

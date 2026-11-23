@@ -608,3 +608,109 @@ fn version_12_to_15_boards_keep_their_earlier_booster_keys() {
         "This MixJam format version is not supported."
     );
 }
+
+#[test]
+fn version_28_master_fields_round_trip_migrate_and_reject_in_earlier_versions() {
+    let mut base = project();
+    base.master.bus_compressor.sc_hpf_hz = 110.0;
+    base.master.bus_compressor.mix = 65.0;
+    base.master.bus_compressor.makeup_db = 2.5;
+    base.master.limiter.style = crate::master::LimiterStyle::Modern;
+
+    let doc = serde_json::to_value(Document::new(&base, timestamp(0), timestamp(0))).unwrap();
+    assert_eq!(doc["formatVersion"], 28);
+    let reopened = parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert_eq!(reopened.master, base.master);
+
+    let mut legacy = doc.clone();
+    legacy["formatVersion"] = 27.into();
+    let mut expected = base.clone();
+    before_version_28(&mut legacy, &mut expected);
+    let migrated = parse(&serde_json::to_vec(&legacy).unwrap()).unwrap();
+    assert_eq!(migrated.master, expected.master);
+
+    for (pedal, key, val) in [
+        ("busCompressor", "scHpfHz", serde_json::json!(20.0)),
+        ("busCompressor", "mix", serde_json::json!(100.0)),
+        ("busCompressor", "makeupDb", serde_json::json!(0.0)),
+        ("limiter", "style", serde_json::json!("transparent")),
+    ] {
+        let mut rejected = legacy.clone();
+        rejected["master"][pedal][key] = val;
+        let err = parse(&serde_json::to_vec(&rejected).unwrap()).unwrap_err();
+        assert_eq!(
+            err,
+            "Version 27 songs cannot contain v28 master parameters."
+        );
+    }
+
+    for (mut chain, label) in [
+        (base.master, "sc_hpf low"),
+        (base.master, "sc_hpf high"),
+        (base.master, "mix nan"),
+        (base.master, "makeup high"),
+    ] {
+        match label {
+            "sc_hpf low" => chain.bus_compressor.sc_hpf_hz = 19.9,
+            "sc_hpf high" => chain.bus_compressor.sc_hpf_hz = 251.0,
+            "mix nan" => chain.bus_compressor.mix = f32::NAN,
+            _ => chain.bus_compressor.makeup_db = 12.1,
+        }
+        assert!(chain.validate().is_err(), "{label}");
+    }
+}
+
+#[test]
+fn saved_master_and_pedals_require_named_fields() {
+    use serde_json::json;
+
+    let document = serde_json::to_value(Document::new(
+        &Project::default(),
+        timestamp(0),
+        timestamp(0),
+    ))
+    .unwrap();
+    let master = &document["master"];
+    let mut positional_board = vec![
+        json!(false),
+        master["trim"].clone(),
+        master["order"].clone(),
+    ];
+    positional_board.extend(
+        master["order"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| master[name.as_str().unwrap()].clone()),
+    );
+    for version in [16, 27, 28] {
+        for (path, value, error) in [
+            (
+                "/master/boosterCompressor",
+                json!([true, 500, 500, 500, 2]),
+                "The master pedals must be JSON objects.",
+            ),
+            (
+                "/master/busCompressor",
+                json!([true, -16, 2, 10, 300, 0, 170, 44, 3]),
+                "The master pedals must be JSON objects.",
+            ),
+            (
+                "/master/limiter",
+                json!([true, 4, -1, 0, "punchy"]),
+                "The master pedals must be JSON objects.",
+            ),
+            (
+                "/master",
+                json!(positional_board),
+                "The master pedalboard must be a JSON object.",
+            ),
+        ] {
+            let mut malformed = document.clone();
+            malformed["formatVersion"] = json!(version);
+            *malformed.pointer_mut(path).unwrap() = value;
+            let error_found = parse(&serde_json::to_vec(&malformed).unwrap()).unwrap_err();
+            assert_eq!(error_found, error, "Version {version} at {path}");
+        }
+    }
+}
