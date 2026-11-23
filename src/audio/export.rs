@@ -68,7 +68,9 @@ impl Mix {
     }
 
     fn check_export_quality(&self) -> Result<(), String> {
-        if self.quality != crate::playback_quality::PlaybackQuality::FULL {
+        if self.quality != crate::playback_quality::PlaybackQuality::FULL
+            || self.render_quality != crate::fx::RenderQuality::Offline
+        {
             return Err("Prepare the song at full quality before export.".into());
         }
         Ok(())

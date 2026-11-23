@@ -21,40 +21,31 @@ impl Mix {
         samples: &HashMap<SourceKey, Arc<Pcm>>,
         source_tempos: &HashMap<u32, f64>,
         quality: crate::playback_quality::PlaybackQuality,
+        render_quality: crate::fx::RenderQuality,
     ) -> Result<Self, String> {
-        let rate = Self::SAMPLE_RATE;
-        let frames_per_tick = project.frames_per_tick(rate);
+        let frames_per_tick = project.frames_per_tick(Self::SAMPLE_RATE);
         let frames = (project.end_tick() as f64 * frames_per_tick).ceil() as u64;
-        let missing = missing_ids(project);
-        // Each sample's playback tempo, found once for all its clips.
-        let mut playback_tempos: HashMap<u32, f64> = HashMap::new();
-        let mut voices = Vec::new();
-        let mut chains = Vec::new();
-        let mut chain_index = [None; crate::engine::TRACK_COUNT];
-        // Each track's Pitch lane, resolved once for all its clips.
-        let mut varispeeds: [Option<Option<Arc<crate::automation::Varispeed>>>;
-            crate::engine::TRACK_COUNT] = std::array::from_fn(|_| None);
-        let any_solo = project.any_solo();
-        // A ducker works when its own track sounds; its key may be silent.
-        let ducking = |index: usize| {
-            let track = &project.tracks[index];
-            track.ducker.on && track.sounds(any_solo)
+        let mut sources = VoiceSources {
+            project,
+            source_tempos,
+            playback_tempos: HashMap::new(),
+            varispeeds: std::array::from_fn(|_| None),
+            high_quality: quality.samples == crate::playback_quality::SampleQuality::High,
+            frames_per_tick,
+            frames,
         };
-        let mut keys: Vec<TrackChain> = Vec::new();
+        let missing = missing_ids(project);
+        let any_solo = project.any_solo();
         let side_keys = project.side_keys();
-        let ducker_keys = (0..crate::engine::TRACK_COUNT)
-            .filter(|&index| ducking(index))
-            .map(|index| project.tracks[index].ducker.key_track());
-        for key in ducker_keys.chain(side_keys.iter().copied()) {
-            if !keys.iter().any(|chain| chain.track == key) {
-                keys.push(TrackChain::new(
-                    key,
-                    &project.tracks[key],
-                    frames_per_tick,
-                    quality,
-                ));
-            }
-        }
+        let side = !side_keys.is_empty();
+        let mut tracks = TrackChains::new(
+            project,
+            any_solo,
+            &side_keys,
+            frames_per_tick,
+            quality,
+            render_quality,
+        );
         for clip in &project.clips {
             if missing.contains(&clip.sample_id) {
                 continue;
@@ -63,144 +54,29 @@ impl Mix {
                 .get(&(clip.sample_id, clip.pitch_cents))
                 .ok_or_else(|| format!("Sample {} is missing.", clip.sample_id))?;
             let track = &project.tracks[clip.track];
-            if !track.sounds(any_solo) {
-                continue;
+            if track.sounds(any_solo) {
+                tracks.add(track, sources.voice(clip, track, source)?);
             }
-            let start = (clip.start_tick as f64 * frames_per_tick).round() as u64;
-            let end = (((clip.start_tick + clip.length_ticks) as f64 * frames_per_tick).round()
-                as u64)
-                .min(frames);
-            let source_bpm = source_tempos
-                .get(&clip.sample_id)
-                .copied()
-                .unwrap_or(SOURCE_BPM);
-            if !source_bpm.is_finite() || source_bpm <= 0.0 {
-                return Err("A sample has an invalid source tempo.".into());
-            }
-            let playback_bpm = *playback_tempos
-                .entry(clip.sample_id)
-                .or_insert_with(|| project.sample_playback_bpm(clip.sample_id, source_bpm));
-            let step = source.sample_rate as f64 / rate as f64 * project.bpm / playback_bpm;
-            if !step.is_finite() || step <= 0.0 {
-                return Err("The source tempo cannot be represented for sample playback.".into());
-            }
-            let frames_of = |ticks: u32| (f64::from(ticks) * frames_per_tick).round() as u64;
-            let source_left =
-                (source.frames() as f64 - f64::from(clip.offset_frames)).max(0.0) / step;
-            let varispeed = varispeeds[clip.track]
-                .get_or_insert_with(|| {
-                    crate::automation::Varispeed::new(&track.automation.pitch, frames_per_tick)
-                        .map(Arc::new)
-                })
-                .clone();
-            // Under a Pitch lane the source runs out where the lane's clock
-            // has run its length, so the fade out ends there.
-            let source_end = match &varispeed {
-                Some(clock) => clock.reach(start, source_left, end),
-                None => start.saturating_add(source_left.ceil() as u64).min(end),
-            };
-            let band_limited = quality.samples == crate::playback_quality::SampleQuality::High
-                && (step != 1.0 || varispeed.is_some());
-            if band_limited {
-                let maximum_cents = track
-                    .automation
-                    .pitch
-                    .iter()
-                    .map(|point| point.value)
-                    .fold(0.0_f32, f32::max);
-                let maximum_speed = step * (f64::from(maximum_cents) / 1200.0).exp2();
-                if !resample::supports_speed(maximum_speed) {
-                    return Err(format!(
-                        "Sample {} cannot be read at this speed with High sample quality.",
-                        clip.sample_id
-                    ));
-                }
-                // The kernel's table is ready before playback reads it.
-                resample::prepare();
-            }
-            // Channel enables depend only on the track: resolve them once per clip.
-            let voice = Voice {
-                track: clip.track,
-                source: Arc::clone(source),
-                start,
-                end,
-                offset_frames: clip.offset_frames,
-                step,
-                channel_gains: [
-                    track.left_enabled.then_some(clip.gain),
-                    track.right_enabled.then_some(clip.gain),
-                ],
-                sends: track.sends,
-                fade_in: frames_of(clip.fades.fade_in.ticks),
-                fade_out: frames_of(clip.fades.fade_out.ticks),
-                curves: [clip.fades.fade_in.curve, clip.fades.fade_out.curve],
-                // A reversed clip's sound ends with the clip: a source shorter
-                // than the clip leaves silence at its start instead.
-                sound_end: if clip.reverse {
-                    end
-                } else {
-                    end.min(source_end)
-                },
-                reverse: clip.reverse,
-                varispeed,
-                band_limited,
-            };
-            let keyed = keys.iter().position(|chain| chain.track == clip.track);
-            if let Some(slot) = keyed {
-                keys[slot].voices.push(voice.clone());
-            }
-            // A track without an active processor or automation mixes its
-            // voices straight into the sum. With the compressor off, its
-            // Compression lane has no effect on this route.
-            if track.automation.is_empty_except_compression()
-                && !track.eq.on
-                && !track.drive.on
-                && !track.compressor.on
-                && !track.widens()
-                && !ducking(clip.track)
-                && keyed.is_none()
-            {
-                voices.push(voice);
-                continue;
-            }
-            let index = *chain_index[clip.track].get_or_insert_with(|| {
-                let mut chain = TrackChain::new(clip.track, track, frames_per_tick, quality);
-                if ducking(clip.track) {
-                    let key = track.ducker.key_track();
-                    let slot = keys.iter().position(|chain| chain.track == key);
-                    chain.ducker = slot
-                        .map(|slot| (crate::ducker::Run::new(&track.ducker, rate as f32), slot));
-                }
-                chains.push(chain);
-                chains.len() - 1
-            });
-            chains[index].voices.push(voice);
         }
+        let drives = tracks.assign_drives();
+        let TrackChains {
+            voices,
+            chains,
+            keys,
+            ..
+        } = tracks;
         let fed = std::array::from_fn(|bus| {
             voices.iter().any(|voice| voice.sends[bus] > 0.0)
                 || chains.iter().any(|chain| chain.feeds(bus))
         });
-        // Each drive, a key chain's too, keeps a history of its own.
-        let mut drives = 0;
-        for (_, slot) in keys
-            .iter_mut()
-            .chain(&mut chains)
-            .filter_map(|chain| chain.drive.as_mut())
-        {
-            *slot = drives;
-            drives += 1;
-        }
-        if drives > 0 {
-            // The oversampling tables are ready before playback reads them.
-            crate::master::dsp::prepare_tables();
-        }
         Ok(Self {
             quality,
+            render_quality,
             frames,
             voices,
             chains,
             key_tracks: keys.iter().map(|chain| chain.track).collect(),
-            side: !side_keys.is_empty(),
+            side,
             keys,
             levels: track_levels(project),
             automated_pan: std::array::from_fn(|track| {
@@ -216,6 +92,236 @@ impl Mix {
     }
 }
 
+// Supplies the tempo and Pitch lane shared by a track's voices.
+struct VoiceSources<'a> {
+    project: &'a Project,
+    source_tempos: &'a HashMap<u32, f64>,
+    playback_tempos: HashMap<u32, f64>,
+    varispeeds: [Option<Option<Arc<crate::automation::Varispeed>>>; crate::engine::TRACK_COUNT],
+    high_quality: bool,
+    frames_per_tick: f64,
+    frames: u64,
+}
+
+impl VoiceSources<'_> {
+    fn voice(
+        &mut self,
+        clip: &crate::engine::Clip,
+        track: &crate::engine::Track,
+        source: &Arc<Pcm>,
+    ) -> Result<Voice, String> {
+        let start = (clip.start_tick as f64 * self.frames_per_tick).round() as u64;
+        let end = (((clip.start_tick + clip.length_ticks) as f64 * self.frames_per_tick).round()
+            as u64)
+            .min(self.frames);
+        let step = self.step(source, clip.sample_id)?;
+        let frames_of = |ticks: u32| (f64::from(ticks) * self.frames_per_tick).round() as u64;
+        let source_left = (source.frames() as f64 - f64::from(clip.offset_frames)).max(0.0) / step;
+        let varispeed = self.varispeeds[clip.track]
+            .get_or_insert_with(|| {
+                crate::automation::Varispeed::new(&track.automation.pitch, self.frames_per_tick)
+                    .map(Arc::new)
+            })
+            .clone();
+        // Under a Pitch lane the source runs out where the lane's clock
+        // has run its length, so the fade out ends there.
+        let source_end = match &varispeed {
+            Some(clock) => clock.reach(start, source_left, end),
+            None => start.saturating_add(source_left.ceil() as u64).min(end),
+        };
+        let band_limited = self.high_quality && (step != 1.0 || varispeed.is_some());
+        if band_limited {
+            check_read_speed(clip, track, step)?;
+            // The kernel's table is ready before playback reads it.
+            resample::prepare();
+        }
+        // Channel enables depend only on the track: resolve them once per clip.
+        Ok(Voice {
+            track: clip.track,
+            source: Arc::clone(source),
+            start,
+            end,
+            offset_frames: clip.offset_frames,
+            step,
+            channel_gains: [
+                track.left_enabled.then_some(clip.gain),
+                track.right_enabled.then_some(clip.gain),
+            ],
+            sends: track.sends,
+            fade_in: frames_of(clip.fades.fade_in.ticks),
+            fade_out: frames_of(clip.fades.fade_out.ticks),
+            curves: [clip.fades.fade_in.curve, clip.fades.fade_out.curve],
+            // A reversed clip's sound ends with the clip: a source shorter
+            // than the clip leaves silence at its start instead.
+            sound_end: if clip.reverse {
+                end
+            } else {
+                end.min(source_end)
+            },
+            reverse: clip.reverse,
+            varispeed,
+            band_limited,
+        })
+    }
+
+    fn step(&mut self, source: &Pcm, sample_id: u32) -> Result<f64, String> {
+        let source_bpm = self
+            .source_tempos
+            .get(&sample_id)
+            .copied()
+            .unwrap_or(SOURCE_BPM);
+        if !source_bpm.is_finite() || source_bpm <= 0.0 {
+            return Err("A sample has an invalid source tempo.".into());
+        }
+        let playback_bpm = *self
+            .playback_tempos
+            .entry(sample_id)
+            .or_insert_with(|| self.project.sample_playback_bpm(sample_id, source_bpm));
+        let step =
+            source.sample_rate as f64 / Mix::SAMPLE_RATE as f64 * self.project.bpm / playback_bpm;
+        if !step.is_finite() || step <= 0.0 {
+            return Err("The source tempo cannot be represented for sample playback.".into());
+        }
+        Ok(step)
+    }
+}
+
+fn check_read_speed(
+    clip: &crate::engine::Clip,
+    track: &crate::engine::Track,
+    step: f64,
+) -> Result<(), String> {
+    let maximum_cents = track
+        .automation
+        .pitch
+        .iter()
+        .map(|point| point.value)
+        .fold(0.0_f32, f32::max);
+    let maximum_speed = step * (f64::from(maximum_cents) / 1200.0).exp2();
+    if !resample::supports_speed(maximum_speed) {
+        return Err(format!(
+            "Sample {} cannot be read at this speed with High sample quality.",
+            clip.sample_id
+        ));
+    }
+    Ok(())
+}
+
+struct TrackChains {
+    voices: Vec<Voice>,
+    chains: Vec<TrackChain>,
+    keys: Vec<TrackChain>,
+    chain_index: [Option<usize>; crate::engine::TRACK_COUNT],
+    frames_per_tick: f64,
+    quality: crate::playback_quality::PlaybackQuality,
+    render_quality: crate::fx::RenderQuality,
+}
+
+impl TrackChains {
+    fn new(
+        project: &Project,
+        any_solo: bool,
+        side_keys: &[usize],
+        frames_per_tick: f64,
+        quality: crate::playback_quality::PlaybackQuality,
+        render_quality: crate::fx::RenderQuality,
+    ) -> Self {
+        let mut keys: Vec<TrackChain> = Vec::new();
+        // A ducker works when its own track sounds; its key may be silent.
+        let ducker_keys = project
+            .tracks
+            .iter()
+            .filter(|track| track.ducker.on && track.sounds(any_solo))
+            .map(|track| track.ducker.key_track());
+        for key in ducker_keys.chain(side_keys.iter().copied()) {
+            if !keys.iter().any(|chain| chain.track == key) {
+                keys.push(TrackChain::new(
+                    key,
+                    &project.tracks[key],
+                    frames_per_tick,
+                    quality,
+                    render_quality,
+                ));
+            }
+        }
+        Self {
+            voices: Vec::new(),
+            chains: Vec::new(),
+            keys,
+            chain_index: [None; crate::engine::TRACK_COUNT],
+            frames_per_tick,
+            quality,
+            render_quality,
+        }
+    }
+
+    fn add(&mut self, track: &crate::engine::Track, voice: Voice) {
+        let track_index = voice.track;
+        let keyed = self
+            .keys
+            .iter()
+            .position(|chain| chain.track == track_index);
+        if let Some(slot) = keyed {
+            self.keys[slot].voices.push(voice.clone());
+        }
+        if !needs_chain(track, keyed.is_some()) {
+            self.voices.push(voice);
+            return;
+        }
+        let index = *self.chain_index[track_index].get_or_insert_with(|| {
+            let mut chain = TrackChain::new(
+                track_index,
+                track,
+                self.frames_per_tick,
+                self.quality,
+                self.render_quality,
+            );
+            if track.ducker.on {
+                let key = track.ducker.key_track();
+                let slot = self.keys.iter().position(|chain| chain.track == key);
+                chain.ducker = slot.map(|slot| {
+                    (
+                        crate::ducker::Run::new(&track.ducker, Mix::SAMPLE_RATE as f32),
+                        slot,
+                    )
+                });
+            }
+            self.chains.push(chain);
+            self.chains.len() - 1
+        });
+        self.chains[index].voices.push(voice);
+    }
+
+    fn assign_drives(&mut self) -> usize {
+        // Key chains and audible chains each keep their own history.
+        let mut count = 0;
+        for (_, slot) in self
+            .keys
+            .iter_mut()
+            .chain(&mut self.chains)
+            .filter_map(|chain| chain.drive.as_mut())
+        {
+            *slot = count;
+            count += 1;
+        }
+        if count > 0 {
+            crate::master::dsp::prepare_tables();
+        }
+        count
+    }
+}
+
+fn needs_chain(track: &crate::engine::Track, is_key: bool) -> bool {
+    // With the compressor off, its Compression lane does not affect the track.
+    is_key
+        || track.eq.on
+        || track.drive.on
+        || track.compressor.on
+        || track.widens()
+        || track.ducker.on
+        || !track.automation.is_empty_except_compression()
+}
+
 /// Render a whole project in memory. Use `prepare_project` for a song of any length.
 pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, String> {
     prepare_project(project, library)?.to_pcm(&project.master, &project.fx)
@@ -223,10 +329,12 @@ pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, Strin
 
 /// Decode a project's sources and prepare its mix.
 pub fn prepare_project(project: &Project, library: &Library) -> Result<Mix, String> {
-    prepare_project_with_quality(
+    prepare_project_reusing_inner(
         project,
         library,
+        &mut HashMap::new(),
         crate::playback_quality::PlaybackQuality::FULL,
+        crate::fx::RenderQuality::Offline,
     )
 }
 
@@ -371,11 +479,12 @@ pub(crate) fn prepare_project_reusing(
     library: &Library,
     decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
 ) -> Result<Mix, String> {
-    prepare_project_reusing_with_quality(
+    prepare_project_reusing_inner(
         project,
         library,
         decoded,
         crate::playback_quality::PlaybackQuality::FULL,
+        crate::fx::RenderQuality::Offline,
     )
 }
 
@@ -384,6 +493,22 @@ pub(crate) fn prepare_project_reusing_with_quality(
     library: &Library,
     decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
     quality: crate::playback_quality::PlaybackQuality,
+) -> Result<Mix, String> {
+    prepare_project_reusing_inner(
+        project,
+        library,
+        decoded,
+        quality,
+        crate::fx::RenderQuality::Live,
+    )
+}
+
+fn prepare_project_reusing_inner(
+    project: &Project,
+    library: &Library,
+    decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
+    quality: crate::playback_quality::PlaybackQuality,
+    render_quality: crate::fx::RenderQuality,
 ) -> Result<Mix, String> {
     project.validate()?;
     load_sources(project, decoded, |id| library.read_pcm(id))?;
@@ -399,7 +524,7 @@ pub(crate) fn prepare_project_reusing_with_quality(
             )
         })
         .collect();
-    Mix::new(project, decoded, &source_tempos, quality)
+    Mix::new(project, decoded, &source_tempos, quality, render_quality)
 }
 
 #[cfg(test)]
@@ -407,10 +532,11 @@ pub(crate) fn mix_with_samples(
     project: &Project,
     samples: &HashMap<u32, Pcm>,
 ) -> Result<Mix, String> {
-    mix_with_samples_quality(
+    mix_with_samples_inner(
         project,
         samples,
         crate::playback_quality::PlaybackQuality::FULL,
+        crate::fx::RenderQuality::Offline,
     )
 }
 
@@ -419,6 +545,16 @@ pub(super) fn mix_with_samples_quality(
     project: &Project,
     samples: &HashMap<u32, Pcm>,
     quality: crate::playback_quality::PlaybackQuality,
+) -> Result<Mix, String> {
+    mix_with_samples_inner(project, samples, quality, crate::fx::RenderQuality::Live)
+}
+
+#[cfg(test)]
+fn mix_with_samples_inner(
+    project: &Project,
+    samples: &HashMap<u32, Pcm>,
+    quality: crate::playback_quality::PlaybackQuality,
+    render_quality: crate::fx::RenderQuality,
 ) -> Result<Mix, String> {
     let source_tempos = project
         .imported_samples
@@ -433,7 +569,7 @@ pub(super) fn mix_with_samples_quality(
             .ok_or_else(|| format!("Sample {id} is missing."))
     })?;
     project.validate()?;
-    Mix::new(project, &decoded, &source_tempos, quality)
+    Mix::new(project, &decoded, &source_tempos, quality, render_quality)
 }
 
 #[cfg(test)]

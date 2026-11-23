@@ -469,6 +469,39 @@ fn playback_compressors_carry_on_only_where_playback_continues() {
 }
 
 #[test]
+fn playback_carries_compressor_sidechain_filter_history() {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    editor.place(1, 0, 0, 256).unwrap();
+    let mut project = editor.project().clone();
+    project.tracks[0].compressor = crate::compressor::Compressor {
+        on: true,
+        threshold: -50.0,
+        attack: 0.1,
+        release: 10.0,
+        sc_hpf_hz: 120.0,
+        ..Default::default()
+    };
+    let mix = mix_with_samples(&project, &HashMap::from([(1, steady(9000))])).unwrap();
+    let live = MasterControl::new(&project.master);
+    let live_state = || RenderState {
+        live: Some(live.clone()),
+        ..RenderState::default()
+    };
+    let mut uninterrupted = live_state();
+    mix.read_block(0, &mut [0.0; 16_384], None, &mut uninterrupted);
+    let mut resumed = [0.0; 512];
+    mix.read_block(8192, &mut resumed, None, &mut live_state());
+    let mut expected = [0.0; 512];
+    mix.read_block(8192, &mut expected, None, &mut uninterrupted);
+    assert!(
+        resumed
+            .iter()
+            .zip(expected)
+            .all(|(a, b)| (a - b).abs() < 1e-6)
+    );
+}
+
+#[test]
 fn a_compressed_key_carries_its_tracks_history_and_starts_fresh_elsewhere() {
     // Track 3 keys track 1's ducker and is compressed: about 15.75 dB
     // down in bar 1, and untouched in bar 3, where it plays 30 dB lower.

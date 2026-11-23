@@ -1,6 +1,6 @@
 //! The live control: the link between the window and the playback thread.
 use super::{MasterChain, MeterReading, meters};
-use crate::audio::Latest;
+use crate::{audio::Latest, compressor};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering},
@@ -63,6 +63,32 @@ impl FxBusMeterAtomics {
     }
 }
 
+/// Live gain-reduction snapshot of one track's Channel Strip dynamics.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TrackMeterReading {
+    pub compressor_gr_db: f32,
+    pub ducker_gr_db: f32,
+}
+
+struct KeptCompressor {
+    state: [AtomicU64; compressor::State::WORDS],
+    frame: AtomicU64,
+    epoch: AtomicU64,
+}
+
+impl KeptCompressor {
+    fn new() -> Self {
+        let unset = u64::from(f32::NAN.to_bits());
+        Self {
+            state: std::array::from_fn(|index| {
+                AtomicU64::new(if index == 0 { unset | (unset << 32) } else { 0 })
+            }),
+            frame: AtomicU64::new(0),
+            epoch: AtomicU64::new(0),
+        }
+    }
+}
+
 /// The link between the window and playback: settings that playback reads
 /// while it runs, and the meters it measures. An edit stores new settings;
 /// the audio thread takes them at its next block without locking or
@@ -77,6 +103,8 @@ pub struct MasterControl {
     pub(super) meters: meters::Shared,
     returns: Latest<crate::fx::FxBuses>,
     fx_meters: [FxBusMeterAtomics; crate::fx::BUSES],
+    track_meters: [AtomicU64; crate::engine::TRACK_COUNT],
+    track_meter_epoch: AtomicU64,
     fx_solo_mask: AtomicU8,
     tail_clears: [AtomicU64; crate::fx::BUSES],
     /// Each track's signed gain (including master gain) and pan knob packed
@@ -97,7 +125,7 @@ pub struct MasterControl {
     /// source epoch, so
     /// that a new playback start just behind that frame carries on from
     /// it. NaN until a playback stores one. Only the audio thread uses them.
-    compressors: [[AtomicU64; 3]; crate::engine::TRACK_COUNT],
+    compressors: [KeptCompressor; crate::engine::TRACK_COUNT],
     compressor_epoch: AtomicU64,
     compressor_reset: AtomicU64,
     compressor_track_reset: [AtomicU64; crate::engine::TRACK_COUNT],
@@ -109,6 +137,8 @@ impl MasterControl {
             meters: meters::Shared::new(),
             returns: Latest::new(crate::fx::FxBuses::default()),
             fx_meters: std::array::from_fn(|_| FxBusMeterAtomics::new()),
+            track_meters: std::array::from_fn(|_| AtomicU64::new(0)),
+            track_meter_epoch: AtomicU64::new(0),
             fx_solo_mask: AtomicU8::new(0),
             tail_clears: std::array::from_fn(|_| AtomicU64::new(0)),
             gain_and_pan: std::array::from_fn(|_| {
@@ -118,14 +148,7 @@ impl MasterControl {
             master_gain: AtomicU32::new(f32::NAN.to_bits()),
             level_writer: Mutex::new(0),
             level_sequence: AtomicU64::new(0),
-            compressors: std::array::from_fn(|_| {
-                let unset = u64::from(f32::NAN.to_bits());
-                [
-                    AtomicU64::new(unset | (unset << 32)),
-                    AtomicU64::new(0),
-                    AtomicU64::new(0),
-                ]
-            }),
+            compressors: std::array::from_fn(|_| KeptCompressor::new()),
             compressor_epoch: AtomicU64::new(0),
             compressor_reset: AtomicU64::new(0),
             compressor_track_reset: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -213,18 +236,22 @@ impl MasterControl {
         if !self.compressor_valid(track, epoch) {
             return;
         }
-        let [kept, frame, saved_epoch] = &self.compressors[track];
-        frame.store(at, Ordering::Relaxed);
-        saved_epoch.store(epoch, Ordering::Relaxed);
-        kept.store(state.pack(), Ordering::Release);
+        let kept = &self.compressors[track];
+        kept.frame.store(at, Ordering::Relaxed);
+        for (word, value) in kept.state.iter().zip(state.pack()) {
+            word.store(value, Ordering::Relaxed);
+        }
+        kept.epoch.store(epoch, Ordering::Release);
     }
     /// The compressor history that playback last kept for a track, if any,
     /// with the frame after the block that left it.
     pub(crate) fn kept_compressor(&self, track: usize) -> Option<(crate::compressor::State, u64)> {
-        let [kept, frame, saved_epoch] = &self.compressors[track];
-        crate::compressor::State::unpack(kept.load(Ordering::Acquire))
-            .filter(|_| self.compressor_valid(track, saved_epoch.load(Ordering::Relaxed)))
-            .map(|state| (state, frame.load(Ordering::Relaxed)))
+        let kept = &self.compressors[track];
+        if !self.compressor_valid(track, kept.epoch.load(Ordering::Acquire)) {
+            return None;
+        }
+        let words = std::array::from_fn(|index| kept.state[index].load(Ordering::Relaxed));
+        compressor::State::unpack(words).map(|state| (state, kept.frame.load(Ordering::Relaxed)))
     }
     pub fn set_returns(&self, buses: &crate::fx::FxBuses) {
         let active = buses
@@ -264,6 +291,40 @@ impl MasterControl {
     /// Latest live meter readings across all four FX buses.
     pub fn fx_meters(&self) -> [FxBusMeterReading; crate::fx::BUSES] {
         std::array::from_fn(|bus| self.fx_meters[bus].load())
+    }
+    /// Publish reductions for the complete mix, including zero for absent tracks.
+    /// The playback thread is the sole writer. A seek or stop can invalidate its source.
+    pub(crate) fn publish_track_meters(
+        &self,
+        readings: &[TrackMeterReading; crate::engine::TRACK_COUNT],
+        source_epoch: u64,
+    ) {
+        if source_epoch < self.compressor_reset.load(Ordering::Acquire) {
+            return;
+        }
+        for (stored, reading) in self.track_meters.iter().zip(readings) {
+            let compressor = u64::from(reading.compressor_gr_db.to_bits());
+            let ducker = u64::from(reading.ducker_gr_db.to_bits());
+            stored.store(compressor | (ducker << 32), Ordering::Relaxed);
+        }
+        self.track_meter_epoch
+            .store(source_epoch, Ordering::Release);
+    }
+
+    /// Latest live channel-strip gain-reduction reading for `track`.
+    pub fn track_meters(&self, track: usize) -> TrackMeterReading {
+        let Some(stored) = self.track_meters.get(track) else {
+            return TrackMeterReading::default();
+        };
+        let epoch = self.track_meter_epoch.load(Ordering::Acquire);
+        let reading = stored.load(Ordering::Relaxed);
+        if epoch < self.compressor_reset.load(Ordering::Acquire) {
+            return TrackMeterReading::default();
+        }
+        TrackMeterReading {
+            compressor_gr_db: f32::from_bits(reading as u32),
+            ducker_gr_db: f32::from_bits((reading >> 32) as u32),
+        }
     }
     /// Set monitoring solo for one FX bus (runtime only, never saved).
     pub fn set_fx_solo(&self, bus: usize, solo: bool) {

@@ -80,12 +80,22 @@ pub struct TrackView {
     pub automation: crate::automation::Automation,
     /// Whether the track's channel EQ is on.
     pub eq_on: bool,
+    /// The track's channel EQ low/high cut slope.
+    pub eq_cut_slope: crate::eq::CutSlope,
     /// The track's drive: its switch and settings.
     pub drive: crate::drive::Drive,
     /// Whether the track's compressor is on.
     pub compressor_on: bool,
+    /// The track's compressor sidechain high-pass cutoff in Hz.
+    pub compressor_sc_hpf_hz: f32,
     /// The track's stereo width in percent.
     pub width: f32,
+    /// The crossover frequency below which the track sums to mono, in Hz.
+    pub mono_below_hz: f32,
+    /// Filter lane resonance percent.
+    pub filter_resonance: f32,
+    /// Filter lane slope (`12db` or `24db`).
+    pub filter_slope: crate::automation::FilterSlope,
     pub clips: usize,
 }
 

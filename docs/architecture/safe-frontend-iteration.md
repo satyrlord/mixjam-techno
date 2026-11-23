@@ -49,6 +49,9 @@ them:
 - FX monitoring and Deep Edit scopes: `Session::fx_meters`,
   `Session::fx_solo`, `Session::toggle_fx_solo`, `Session::fx_drive_curve`,
   `Session::fx_delay_taps`, and `Session::fx_reverb_profile`.
+- Channel Strip scopes: `application::eq::sample_channel_eq_curve` and
+  `application::drive::sample_drive_curve` give the curves.
+  `Session::track_meters` gives the live compressor and ducker gain reduction.
 - Duckers: `Ducker::set_key` stops a ducker from using its own track as its
   key.
 - Mastering: `application::sample_saturation_curve` and

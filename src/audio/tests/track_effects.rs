@@ -1,6 +1,78 @@
 use super::*;
 
 #[test]
+fn stereo_width_and_bass_mono_keep_a_disabled_output_silent() {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    editor.place(1, 0, 0, 256).unwrap();
+    let mut project = editor.project().clone();
+    // A keyed track takes the chain path even when Width has no effect.
+    project.master.bus_compressor.on = true;
+    project.master.bus_compressor.key = 1;
+    project.tracks[0].right_enabled = false;
+    let samples = HashMap::from([(1, tone(55.0))]);
+    let dry = mix_with_samples(&project, &samples).unwrap();
+    let mut expected = [0.0; 512];
+    dry.read_block(0, &mut expected, None, &mut RenderState::default());
+    assert!(expected.iter().step_by(2).any(|sample| *sample != 0.0));
+
+    for (width, mono_below_hz) in [(0.0, 20.0), (100.0, 120.0), (200.0, 120.0)] {
+        project.tracks[0].width = width;
+        project.tracks[0].mono_below_hz = mono_below_hz;
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let mut output = [0.0; 512];
+        let mut state = RenderState::default();
+        mix.read_block(0, &mut output, None, &mut state);
+        assert_eq!(output, expected);
+        assert_eq!(mix.keys(&state, 256).audio, expected);
+    }
+}
+
+#[test]
+fn track_reduction_meters_follow_the_playing_mix() {
+    use crate::{master::TrackMeterReading, playback_quality::PlaybackQuality};
+
+    let mut editor = crate::engine::Editor::new(Project::default());
+    editor.place(1, 0, 0, 256).unwrap();
+    editor.place(2, 1, 0, 256).unwrap();
+    let mut project = editor.project().clone();
+    project.tracks[0].compressor.on = true;
+    project.tracks[0].compressor.threshold = -40.0;
+    project.tracks[0].ducker.on = true;
+    project.tracks[0].ducker.threshold = -40.0;
+    project.tracks[0].ducker.key = 2;
+    let samples = HashMap::from([(1, steady(4096)), (2, steady(4096))]);
+    let live = MasterControl::new(&project.master);
+    let compressing = mix_with_samples_quality(&project, &samples, PlaybackQuality::FULL).unwrap();
+    let mut output = vec![0.0; 4096];
+    let mut state = RenderState {
+        live: Some(live.clone()),
+        ..Default::default()
+    };
+    compressing.read_block(0, &mut output, None, &mut state);
+    let reduction = live.track_meters(0);
+    assert!(reduction.compressor_gr_db > 0.0, "{reduction:?}");
+    assert!(reduction.ducker_gr_db > 0.0, "{reduction:?}");
+    assert_eq!(live.track_meters(1), TrackMeterReading::default());
+
+    live.reset_compressors();
+    compressing.read_block(2048, &mut output, None, &mut state);
+    assert_eq!(live.track_meters(0), TrackMeterReading::default());
+    state.compressor_epoch = None;
+    compressing.read_block(0, &mut output, None, &mut state);
+    assert!(live.track_meters(0).compressor_gr_db > 0.0);
+
+    project.tracks[0].compressor.on = false;
+    project.tracks[0].ducker.on = false;
+    let replacement = mix_with_samples_quality(&project, &samples, PlaybackQuality::FULL).unwrap();
+    let mut next = RenderState {
+        live: Some(live.clone()),
+        ..Default::default()
+    };
+    replacement.read_block(2048, &mut output, None, &mut next);
+    assert_eq!(live.track_meters(0), TrackMeterReading::default());
+}
+
+#[test]
 fn a_track_whose_eq_is_off_renders_exactly_as_before() {
     let mut editor = crate::engine::Editor::new(Project::default());
     editor.place(1, 0, 0, 256).unwrap();
@@ -69,7 +141,19 @@ fn the_channel_eq_shapes_its_track_before_the_automation() {
         };
     }
     let top = level_db(&solo(&project, 0), frames.clone()) - open[0];
-    assert!((top + 12.0).abs() < 1.5, "12 kHz: {top:.2} dB");
+    assert!(
+        top < -9.5
+            && (top
+                - crate::eq::ChannelEq {
+                    on: true,
+                    high_db: -12.0,
+                    ..Default::default()
+                }
+                .response_db(12_000.0))
+            .abs()
+                < 0.3,
+        "12 kHz: {top:.2} dB"
+    );
     let low = level_db(&solo(&project, 1), frames.clone()) - open[1];
     assert!(low.abs() < 0.5, "200 Hz: {low:.2} dB");
     // A low cut at 200 Hz removes 50 Hz, on a track with automation too.

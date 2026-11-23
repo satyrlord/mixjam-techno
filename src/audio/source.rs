@@ -147,87 +147,100 @@ impl PlaybackSource {
     /// Read and process the next block that has sound to play. False when
     /// nothing is left.
     pub(super) fn fill(&mut self) -> bool {
-        loop {
-            if self.frame >= self.end
-                && let Some(start) = self.loop_start
-            {
-                self.frame = start;
-                if self.frame >= self.end {
-                    return false;
-                }
-            }
-            // As in export: the song's frames, then the buses' tail, then
-            // the pedals' delay.
-            let Some((phase, count)) =
-                self.schedule.next(self.end.saturating_sub(self.frame), || {
-                    self.returns.as_ref().is_some_and(ReturnsProcessor::ringing)
-                })
-            else {
-                if let Some(master) = self.master.as_mut().filter(|_| !self.finished) {
-                    master.finish();
-                }
-                self.finished = true;
-                return false;
-            };
-            self.filled = count * self.channels;
-            // The key tracks cover only the song's frames.
-            self.keyed = if phase == Phase::Song { count } else { 0 };
-            match (phase, &mut self.returns) {
-                (Phase::Song, Some(returns)) => {
-                    let sends = &mut self.sends[..count * 2 * BUSES];
-                    let sending = self.audio.read_block(
-                        self.frame,
-                        &mut self.block[..self.filled],
-                        Some(sends),
-                        &mut self.state,
-                    );
-                    returns.process_at(
-                        &mut self.block[..self.filled],
-                        sending.then_some(&*sends),
-                        self.audio.keys(&self.state, count),
-                        self.audio.return_lanes().map(|lanes| {
-                            (
-                                lanes,
-                                self.frame,
-                                self.loop_start.map(|start| [start, self.end]),
-                            )
-                        }),
-                    );
-                }
-                (Phase::Song, None) => {
-                    self.audio.read_block(
-                        self.frame,
-                        &mut self.block[..self.filled],
-                        None,
-                        &mut self.state,
-                    );
-                }
-                (Phase::Tail { after }, returns) => {
-                    self.block[..self.filled].fill(0.0);
-                    if let Some(returns) = returns {
-                        // The song's frames go on through the tail, as in export.
-                        let lanes = self
-                            .audio
-                            .return_lanes()
-                            .map(|lanes| (lanes, self.end + after, None));
-                        returns.process_at(
-                            &mut self.block[..self.filled],
-                            None,
-                            crate::ducker::Keys::NONE,
-                            lanes,
-                        );
-                    }
-                }
-                (Phase::Flush, _) => self.block[..self.filled].fill(0.0),
-            }
-            if phase == Phase::Song {
-                self.frame += count as u64;
-            }
+        while let Some((phase, count)) = self.next_block() {
+            self.render_block(phase, count);
             if self.process() {
                 return true;
             }
         }
+        if !self.finished {
+            self.clear_track_meters();
+            if let Some(master) = &mut self.master {
+                master.finish();
+            }
+            self.finished = true;
+        }
+        false
     }
+
+    fn next_block(&mut self) -> Option<(Phase, usize)> {
+        if self.frame >= self.end
+            && let Some(start) = self.loop_start
+        {
+            self.frame = start;
+            if self.frame >= self.end {
+                return None;
+            }
+        }
+        // As in export: the song, the buses' tail, then the pedals' delay.
+        self.schedule.next(self.end.saturating_sub(self.frame), || {
+            self.returns.as_ref().is_some_and(ReturnsProcessor::ringing)
+        })
+    }
+
+    fn render_block(&mut self, phase: Phase, count: usize) {
+        self.filled = count * self.channels;
+        if phase == Phase::Song {
+            self.keyed = count;
+            self.render_song(count);
+            self.frame += count as u64;
+            return;
+        }
+        // The tracks and their keys are silent while the buses ring out.
+        if self.keyed > 0 {
+            self.clear_track_meters();
+            self.keyed = 0;
+        }
+        self.block[..self.filled].fill(0.0);
+        if let (Phase::Tail { after }, Some(returns)) = (phase, &mut self.returns) {
+            let lanes = self
+                .audio
+                .return_lanes()
+                .map(|lanes| (lanes, self.end + after, None));
+            returns.process_at(
+                &mut self.block[..self.filled],
+                None,
+                crate::ducker::Keys::NONE,
+                lanes,
+            );
+        }
+    }
+
+    fn render_song(&mut self, count: usize) {
+        let sends = self
+            .returns
+            .as_ref()
+            .map(|_| &mut self.sends[..count * 2 * BUSES]);
+        let samples = &mut self.block[..self.filled];
+        let sending = self
+            .audio
+            .read_block(self.frame, samples, sends, &mut self.state);
+        if let Some(returns) = &mut self.returns {
+            let lanes = self.audio.return_lanes().map(|lanes| {
+                (
+                    lanes,
+                    self.frame,
+                    self.loop_start.map(|start| [start, self.end]),
+                )
+            });
+            returns.process_at(
+                samples,
+                sending.then_some(&self.sends[..count * 2 * BUSES]),
+                self.audio.keys(&self.state, count),
+                lanes,
+            );
+        }
+    }
+
+    fn clear_track_meters(&self) {
+        if let Some(live) = &self.state.live {
+            live.publish_track_meters(
+                &[crate::master::TrackMeterReading::default(); crate::engine::TRACK_COUNT],
+                self.state.compressor_epoch.unwrap(),
+            );
+        }
+    }
+
     /// Run the block through the pedals and drop what remains of their
     /// delay. True when the block still has samples to play.
     fn process(&mut self) -> bool {

@@ -1,297 +1,140 @@
-//! The channel EQ window of one track: its power switch, Reset, the
-//! response curve of its settings, and a dial for each control, in signal
-//! order from the low cut to the high cut; below them the track's drive and
-//! then its compressor, each with its switch and dials, and the track's
-//! width; at the foot the track's ducker, with its switch, its key track,
-//! and its dials.
-//! The window edits copies of the track's settings; the caller turns
-//! changed copies into a mixer edit.
-use super::master::{Dial, Format, decimal, dial};
+//! The 3-theme Channel Strip floating window (`736x500 pt`) for a single
+//! track (`Track 1..64 EQ`): track switcher, live response/transfer/GR scopes,
+//! and grouped hardware bays (`EQ`, `Drive`, `Compressor & Stereo`,
+//! `Filter & Ducker`).
+//! Edits flow back as `EditCommand::SetTrack`; the shared EQ curve is also
+//! used by the Inspector.
 use super::*;
 use mixjam_techno::application::{
-    KnobRange, TRACK_WIDTH,
-    compressor::{Compressor, CompressorParam},
-    drive::{Drive, DriveParam},
-    ducker::{Ducker, DuckerParam},
-    eq::{ChannelEq, EqParam},
+    TRACK_COUNT, TRACK_MONO_BELOW, TRACK_WIDTH, automation::FilterSlope, compressor::Compressor,
+    drive::Drive, ducker::Ducker, eq::ChannelEq,
 };
 
-/// The track settings that the window edits.
+#[path = "eq/bays.rs"]
+mod bays;
+#[path = "eq/scopes.rs"]
+mod scopes;
+
+pub(super) use scopes::response_curve;
+
+const CONTENT_W: f32 = 736.0;
+const CONTENT_H: f32 = 500.0;
+const HEADER_H: f32 = 26.0;
+const SCOPE_H: f32 = 108.0;
+const EQ_BAY_H: f32 = 124.0;
+const ROW2_BAY_H: f32 = 220.0;
+const GAP: f32 = 8.0;
+
+/// Track settings edited by the Channel Strip window.
 #[derive(Clone, Copy, PartialEq)]
 struct Channel {
     eq: ChannelEq,
     drive: Drive,
     compressor: Compressor,
     width: f32,
+    mono_below_hz: f32,
+    filter_resonance: f32,
+    filter_slope: FilterSlope,
     ducker: Ducker,
 }
 
-/// What the window changed. Turns of one dial continue one undo step; the
-/// power switches and Reset are steps of their own.
 enum Action {
     None,
     Turn(Channel),
     Switch(Channel),
 }
 
-/// The content's width, the response curve's height, and the pitch of the
-/// dial columns and rows.
-const WIDTH: f32 = 520.0;
-const CURVE_HEIGHT: f32 = 132.0;
-const COLUMN: f32 = 86.0;
-const ROW: f32 = 92.0;
-/// Where the first row of dials starts below the curve.
-const DIALS_TOP: f32 = 36.0 + CURVE_HEIGHT + 10.0;
-/// Where the drive's section starts: below the EQ's three rows of dials,
-/// with room between the Q label and the section divider.
-const DRIVE_TOP: f32 = DIALS_TOP + 48.0 + 2.0 * ROW + 80.0;
-/// A section's switch and row of dials, and the gap to the next divider.
-const SECTION: f32 = 48.0 + 70.0;
-const SECTION_GAP: f32 = 14.0;
-/// Where the compressor's section starts, below the drive's, in signal
-/// order.
-const COMPRESSOR_TOP: f32 = DRIVE_TOP + SECTION + SECTION_GAP;
-/// Where the ducker's section starts, below the compressor's.
-const DUCKER_TOP: f32 = COMPRESSOR_TOP + SECTION + SECTION_GAP;
-/// The content's height: the controls row, the curve, the column headings,
-/// three rows of dials, and the drive's, the compressor's, and the
-/// ducker's sections.
-const HEIGHT: f32 = DUCKER_TOP + SECTION;
-/// The key dial: a track from 1 to 64.
-const KEY_RANGE: KnobRange = KnobRange {
-    low: 1.0,
-    high: 64.0,
-    default: 1.0,
-    step: 1.0,
-    logarithmic: false,
-};
-/// The curve spans 20 Hz to 20 kHz and this many decibels each way.
-const CURVE_DB: f64 = 24.0;
-
-/// Each band's heading and its controls from top to bottom.
-const COLUMNS: [(&str, &[EqParam]); 6] = [
-    ("Low cut", &[EqParam::LowCut]),
-    ("Low shelf", &[EqParam::LowHz, EqParam::LowDb]),
-    ("Mid peak", &[EqParam::MidHz, EqParam::MidDb, EqParam::MidQ]),
-    (
-        "Peak 2",
-        &[EqParam::Peak2Hz, EqParam::Peak2Db, EqParam::Peak2Q],
-    ),
-    ("High shelf", &[EqParam::HighHz, EqParam::HighDb]),
-    ("High cut", &[EqParam::HighCut]),
-];
-
-/// The centre of a dial column, from 0, in the grid that the EQ's columns
-/// and the sections below share.
-fn column_x(bounds: Rect, column: usize) -> f32 {
-    bounds.left() + (WIDTH - COLUMNS.len() as f32 * COLUMN) / 2.0 + (column as f32 + 0.5) * COLUMN
-}
-
-/// The printed label, description, and value format of a control.
-fn face(param: EqParam) -> (&'static str, &'static str, Format) {
-    match param {
-        EqParam::LowCut => (
-            "Cut",
-            "A 12 dB per octave high-pass that removes rumble. At 20 Hz it is off.",
-            Format::Hertz,
-        ),
-        EqParam::LowHz => ("Freq", "Where the low shelf turns.", Format::Hertz),
-        EqParam::LowDb => (
-            "Gain",
-            "Raises or lowers the sound below the low shelf's frequency.",
-            Format::db(true),
-        ),
-        EqParam::MidHz => ("Freq", "The centre of the peak.", Format::Hertz),
-        EqParam::MidDb => (
-            "Gain",
-            "Raises or lowers the band around the peak's frequency.",
-            Format::db(true),
-        ),
-        EqParam::MidQ => (
-            "Q",
-            "The width of the peak: a higher Q is narrower.",
-            Format::tenths(""),
-        ),
-        EqParam::Peak2Hz => (
-            "Freq",
-            "The centre of the second peak, from 40 Hz to 16 kHz.",
-            Format::Hertz,
-        ),
-        EqParam::Peak2Db => (
-            "Gain",
-            "Raises or lowers the band around the second peak's frequency. A narrow cut tames \
-             one ringing line while the first peak does another job.",
-            Format::db(true),
-        ),
-        EqParam::Peak2Q => (
-            "Q",
-            "The width of the second peak: a higher Q is narrower.",
-            Format::tenths(""),
-        ),
-        EqParam::HighHz => ("Freq", "Where the high shelf turns.", Format::Hertz),
-        EqParam::HighDb => (
-            "Gain",
-            "Raises or lowers the sound above the high shelf's frequency. Lower it to tame \
-             harsh hi-hats.",
-            Format::db(true),
-        ),
-        EqParam::HighCut => (
-            "Cut",
-            "A 12 dB per octave low-pass that darkens the top. At 20 kHz it is off.",
-            Format::Hertz,
-        ),
-    }
-}
-
-/// The printed label, description, and value format of a drive control.
-fn drive_face(param: DriveParam) -> (&'static str, &'static str, Format) {
-    match param {
-        DriveParam::Amount => (
-            "Amount",
-            "How hard a copy of the track is driven. More drive makes more and higher \
-             harmonics; the level stays.",
-            Format::db(false),
-        ),
-        DriveParam::Character => (
-            "Character",
-            "0% bends both halves of the wave alike, for odd harmonics, like tape. 100% bends \
-             one half, for even harmonics, like a tube.",
-            Format::whole("%"),
-        ),
-        DriveParam::Mix => (
-            "Mix",
-            "How much of the change the drive adds to the track. At 0% only Output changes its level.",
-            Format::whole("%"),
-        ),
-        DriveParam::Focus => (
-            "Focus",
-            "Below this frequency the track stays clean. At about twice a bass's lowest note \
-             the fundamental stays as it is and only harmonics are added; at 20 Hz the whole \
-             track is driven.",
-            Format::Hertz,
-        ),
-        DriveParam::Output => (
-            "Output",
-            "The level after the drive. The drive keeps the track's power by itself; this \
-             moves it by hand.",
-            Format::db(true),
-        ),
-    }
-}
-
-/// The printed label, description, and value format of a compressor control.
-fn compressor_face(param: CompressorParam) -> (&'static str, &'static str, Format) {
-    match param {
-        CompressorParam::Threshold => (
-            "Thresh",
-            "Compression starts above this level of the track after its EQ and drive.",
-            Format::db(false),
-        ),
-        CompressorParam::Ratio => (
-            "Ratio",
-            "How strongly the level above the threshold comes down.",
-            Format::tenths(":1"),
-        ),
-        CompressorParam::Attack => (
-            "Attack",
-            "How fast compression starts. A short attack catches drum hits.",
-            Format::tenths("ms"),
-        ),
-        CompressorParam::Release => (
-            "Release",
-            "How fast compression lets go.",
-            Format::whole("ms"),
-        ),
-        CompressorParam::Makeup => (
-            "Makeup",
-            "Raises the track after the compression.",
-            Format::db(true),
-        ),
-    }
-}
-
-/// The printed label, description, and value format of a ducker control.
-fn ducker_face(param: DuckerParam) -> (&'static str, &'static str, Format) {
-    match param {
-        DuckerParam::Threshold => (
-            "Thresh",
-            "The key's level above which this track ducks.",
-            Format::db(true),
-        ),
-        DuckerParam::Depth => (
-            "Depth",
-            "The most the track ducks. It ducks by as much as the key rises over the \
-             threshold, up to this.",
-            Format::db(false),
-        ),
-        DuckerParam::Attack => ("Attack", "How fast the track ducks.", Format::tenths("ms")),
-        DuckerParam::Release => (
-            "Release",
-            "How fast the track comes back after the key.",
-            Format::whole("ms"),
-        ),
-    }
+enum WindowEvent {
+    Action(Action),
+    SelectTrack(usize),
 }
 
 impl MixJamApp {
-    /// The EQ window of the track whose EQ button was pressed last. Its
-    /// edits apply while the song plays and are undo steps.
+    /// Draw the Channel Strip window for `self.eq_track`, if open.
     pub(super) fn eq_window(&mut self, ctx: &egui::Context) {
         let Some(track) = self.eq_track else {
             return;
         };
-        let title = format!("Track {} EQ", track + 1);
-        let settings = &self.session.project().tracks[track];
-        let channel = Channel {
-            eq: settings.eq,
-            drive: settings.drive,
-            compressor: settings.compressor,
-            width: settings.width,
-            ducker: settings.ducker,
-        };
-        // A replaced project starts new dial gestures.
-        let generation = self.boards.master_view_generation;
-        let mut open = true;
-        let mut action = Action::None;
-        // The shell's margins and bay take 36 by 12 points of the size.
-        // Reserve the solid vertical scrollbar too, so a short viewport
-        // does not also force the fixed-width controls to scroll sideways.
-        let scrollbar = egui::style::ScrollStyle::solid().allocated_width();
-        let anchor = self.mix.shown.then_some(self.mix.eq_row).flatten();
-        let mut bounds = ctx.viewport_rect().shrink(12.0);
-        if anchor.is_some() {
-            // Beside a Mix view row, the window keeps the 30-point status
-            // bar and its messages in view.
-            bounds.max.y -= 30.0;
+        if track >= self.session.project().tracks.len() {
+            self.eq_track = None;
+            self.mix.eq_row = None;
+            return;
         }
-        dialog::window(&title)
+        let project = self.session.project();
+        let current = &project.tracks[track];
+        let filter_active = !current.automation.filter.is_empty();
+        let channel = Channel {
+            eq: current.eq,
+            drive: current.drive,
+            compressor: current.compressor,
+            width: current.width,
+            mono_below_hz: current.mono_below_hz,
+            filter_resonance: current.filter_resonance,
+            filter_slope: current.filter_slope,
+            ducker: current.ducker,
+        };
+        let dynamics = scopes::Dynamics::read(&self.session, track);
+        let generation = self.boards.master_view_generation;
+        let name = format!("Track {} EQ", track + 1);
+        let mut open = true;
+        let mut event = WindowEvent::Action(Action::None);
+        let anchor = self.mix.shown.then_some(self.mix.eq_row).flatten();
+        let mut viewport = ctx.viewport_rect().shrink(8.0);
+        if anchor.is_some() {
+            viewport.max.y -= 30.0;
+        }
+        // If an anchor or a resize shortens the window, reserve a vertical
+        // bar in the default width so the right bay still fits.
+        let scrollbar = egui::style::ScrollStyle::solid().allocated_width();
+
+        dialog::window(&name)
             .open(&mut open)
-            .default_width(WIDTH + 40.0 + scrollbar)
-            .default_height(HEIGHT + 16.0)
-            .max_height((ctx.viewport_rect().height() - 40.0).max(240.0))
-            .constrain_to(bounds)
-            // From the Mix view, the window first opens beside its row.
+            .palette(controls::Palette::Utility)
+            .default_width(CONTENT_W + 36.0 + scrollbar)
+            .default_height(CONTENT_H + 20.0)
+            .constrain_to(viewport)
             .anchor(anchor)
             .show(ctx, |ui| {
-                action = ui
-                    .push_id(generation, |ui| show(ui, &title, track, &channel))
+                event = ui
+                    .push_id(generation, |ui| {
+                        show_strip(ui, &name, track, &channel, dynamics, filter_active)
+                    })
                     .inner;
             });
+
         if !open {
             self.eq_track = None;
             self.mix.eq_row = None;
+            return;
         }
-        let (changed, discrete) = match action {
-            Action::None => return,
-            Action::Turn(channel) => (channel, false),
-            Action::Switch(channel) => (channel, true),
-        };
+        match event {
+            WindowEvent::SelectTrack(next) => {
+                let next = next.min(TRACK_COUNT - 1);
+                // The title names the track, so keep the window where it is.
+                dialog::carry_geometry(ctx, &name, &format!("Track {} EQ", next + 1));
+                self.eq_track = Some(next);
+                self.mix.eq_row = None;
+                ctx.request_repaint();
+            }
+            WindowEvent::Action(Action::None) => {}
+            WindowEvent::Action(Action::Turn(updated) | Action::Switch(updated)) => {
+                let discrete = matches!(event, WindowEvent::Action(Action::Switch(_)));
+                self.apply_channel_edit(track, updated, discrete);
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    fn apply_channel_edit(&mut self, track: usize, updated: Channel, discrete: bool) {
         let mut edited = self.session.project().tracks[track].clone();
-        edited.eq = changed.eq;
-        edited.drive = changed.drive;
-        edited.compressor = changed.compressor;
-        edited.width = changed.width;
-        edited.ducker = changed.ducker;
+        edited.eq = updated.eq;
+        edited.drive = updated.drive;
+        edited.compressor = updated.compressor;
+        edited.width = updated.width;
+        edited.mono_below_hz = updated.mono_below_hz;
+        edited.filter_resonance = updated.filter_resonance;
+        edited.filter_slope = updated.filter_slope;
+        edited.ducker = updated.ducker;
         let command = EditCommand::SetTrack {
             index: track,
             track: Box::new(edited),
@@ -302,417 +145,230 @@ impl MixJamApp {
             self.session.edit(command)
         };
         self.apply(result);
-        ctx.request_repaint();
     }
 }
 
-/// The window's content for the EQ named `name`, such as "Track 1 EQ", of
-/// `track`, from 0.
-fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Action {
-    let mut draft = channel.eq;
-    let (bounds, _) = ui.allocate_exact_size(Vec2::new(WIDTH, HEIGHT), Sense::hover());
-    // The controls are placed in the allocated bounds; their own scopes must
-    // not lengthen the window's content.
+fn show_strip(
+    ui: &mut egui::Ui,
+    name: &str,
+    track: usize,
+    channel: &Channel,
+    dynamics: scopes::Dynamics,
+    filter_active: bool,
+) -> WindowEvent {
+    let mut draft = *channel;
+    let (bounds, _) = ui.allocate_exact_size(Vec2::new(CONTENT_W, CONTENT_H), Sense::hover());
     let ui = &mut ui.new_child(egui::UiBuilder::new().max_rect(bounds));
-    let mut switched = false;
 
-    let power_name = format!("{name} power");
-    let response = controls::toggle_at(
-        ui,
-        Rect::from_min_size(bounds.min, Vec2::new(120.0, 28.0)),
-        &power_name,
-        "Power",
-        &mut draft.on,
+    let header_rect = Rect::from_min_size(bounds.min, Vec2::new(CONTENT_W, HEADER_H));
+    // Paint the whole body even on a header click, so the frame is not blank.
+    let header_event = header_bar(ui, header_rect, name, track, &mut draft, filter_active);
+
+    let scope_y = header_rect.bottom() + 6.0;
+    let eq_scope =
+        Rect::from_min_size(Pos2::new(bounds.left(), scope_y), Vec2::new(328.0, SCOPE_H));
+    let drv_scope = Rect::from_min_size(
+        Pos2::new(eq_scope.right() + GAP, scope_y),
+        Vec2::new(192.0, SCOPE_H),
     );
-    switched |= response.clicked();
-    name_control(response, &power_name).hover_hint(format!(
-        "{power_name}: {}. An EQ that is off keeps its settings and passes the track on \
-         unchanged.",
-        if draft.on { "on" } else { "off" }
-    ));
-    let reset_name = format!("Reset {name}");
-    let response = controls::button_at(
+    let gr_scope = Rect::from_min_size(
+        Pos2::new(drv_scope.right() + GAP, scope_y),
+        Vec2::new(200.0, SCOPE_H),
+    );
+    scopes::response_curve(ui, eq_scope, &draft.eq, name);
+    scopes::drive_scope(ui, drv_scope, &draft.drive, track);
+    dynamics.show(ui, gr_scope, track);
+
+    let mut flags = bays::EditFlags {
+        turned: false,
+        switched: false,
+    };
+    let eq_bay_rect = Rect::from_min_size(
+        Pos2::new(bounds.left(), eq_scope.bottom() + GAP),
+        Vec2::new(CONTENT_W, EQ_BAY_H),
+    );
+    flags.merge(bays::eq_bay(ui, eq_bay_rect, name, &mut draft));
+
+    let row2_y = eq_bay_rect.bottom() + GAP;
+    let drv_rect = Rect::from_min_size(
+        Pos2::new(bounds.left(), row2_y),
+        Vec2::new(188.0, ROW2_BAY_H),
+    );
+    let cmp_rect = Rect::from_min_size(
+        Pos2::new(drv_rect.right() + GAP, row2_y),
+        Vec2::new(280.0, ROW2_BAY_H),
+    );
+    let duk_rect = Rect::from_min_size(
+        Pos2::new(cmp_rect.right() + GAP, row2_y),
+        Vec2::new(252.0, ROW2_BAY_H),
+    );
+
+    let track_num = track + 1;
+    flags.merge(bays::drive_bay(ui, drv_rect, track_num, &mut draft));
+    flags.merge(bays::comp_stereo_bay(ui, cmp_rect, track_num, &mut draft));
+    flags.merge(bays::filter_ducker_bay(ui, duk_rect, track, &mut draft));
+
+    if let Some(header_event) = header_event {
+        header_event
+    } else if flags.switched {
+        WindowEvent::Action(Action::Switch(draft))
+    } else if flags.turned {
+        WindowEvent::Action(Action::Turn(draft))
+    } else {
+        WindowEvent::Action(Action::None)
+    }
+}
+
+/// The header lamps: each section tag, whether the section shapes the sound,
+/// and its lamp color.
+fn header_leds(draft: &Channel, filter_active: bool) -> [(&'static str, bool, egui::Color32); 6] {
+    let r = roles();
+    let stereo_active =
+        draft.width != TRACK_WIDTH.default || draft.mono_below_hz > TRACK_MONO_BELOW.low + 0.5;
+    let filter_shaped =
+        filter_active || draft.filter_resonance > 0.0 || draft.filter_slope != FilterSlope::Slope12;
+    [
+        ("EQ", draft.eq.on, r.sections[1]),
+        ("DRV", draft.drive.on, r.sections[5]),
+        ("CMP", draft.compressor.on, r.sections[4]),
+        ("WID", stereo_active, r.sections[0]),
+        ("FLT", filter_shaped, r.sections[3]),
+        ("DUK", draft.ducker.on, r.sections[2]),
+    ]
+}
+
+#[cfg(test)]
+#[test]
+fn the_filter_lamp_lights_for_the_lane_resonance_and_slope() {
+    let flat = Channel {
+        eq: ChannelEq::default(),
+        drive: Drive::default(),
+        compressor: Compressor::default(),
+        width: TRACK_WIDTH.default,
+        mono_below_hz: TRACK_MONO_BELOW.low,
+        filter_resonance: 0.0,
+        filter_slope: FilterSlope::Slope12,
+        ducker: Ducker::default(),
+    };
+    let lamp = |channel: Channel, automated: bool| header_leds(&channel, automated)[4];
+    assert_eq!(lamp(flat, false).0, "FLT");
+    assert!(!lamp(flat, false).1, "a flat filter lane rests");
+    assert!(lamp(flat, true).1, "an automated cutoff lights the lamp");
+    let resonant = Channel {
+        filter_resonance: 30.0,
+        ..flat
+    };
+    assert!(lamp(resonant, false).1, "resonance lights the lamp");
+    let steep = Channel {
+        filter_slope: FilterSlope::Slope24,
+        ..flat
+    };
+    assert!(lamp(steep, false).1, "the 24 dB slope lights the lamp");
+    assert!(header_leds(&flat, false).iter().all(|(_, on, _)| !on));
+}
+
+fn header_bar(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    track: usize,
+    draft: &mut Channel,
+    filter_active: bool,
+) -> Option<WindowEvent> {
+    let prev_rect = Rect::from_min_size(rect.min, Vec2::new(26.0, 24.0));
+    let prev_name = format!("{name} previous track");
+    let prev_resp = controls::button_at(
         ui,
-        Rect::from_min_size(
-            Pos2::new(bounds.right() - 84.0, bounds.top()),
-            Vec2::new(84.0, 28.0),
-        ),
+        prev_rect,
+        &prev_name,
+        "<",
+        controls::ButtonRole::Secondary,
+        track > 0,
+    );
+    if name_control(prev_resp, &prev_name)
+        .hover_hint("Switch Channel Strip to the previous track.")
+        .clicked()
+    {
+        return Some(WindowEvent::SelectTrack(track - 1));
+    }
+
+    let badge_rect = Rect::from_min_size(
+        Pos2::new(prev_rect.right() + 4.0, rect.top()),
+        Vec2::new(68.0, 24.0),
+    );
+    controls::well(ui, badge_rect);
+    ui.painter().text(
+        badge_rect.center(),
+        Align2::CENTER_CENTER,
+        format!("Track {}", track + 1),
+        FontId::proportional(11.0),
+        roles().legend,
+    );
+
+    let next_rect = Rect::from_min_size(
+        Pos2::new(badge_rect.right() + 4.0, rect.top()),
+        Vec2::new(26.0, 24.0),
+    );
+    let next_name = format!("{name} next track");
+    let next_resp = controls::button_at(
+        ui,
+        next_rect,
+        &next_name,
+        ">",
+        controls::ButtonRole::Secondary,
+        track + 1 < TRACK_COUNT,
+    );
+    if name_control(next_resp, &next_name)
+        .hover_hint("Switch Channel Strip to the next track.")
+        .clicked()
+    {
+        return Some(WindowEvent::SelectTrack(track + 1));
+    }
+
+    let r = roles();
+    let led_x0 = next_rect.right() + 14.0;
+    for (idx, (tag, on, color)) in header_leds(draft, filter_active).into_iter().enumerate() {
+        let chip = Rect::from_min_size(
+            Pos2::new(led_x0 + idx as f32 * 44.0, rect.top() + 2.0),
+            Vec2::new(40.0, 20.0),
+        );
+        ui.painter().rect_filled(chip, 3.0, r.strip_slot);
+        ui.painter().circle_filled(
+            Pos2::new(chip.left() + 7.0, chip.center().y),
+            3.0,
+            if on { color } else { r.lamp_off },
+        );
+        ui.painter().text(
+            Pos2::new(chip.left() + 14.0, chip.center().y),
+            Align2::LEFT_CENTER,
+            tag,
+            FontId::proportional(9.5),
+            if on { r.legend } else { r.disabled_text },
+        );
+    }
+
+    let reset_name = format!("Reset {name}");
+    let reset_rect = Rect::from_min_size(
+        Pos2::new(rect.right() - 80.0, rect.top()),
+        Vec2::new(80.0, 24.0),
+    );
+    let reset_resp = controls::button_at(
+        ui,
+        reset_rect,
         &reset_name,
         "Reset",
         controls::ButtonRole::Secondary,
         true,
     );
-    if name_control(response, &reset_name)
+    if name_control(reset_resp, &reset_name)
         .hover_hint("Return every band to flat. The power switch stays as it is.")
         .clicked()
     {
-        draft = ChannelEq {
-            on: draft.on,
+        draft.eq = ChannelEq {
+            on: draft.eq.on,
             ..ChannelEq::default()
         };
-        switched = true;
+        return Some(WindowEvent::Action(Action::Switch(*draft)));
     }
-
-    let curve = Rect::from_min_size(
-        bounds.min + Vec2::new(0.0, 36.0),
-        Vec2::new(WIDTH, CURVE_HEIGHT),
-    );
-    response_curve(ui, curve, &draft, name);
-
-    let top = bounds.top() + DIALS_TOP;
-    for (column, (heading, params)) in COLUMNS.iter().enumerate() {
-        let x = column_x(bounds, column);
-        ui.painter().text(
-            Pos2::new(x, top + 8.0),
-            Align2::CENTER_CENTER,
-            heading,
-            FontId::proportional(12.0),
-            roles().legend,
-        );
-        for (row, param) in params.iter().enumerate() {
-            let y = top + 48.0 + row as f32 * ROW;
-            let (label, hint, format) = face(*param);
-            let before = decimal(param.get(&draft));
-            let mut value = before;
-            dial(
-                ui,
-                dial_points(x, y),
-                &mut value,
-                Dial {
-                    name: &format!("{name} {}", param.name()),
-                    label,
-                    hint,
-                    range: param.range(),
-                    format,
-                    choices: &[],
-                },
-                draft.on,
-            );
-            if value != before {
-                param.set(&mut draft, value as f32);
-            }
-        }
-    }
-    let (drive, drive_switched) = drive_section(ui, bounds, track, &channel.drive);
-    let (compressor, width, compressor_switched) =
-        compressor_section(ui, bounds, track, &channel.compressor, channel.width);
-    let (ducker, ducker_switched) = ducker_section(ui, bounds, track, &channel.ducker);
-    let changed = Channel {
-        eq: draft,
-        drive,
-        compressor,
-        width,
-        ducker,
-    };
-    if changed == *channel {
-        Action::None
-    } else if switched || drive_switched || compressor_switched || ducker_switched {
-        Action::Switch(changed)
-    } else {
-        Action::Turn(changed)
-    }
-}
-
-/// Three points of a dial at `x`: the knob's centre at `y`, its label,
-/// and its value.
-fn dial_points(x: f32, y: f32) -> [Pos2; 3] {
-    [
-        Pos2::new(x, y),
-        Pos2::new(x, y + 38.0),
-        Pos2::new(x, y + 60.0),
-    ]
-}
-
-/// The drive's switch and dials below the EQ, and whether the switch
-/// changed.
-fn drive_section(ui: &mut egui::Ui, bounds: Rect, track: usize, drive: &Drive) -> (Drive, bool) {
-    let mut draft = *drive;
-    let label = format!("Track {}", track + 1);
-    let top = bounds.top() + DRIVE_TOP;
-    controls::inset(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top - 8.0), Vec2::new(WIDTH, 1.0)),
-    );
-    let power_name = format!("{label} drive power");
-    let response = controls::toggle_at(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top), Vec2::new(120.0, 28.0)),
-        &power_name,
-        "Drive",
-        &mut draft.on,
-    );
-    let switched = response.clicked();
-    name_control(response, &power_name).hover_hint(format!(
-        "{power_name}: {}. The drive adds harmonics to this track after its EQ and before its \
-         compressor, so a bass can be heard on small speakers, and keeps the track's level.",
-        if draft.on { "on" } else { "off" }
-    ));
-    let y = top + 48.0;
-    for (column, param) in DriveParam::ALL.into_iter().enumerate() {
-        let (label_text, hint, format) = drive_face(param);
-        let before = decimal(param.get(&draft));
-        let mut value = before;
-        dial(
-            ui,
-            dial_points(column_x(bounds, column), y),
-            &mut value,
-            Dial {
-                name: &format!("{label} {}", param.name()),
-                label: label_text,
-                hint,
-                range: param.range(),
-                format,
-                choices: &[],
-            },
-            draft.on,
-        );
-        if value != before {
-            param.set(&mut draft, value as f32);
-        }
-    }
-    (draft, switched)
-}
-
-/// The compressor's switch and dials below the drive, and the track's width
-/// at the end of their row; whether the switch changed. The width has no
-/// switch: at 100% it leaves the track as it is.
-fn compressor_section(
-    ui: &mut egui::Ui,
-    bounds: Rect,
-    track: usize,
-    compressor: &Compressor,
-    width: f32,
-) -> (Compressor, f32, bool) {
-    let mut draft = *compressor;
-    let label = format!("Track {}", track + 1);
-    let top = bounds.top() + COMPRESSOR_TOP;
-    controls::inset(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top - 8.0), Vec2::new(WIDTH, 1.0)),
-    );
-    let power_name = format!("{label} compressor power");
-    let response = controls::toggle_at(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top), Vec2::new(120.0, 28.0)),
-        &power_name,
-        "Compressor",
-        &mut draft.on,
-    );
-    let switched = response.clicked();
-    name_control(response, &power_name).hover_hint(format!(
-        "{power_name}: {}. The compressor evens out this track's level after its EQ and \
-         drive, such as the hits of a drum loop, before its width, automation, and fader.",
-        if draft.on { "on" } else { "off" }
-    ));
-    let y = top + 48.0;
-    for (column, param) in CompressorParam::ALL.into_iter().enumerate() {
-        let (label_text, hint, format) = compressor_face(param);
-        let before = decimal(param.get(&draft));
-        let mut value = before;
-        dial(
-            ui,
-            dial_points(column_x(bounds, column), y),
-            &mut value,
-            Dial {
-                name: &format!("{label} {}", param.name()),
-                label: label_text,
-                hint,
-                range: param.range(),
-                format,
-                choices: &[],
-            },
-            draft.on,
-        );
-        if value != before {
-            param.set(&mut draft, value as f32);
-        }
-    }
-    let x = column_x(bounds, COLUMNS.len() - 1);
-    ui.painter().text(
-        Pos2::new(x, top + 14.0),
-        Align2::CENTER_CENTER,
-        "Stereo",
-        FontId::proportional(12.0),
-        roles().legend,
-    );
-    let before = decimal(width);
-    let mut value = before;
-    dial(
-        ui,
-        dial_points(x, y),
-        &mut value,
-        Dial {
-            name: &format!("{label} width"),
-            label: "Width",
-            hint: "The track's stereo width, before its pan: 0% is mono, 100% leaves it as it \
-                   is, and 200% doubles the difference between its sides. It needs both \
-                   outputs on.",
-            range: TRACK_WIDTH,
-            format: Format::whole("%"),
-            choices: &[],
-        },
-        true,
-    );
-    let width = if value == before {
-        width
-    } else {
-        (value as f32).clamp(TRACK_WIDTH.low, TRACK_WIDTH.high)
-    };
-    (draft, width, switched)
-}
-
-/// The ducker's switch and dials at the foot of the window, and whether
-/// the switch changed. The key never names the track itself: the dial
-/// steps over it.
-fn ducker_section(
-    ui: &mut egui::Ui,
-    bounds: Rect,
-    track: usize,
-    ducker: &Ducker,
-) -> (Ducker, bool) {
-    let mut draft = *ducker;
-    let label = format!("Track {}", track + 1);
-    let top = bounds.top() + DUCKER_TOP;
-    controls::inset(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top - 8.0), Vec2::new(WIDTH, 1.0)),
-    );
-    let power_name = format!("{label} ducker power");
-    let response = controls::toggle_at(
-        ui,
-        Rect::from_min_size(Pos2::new(bounds.left(), top), Vec2::new(120.0, 28.0)),
-        &power_name,
-        "Ducker",
-        &mut draft.on,
-    );
-    let switched = response.clicked();
-    name_control(response, &power_name).hover_hint(format!(
-        "{power_name}: {}. The ducker lowers this track while its key track sounds, as a \
-         bass makes room for the kick. It works after the fader and before the sends.",
-        if draft.on { "on" } else { "off" }
-    ));
-    draft.set_key(track, f64::from(draft.key));
-    let y = top + 48.0;
-    let at = |column: usize| column_x(bounds, column);
-    let mut key = f64::from(draft.key);
-    dial(
-        ui,
-        dial_points(at(0), y),
-        &mut key,
-        Dial {
-            name: &format!("{label} ducker key"),
-            label: "Key",
-            hint: "The track whose sound ducks this one, as it sounds after its fader.",
-            range: KEY_RANGE,
-            format: Format::whole(""),
-            choices: &[],
-        },
-        draft.on,
-    );
-    draft.set_key(track, key);
-    for (column, param) in DuckerParam::ALL.into_iter().enumerate() {
-        let x = at(column + 1);
-        let (label_text, hint, format) = ducker_face(param);
-        let before = decimal(param.get(&draft));
-        let mut value = before;
-        dial(
-            ui,
-            dial_points(x, y),
-            &mut value,
-            Dial {
-                name: &format!("{label} {}", param.name()),
-                label: label_text,
-                hint,
-                range: param.range(),
-                format,
-                choices: &[],
-            },
-            draft.on,
-        );
-        if value != before {
-            param.set(&mut draft, value as f32);
-        }
-    }
-    (draft, switched)
-}
-
-/// The EQ's magnitude response, on a frequency scale from 20 Hz to 20 kHz
-/// that spreads octaves evenly. An EQ that is off draws its curve faint.
-pub(super) fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
-    controls::inset(ui, rect);
-    let plot = Rect::from_min_max(
-        rect.min + Vec2::new(30.0, 8.0),
-        rect.max - Vec2::new(10.0, 18.0),
-    );
-    let x_of = |hz: f64| plot.left() + ((hz / 20.0).log10() / 3.0) as f32 * plot.width();
-    let y_of = |db: f64| {
-        plot.center().y - (db.clamp(-CURVE_DB, CURVE_DB) / CURVE_DB) as f32 * plot.height() / 2.0
-    };
-    let grid = roles().legend.gamma_multiply(0.18);
-    let painter = ui.painter().with_clip_rect(rect);
-    for hz in [50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10_000.0] {
-        let x = x_of(hz);
-        painter.line_segment(
-            [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())],
-            Stroke::new(1.0_f32, grid),
-        );
-        if let Some(label) = match hz as u32 {
-            100 => Some("100"),
-            1000 => Some("1k"),
-            10_000 => Some("10k"),
-            _ => None,
-        } {
-            painter.text(
-                Pos2::new(x, plot.bottom() + 9.0),
-                Align2::CENTER_CENTER,
-                label,
-                FontId::proportional(10.0),
-                roles().legend,
-            );
-        }
-    }
-    for (db, label) in [(12.0, "+12"), (0.0, "0"), (-12.0, "−12")] {
-        let y = y_of(db);
-        painter.line_segment(
-            [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
-            Stroke::new(
-                1.0_f32,
-                if db == 0.0 {
-                    roles().legend.gamma_multiply(0.4)
-                } else {
-                    grid
-                },
-            ),
-        );
-        painter.text(
-            Pos2::new(plot.left() - 5.0, y),
-            Align2::RIGHT_CENTER,
-            label,
-            FontId::proportional(10.0),
-            roles().legend,
-        );
-    }
-    let points: Vec<Pos2> = (0..=160)
-        .map(|step| {
-            let hz = 20.0 * 1000.0_f64.powf(f64::from(step) / 160.0);
-            Pos2::new(x_of(hz), y_of(eq.response_db(hz)))
-        })
-        .collect();
-    let color = if eq.on {
-        controls::print_color(ui)
-    } else {
-        roles().legend.gamma_multiply(0.35)
-    };
-    painter.add(egui::Shape::line(points, Stroke::new(2.0_f32, color)));
-    let response = ui.interact(rect, ui.id().with(("eq-curve", name)), Sense::hover());
-    named(
-        &response,
-        egui::WidgetType::Other,
-        &format!("{name} response curve"),
-    );
-    response.hover_hint(format!(
-        "{name}: the change in level across the spectrum{}. The grid marks 100 Hz, 1 kHz, \
-         and 10 kHz, and 12 dB steps.",
-        if eq.on { "" } else { " once the EQ is on" }
-    ));
+    None
 }

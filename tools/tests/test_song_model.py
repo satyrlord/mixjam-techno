@@ -248,6 +248,23 @@ class SongTests(unittest.TestCase):
             document['formatVersion'] = mixjam.FORMAT_VERSION + 1
             self.assertIsNone(render.source_fingerprints(document))
 
+    def test_lane_cache_does_not_hide_invalid_channel_strip_on_an_empty_lane(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            source = Path(directory) / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('strip cache')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            empty_lane = document['lanes'][1]
+            for version, slope in ((28, '24db'), (29, None), (29, '48db')):
+                with self.subTest(version=version, slope=slope):
+                    document['formatVersion'] = version
+                    self.assertIsNotNone(render.lane_key(document, [1], False))
+                    empty_lane['filterSlope'] = slope
+                    self.assertIsNone(render.lane_key(document, [1], False))
+                    del empty_lane['filterSlope']
+
     def test_hold_rests_at_neutral_until_the_first_point(self):
         held = mixjam.hold([{'tick': 1024, 'value': -6.0}, {'tick': 2048, 'value': 0.0}], 0.0, [], 'lane')
         self.assertEqual(held[:2], [{'tick': 0, 'value': 0.0}, {'tick': 1023, 'value': 0.0}])
@@ -519,6 +536,35 @@ class SongTests(unittest.TestCase):
         for track, percent in ((3, -1), (3, 201), (0, 50), (65, 50)):
             with self.subTest(track=track, percent=percent), self.assertRaises(ValueError):
                 song.width(track, percent)
+
+    def test_v29_channel_strip_options(self):
+        song = mixjam.Song('strip29')
+        song.eq(1, lowCut=80, cutSlope='24db')
+        self.assertEqual(song.lanes[0]['eq']['cutSlope'], '24db')
+        song.compressor(2, sc_hpf_hz=110)
+        self.assertEqual(song.lanes[1]['compressor']['scHpfHz'], 110.0)
+        song.width(3, 140, mono_below=120)
+        self.assertEqual(song.lanes[2]['monoBelowHz'], 120.0)
+        song.filter_settings(4, resonance=45, slope='24db')
+        self.assertEqual(song.lanes[3]['filterResonance'], 45.0)
+        self.assertEqual(song.lanes[3]['filterSlope'], '24db')
+        song.filter_settings(4, resonance=0, slope='12db')
+        self.assertNotIn('filterResonance', song.lanes[3])
+        self.assertNotIn('filterSlope', song.lanes[3])
+
+    def test_compressor_keeps_its_positional_power_argument(self):
+        song = mixjam.Song('compressor')
+        song.compressor(1, -20, 4, 10, 100, 0, False)
+        self.assertFalse(song.lanes[0]['compressor']['on'])
+        self.assertNotIn('scHpfHz', song.lanes[0]['compressor'])
+
+    def test_invalid_mono_below_does_not_change_the_lane(self):
+        song = mixjam.Song('width')
+        song.width(1, 80, mono_below=100)
+        with self.assertRaisesRegex(ValueError, 'mono-below frequency'):
+            song.width(1, 140, mono_below=999)
+        self.assertEqual(song.lanes[0]['width'], 80.0)
+        self.assertEqual(song.lanes[0]['monoBelowHz'], 100.0)
 
     def test_pedal_and_fx_keys_name_a_track_or_their_own_input(self):
         board = mixjam.board(limiter=dict(gain=4.0, key=3), busCompressor=dict(key=0))

@@ -45,6 +45,24 @@ pub(super) fn forget_geometry(ctx: &egui::Context, identity: &str) {
         d.remove::<bool>(id.with("hardware-resized"));
     });
 }
+/// Give the window `to` the place, size, and collapse state of the window
+/// `from`, for a window that changes its title while it stays open.
+pub(super) fn carry_geometry(ctx: &egui::Context, from: &str, to: &str) {
+    let (old, new) = (egui::Id::new(from), egui::Id::new(to));
+    let collapsed = is_collapsed(ctx, from);
+    ctx.data_mut(|d| {
+        if let Some(geometry) = d.get_temp::<Geometry>(old.with("hardware-geometry")) {
+            d.insert_temp(new.with("hardware-geometry"), geometry);
+        }
+        if let Some(resized) = d.get_temp::<bool>(old.with("hardware-resized")) {
+            d.insert_temp(new.with("hardware-resized"), resized);
+        }
+        if let Some(fitted) = d.get_temp::<f32>(old.with("hardware-fitted")) {
+            d.insert_temp(new.with("hardware-fitted"), fitted);
+        }
+    });
+    set_collapsed(ctx, to, collapsed);
+}
 /// A window of `size` beside `anchor`: at its right or left when there is
 /// room, else above or below it, made shorter to fit when needed.
 fn beside(anchor: Rect, size: Vec2, viewport: Rect, min_height: f32) -> Geometry {

@@ -242,6 +242,19 @@ mixer_project['fx'][1]['powered'] = False
 mixer_project['tracks'][0]['sends'] = [0.4, 0.0, 0.25, 0.0]
 mixer_project['tracks'][2]['sends'] = [0.0, 0.7, 0.0, 1.0]
 mixer_states = write_project('mixer-states', mixer_project)
+strip_project = deepcopy(mixer_project)
+strip_project.update(schema_version=4, title='Channel strip')
+strip_project['tracks'][0].update(
+    eq=dict(on=True, lowCut=48.0, lowHz=180.0, lowDb=-3.5, midHz=680.0, midDb=3.0,
+            midQ=1.2, peak2Hz=4800.0, peak2Db=-2.0, peak2Q=2.0, highHz=7200.0,
+            highDb=4.0, highCut=18000.0, cutSlope='24db'),
+    drive=dict(on=True, amount=18.0, character=64.0, mix=70.0, focus=120.0, output=1.0),
+    compressor=dict(on=True, threshold=-24.0, ratio=5.0, attack=7.5, release=120.0,
+                    makeup=2.5, scHpfHz=80.0),
+    width=125.0, mono_below_hz=120.0, filter_resonance=40.0, filter_slope='24db',
+    automation=dict(filter=[dict(tick=0, value=-0.5), dict(tick=8 * 256, value=0.0)]),
+    ducker=dict(on=True, key=3, threshold=-24.0, depth=9.0, attack=6.0, release=240.0))
+channel_strip = write_project('channel-strip', strip_project)
 emberform = dict(type='emberform-drive', shape='tube', driveDb=18.0, asymmetryPercent=25.0,
                  lowCutHz=120.0, highCutHz=9500.0, bits=16, crushRateHz=44100.0,
                  widthPercent=115.0, duckAmountPercent=30.0, duckReleaseMs=320.0,
@@ -336,10 +349,10 @@ def run_case(theme, size, view):
         if view != 'first-run':
             fixture = {
                 'sections': sections, 'sparse': sparse, 'track64': full, 'mixer-dense': full,
-                'mixer-empty': empty, 'mixer-states': mixer_states, 'mixer-eq': mixer_states,
+                'mixer-empty': empty, 'mixer-states': mixer_states, 'mixer-eq': channel_strip,
                 'mix-view-dense': full, 'mix-view-empty': empty, 'mix-view-states': mixer_states,
-                'mix-view-eq': mixer_states,
-                'inspector-song': sections, 'inspector-track': mixer_states,
+                'mix-view-eq': channel_strip,
+                'inspector-song': sections, 'inspector-track': channel_strip,
                 'inspector-clip': shaped, 'inspector-clips': shaped,
                 'follow': follow,
                 'fx-board': fx_rack, 'fx-deep-edit': fx_rack,

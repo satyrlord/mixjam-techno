@@ -122,13 +122,25 @@ impl Ramp {
     }
 }
 
-/// The histories of one track's chain: its EQ, its compressor, and its
-/// automation filter.
-#[derive(Clone, Copy, Default)]
+/// The histories of one track's chain: its EQ, its compressor, its stereo
+/// width HPF, and its automation filter.
+#[derive(Clone, Copy)]
 pub(super) struct ChainState {
     pub(super) eq: Filters,
     pub(super) compressor: crate::compressor::State,
+    pub(super) width_hpf: [crate::master::dsp::Biquad; 2],
     pub(super) filter: Filter,
+}
+
+impl Default for ChainState {
+    fn default() -> Self {
+        Self {
+            eq: Filters::default(),
+            compressor: crate::compressor::State::default(),
+            width_hpf: [crate::master::dsp::Biquad::FLAT; 2],
+            filter: Filter::default(),
+        }
+    }
 }
 
 impl Default for RenderState {

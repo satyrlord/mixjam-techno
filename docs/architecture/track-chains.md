@@ -28,7 +28,7 @@ The render worker keeps each copy until no clip uses that pitch.
 A track is a `TrackChain` when one of these conditions is true:
 
 - Its channel EQ, drive, compressor, or ducker is on.
-- Its width is not 100%.
+- Both outputs are on, with a width other than 100% or Mono below active.
 - It has automation outside the Compression lane.
 - It is the key track of a ducker, a master pedal, or an FX bus.
 
@@ -39,7 +39,7 @@ then shape the buffer, in this order, before the sum:
 2. The EQ (`src/eq.rs`).
 3. The drive (`src/drive.rs`).
 4. The compressor (`src/compressor.rs`).
-5. The width.
+5. The width and Mono below crossover.
 6. The filter and volume lanes (`src/automation/`).
 7. The ducker (`src/ducker.rs`).
 8. The level.
@@ -113,13 +113,15 @@ voice. For a chain it applies after the volume lane. The compressor and the
 width operate on the sound of the track before its level:
 
 - The compressor follows the mean power of the two channels with the curve of
-  the master Bus compressor (`master::dsp::reduction`). Thus the fader does
-  not change how hard it works. The Compression lane, when the track has
-  one, mixes each compressed frame with the frame before the compressor. The
-  compressor only scales each frame, so the mix stays in phase. The detector
-  runs at every value of the lane.
+  the master Bus compressor (`master::dsp::reduction`). Its sidechain
+  high-pass filters the signal to the detector. The fader does not change
+  how hard the compressor works. The Compression lane mixes each compressed
+  frame with the frame before the compressor. The compressor only scales each
+  frame, so the mix stays in phase. The detector runs at every lane value.
 - The width scales the side of each frame, on a track whose two outputs are
-  on.
+  on. Mono below high-passes the side with a fourth-order Linkwitz-Riley filter
+  and keeps the mid. The Filter lane runs after the width and applies its
+  resonance and 12 or 24 dB/octave slope with a smoothed cutoff.
 
 After them, each stage is linear and operates on each channel separately, up to
 the ducker. The gain of the ducker follows the separate key. Thus this signal
@@ -140,10 +142,10 @@ bit the same.
 ## Render state and compressor history
 
 The shared mix is immutable. Each playback or export owns a `RenderState` that
-`Frames::read_block` receives. The `RenderState` holds the EQ, compressor, and
-filter histories of each chain and the next-frame cursor. A read that does not
-continue the previous read starts the histories from silence. This happens after
-a seek or a loop. One exception exists: where playback continues, its
+`Frames::read_block` receives. The `RenderState` holds the EQ, compressor,
+width, and filter histories of each chain and the next-frame cursor.
+A read that does not continue the previous read starts the histories from
+silence. This happens after a seek or a loop. Where playback continues, its
 compressors continue. A compressor that starts without reduction plays its track
 louder until the attack catches up. The difference is up to the full reduction.
 A compressor continues in two cases:
@@ -154,7 +156,8 @@ A compressor continues in two cases:
   when the application prepares the mix again during playback, for example for
   each step of a compressor dial. After each block, playback keeps the power and
   the reduction of each compressed track in its `MasterControl`, with the frame
-  after that block. A new playback that starts at most `CARRY_FRAMES` (4096
+  after that block. It also keeps the sidechain filter history when the cutoff
+  stays the same. A new playback that starts at most `CARRY_FRAMES` (4096
   frames) before that frame starts the compressor of the track from these
   values. This distance covers the frames that playback renders before they
   play. It also covers the delay of the master pedals and the tick and update

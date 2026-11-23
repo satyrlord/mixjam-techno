@@ -35,7 +35,7 @@ mod settings;
 mod tests;
 
 pub use chain::MasterChain;
-pub use control::{FxBusMeterReading, MasterControl};
+pub use control::{FxBusMeterReading, MasterControl, TrackMeterReading};
 pub use knobs::{Knob, KnobRange, PedalKind};
 pub(crate) use knobs::{range, ratio_range};
 pub use meters::{

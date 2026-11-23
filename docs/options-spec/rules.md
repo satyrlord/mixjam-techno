@@ -127,8 +127,9 @@ quality crossfade is necessary.
 Stored fields:
 
 - `schemaVersion`
-- `drivePlaybackOversampling`
-- `masterPlaybackOversampling`
+- `drivePlaybackOversampling`: `4x` or `off`. A draft file with `2x` loads at
+  `4x` and saves as `4x`.
+- `masterPlaybackOversampling`: `4x` or `off`.
 - `samplePlaybackQuality`: `high` or `low`. A schema 1 file without it loads
   at `high`.
 - `previewLevelDb`

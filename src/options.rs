@@ -1,6 +1,6 @@
 //! Application preferences. These values are independent of songs and exports.
 use crate::playback_quality::PlaybackQuality;
-pub use crate::playback_quality::{Oversampling, SampleQuality};
+pub use crate::playback_quality::{DriveOversampling, Oversampling, SampleQuality};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -90,7 +90,7 @@ pub enum SongFolderMode {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppOptions {
     pub schema_version: u32,
-    pub drive_playback_oversampling: Oversampling,
+    pub drive_playback_oversampling: DriveOversampling,
     pub master_playback_oversampling: Oversampling,
     /// Added after schema 1 was released, so a file without it loads at High.
     #[serde(default)]
@@ -117,7 +117,7 @@ impl Default for AppOptions {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            drive_playback_oversampling: Oversampling::FourX,
+            drive_playback_oversampling: DriveOversampling::FourX,
             master_playback_oversampling: Oversampling::FourX,
             sample_playback_quality: SampleQuality::High,
             preview_level_db: 0.0,
@@ -522,6 +522,28 @@ mod tests {
             ..AppOptions::default()
         };
         assert!(options.validate().is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn prerelease_drive_quality_loads_without_discarding_other_options() {
+        let root = root();
+        let options = AppOptions {
+            theme: Theme::Vintage,
+            ..AppOptions::default()
+        };
+        let mut draft = serde_json::to_value(&options).unwrap();
+        draft["drivePlaybackOversampling"] = serde_json::json!("2x");
+        fs::write(
+            root.join("options.json"),
+            serde_json::to_vec(&draft).unwrap(),
+        )
+        .unwrap();
+        let migrated = load(&root);
+        assert!(!migrated.invalid);
+        assert_eq!(migrated.values, options);
+        let resaved = serde_json::to_value(&migrated.values).unwrap();
+        assert_eq!(resaved["drivePlaybackOversampling"], "4x");
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

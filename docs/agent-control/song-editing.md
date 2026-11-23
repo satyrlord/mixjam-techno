@@ -89,14 +89,23 @@ the bus. `points=[]` clears it. `state` lists the four buses under
 
 ## Track EQ window
 
-The channel EQ, drive, compressor, width, and ducker of a track are controls in
-its EQ window. To open it, click `Track N EQ` in the Mixer or the Mix view, or
-`Inspector track EQ` for the selected track. Then `set` the control by name:
+The channel EQ, drive, compressor, stereo, filter, and ducker controls are in
+the track's channel strip. To open it, click `Track N EQ` in the Mixer or the
+Mix view, or `Inspector track EQ` for the selected track. The `Track N EQ
+previous track` and `Track N EQ next track` buttons change the track shown.
+Set an editable value by name:
 
 1. `set target="Track 1 drive power" value=true`.
 2. `set target="Track 1 drive amount" value=18`.
 3. Set `drive character`, `drive mix`, `drive focus` (Hz), and `drive output`
    (dB) in the same way.
 
-`state` lists the `eq_on`, `compressor_on`, and `width` of each track, and its
-`drive` with its switch and settings.
+Use `click` for slope choices such as `Track 1 EQ cut slope 24 dB` and
+`Track 1 filter 24 dB`. Use `set` for `Track 1 compressor sidechain HPF`,
+`Track 1 mono below`, and `Track 1 filter resonance`. The two gain-reduction
+meters have the names `Track N compressor gain reduction` and
+`Track N ducker gain reduction`.
+
+`state` lists `eq_on`, `eq_cut_slope`, `drive`, `compressor_on`,
+`compressor_sc_hpf_hz`, `width`, `mono_below_hz`, `filter_resonance`, and
+`filter_slope` for each track.

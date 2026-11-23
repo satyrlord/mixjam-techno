@@ -24,12 +24,13 @@ row of Mute and Solo, above polarity. The Bypass of the Master strip is under
 its meter, which `master::strip_meter` draws from the same `Metering` sample
 and OVER latch as Mastering. The two buttons show the project state.
 
-`src/ui/eq.rs` owns the channel EQ window. The frontend keeps the track that
-the window shows. The window edits copies of the `ChannelEq`, `Drive`,
-`Compressor`, width, and `Ducker` of that track, and sends them as
-`EditCommand::SetTrack`. It uses the Mastering dials and paints its response
-curve. The toolbar of the Mixer holds Export tracks, which asks for a folder
-through `ask_path`.
+`src/ui/eq.rs` owns the Channel Strip window. The frontend keeps the track that
+the window shows. The window edits copies of the EQ, Drive, compressor, stereo
+width, automated filter, and ducker settings. It sends the changes through
+`EditCommand::SetTrack`. The scope row uses the channel EQ response that the
+Inspector also shows, the Drive transfer curve, and the live compressor and
+ducker gain reduction from the session. The toolbar of the Mixer holds Export
+tracks, which asks for a folder through `ask_path`.
 
 ## Mix view
 

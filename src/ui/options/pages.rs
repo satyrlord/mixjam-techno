@@ -64,7 +64,7 @@ pub(crate) fn audio(
         ui,
         DRIVE_OVERSAMPLING,
         &mut values.drive_playback_oversampling,
-        &OVERSAMPLING,
+        &DRIVE_OVERSAMPLING_CHOICES,
     );
     help(
         ui,

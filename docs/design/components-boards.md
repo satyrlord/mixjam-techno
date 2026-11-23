@@ -15,8 +15,8 @@ L/R routing uses small named toggle buttons with live enabled indicators. Two
 rows of buttons are at the foot of a track strip:
 
 - The upper row: a 26 by 24-point EQ button, Mute, and Solo. The EQ button
-  fills amber while the EQ, drive, compressor, or ducker is on. It also fills
-  amber while the width is not 100%.
+  fills amber while the EQ, drive, compressor, or ducker is on, or while
+  width, bass mono, or filter settings differ from their defaults.
 - The lower row: polarity, L, and R.
 
 The status line under pan tells why a track is silent. The order is Muted, then
@@ -42,30 +42,23 @@ strips, has a lamp bar over its label like M, S, L, and R. It lights and the
 face fills amber while the master pedalboard is on bypass. A Mastering board
 on bypass draws at 45% opacity and stays usable.
 
-### Channel EQ window
+### Channel Strip window
 
-The channel EQ window uses the neutral Utility palette. A power switch and Reset
-share its top row. The response curve follows. It spans 20 Hz to 20 kHz and ±24
-dB, on a dark inset. Vertical grid lines mark 50 Hz, 100 Hz, 200 Hz, 500 Hz, 1
-kHz, 2 kHz, 5 kHz, and 10 kHz. Labels are at 100, 1k, and 10k. Horizontal lines
-mark +12 dB, 0 dB, and -12 dB. Below the curve, six columns name the bands: Low
-cut, Low shelf, Mid peak, Peak 2, High shelf, and High cut. Each column stacks
-the Mastering dials of its band. While the EQ is on, the curve uses the print
-color of the palette. While it is off, the curve is faint cream and the dials
-are disabled.
+The `Track N EQ` window uses the Utility palette and the shared instrument
+painters. Its header selects the track, shows the processing states, and
+resets the EQ. The next row shows the EQ response from 20 Hz to 20 kHz, the
+static Drive transfer curve, and separate gain-reduction histories for the
+compressor and ducker. The Inspector uses the same EQ response painter.
 
-Each of the next sections starts under a divider. Its power switch comes
-first, and a row of five dials in the band columns follows:
+The EQ bay groups its dials by band in signal order and has a cut slope
+selector. Under it, Drive, Compressor & Stereo, and Filter & Ducker group
+the other dials. The stereo and filter controls have no power switch. The
+ducker key steps over the track that the window shows. Powered sections
+disable their dials while off.
 
-| Section | Dials | Notes |
-| --- | --- | --- |
-| Drive | Amount, Character, Mix, Focus, Output | Disabled while the drive is off. |
-| Compressor | Thresh, Ratio, Attack, Release, Makeup | Disabled while the compressor is off. The sixth column, headed Stereo, holds the Width dial, which has no switch. |
-| Ducker | Key (a track number), Thresh, Depth, Attack, Release | Disabled while the ducker is off. The Key dial steps over the track of the window. |
-
-The content of the window is 520 points wide. Its default outer width keeps
-space for the vertical scroll bar. Thus a short viewport scrolls the content
-vertically and adds no horizontal overflow.
+The body is 736 by 500 points. It fits by default at 960 by 720 points when
+there is no row anchor. Scroll bars keep the controls reachable when the
+window opens in a shorter area or the user resizes it.
 
 ### Sends and returns
 

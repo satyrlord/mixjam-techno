@@ -21,6 +21,7 @@ mod tests;
 pub(crate) use evaluate::{Envelope, Varispeed};
 pub use evaluate::{filter_cutoff, value_at, volume_gain};
 pub(crate) use filter::Filter;
+pub use filter::FilterSlope;
 pub use model::{
     Automation, COMPRESSION_FULL, COMPRESSION_STEP, Lane, PITCH_CEILING_CENTS, PITCH_FLOOR_CENTS,
     Point, REPEAT_GATE_FLOOR, REPEAT_GATE_FULL, REPEAT_GATE_STEP, REPEAT_STEPS, RETURN_CEILING,

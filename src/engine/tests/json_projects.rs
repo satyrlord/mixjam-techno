@@ -148,6 +148,34 @@ fn paired_native_labels_and_signed_track_levels_survive_json() {
 }
 
 #[test]
+fn json_tracks_read_the_channel_strip_keys_and_validation_holds_their_ranges() {
+    let mut value = serde_json::to_value(Project::default()).unwrap();
+    let track = &mut value["tracks"][3];
+    track["mono_below_hz"] = 120.0.into();
+    track["filter_resonance"] = 40.0.into();
+    track["filter_slope"] = "24db".into();
+    track["eq"]["cutSlope"] = "24db".into();
+    track["compressor"]["scHpfHz"] = 90.0.into();
+    let mut project = Project::parse_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+    let track = &project.tracks[3];
+    assert_eq!(track.mono_below_hz, 120.0);
+    assert_eq!(track.filter_resonance, 40.0);
+    assert_eq!(track.filter_slope, crate::automation::FilterSlope::Slope24);
+    assert_eq!(track.eq.cut_slope, crate::eq::CutSlope::Slope24);
+    assert_eq!(track.compressor.sc_hpf_hz, 90.0);
+    project.validate().unwrap();
+    for bad in [f32::NAN, f32::INFINITY, 19.0, 301.0] {
+        project.tracks[3].mono_below_hz = bad;
+        assert!(project.validate().is_err(), "mono below {bad}");
+    }
+    project.tracks[3].mono_below_hz = 120.0;
+    for bad in [f32::NAN, f32::NEG_INFINITY, -1.0, 101.0] {
+        project.tracks[3].filter_resonance = bad;
+        assert!(project.validate().is_err(), "filter resonance {bad}");
+    }
+}
+
+#[test]
 fn imported_track_shapes_preserve_values_and_pad_to_sixty_four() {
     for source_track_count in [1, 8, 16, 24, 32, 33, 48, 49, 64] {
         let mut project = Project::default();
@@ -166,6 +194,9 @@ fn imported_track_shapes_preserve_values_and_pad_to_sixty_four() {
             drive: Default::default(),
             compressor: Default::default(),
             width: TRACK_WIDTH.default,
+            mono_below_hz: TRACK_MONO_BELOW.default,
+            filter_resonance: FILTER_RESONANCE.default,
+            filter_slope: Default::default(),
             ducker: Default::default(),
         };
         project.clips.push(Clip {

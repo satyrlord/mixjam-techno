@@ -9,48 +9,58 @@ use super::{
     },
 };
 use crate::{
-    engine::{Fades, MissingReference, Project, TRACK_WIDTH},
+    automation::FilterSlope,
+    engine::{Fades, MissingReference, Project, TRACK_MONO_BELOW, TRACK_WIDTH},
     mixjam::{Header, MAX_SONG_BYTES, text},
 };
 use std::{fs, io::Read, path::Path};
 
+fn write_lanes(project: &Project) -> Vec<Lane> {
+    let mut lanes: Vec<Lane> = project
+        .tracks
+        .iter()
+        .map(|track| Lane {
+            gain: track.gain,
+            polarity_inverted: Some(track.polarity_inverted),
+            pan: track.pan,
+            left_enabled: track.left_enabled,
+            right_enabled: track.right_enabled,
+            muted: Some(track.muted),
+            solo: Some(track.solo),
+            sends: Some(track.sends),
+            automation: (!track.automation.is_empty())
+                .then(|| Saved::Known(track.automation.clone())),
+            eq: (!track.eq.is_default()).then_some(Saved::Known(track.eq)),
+            drive: (!track.drive.is_default()).then_some(track.drive),
+            compressor: (!track.compressor.is_default()).then_some(Saved::Known(track.compressor)),
+            width: (track.width != TRACK_WIDTH.default).then_some(track.width),
+            mono_below_hz: (track.mono_below_hz != TRACK_MONO_BELOW.default)
+                .then_some(track.mono_below_hz),
+            filter_resonance: (track.filter_resonance != 0.0).then_some(track.filter_resonance),
+            filter_slope: (track.filter_slope != FilterSlope::Slope12)
+                .then_some(track.filter_slope),
+            ducker: (!track.ducker.is_default()).then_some(track.ducker),
+            placements: Vec::new(),
+        })
+        .collect();
+    for clip in &project.clips {
+        lanes[clip.track].placements.push(Placement {
+            id: clip.id,
+            sample_id: clip.sample_id,
+            start_tick: clip.start_tick,
+            duration_ticks: clip.length_ticks,
+            offset_frames: clip.offset_frames,
+            gain: clip.gain,
+            fades: (clip.fades != Fades::default()).then_some(clip.fades),
+            pitch_cents: (clip.pitch_cents != 0).then_some(clip.pitch_cents),
+            reverse: clip.reverse.then_some(true),
+        });
+    }
+    lanes
+}
+
 impl Document {
     pub(super) fn new(project: &Project, created_at: String, modified_at: String) -> Self {
-        let mut lanes: Vec<Lane> = project
-            .tracks
-            .iter()
-            .map(|track| Lane {
-                gain: track.gain,
-                polarity_inverted: Some(track.polarity_inverted),
-                pan: track.pan,
-                left_enabled: track.left_enabled,
-                right_enabled: track.right_enabled,
-                muted: Some(track.muted),
-                solo: Some(track.solo),
-                sends: Some(track.sends),
-                automation: (!track.automation.is_empty())
-                    .then(|| Saved::Known(track.automation.clone())),
-                eq: (!track.eq.is_default()).then_some(Saved::Known(track.eq)),
-                drive: (!track.drive.is_default()).then_some(track.drive),
-                compressor: (!track.compressor.is_default()).then_some(track.compressor),
-                width: (track.width != TRACK_WIDTH.default).then_some(track.width),
-                ducker: (!track.ducker.is_default()).then_some(track.ducker),
-                placements: Vec::new(),
-            })
-            .collect();
-        for clip in &project.clips {
-            lanes[clip.track].placements.push(Placement {
-                id: clip.id,
-                sample_id: clip.sample_id,
-                start_tick: clip.start_tick,
-                duration_ticks: clip.length_ticks,
-                offset_frames: clip.offset_frames,
-                gain: clip.gain,
-                fades: (clip.fades != Fades::default()).then_some(clip.fades),
-                pitch_cents: (clip.pitch_cents != 0).then_some(clip.pitch_cents),
-                reverse: clip.reverse.then_some(true),
-            });
-        }
         Self {
             format_version: FORMAT_VERSION,
             app_version: crate::APP_VERSION.into(),
@@ -86,7 +96,7 @@ impl Document {
                     })
                     .collect(),
             ))),
-            lanes,
+            lanes: write_lanes(project),
             samples: project
                 .imported_samples
                 .iter()

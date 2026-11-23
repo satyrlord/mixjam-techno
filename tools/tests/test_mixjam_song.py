@@ -89,6 +89,54 @@ class SongProjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'master pedals must be JSON objects'):
                 self.project(document)
 
+    def test_version_29_projects_channel_strip_settings(self):
+        document = self.document(29)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        eq = dict(earlier['tracks'][0]['eq'], on=True, cutSlope='24db')
+        compressor = dict(earlier['tracks'][0]['compressor'], on=True, scHpfHz=120.0)
+        settings = dict(eq=eq, compressor=compressor, monoBelowHz=140.0,
+                        filterResonance=45.0, filterSlope='24db')
+        for key, value in settings.items():
+            with self.subTest(key=key):
+                old = copy.deepcopy(document)
+                old['formatVersion'] = 28
+                old['lanes'][0][key] = value
+                with self.assertRaisesRegex(RuntimeError, 'v29 channel strip keys'):
+                    self.project(old)
+        document['lanes'][0].update(settings)
+        track = self.project(document)['tracks'][0]
+        self.assertEqual(track['eq'], eq)
+        self.assertEqual(track['compressor'], compressor)
+        self.assertEqual((track['mono_below_hz'], track['filter_resonance'], track['filter_slope']),
+                         (140.0, 45.0, '24db'))
+        track = earlier['tracks'][0]
+        self.assertEqual((track['mono_below_hz'], track['filter_resonance'], track['filter_slope']),
+                         (20.0, 0.0, '12db'))
+
+    def test_version_29_rejects_invalid_channel_strip_settings(self):
+        document = self.document(29)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        lane = document['lanes'][0]
+        lane['eq'] = earlier['tracks'][0]['eq']
+        lane['compressor'] = earlier['tracks'][0]['compressor']
+        for record, key, invalid in [
+            (lane['eq'], 'cutSlope', '48db'),
+            (lane['compressor'], 'scHpfHz', 251),
+            (lane, 'monoBelowHz', 301),
+            (lane, 'filterResonance', -1),
+            (lane, 'filterSlope', '48db'),
+        ]:
+            for value in (None, True, invalid):
+                with self.subTest(key=key, value=value):
+                    record[key] = value
+                    with self.assertRaisesRegex(RuntimeError, key):
+                        self.project(document)
+            del record[key]
+
     def test_version_11_preserves_booster_and_adds_disabled_pedals(self):
         document = self.document(11)
         defaults = self.project(self.document())['master']

@@ -598,6 +598,12 @@ impl Biquad {
     pub(crate) fn clear(&mut self) {
         self.state = [[0.0; 2]; 2];
     }
+    pub(crate) fn history(&self) -> [[f64; 2]; 2] {
+        self.state
+    }
+    pub(crate) fn set_history(&mut self, history: [[f64; 2]; 2]) {
+        self.state = history;
+    }
     #[inline]
     pub(crate) fn process(&mut self, channel: usize, input: f64) -> f64 {
         let c = &self.coefficients;

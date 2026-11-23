@@ -5,18 +5,19 @@ pub use crate::{
     compat::rejected_import_path,
     effects::{EffectsState, MIN_ECHO_BEATS},
     engine::{
-        CLIP_SILENCE_DB, Clip, Fade, FadeCurve, Fades, MAX_CLIP_GAIN, MAX_MIXER_GAIN_DB,
-        MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, MissingReference, MissingSample, PITCH_RANGE,
-        Project, SOURCE_BPM, SUPPORTED_BPMS, SampleConflict, Section, Silence, TEMPO_RANGE,
-        TICKS_PER_BAR, TICKS_PER_BEAT, TRACK_COUNT, TRACK_WIDTH, Track, TrackMix, amplitude_to_db,
-        check_pitch, clip_gain_db, clip_gain_from_db, clip_gain_max_db, db_to_amplitude,
-        frames_per_tick_at, playback_bpm, tick_seconds,
+        CLIP_SILENCE_DB, Clip, FILTER_RESONANCE, Fade, FadeCurve, Fades, MAX_CLIP_GAIN,
+        MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, MissingReference,
+        MissingSample, PITCH_RANGE, Project, SOURCE_BPM, SUPPORTED_BPMS, SampleConflict, Section,
+        Silence, TEMPO_RANGE, TICKS_PER_BAR, TICKS_PER_BEAT, TRACK_COUNT, TRACK_MONO_BELOW,
+        TRACK_WIDTH, Track, TrackMix, amplitude_to_db, check_pitch, clip_gain_db,
+        clip_gain_from_db, clip_gain_max_db, db_to_amplitude, frames_per_tick_at, playback_bpm,
+        tick_seconds,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
         EQ_BAND_MAX, EQ_FREQUENCIES, FxBusMeterReading, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob,
         KnobRange, LimiterStyle, MasterChain, MeterReading, OVER_DBTP, PedalKind,
-        VECTORSCOPE_POINTS, VU_REFERENCE_DBFS, presets, sample_master_eq_curve,
+        TrackMeterReading, VECTORSCOPE_POINTS, VU_REFERENCE_DBFS, presets, sample_master_eq_curve,
         sample_saturation_curve,
     },
     peaks::{PeakState, Peaks},
@@ -27,13 +28,14 @@ pub use crate::{
 pub const MIX_SAMPLE_RATE: u32 = crate::audio::Mix::SAMPLE_RATE;
 /// The channel EQ of each track and its controls.
 pub mod eq {
-    pub use crate::eq::{ChannelEq, EqParam};
+    pub use crate::eq::{ChannelEq, CutSlope, EqParam, sample_channel_eq_curve};
 }
 /// Validated application preferences, independent of the song model.
 pub mod options {
     pub use crate::options::{
-        AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget,
-        SampleQuality, SongFolderMode, StartingModule, Theme, WorkspaceLayout,
+        AppOptions, DriveOversampling, LaneHeight, MeterDisplayRate, Oversampling,
+        PlaybackBufferTarget, SampleQuality, SongFolderMode, StartingModule, Theme,
+        WorkspaceLayout,
     };
     /// The message when the active options changed after a draft was taken.
     pub const STALE_DRAFT: &str =
@@ -41,7 +43,7 @@ pub mod options {
 }
 /// The drive of each track and its controls.
 pub mod drive {
-    pub use crate::drive::{Drive, DriveParam};
+    pub use crate::drive::{Drive, DriveParam, sample_drive_curve};
 }
 /// The compressor of each track and its controls.
 pub mod compressor {
@@ -54,8 +56,8 @@ pub mod ducker {
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
-        Automation, Lane, Point, REPEAT_STEPS, RETURN_CEILING, VOLUME_FLOOR_DB, filter_cutoff,
-        moved_point, return_label, set_point, snap_return, value_at,
+        Automation, FilterSlope, Lane, Point, REPEAT_STEPS, RETURN_CEILING, VOLUME_FLOOR_DB,
+        filter_cutoff, moved_point, return_label, set_point, snap_return, value_at,
     };
 }
 /// The FX buses, their effects, and the controls of both.

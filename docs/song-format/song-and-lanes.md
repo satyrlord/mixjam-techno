@@ -2,8 +2,8 @@
 
 ## Contents
 
-The keys `eq`, `drive`, `compressor`, `width`, and `ducker` have their
-own page, [Lane processing keys](lane-processing.md).
+See [Lane processing keys](lane-processing.md) for the channel EQ, drive,
+compressor, stereo width, Filter settings, and ducker.
 
 ## Song
 

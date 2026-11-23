@@ -43,6 +43,7 @@
 //! modes. The clean track itself passes through a plain delay, so a `mix`
 //! of 0% at 0 dB output gives the track back bit for bit. A track whose
 //! drive is off mixes exactly as it did before the drive existed.
+use crate::fx::RenderQuality;
 use crate::master::{
     KnobRange,
     dsp::{
@@ -51,7 +52,7 @@ use crate::master::{
     },
     range, ratio_range,
 };
-use crate::playback_quality::Oversampling;
+use crate::playback_quality::{DriveOversampling, Oversampling};
 use serde::{Deserialize, Serialize};
 
 /// The frames by which the drive's output follows its input.
@@ -285,10 +286,20 @@ pub(crate) struct Run {
 impl Run {
     #[cfg(test)]
     pub(crate) fn new(drive: &Drive) -> Self {
-        Self::with_quality(drive, Oversampling::FourX)
+        Self::with_quality(drive, DriveOversampling::FourX, RenderQuality::Offline)
     }
 
-    pub(crate) fn with_quality(drive: &Drive, oversampling: Oversampling) -> Self {
+    pub(crate) fn with_quality(
+        drive: &Drive,
+        drive_oversampling: DriveOversampling,
+        render_quality: RenderQuality,
+    ) -> Self {
+        let oversampling = match (render_quality, drive_oversampling) {
+            (RenderQuality::Offline, _) | (RenderQuality::Live, DriveOversampling::FourX) => {
+                Oversampling::FourX
+            }
+            (RenderQuality::Live, DriveOversampling::Off) => Oversampling::Off,
+        };
         let amount = f64::from(drive.amount);
         let gain = db_to_gain(amount);
         let focus = f64::from(drive.focus);
@@ -438,6 +449,30 @@ impl State {
             ..Self::default()
         }
     }
+}
+
+/// Sample the static Drive transfer curve over input amplitudes `[-1, 1]`.
+/// This preview includes Mix and Output. The focus filter and power matching
+/// need a sequence of samples, so they do not enter a static curve.
+pub fn sample_drive_curve(drive: &Drive, points: usize) -> Vec<f32> {
+    if points == 0 {
+        return Vec::new();
+    }
+    if points == 1 {
+        return vec![0.0];
+    }
+    let gain = db_to_gain(f64::from(drive.amount));
+    let character = f64::from(drive.character) / 100.0;
+    let mix = f64::from(drive.mix) / 100.0;
+    let output = db_to_gain(f64::from(drive.output));
+    (0..points)
+        .map(|i| {
+            let x = -1.0 + 2.0 * (i as f64) / ((points - 1) as f64);
+            let shaped = curve(x * gain, character) / gain;
+            let blended = (1.0 - mix) * x + mix * shaped;
+            (blended * output) as f32
+        })
+        .collect()
 }
 
 #[cfg(test)]

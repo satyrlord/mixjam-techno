@@ -111,24 +111,43 @@ pub(super) struct Lane {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        deserialize_with = "saved_drive"
+        deserialize_with = "present"
     )]
     pub(super) drive: Option<crate::drive::Drive>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) compressor: Option<crate::compressor::Compressor>,
+    pub(super) compressor: Option<Saved<crate::compressor::Compressor>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) width: Option<f32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub(super) mono_below_hz: Option<f32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub(super) filter_resonance: Option<f32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub(super) filter_slope: Option<crate::automation::FilterSlope>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) ducker: Option<crate::ducker::Ducker>,
     pub(super) placements: Vec<Placement>,
 }
 
-// A missing drive is off. An explicit null is not a drive record and must
-// not erase the presence of a version-22 setting in an earlier song.
-fn saved_drive<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<crate::drive::Drive>, D::Error> {
-    crate::drive::Drive::deserialize(deserializer).map(Some)
+// An explicit null must not erase the presence of a later-version field.
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 /// The FX buses as a song saves them: each bus's settings and, from version

@@ -31,6 +31,8 @@ rate. This mode keeps the matching, focus, Mix, Output, and DC-removal stages.
 A plain delay keeps the same 69-frame integer alignment, so a quality switch
 does not bypass Drive. Audible chains and separate key chains use the same
 explicit playback configuration. The default is the 4x path.
+Mix preparation records whether it is for live playback or offline export.
+Export reuses a prepared mix only if it is offline and uses full quality.
 
 The oversampling delays the copy by `drive::LATENCY` (69 frames). Thus a chain
 with a drive reads its voices, Repeat lane, and EQ 69 frames ahead. The output
@@ -52,9 +54,10 @@ track edit and prepares a new mix, as an EQ edit does.
 ## Channel EQ and live track levels
 
 `src/eq.rs` owns `ChannelEq`, the saved settings, and `EqParam`, each control
-with its range. A mix designs the EQ curve of a chain once, from the shared
-RBJ biquads of the master board (`master::dsp`). An EQ edit is a track edit, so
-it prepares a new mix, and playback continues on that mix.
+with its range. A mix designs the EQ curve of a chain once, using biquads. The
+cut bands share a 12 or 24 dB/octave slope. The window and Inspector plot the
+response of the same filters. An EQ edit prepares a new mix, and playback
+continues on that mix.
 
 A mix keeps the track levels from its preparation, and export uses them.
 Playback reads the levels live from the `MasterControl` instead. It glides from
@@ -77,6 +80,6 @@ uses the levels of the prepared mix. The audio thread does not wait for a lock
 and does not try again. The master gain glides with the levels. Key
 normalization divides by that gain directly. Thus a very small positive gain
 cannot overflow a reciprocal and leave the detector of a ducker at infinity.
-Playback continues without a click. An export prepares a new mix only when the
+Playback continues without a click. Export also prepares a mix again when the
 levels are different. The mix calculates automation values at each output
 frame, so short moves do not depend on the block size of the reader.

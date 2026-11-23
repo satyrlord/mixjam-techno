@@ -139,58 +139,29 @@ fn compressor_and_ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
             frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         }
         let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-        let point = text_rect(&output, "Mid peak").center();
-        frame_at_size(
-            &ctx,
-            &mut app,
-            vec![
-                egui::Event::PointerMoved(point),
-                egui::Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta: Vec2::new(0.0, -20_000.0),
-                    modifiers: egui::Modifiers::NONE,
-                },
-            ],
-            egui::Modifiers::NONE,
-            size,
-        );
-        for _ in 0..60 {
-            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-        }
-        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-        let q = text_rect(&output, "Q");
-        let ducker = text_rect(&output, "Ducker");
-        let separator = output
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Rect(rect)
-                    if (500.0..540.0).contains(&rect.rect.width())
-                        && rect.rect.height() <= 2.0
-                        && rect.rect.top() > q.top()
-                        && rect.rect.bottom() < ducker.top() =>
-                {
-                    Some(rect.rect.top())
-                }
-                _ => None,
-            })
-            .min_by(f32::total_cmp)
-            .expect("The compressor section needs its separator.");
-        assert!(
-            separator >= q.bottom() + 2.0,
-            "The compressor separator crosses the EQ Q label at {size:?}: {q:?}, {separator}"
-        );
         for label in [
-            "Compressor",
-            "Ratio",
-            "Makeup",
-            "Stereo",
-            "Width",
-            "Key",
+            "EQ",
+            "Drive",
+            "Compressor & Stereo",
+            "Filter & Ducker",
+            "Low cut",
+            "High cut",
+            "Amount",
+            "Char",
+            "Mix",
+            "Focus",
+            "Output",
             "Thresh",
-            "Depth",
+            "Ratio",
             "Attack",
             "Release",
+            "Makeup",
+            "SC HPF",
+            "Width",
+            "Mono <",
+            "Flt Res",
+            "Key",
+            "Depth",
         ] {
             assert!(
                 screen(&output).texts().any(|text| {
@@ -199,10 +170,274 @@ fn compressor_and_ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
                             .clip()
                             .contains_rect(text.shape().visual_bounding_rect())
                 }),
-                "{label} is clipped at {size:?}"
+                "{label} is clipped or missing at {size:?}"
             );
         }
     }
+}
+
+#[test]
+fn a_short_channel_strip_scrolls_to_its_bottom_controls() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
+    app.eq_track = Some(0);
+    for _ in 0..4 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let before = dialog::window_rect(&ctx, "Track 1 EQ").unwrap();
+    let grip = before.center_bottom() - Vec2::new(0.0, 3.0);
+    let smaller = grip - Vec2::new(0.0, 210.0);
+    pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(smaller)],
+        egui::Modifiers::NONE,
+    );
+    pointer(&ctx, &mut app, smaller, false, egui::Modifiers::NONE);
+    let window = dialog::window_rect(&ctx, "Track 1 EQ").unwrap();
+    assert!(window.height() < before.height() - 100.0);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let name = "Track 1 ducker release value";
+    assert!(effects_control_rect(&output, name).bottom() > window.bottom());
+    frame(
+        &ctx,
+        &mut app,
+        vec![
+            egui::Event::PointerMoved(window.min + Vec2::new(25.0, 65.0)),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: Vec2::new(0.0, -1400.0),
+                modifiers: egui::Modifiers::NONE,
+            },
+        ],
+        egui::Modifiers::NONE,
+    );
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(
+        window
+            .shrink(18.0)
+            .contains_rect(effects_control_rect(&output, name))
+    );
+}
+
+#[test]
+fn mix_view_channel_strip_keeps_the_invoking_row_visible() {
+    let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+    click_named(&ctx, &mut app, "Track 2 EQ");
+    let row = app.mix.eq_row.unwrap();
+    let window = dialog::window_rect(&ctx, "Track 2 EQ").unwrap();
+    assert!(!row.intersects(window), "{row:?} / {window:?}");
+    assert!(window.bottom() <= 970.0);
+}
+
+#[test]
+fn the_track_switcher_keeps_the_window_in_place() {
+    let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+    click_named(&ctx, &mut app, "Track 2 EQ");
+    let before = dialog::window_rect(&ctx, "Track 2 EQ").unwrap();
+    click_named(&ctx, &mut app, "Track 2 EQ next track");
+    assert_eq!(app.eq_track, Some(2));
+    for _ in 0..2 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let after = dialog::window_rect(&ctx, "Track 3 EQ").unwrap();
+    assert_eq!(after, before);
+}
+
+#[test]
+fn clicking_the_power_caption_switches_the_eq() {
+    let (ctx, mut app) = fixture();
+    app.eq_track = Some(0);
+    for _ in 0..4 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let caption = screen(&output)
+        .texts()
+        .filter(|text| text.label() == "Power")
+        .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+        .unwrap();
+    click(
+        &ctx,
+        &mut app,
+        caption.rect().center(),
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().tracks[0].eq.on);
+}
+
+#[test]
+fn track_switcher_buttons_move_between_tracks_cleanly() {
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    app.boards.module = BottomModule::Mixer;
+    send(&mut app, &["click", "target=Track 1 EQ"]);
+    let reply = send(&mut app, &["click", "target=Track 1 EQ next track"]);
+    assert_eq!(
+        reply["windows"],
+        serde_json::json!(["Track 2 EQ"]),
+        "{reply}"
+    );
+    assert_eq!(app.eq_track, Some(1));
+    let reply = send(&mut app, &["click", "target=Track 2 EQ previous track"]);
+    assert_eq!(
+        reply["windows"],
+        serde_json::json!(["Track 1 EQ"]),
+        "{reply}"
+    );
+    assert_eq!(app.eq_track, Some(0));
+}
+
+#[test]
+fn v29_channel_strip_controls_edit_and_undo_cleanly() {
+    use mixjam_techno::application::{automation::FilterSlope, eq::CutSlope};
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    app.boards.module = BottomModule::Mixer;
+    send(&mut app, &["click", "target=Track 1 EQ"]);
+    let initial = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    for label in ["Track 1 EQ cut slope 12 dB", "Track 1 filter 12 dB"] {
+        let (_, node) = accessible_node(&initial, label);
+        assert_eq!(node.role(), egui::accesskit::Role::RadioButton);
+        assert_eq!(node.toggled(), Some(egui::accesskit::Toggled::True));
+    }
+    accessible_node(&initial, "Track 1 drive transfer curve");
+    for processor in ["compressor", "ducker"] {
+        let (_, node) = accessible_node(&initial, &format!("Track 1 {processor} gain reduction"));
+        assert_eq!(node.role(), egui::accesskit::Role::Meter);
+        assert_eq!(node.numeric_value(), Some(0.0));
+    }
+    send(&mut app, &["set", "target=Track 1 EQ power", "value=true"]);
+    send(&mut app, &["click", "target=Track 1 EQ cut slope 24 dB"]);
+    send(
+        &mut app,
+        &["set", "target=Track 1 compressor power", "value=true"],
+    );
+    send(
+        &mut app,
+        &[
+            "set",
+            "target=Track 1 compressor sidechain HPF",
+            "value=110",
+        ],
+    );
+    send(&mut app, &["set", "target=Track 1 mono below", "value=120"]);
+    send(&mut app, &["click", "target=Track 1 filter 24 dB"]);
+    send(
+        &mut app,
+        &["set", "target=Track 1 filter resonance", "value=40"],
+    );
+
+    let track = &app.session.project().tracks[0];
+    assert_eq!(track.eq.cut_slope, CutSlope::Slope24);
+    assert_eq!(track.compressor.sc_hpf_hz, 110.0);
+    assert_eq!(track.mono_below_hz, 120.0);
+    assert_eq!(track.filter_slope, FilterSlope::Slope24);
+    assert_eq!(track.filter_resonance, 40.0);
+    let updated = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    for stem in ["Track 1 EQ cut slope", "Track 1 filter"] {
+        for (slope, checked) in [(12, false), (24, true)] {
+            let (_, node) = accessible_node(&updated, &format!("{stem} {slope} dB"));
+            let toggled = if checked {
+                egui::accesskit::Toggled::True
+            } else {
+                egui::accesskit::Toggled::False
+            };
+            assert_eq!(node.toggled(), Some(toggled));
+        }
+    }
+
+    let state = send(&mut app, &["state"]);
+    assert_eq!(
+        state["song"]["tracks"][0]["mono_below_hz"], 120.0,
+        "{state}"
+    );
+    assert_eq!(
+        state["song"]["tracks"][0]["filter_resonance"], 40.0,
+        "{state}"
+    );
+    assert_eq!(
+        state["song"]["tracks"][0]["filter_slope"], "24db",
+        "{state}"
+    );
+    assert_eq!(
+        state["song"]["tracks"][0]["eq_cut_slope"], "24db",
+        "{state}"
+    );
+
+    app.history_step(false);
+    assert_eq!(app.session.project().tracks[0].filter_resonance, 0.0);
+    app.history_step(false);
+    assert_eq!(
+        app.session.project().tracks[0].filter_slope,
+        FilterSlope::Slope12
+    );
+}
+
+#[test]
+fn channel_strip_renders_across_all_three_themes_with_accessible_contrast() {
+    use mixjam_techno::application::options::Theme;
+    for theme_kind in [Theme::Studio, Theme::Aero, Theme::Vintage] {
+        theme::paint_as(theme_kind);
+        let r = roles();
+        let face_contrast = controls::contrast(r.panel, r.legend);
+        assert!(
+            face_contrast >= 5.0,
+            "{theme_kind:?} panel/legend contrast {face_contrast:.2}:1 < 5.0:1"
+        );
+        let btn_contrast = controls::contrast(r.primary, r.on_light);
+        assert!(
+            btn_contrast >= 4.5,
+            "{theme_kind:?} primary button contrast {btn_contrast:.2}:1 < 4.5:1"
+        );
+        // The lit processing tags in the strip header print legend on a slot.
+        let tag_contrast = controls::contrast(r.strip_slot, r.legend);
+        assert!(
+            tag_contrast >= 4.5,
+            "{theme_kind:?} strip tag contrast {tag_contrast:.2}:1 < 4.5:1"
+        );
+
+        let (ctx, mut app) = fixture();
+        let mut tracks = app.session.project().tracks.clone();
+        tracks[0].eq.on = true;
+        tracks[0].drive.on = true;
+        tracks[0].compressor.on = true;
+        tracks[0].ducker.on = true;
+        tracks[0].ducker.key = 2;
+        let master_gain = app.session.project().master_gain;
+        app.session
+            .edit(EditCommand::SetMixer {
+                tracks,
+                master_gain,
+            })
+            .unwrap();
+        app.eq_track = Some(0);
+        for _ in 0..4 {
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![],
+                egui::Modifiers::NONE,
+                Vec2::new(960.0, 720.0),
+            );
+        }
+        let output = frame_at_size(
+            &ctx,
+            &mut app,
+            vec![],
+            egui::Modifiers::NONE,
+            Vec2::new(960.0, 720.0),
+        );
+        assert!(
+            screen(&output)
+                .texts()
+                .any(|t| t.label() == "Filter & Ducker"),
+            "missing Filter & Ducker under {theme_kind:?}"
+        );
+    }
+    theme::paint_as(Theme::Studio);
 }
 
 #[test]
@@ -216,6 +451,32 @@ fn opening_eq_preserves_an_off_ducker_with_its_own_track_as_key() {
     assert_eq!(app.session.project(), &project);
     assert!(!app.session.unsaved());
     assert!(!app.session.has_history_step(false));
+}
+
+#[test]
+fn inspector_preserves_an_off_ducker_key_until_the_ducker_turns_on() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    let mut project = app.session.project().clone();
+    project.tracks[1].ducker.key = 2;
+    let library = Library::fixture(app.session.library().samples.to_vec());
+    app.session = Session::headless(Arc::new(library), project.clone()).unwrap();
+    app.open_inspector();
+    app.select_track(1);
+    for _ in 0..4 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    assert_eq!(app.session.project(), &project);
+    assert!(!app.session.has_history_step(false));
+    click_named(&ctx, &mut app, "Inspector track ducker power");
+    let ducker = app.session.project().tracks[1].ducker;
+    assert!(ducker.on);
+    assert_eq!(ducker.key, 1);
+    app.history_step(false);
+    assert_eq!(
+        app.session.project().tracks[1].ducker,
+        project.tracks[1].ducker
+    );
 }
 
 #[test]
@@ -399,7 +660,7 @@ fn the_strip_eq_button_names_channel_processing_not_the_eq_alone() {
         tooltip = tooltip.or_else(|| {
             screen(&output)
                 .texts()
-                .find(|text| text.label().contains("Open the channel EQ window"))
+                .find(|text| text.label().contains("Open the channel strip"))
                 .map(|text| text.label().to_owned())
         });
     }

@@ -3,7 +3,7 @@ use super::{
     BusView, Busy, ClipView, ConflictView, LibraryState, MissingView, ProviderView, SampleView,
     ScanView, SectionView, SongView, TrackView, Transport, UnloadedView,
 };
-use crate::application::{Product, Sample, Session, TICKS_PER_BAR};
+use crate::application::{Clip, Product, Project, Sample, Session, TICKS_PER_BAR};
 use std::path::PathBuf;
 
 fn bar_of(tick: u32) -> f64 {
@@ -52,9 +52,7 @@ pub fn sample_view(session: &Session, sample: &Sample) -> SampleView {
     }
 }
 
-pub fn song_view(session: &Session) -> SongView {
-    let project = session.project();
-    let library = session.library();
+fn track_views(project: &Project) -> Vec<TrackView> {
     let mut clip_counts = vec![0; project.tracks.len()];
     for clip in &project.clips {
         if let Some(count) = clip_counts.get_mut(clip.track) {
@@ -62,7 +60,7 @@ pub fn song_view(session: &Session) -> SongView {
         }
     }
     // A soloed track silences the others, so it is listed even without clips.
-    let tracks: Vec<TrackView> = project
+    project
         .tracks
         .iter()
         .zip(clip_counts)
@@ -80,12 +78,51 @@ pub fn song_view(session: &Session) -> SongView {
             sends: track.sends,
             automation: track.automation.clone(),
             eq_on: track.eq.on,
+            eq_cut_slope: track.eq.cut_slope,
             drive: track.drive,
             compressor_on: track.compressor.on,
+            compressor_sc_hpf_hz: track.compressor.sc_hpf_hz,
             width: track.width,
+            mono_below_hz: track.mono_below_hz,
+            filter_resonance: track.filter_resonance,
+            filter_slope: track.filter_slope,
             clips,
         })
-        .collect();
+        .collect()
+}
+
+fn clip_view(session: &Session, clip: &Clip) -> ClipView {
+    let missing = session.missing_sample(clip.sample_id);
+    let name = missing.map_or_else(
+        || {
+            session
+                .library()
+                .sample_by_id(clip.sample_id)
+                .map(|sample| sample.name.clone())
+                .unwrap_or_default()
+        },
+        |missing| missing.name.clone(),
+    );
+    ClipView {
+        id: clip.id,
+        sample: clip.sample_id,
+        name,
+        missing: missing.is_some(),
+        track: clip.track + 1,
+        bar: bar_of(clip.start_tick),
+        start_tick: clip.start_tick,
+        length_ticks: clip.length_ticks,
+        offset_frames: clip.offset_frames,
+        gain: clip.gain,
+        fades: clip.fades,
+        pitch_cents: clip.pitch_cents,
+        reverse: clip.reverse,
+        rect: None,
+    }
+}
+
+fn library_state(session: &Session) -> LibraryState {
+    let library = session.library();
     let mut groups: Vec<String> = library
         .samples
         .iter()
@@ -93,6 +130,24 @@ pub fn song_view(session: &Session) -> SongView {
         .collect();
     groups.sort();
     groups.dedup();
+    LibraryState {
+        folders: library.wav_roots().to_vec(),
+        unloaded: unloaded_views(session),
+        samples: library.samples.len(),
+        groups,
+        providers: library
+            .bindings()
+            .iter()
+            .map(|binding| ProviderView {
+                library: binding.product.label(),
+                root: binding.root.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn song_view(session: &Session) -> SongView {
+    let project = session.project();
     SongView {
         title: project.title.clone(),
         file: session.file().map(PathBuf::from),
@@ -116,37 +171,11 @@ pub fn song_view(session: &Session) -> SongView {
             })
             .collect(),
         end_tick: project.end_tick(),
-        tracks,
+        tracks: track_views(project),
         clips: project
             .clips
             .iter()
-            .map(|clip| {
-                let missing = session.missing_sample(clip.sample_id);
-                ClipView {
-                    id: clip.id,
-                    sample: clip.sample_id,
-                    name: missing.map_or_else(
-                        || {
-                            library
-                                .sample_by_id(clip.sample_id)
-                                .map(|sample| sample.name.clone())
-                                .unwrap_or_default()
-                        },
-                        |missing| missing.name.clone(),
-                    ),
-                    missing: missing.is_some(),
-                    track: clip.track + 1,
-                    bar: bar_of(clip.start_tick),
-                    start_tick: clip.start_tick,
-                    length_ticks: clip.length_ticks,
-                    offset_frames: clip.offset_frames,
-                    gain: clip.gain,
-                    fades: clip.fades,
-                    pitch_cents: clip.pitch_cents,
-                    reverse: clip.reverse,
-                    rect: None,
-                }
-            })
+            .map(|clip| clip_view(session, clip))
             .collect(),
         fx_buses: project
             .fx
@@ -192,20 +221,7 @@ pub fn song_view(session: &Session) -> SongView {
             })
             .chain(project.source_notices.iter().cloned())
             .collect(),
-        library: LibraryState {
-            folders: library.wav_roots().to_vec(),
-            unloaded: unloaded_views(session),
-            samples: library.samples.len(),
-            groups,
-            providers: library
-                .bindings()
-                .iter()
-                .map(|binding| ProviderView {
-                    library: binding.product.label(),
-                    root: binding.root.clone(),
-                })
-                .collect(),
-        },
+        library: library_state(session),
     }
 }
 

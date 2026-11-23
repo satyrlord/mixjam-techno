@@ -63,6 +63,9 @@
 //! - Version 28 adds `scHpfHz`, `mix`, and `makeupDb` to `busCompressor` and
 //!   `style` to `limiter`. Earlier songs open with lossless migration defaults
 //!   and reject those keys.
+//! - Version 29 adds `cutSlope` to `eq`, `scHpfHz` to `compressor`, and
+//!   `monoBelowHz`, `filterResonance`, and `filterSlope` to lanes. Earlier
+//!   songs open with lossless migration defaults and reject those keys.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -78,4 +81,4 @@ mod writing;
 pub(super) use reading::parse;
 pub(super) use writing::save;
 
-pub(super) const FORMAT_VERSION: u32 = 28;
+pub(super) const FORMAT_VERSION: u32 = 29;

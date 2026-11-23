@@ -3,8 +3,8 @@
 //! only. The backend's option values carry no labels.
 use super::draft::Page;
 use mixjam_techno::application::options::{
-    LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
-    SongFolderMode, StartingModule, Theme,
+    DriveOversampling, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget,
+    SampleQuality, SongFolderMode, StartingModule, Theme,
 };
 
 /// The window's title and identity.
@@ -58,6 +58,10 @@ pub(crate) const PREVIEW_LEVEL: &str = "Preview level";
 pub(crate) const MUTE_PREVIEWS: &str = "Mute previews";
 pub(crate) const METER_RATE: &str = "Meter display rate";
 
+pub(crate) const DRIVE_OVERSAMPLING_CHOICES: [(DriveOversampling, &str); 2] = [
+    (DriveOversampling::FourX, "4x"),
+    (DriveOversampling::Off, "Off"),
+];
 pub(crate) const OVERSAMPLING: [(Oversampling, &str); 2] =
     [(Oversampling::FourX, "4x"), (Oversampling::Off, "Off")];
 pub(crate) const SAMPLE_QUALITIES: [(SampleQuality, &str); 2] =

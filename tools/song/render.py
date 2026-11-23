@@ -29,7 +29,7 @@ part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
 whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
-not change since an earlier render comes from the cache. Only format-18 to 26 songs
+not change since an earlier render comes from the cache. Only format-18 to 29 songs
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
@@ -304,6 +304,28 @@ def cacheable_sections(document):
     return True
 
 
+def cacheable_channel_strip(document):
+    """Leave invalid settings in any lane for the native renderer to reject."""
+    version = document['formatVersion']
+    for lane in document['lanes']:
+        eq, compressor = lane.get('eq'), lane.get('compressor')
+        if any(value is not None and not isinstance(value, dict) for value in (eq, compressor)):
+            return False
+        for record, key in ((eq or {}, 'cutSlope'), (lane, 'filterSlope')):
+            if key in record and (version < 29 or record[key] not in ('12db', '24db')):
+                return False
+        for record, key, low, high in (
+            (compressor or {}, 'scHpfHz', 20, 250),
+            (lane, 'monoBelowHz', 20, 300),
+            (lane, 'filterResonance', 0, 100),
+        ):
+            if key in record:
+                value = record[key]
+                if version < 29 or type(value) not in (int, float) or not low <= value <= high:
+                    return False
+    return True
+
+
 def source_fingerprints(document):
     """Hash directly linked WAVs; None when native source resolution is needed.
 
@@ -314,7 +336,7 @@ def source_fingerprints(document):
     if document.get('formatVersion') not in range(18, FORMAT_VERSION + 1) or any(document.get(field) for field in
                                                 ('libraries', 'missingSamples', 'sampleConflicts')):
         return None
-    if not cacheable_sections(document):
+    if not cacheable_sections(document) or not cacheable_channel_strip(document):
         return None
     samples = {sample['id']: sample for sample in document['samples']}
     used = {placement['sampleId'] for lane in document['lanes'] for placement in lane['placements']}

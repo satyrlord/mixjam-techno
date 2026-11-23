@@ -1,6 +1,7 @@
 mod lane_versions;
 mod master_versions;
 mod roundtrip;
+mod strip_versions;
 
 use super::*;
 use super::{
@@ -122,6 +123,9 @@ fn project() -> Project {
             ..Default::default()
         },
         width: 150.0,
+        mono_below_hz: 20.0,
+        filter_resonance: 0.0,
+        filter_slope: crate::automation::FilterSlope::Slope12,
         ducker: crate::ducker::Ducker {
             on: true,
             key: 1,

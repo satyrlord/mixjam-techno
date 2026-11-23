@@ -207,7 +207,7 @@ fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
         frame[1] *= -0.5;
     }
     input[1024..2048].fill(0.0);
-    for quality in [Oversampling::FourX, Oversampling::Off] {
+    for quality in [DriveOversampling::FourX, DriveOversampling::Off] {
         for mix in [0.0, 100.0] {
             let settings = Drive {
                 amount: 24.0,
@@ -215,12 +215,12 @@ fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
                 mix,
                 ..on()
             };
-            let run = Run::with_quality(&settings, quality);
+            let run = Run::with_quality(&settings, quality, RenderQuality::Live);
             let mut state = State::new(&run);
             let mut whole = input.clone();
             whole.extend([0.0; LATENCY * 2]);
             run.process(&mut whole, &mut state);
-            if quality == Oversampling::Off || mix == 0.0 {
+            if quality == DriveOversampling::Off || mix == 0.0 {
                 assert!(whole[..LATENCY * 2].iter().all(|x| *x == 0.0));
             }
             let mut blocked = input.clone();
@@ -236,7 +236,7 @@ fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
                 assert_ne!(&whole[LATENCY * 2..], input, "Off must still saturate");
                 assert!(whole.iter().all(|x| x.is_finite()));
             }
-            if quality == Oversampling::FourX {
+            if quality == DriveOversampling::FourX {
                 let mut legacy = input.clone();
                 legacy.extend([0.0; LATENCY * 2]);
                 let legacy_run = Run::new(&settings);
@@ -284,11 +284,11 @@ fn playback_quality_records_alias_and_frequency_response_tradeoffs() {
         ..on()
     };
     let mut aliases = [0.0; 2];
-    for (index, quality) in [Oversampling::FourX, Oversampling::Off]
+    for (index, quality) in [DriveOversampling::FourX, DriveOversampling::Off]
         .into_iter()
         .enumerate()
     {
-        let run = Run::with_quality(&settings, quality);
+        let run = Run::with_quality(&settings, quality, RenderQuality::Live);
         let mut state = State::new(&run);
         let mut output = input.clone();
         output.extend([0.0; LATENCY * 2]);
@@ -545,4 +545,20 @@ fn nearby_settings_sound_nearby() {
             );
         }
     }
+}
+
+#[test]
+fn transfer_preview_keeps_the_straight_half_and_full_output_trim() {
+    let settings = Drive {
+        amount: 12.0,
+        character: 100.0,
+        mix: 100.0,
+        output: 12.0,
+        ..on()
+    };
+    let trace = sample_drive_curve(&settings, 3);
+    let gain = db_to_gain(12.0);
+    assert!((f64::from(trace[0]) + gain).abs() < 1e-6);
+    assert_eq!(trace[1], 0.0);
+    assert!((f64::from(trace[2]) - gain.tanh()).abs() < 1e-6);
 }

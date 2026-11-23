@@ -5,6 +5,7 @@ fn wav_export_rejects_riff_size_overflow_before_opening_output() {
     // The data fits u32, but adding the 36-byte RIFF payload header does not.
     let mix = Mix {
         quality: crate::playback_quality::PlaybackQuality::FULL,
+        render_quality: crate::fx::RenderQuality::Offline,
         frames: (u64::from(u32::MAX) - 36) / 4 + 1,
         voices: Vec::new(),
         chains: Vec::new(),
@@ -173,6 +174,7 @@ fn a_short_sound_keeps_its_end() {
 fn dry_wav_admission_keeps_the_full_riff_capacity() {
     let mix = Mix {
         quality: crate::playback_quality::PlaybackQuality::FULL,
+        render_quality: crate::fx::RenderQuality::Offline,
         frames: (u64::from(u32::MAX) - 36) / 4,
         voices: Vec::new(),
         chains: Vec::new(),

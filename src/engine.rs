@@ -46,6 +46,11 @@ pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
 /// A track's stereo width in percent: 0 is mono, 100 leaves the track as
 /// it is, and 200 doubles its side.
 pub const TRACK_WIDTH: crate::master::KnobRange = crate::master::range(0.0, 200.0, 100.0, 1.0);
+/// Mono-below bass focus crossover frequency (`<= 20.5 Hz` = bypassed).
+pub const TRACK_MONO_BELOW: crate::master::KnobRange =
+    crate::master::ratio_range(20.0, 300.0, 20.0, 1.0);
+/// Track automated Filter lane resonance (`0%` = default damping).
+pub const FILTER_RESONANCE: crate::master::KnobRange = crate::master::range(0.0, 100.0, 0.0, 1.0);
 
 /// The pitch shifts that a clip and the sample editor take, in cents.
 pub const PITCH_RANGE: std::ops::RangeInclusive<i32> = -MAX_PITCH_CENTS..=MAX_PITCH_CENTS;

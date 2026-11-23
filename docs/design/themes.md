@@ -90,11 +90,12 @@ permits installable embedding. `tools/assets/prepare-fonts.py` checks this.
 The executable embeds every face. The font setup loads only the faces of the
 current theme, with the brand face and Inter.
 
-The FX rack, Mastering board modules, and Deep Edit share the instrument
-painters in `src/ui/controls/instrument.rs` and `instrument_scopes.rs`. The
-painters use `Material` to select the surface details. Studio has flat frames,
-Aero uses translucent molded plastic frames and a blue scope, and Vintage uses
-dark anodized metal faceplates, faceted lamps, and a green scope.
+The Channel Strip, FX rack, Mastering board modules, and Deep Edit share the
+instrument painters in `src/ui/controls/instrument.rs` and
+`instrument_scopes.rs`. The painters use `Material` to select the surface
+details. Studio has flat frames, Aero uses translucent molded plastic frames
+and a blue scope, and Vintage uses dark anodized metal faceplates, faceted
+lamps, and a green scope.
 
 **Code-only rendering.** Studio and Aero load no material bitmaps. All of
 their surfaces, dials, caps, bevels, and highlights are bounded painter

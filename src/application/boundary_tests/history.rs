@@ -595,6 +595,33 @@ fn ducker_dial_drags_keep_one_undo_step_per_control() {
 }
 
 #[test]
+fn mono_below_and_filter_resonance_drags_are_one_undo_step_each() {
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    let set = |session: &mut Session, change: &dyn Fn(&mut crate::engine::Track)| {
+        let mut track = session.project().tracks[2].clone();
+        change(&mut track);
+        session
+            .edit(EditCommand::SetTrack {
+                index: 2,
+                track: Box::new(track),
+            })
+            .unwrap();
+    };
+    for hz in [60.0, 90.0, 120.0] {
+        set(&mut session, &|track| track.mono_below_hz = hz);
+    }
+    for resonance in [10.0, 30.0, 50.0] {
+        set(&mut session, &|track| track.filter_resonance = resonance);
+    }
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project().tracks[2].filter_resonance, 0.0);
+    assert_eq!(session.project().tracks[2].mono_below_hz, 120.0);
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project(), &Project::default());
+    assert!(!session.history_step(false).unwrap());
+}
+
+#[test]
 fn bypass_is_one_undo_step_that_keeps_the_mix_prepared() {
     let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
     let mut chain = session.project().master;

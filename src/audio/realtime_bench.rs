@@ -31,7 +31,7 @@ use crate::{
     engine::Project,
     library::Library,
     master::MasterControl,
-    playback_quality::{Oversampling, PlaybackQuality, SampleQuality},
+    playback_quality::{DriveOversampling, Oversampling, PlaybackQuality, SampleQuality},
 };
 use std::{
     collections::HashMap,
@@ -299,7 +299,7 @@ fn realtime_options_bench() {
         ("64-track-stress", 64, 64, true),
     ] {
         let (project, samples) = options_fixture(tracks, drives, master_heavy);
-        for drive in [Oversampling::FourX, Oversampling::Off] {
+        for drive in [DriveOversampling::FourX, DriveOversampling::Off] {
             for master in [Oversampling::FourX, Oversampling::Off] {
                 let quality = PlaybackQuality {
                     drive,
@@ -389,8 +389,13 @@ fn realtime_bench() {
         Ok("4x") | Err(_) => Oversampling::FourX,
         _ => panic!("Use off or 4x for {name}"),
     };
+    let drive_oversampling = |name| match std::env::var(name).as_deref() {
+        Ok("off") => DriveOversampling::Off,
+        Ok("4x") | Err(_) => DriveOversampling::FourX,
+        _ => panic!("Use off or 4x for {name}"),
+    };
     let quality = PlaybackQuality {
-        drive: oversampling("MIXJAM_BENCH_DRIVE"),
+        drive: drive_oversampling("MIXJAM_BENCH_DRIVE"),
         master: oversampling("MIXJAM_BENCH_MASTER"),
         samples: match std::env::var("MIXJAM_BENCH_SAMPLES").as_deref() {
             Ok("low") => SampleQuality::Low,

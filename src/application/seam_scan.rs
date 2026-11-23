@@ -44,10 +44,9 @@ fn long_play_scan() {
     let fpt = project.frames_per_tick(audio::Mix::SAMPLE_RATE);
     let bar_frame =
         |bar: u32| (f64::from((bar - 1) * crate::engine::TICKS_PER_BAR) * fpt).round() as u64;
-    let mix: Arc<audio::Mix> = Arc::new(
-        audio::prepare_project_with_quality(&project, &library, PlaybackQuality::FULL)
-            .expect("prepares"),
-    );
+    // Export needs an offline mix at full quality.
+    let mix: Arc<audio::Mix> =
+        Arc::new(audio::prepare_project(&project, &library).expect("prepares"));
     let export = mix
         .to_pcm(&project.master, &project.fx)
         .expect("exports")

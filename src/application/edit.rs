@@ -150,19 +150,39 @@ fn levels_differ_only(old: &Track, new: &Track) -> bool {
         drive,
         compressor,
         width,
+        mono_below_hz,
+        filter_resonance,
+        filter_slope,
         ducker,
     } = old;
-    *left_enabled == new.left_enabled
-        && *right_enabled == new.right_enabled
-        && *muted == new.muted
-        && *solo == new.solo
-        && *sends == new.sends
-        && *width == new.width
-        && *eq == new.eq
-        && *drive == new.drive
-        && *compressor == new.compressor
-        && *ducker == new.ducker
-        && *automation == new.automation
+    let same_routing = (*left_enabled, *right_enabled, *muted, *solo, *sends)
+        == (
+            new.left_enabled,
+            new.right_enabled,
+            new.muted,
+            new.solo,
+            new.sends,
+        );
+    let same_processing = (
+        *eq,
+        *drive,
+        *compressor,
+        *ducker,
+        *width,
+        *mono_below_hz,
+        *filter_resonance,
+        *filter_slope,
+    ) == (
+        new.eq,
+        new.drive,
+        new.compressor,
+        new.ducker,
+        new.width,
+        new.mono_below_hz,
+        new.filter_resonance,
+        new.filter_slope,
+    );
+    same_routing && same_processing && automation == &new.automation
 }
 
 /// A part of the song that playback takes live, without a new render.

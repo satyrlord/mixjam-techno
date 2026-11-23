@@ -618,7 +618,7 @@ fn version_28_master_fields_round_trip_migrate_and_reject_in_earlier_versions() 
     base.master.limiter.style = crate::master::LimiterStyle::Modern;
 
     let doc = serde_json::to_value(Document::new(&base, timestamp(0), timestamp(0))).unwrap();
-    assert_eq!(doc["formatVersion"], 28);
+    assert_eq!(doc["formatVersion"], FORMAT_VERSION);
     let reopened = parse(&serde_json::to_vec(&doc).unwrap()).unwrap();
     assert_eq!(reopened.master, base.master);
 

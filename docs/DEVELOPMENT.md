@@ -103,13 +103,13 @@ The Python tests check these items:
 - The `.mixjam` projection that artifact verification uses.
 - The change measurements of `tools/measure-change.py`.
 
-The projection reads formats 8 through 28. When a verification script writes a
+The projection reads formats 8 through 29. When a verification script writes a
 schema-4 JSON project for a render, the projection keeps these items:
 
 - The sections, the master pedalboard and its bypass.
 - The FX buses and their return lanes, the sends, and the automation.
 - The channel EQs, and the clip fades, pitch, and reverse.
-- The lane duckers, drives, compressors, and widths.
+- The lane duckers, drives, compressors, widths, and Filter settings.
 - The master keys and the FX keys.
 
 It gives the Booster pedals their format-16 keys.

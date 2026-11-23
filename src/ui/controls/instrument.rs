@@ -91,7 +91,11 @@ pub(in super::super) fn bat_toggle(
 ) -> Response {
     let r = roles();
     let switch_rect = Rect::from_min_size(rect.min, Vec2::new(28.0, 20.0));
-    let response = toggle_at(ui, switch_rect, name, "", value);
+    let hit_rect = Rect::from_min_size(
+        rect.min,
+        Vec2::new(rect.width().max(switch_rect.width()), switch_rect.height()),
+    );
+    let response = toggle_at(ui, hit_rect, name, "", value);
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *value, name)
     });

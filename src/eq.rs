@@ -17,6 +17,29 @@ use crate::master::{
 use serde::{Deserialize, Serialize};
 use std::f64::consts::FRAC_1_SQRT_2;
 
+/// Steepness of the channel EQ's low-cut and high-cut filters.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CutSlope {
+    #[default]
+    #[serde(rename = "12db")]
+    Slope12,
+    #[serde(rename = "24db")]
+    Slope24,
+}
+
+impl CutSlope {
+    pub fn is_default(&self) -> bool {
+        *self == Self::Slope12
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Slope12 => "12 dB",
+            Self::Slope24 => "24 dB",
+        }
+    }
+}
+
 /// One track's EQ settings. The EQ keeps them while it is off.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -41,6 +64,9 @@ pub struct ChannelEq {
     pub high_db: f32,
     /// The high cut's frequency in Hz. At its highest it is off.
     pub high_cut: f32,
+    /// Cut slope for both low-cut and high-cut (`12db` default or `24db`).
+    #[serde(default, skip_serializing_if = "CutSlope::is_default")]
+    pub cut_slope: CutSlope,
 }
 
 impl Default for ChannelEq {
@@ -59,6 +85,7 @@ impl Default for ChannelEq {
             high_hz: 0.0,
             high_db: 0.0,
             high_cut: 0.0,
+            cut_slope: CutSlope::Slope12,
         };
         for param in EqParam::ALL {
             param.set(&mut eq, param.range().default);
@@ -193,6 +220,68 @@ impl EqParam {
     }
 }
 
+/// Quality factors for a 4th-order (24 dB/oct) Butterworth cascade.
+const BUTTERWORTH_4_Q: [f64; 2] = [0.541_196_100_146_197, 1.306_562_964_876_376_5];
+
+/// The decramped band of `boost`, a matched design at the absolute gain, or
+/// `None` when it cannot serve. A cut is the exact reciprocal of the boost,
+/// as for the analog prototype. The matched design can put the boost zeros
+/// on the unit circle at extreme settings, and these would become poles for
+/// the cut, so the zeros must be strictly minimum-phase. A boost must also
+/// not dip more than 0.1 dB below unity gain: a matched high shelf near the
+/// top of its range bends the wrong way below its corner.
+fn matched_band(boost: Coefficients, db: f64) -> Option<Coefficients> {
+    /// -0.1 dB as a gain.
+    const DIP_FLOOR: f64 = 0.988_553_094_656_939_3;
+    let [b0, b1, b2, a1, a2] = boost.values();
+    let margin = 1e-6 * b0;
+    if b0 <= 0.0 || b0 - b2.abs() <= margin || b0 + b2 - b1.abs() <= margin {
+        return None;
+    }
+    // 64 log-spaced points from 20 Hz to 20 kHz find a dip of the boost.
+    let dips = (0..64).any(|step| {
+        let hz = 20.0 * 1000_f64.powf(f64::from(step) / 63.0);
+        boost.magnitude(hz) < DIP_FLOOR
+    });
+    if dips {
+        return None;
+    }
+    Some(if db < 0.0 {
+        Coefficients::raw([1.0, a1, a2], [b0, b1, b2])
+    } else {
+        boost
+    })
+}
+
+fn high_shelf(hz: f64, db: f64) -> Coefficients {
+    let boost = Coefficients::high_shelf_matched(hz, SHELF_SLOPE, db.abs());
+    matched_band(boost, db).unwrap_or_else(|| Coefficients::high_shelf(hz, SHELF_SLOPE, db))
+}
+
+fn peak(hz: f64, q: f64, db: f64) -> Coefficients {
+    let boost = Coefficients::peaking_matched(hz, q, db.abs());
+    matched_band(boost, db).unwrap_or_else(|| Coefficients::peaking(hz, q, db))
+}
+
+fn push_cut_stages(
+    slope: CutSlope,
+    active: bool,
+    hz: f64,
+    make: fn(f64, f64) -> Coefficients,
+    out: &mut [Option<Coefficients>; 2],
+) {
+    if !active {
+        return;
+    }
+    match slope {
+        CutSlope::Slope12 => out[0] = Some(make(hz, FRAC_1_SQRT_2)),
+        CutSlope::Slope24 => {
+            out[0] = Some(make(hz, BUTTERWORTH_4_Q[0]));
+            out[1] = Some(make(hz, BUTTERWORTH_4_Q[1]));
+        }
+    }
+}
+
 impl ChannelEq {
     pub fn validate(&self) -> Result<(), String> {
         if !EqParam::ALL
@@ -212,20 +301,33 @@ impl ChannelEq {
     /// The bands that change the sound, in signal order.
     fn bands(&self) -> impl Iterator<Item = Coefficients> {
         let hz = |value: f32| f64::from(value);
+        let mut lc = [None; 2];
+        let mut hc = [None; 2];
+        push_cut_stages(
+            self.cut_slope,
+            self.low_cut > LOW_CUT_OFF,
+            hz(self.low_cut),
+            Coefficients::high_pass,
+            &mut lc,
+        );
+        push_cut_stages(
+            self.cut_slope,
+            self.high_cut < HIGH_CUT_OFF,
+            hz(self.high_cut),
+            Coefficients::low_pass,
+            &mut hc,
+        );
         [
-            (self.low_cut > LOW_CUT_OFF)
-                .then(|| Coefficients::high_pass(hz(self.low_cut), FRAC_1_SQRT_2)),
+            lc[0],
+            lc[1],
             (self.low_db != 0.0)
                 .then(|| Coefficients::low_shelf(hz(self.low_hz), SHELF_SLOPE, hz(self.low_db))),
-            (self.mid_db != 0.0)
-                .then(|| Coefficients::peaking(hz(self.mid_hz), hz(self.mid_q), hz(self.mid_db))),
-            (self.peak2_db != 0.0).then(|| {
-                Coefficients::peaking(hz(self.peak2_hz), hz(self.peak2_q), hz(self.peak2_db))
-            }),
-            (self.high_db != 0.0)
-                .then(|| Coefficients::high_shelf(hz(self.high_hz), SHELF_SLOPE, hz(self.high_db))),
-            (self.high_cut < HIGH_CUT_OFF)
-                .then(|| Coefficients::low_pass(hz(self.high_cut), FRAC_1_SQRT_2)),
+            (self.mid_db != 0.0).then(|| peak(hz(self.mid_hz), hz(self.mid_q), hz(self.mid_db))),
+            (self.peak2_db != 0.0)
+                .then(|| peak(hz(self.peak2_hz), hz(self.peak2_q), hz(self.peak2_db))),
+            (self.high_db != 0.0).then(|| high_shelf(hz(self.high_hz), hz(self.high_db))),
+            hc[0],
+            hc[1],
         ]
         .into_iter()
         .flatten()
@@ -233,16 +335,33 @@ impl ChannelEq {
 
     /// The change in level at a frequency, in dB, with the EQ on.
     pub fn response_db(&self, hz: f64) -> f64 {
-        self.bands()
-            .map(|band| 20.0 * band.magnitude(hz).log10())
-            .sum()
+        response_db(self.bands(), hz)
     }
+}
+
+fn response_db(bands: impl Iterator<Item = Coefficients>, hz: f64) -> f64 {
+    bands.map(|band| 20.0 * band.magnitude(hz).log10()).sum()
+}
+
+/// Sample the channel EQ's analytical magnitude response across `20 Hz..20 kHz`.
+pub fn sample_channel_eq_curve(eq: &ChannelEq, points: usize) -> Vec<f32> {
+    if points <= 1 {
+        return vec![eq.response_db(1000.0) as f32; points];
+    }
+    let bands = eq.bands().collect::<Vec<_>>();
+    let denom = (points - 1) as f64;
+    (0..points)
+        .map(|i| {
+            let hz = 20.0 * 1000.0_f64.powf(i as f64 / denom);
+            response_db(bands.iter().copied(), hz) as f32
+        })
+        .collect()
 }
 
 /// The filters of an EQ that is on, designed once when a mix is prepared.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Curve {
-    bands: [Coefficients; 6],
+    bands: [Coefficients; 8],
     count: usize,
 }
 
@@ -254,7 +373,7 @@ impl Curve {
             return None;
         }
         let mut curve = Self {
-            bands: [Coefficients::FLAT; 6],
+            bands: [Coefficients::FLAT; 8],
             count: 0,
         };
         for band in eq.bands() {
@@ -267,11 +386,11 @@ impl Curve {
 
 /// The history of one track's EQ filters. Each render reader owns its own.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Filters([Biquad; 6]);
+pub(crate) struct Filters([Biquad; 8]);
 
 impl Default for Filters {
     fn default() -> Self {
-        Self([Biquad::FLAT; 6])
+        Self([Biquad::FLAT; 8])
     }
 }
 
@@ -360,16 +479,148 @@ mod tests {
     }
 
     #[test]
+    fn high_shelf_and_peak2_stay_decramped_up_to_18_khz() {
+        let eq = ChannelEq {
+            on: true,
+            high_hz: 12_000.0,
+            high_db: 6.0,
+            ..ChannelEq::default()
+        };
+        for hz in [1000.0, 8000.0, 12_000.0, 15_000.0, 18_000.0] {
+            let proto_db =
+                10.0 * Coefficients::analog_high_shelf_mag2(hz, 12_000.0, SHELF_SLOPE, 6.0).log10();
+            let diff = (eq.response_db(hz) - proto_db).abs();
+            assert!(diff <= 0.30, "hs {hz} Hz diff {diff:.3} dB");
+        }
+        let low_p2 = ChannelEq {
+            on: true,
+            peak2_hz: 40.0,
+            peak2_q: 8.0,
+            peak2_db: -18.0,
+            ..ChannelEq::default()
+        };
+        assert!((low_p2.response_db(40.0) + 18.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn extreme_high_shelf_has_no_notch_or_resonant_cut() {
+        for gain in [-18.0_f32, 18.0] {
+            let eq = ChannelEq {
+                on: true,
+                high_hz: 16_000.0,
+                high_db: gain,
+                ..ChannelEq::default()
+            };
+            let mut previous = 0.0;
+            for hz in (25..=22_000).step_by(25) {
+                let response = eq.response_db(f64::from(hz)) * f64::from(gain.signum());
+                assert!(
+                    response >= previous - 1e-8,
+                    "{gain} dB at {hz} Hz: {response}"
+                );
+                assert!(response <= 18.0 + 1e-8, "{gain} dB at {hz} Hz: {response}");
+                previous = response;
+            }
+        }
+    }
+    /// The lowest and highest response of `eq` from 20 Hz to 20 kHz.
+    fn response_extremes(eq: &ChannelEq) -> (f64, f64) {
+        (0..400).fold((f64::MAX, f64::MIN), |(low, high), step| {
+            let db = eq.response_db(20.0 * 1000_f64.powf(f64::from(step) / 399.0));
+            assert!(db.is_finite());
+            (low.min(db), high.max(db))
+        })
+    }
+
+    #[test]
+    fn high_peak_cuts_reach_their_gain_without_a_notch() {
+        for hz in (6000..=16_000).step_by(1000) {
+            for q in [0.3_f32, 0.7, 1.0, 2.0, 4.0, 8.0] {
+                for db in [-18.0_f32, -12.0, -6.0, -3.0, 3.0, 18.0] {
+                    let eq = ChannelEq {
+                        on: true,
+                        peak2_hz: hz as f32,
+                        peak2_q: q,
+                        peak2_db: db,
+                        ..ChannelEq::default()
+                    };
+                    let at = eq.response_db(f64::from(hz));
+                    assert!(
+                        (at - f64::from(db)).abs() < 0.05,
+                        "{hz} Hz Q {q} {db} dB: {at}"
+                    );
+                    let (low, high) = response_extremes(&eq);
+                    let (deepest, highest) = if db < 0.0 {
+                        (f64::from(db) - 0.3, 0.3)
+                    } else {
+                        (-0.3, f64::from(db) + 0.3)
+                    };
+                    assert!(low >= deepest, "{hz} Hz Q {q} {db} dB: low {low}");
+                    assert!(high <= highest, "{hz} Hz Q {q} {db} dB: high {high}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn high_shelves_never_bend_the_wrong_way() {
+        for hz in (12_000..=16_000).step_by(250) {
+            for db in [
+                -18.0_f32, -12.0, -6.0, -3.0, -1.0, 1.0, 3.0, 6.0, 12.0, 18.0,
+            ] {
+                let eq = ChannelEq {
+                    on: true,
+                    high_hz: hz as f32,
+                    high_db: db,
+                    ..ChannelEq::default()
+                };
+                let (low, high) = response_extremes(&eq);
+                if db > 0.0 {
+                    assert!(low >= -0.11, "{hz} Hz {db} dB: low {low}");
+                } else {
+                    assert!(high <= 0.11, "{hz} Hz {db} dB: high {high}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cut_slope_24db_doubles_stopband_attenuation_and_omits_default() {
+        let eq12 = ChannelEq {
+            on: true,
+            low_cut: 100.0,
+            high_cut: 8000.0,
+            cut_slope: CutSlope::Slope12,
+            ..ChannelEq::default()
+        };
+        let eq24 = ChannelEq {
+            cut_slope: CutSlope::Slope24,
+            ..eq12
+        };
+        assert!(eq24.response_db(50.0) < -23.5);
+        assert!((eq24.response_db(25.0) - 2.0 * eq12.response_db(25.0)).abs() < 0.25);
+        assert!((eq24.response_db(50.0) - 2.0 * eq12.response_db(50.0)).abs() < 0.60);
+        assert!((eq24.response_db(16_000.0) - 2.0 * eq12.response_db(16_000.0)).abs() < 0.60);
+        let saved12 = serde_json::to_value(eq12).unwrap();
+        assert!(saved12.get("cutSlope").is_none());
+        let saved24 = serde_json::to_value(eq24).unwrap();
+        assert_eq!(saved24["cutSlope"], "24db");
+        assert_eq!(serde_json::from_value::<ChannelEq>(saved24).unwrap(), eq24);
+    }
+
+    #[test]
     fn a_high_shelf_tames_the_top_and_leaves_the_low_end() {
         let eq = ChannelEq {
             on: true,
             high_db: -12.0,
             ..ChannelEq::default()
         };
-        // Half an octave above the shelf's frequency, its midpoint, the
-        // shelf has nearly reached its gain.
+        // Half an octave above the shelf's frequency, the decramped shelf
+        // reaches ~-9.8 dB and continues toward -12 dB by 16 kHz.
         let top = gain_db(&eq, 12_000.0);
-        assert!((top + 12.0).abs() < 1.5, "12 kHz: {top:.2} dB");
+        assert!(top < -9.5 && top > -12.5, "12 kHz: {top:.2} dB");
+        let octave = gain_db(&eq, 16_000.0);
+        assert!((octave + 12.0).abs() < 1.5, "16 kHz: {octave:.2} dB");
         let low = gain_db(&eq, 200.0);
         assert!(low.abs() < 0.5, "200 Hz: {low:.2} dB");
         assert!((eq.response_db(12_000.0) - top).abs() < 0.3);

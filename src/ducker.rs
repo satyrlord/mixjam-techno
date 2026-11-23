@@ -219,6 +219,12 @@ pub(crate) struct State {
     reduction: f32,
 }
 
+impl State {
+    pub(crate) fn reduction_db(&self) -> f32 {
+        self.reduction
+    }
+}
+
 /// One block of the key tracks that the master pedals and the FX buses
 /// listen to: each key track as it sounds after its fader, stereo, in the
 /// slots of `tracks`, frame after frame. A key track that is not among

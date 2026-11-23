@@ -1,7 +1,7 @@
 # Version history
 
 Migration keeps the earlier settings within the limits below. A save of an
-earlier song writes version 28, which earlier builds cannot open.
+earlier song writes version 29, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 | --- | --- | --- |
@@ -26,6 +26,7 @@ earlier song writes version 28, which earlier builds cannot open.
 | 26 | Adds the lane automation `compression`. | The lane compressor fully in. |
 | 27 | Adds the FX settings `levelMatch`, `duckThresholdDb`, `linkTimes`, `smearPercent`, `filterResonance`, `bassMult`, and `trebleMult`. | `duckThresholdDb` at -27 dBFS, `levelMatch` on, `linkTimes` on when both time pairs match, and neutral smear, resonance, bass, and treble settings. |
 | 28 | Adds `scHpfHz`, `mix`, and `makeupDb` to `busCompressor`, and `style` to `limiter`. | 20 Hz, 100 percent, 0 dB, and `transparent`. |
+| 29 | Adds `cutSlope` to lane `eq`, `scHpfHz` to lane `compressor`, and `monoBelowHz`, `filterResonance`, and `filterSlope` to the lane. | `12db` EQ cuts, 20 Hz compressor cutoff, 20 Hz mono-below cutoff, 0 percent Filter resonance, and `12db` Filter slope. |
 
 The reader moves the `threshold` of each saved lane `ducker` of an earlier song,
 on or off, by `-20 * log10(masterGain)` dB. It then holds the result to -60..0.
@@ -36,8 +37,8 @@ The reader rejects settings of a later version in an earlier song. A version
 that does not hold a field reads `null` as absent for `master`, `fxBuses`,
 `sends`, `automation`, `eq`, `compressor`, `width`, `ducker`, `fades`, and
 `pitchCents`. The fields `polarityInverted`, `muted`, `solo`, `reverse`,
-`sections`, and `drive` reject `null`. Versions 12 to 14 also accept an explicit
-`"bypass": false` in `master`.
+`sections`, `drive`, and the five version 29 keys reject `null`. Versions 12
+to 14 also accept an explicit `"bypass": false` in `master`.
 
 A separate compatibility reader opens plain JSON projects. It accepts both
 generations of Booster names. It does not weaken the versioned song rules in

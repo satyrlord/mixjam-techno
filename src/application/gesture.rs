@@ -28,6 +28,8 @@ pub(super) enum TrackControl {
     Drive(crate::drive::DriveParam),
     Compressor(crate::compressor::CompressorParam),
     Width,
+    MonoBelow,
+    FilterResonance,
     Ducker(crate::ducker::DuckerParam),
     DuckerKey,
 }
@@ -194,11 +196,24 @@ impl Gesture {
         {
             return None;
         }
-        if old.gain != new.gain {
-            controls.push(Self::Track(index, TrackControl::Gain));
-        }
-        if old.pan != new.pan {
-            controls.push(Self::Track(index, TrackControl::Pan));
+        let scalars = [
+            (old.gain != new.gain, TrackControl::Gain),
+            (old.pan != new.pan, TrackControl::Pan),
+            (old.width != new.width, TrackControl::Width),
+            (
+                old.mono_below_hz != new.mono_below_hz,
+                TrackControl::MonoBelow,
+            ),
+            (
+                old.filter_resonance != new.filter_resonance,
+                TrackControl::FilterResonance,
+            ),
+            (old.ducker.key != new.ducker.key, TrackControl::DuckerKey),
+        ];
+        for (differs, control) in scalars {
+            if differs {
+                controls.push(Self::Track(index, control));
+            }
         }
         for (bus, (old, new)) in old.sends.iter().zip(new.sends).enumerate() {
             if *old != new {
@@ -219,12 +234,6 @@ impl Gesture {
             if param.get(&old.compressor) != param.get(&new.compressor) {
                 controls.push(Self::Track(index, TrackControl::Compressor(param)));
             }
-        }
-        if old.width != new.width {
-            controls.push(Self::Track(index, TrackControl::Width));
-        }
-        if old.ducker.key != new.ducker.key {
-            controls.push(Self::Track(index, TrackControl::DuckerKey));
         }
         for param in crate::ducker::DuckerParam::ALL {
             if param.get(&old.ducker) != param.get(&new.ducker) {

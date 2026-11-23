@@ -29,6 +29,14 @@ impl Session {
             [Default::default(); crate::fx::BUSES]
         }
     }
+    /// Live compressor and ducker gain reduction for `track`.
+    pub fn track_meters(&self, track: usize) -> crate::master::TrackMeterReading {
+        if self.playing_mix() {
+            self.master.track_meters(track)
+        } else {
+            Default::default()
+        }
+    }
     /// Whether FX bus `bus` is currently soloed for live monitoring.
     pub fn fx_solo(&self, bus: usize) -> bool {
         self.master.fx_solo(bus)

@@ -6,10 +6,14 @@ use super::{
     model::{Document, Reference, point_arrays_have_objects, saved_buses},
 };
 use crate::{
+    automation::FilterSlope,
+    compressor::Compressor,
     engine::{
         Clip, ImportNotice, ImportedSample, MissingReference, MissingSample,
-        PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, TRACK_WIDTH, Track,
+        PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, TRACK_MONO_BELOW,
+        TRACK_WIDTH, Track,
     },
+    eq::ChannelEq,
     master::MasterChain,
     mixjam::text,
 };
@@ -53,6 +57,50 @@ fn check_master_record(version: u32, master: Option<&Saved<MasterChain>>) -> Res
         ));
     }
     Ok(())
+}
+
+fn read_lane_eq(version: u32, saved: Option<Saved<ChannelEq>>) -> Result<ChannelEq, String> {
+    let Some(saved) = saved else {
+        return Ok(ChannelEq::default());
+    };
+    let json = saved.json();
+    let eq = json
+        .as_object()
+        .ok_or("The channel EQ must be a JSON object.")?;
+    if version < 18 && PEAK2_KEYS.iter().any(|key| eq.contains_key(*key)) {
+        return Err(format!(
+            "Version {version} lanes cannot contain eq peak2Hz, peak2Db, or peak2Q."
+        ));
+    }
+    if version < 29 && eq.contains_key("cutSlope") {
+        return Err(format!(
+            "Version {version} lanes cannot contain eq cutSlope."
+        ));
+    }
+    saved
+        .settings()
+        .map_err(|error| format!("The channel EQ is invalid: {error}"))
+}
+
+fn read_lane_compressor(
+    version: u32,
+    saved: Option<Saved<Compressor>>,
+) -> Result<Compressor, String> {
+    let Some(saved) = saved else {
+        return Ok(Compressor::default());
+    };
+    let json = saved.json();
+    let compressor = json
+        .as_object()
+        .ok_or("The compressor must be a JSON object.")?;
+    if version < 29 && compressor.contains_key("scHpfHz") {
+        return Err(format!(
+            "Version {version} lanes cannot contain compressor scHpfHz."
+        ));
+    }
+    saved
+        .settings()
+        .map_err(|error| format!("The compressor is invalid: {error}"))
 }
 
 impl Document {
@@ -256,24 +304,18 @@ impl Document {
                     self.format_version
                 ));
             }
-            let eq = match lane.eq {
-                Some(eq) => {
-                    if self.format_version < 18
-                        && eq
-                            .json()
-                            .as_object()
-                            .is_some_and(|eq| PEAK2_KEYS.iter().any(|key| eq.contains_key(*key)))
-                    {
-                        return Err(format!(
-                            "Version {} lanes cannot contain eq peak2Hz, peak2Db, or peak2Q.",
-                            self.format_version
-                        ));
-                    }
-                    eq.settings()
-                        .map_err(|error| format!("The channel EQ is invalid: {error}"))?
-                }
-                None => Default::default(),
-            };
+            if self.format_version < 29
+                && (lane.mono_below_hz.is_some()
+                    || lane.filter_resonance.is_some()
+                    || lane.filter_slope.is_some())
+            {
+                return Err(format!(
+                    "Version {} lanes cannot contain v29 channel strip keys.",
+                    self.format_version
+                ));
+            }
+            let compressor = read_lane_compressor(self.format_version, lane.compressor)?;
+            let eq = read_lane_eq(self.format_version, lane.eq)?;
             let mut settings = Track {
                 gain: lane.gain,
                 polarity_inverted: lane.polarity_inverted.unwrap_or(false),
@@ -286,8 +328,11 @@ impl Document {
                 automation,
                 eq,
                 drive: lane.drive.unwrap_or_default(),
-                compressor: lane.compressor.unwrap_or_default(),
+                compressor,
                 width: lane.width.unwrap_or(TRACK_WIDTH.default),
+                mono_below_hz: lane.mono_below_hz.unwrap_or(TRACK_MONO_BELOW.default),
+                filter_resonance: lane.filter_resonance.unwrap_or(0.0),
+                filter_slope: lane.filter_slope.unwrap_or(FilterSlope::Slope12),
                 ducker: lane.ducker.unwrap_or_default(),
             };
             if self.format_version < 18 && lane.ducker.is_some() {

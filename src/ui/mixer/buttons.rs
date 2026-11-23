@@ -463,10 +463,10 @@ pub(crate) fn eq_button(
     });
     response
         .hover_hint(format!(
-            "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
-             shelves, and two peaks; the drive, which adds harmonics; the compressor and the \
-             stereo width, before the track's automation and fader; and the ducker, which \
-             lowers the track while another track sounds.",
+            "{name} channel processing: {}. Open the channel strip: the EQ cuts, shelves, \
+             and two peaks; the drive, which adds harmonics; the compressor, stereo width, and \
+             bass mono, before the track's automation and fader; the Filter lane resonance and \
+             slope; and the ducker, which lowers the track while another track sounds.",
             if on { "on" } else { "off" }
         ))
         .clicked()

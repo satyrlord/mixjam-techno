@@ -11,8 +11,17 @@ pub enum Oversampling {
     Off,
 }
 
-/// How a clip reads its source when it plays off the source's own tempo or
-/// sample rate, or under a Pitch lane.
+/// Oversampling of track Drive during playback.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DriveOversampling {
+    #[default]
+    #[serde(rename = "4x", alias = "2x")]
+    FourX,
+    #[serde(rename = "off")]
+    Off,
+}
+
+/// How sources at a different rate or tempo play during playback.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SampleQuality {
     /// A band-limited read: a windowed-sinc filter that reduces aliasing.
@@ -30,7 +39,7 @@ pub enum SampleQuality {
 /// pedals, and the clips' sample reads.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlaybackQuality {
-    pub drive: Oversampling,
+    pub drive: DriveOversampling,
     pub master: Oversampling,
     pub samples: SampleQuality,
 }
@@ -38,7 +47,7 @@ pub struct PlaybackQuality {
 impl PlaybackQuality {
     /// Every export and song-tool render explicitly uses full quality.
     pub const FULL: Self = Self {
-        drive: Oversampling::FourX,
+        drive: DriveOversampling::FourX,
         master: Oversampling::FourX,
         samples: SampleQuality::High,
     };

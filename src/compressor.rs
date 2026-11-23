@@ -10,10 +10,21 @@
 //! exactly as it did before the compressor existed.
 use crate::master::{
     KnobRange,
-    dsp::{DETECTOR, KNEE_DB, db_to_gain, flush, pole, reduction},
+    dsp::{Biquad, Coefficients, DETECTOR, KNEE_DB, db_to_gain, flush, pole, reduction},
     range, ratio_range,
 };
 use serde::{Deserialize, Serialize};
+use std::f64::consts::FRAC_1_SQRT_2;
+
+/// Sidechain high-pass cutoff at or below this frequency is bypassed.
+pub const SC_HPF_OFF_HZ: f32 = 20.0;
+
+fn default_sc_hpf() -> f32 {
+    SC_HPF_OFF_HZ
+}
+fn is_default_sc_hpf(hz: &f32) -> bool {
+    *hz == SC_HPF_OFF_HZ
+}
 
 /// One track's compressor settings. The compressor keeps them while it is off.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -30,6 +41,9 @@ pub struct Compressor {
     pub release: f32,
     /// The gain after the compression, in dB.
     pub makeup: f32,
+    /// Sidechain high-pass cutoff in Hz (`20.0` = bypassed).
+    #[serde(default = "default_sc_hpf", skip_serializing_if = "is_default_sc_hpf")]
+    pub sc_hpf_hz: f32,
 }
 
 impl Default for Compressor {
@@ -41,6 +55,7 @@ impl Default for Compressor {
             attack: 0.0,
             release: 0.0,
             makeup: 0.0,
+            sc_hpf_hz: SC_HPF_OFF_HZ,
         };
         for param in CompressorParam::ALL {
             param.set(&mut compressor, param.range().default);
@@ -57,15 +72,17 @@ pub enum CompressorParam {
     Attack,
     Release,
     Makeup,
+    ScHpfHz,
 }
 
 impl CompressorParam {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Threshold,
         Self::Ratio,
         Self::Attack,
         Self::Release,
         Self::Makeup,
+        Self::ScHpfHz,
     ];
 
     pub const fn range(self) -> KnobRange {
@@ -75,6 +92,7 @@ impl CompressorParam {
             Self::Attack => ratio_range(0.1, 100.0, 10.0, 0.1),
             Self::Release => ratio_range(10.0, 1000.0, 100.0, 1.0),
             Self::Makeup => range(0.0, 24.0, 0.0, 0.5),
+            Self::ScHpfHz => ratio_range(SC_HPF_OFF_HZ, 250.0, SC_HPF_OFF_HZ, 1.0),
         }
     }
 
@@ -86,6 +104,7 @@ impl CompressorParam {
             Self::Attack => "compressor attack",
             Self::Release => "compressor release",
             Self::Makeup => "compressor makeup",
+            Self::ScHpfHz => "compressor sidechain HPF",
         }
     }
 
@@ -96,6 +115,7 @@ impl CompressorParam {
             Self::Attack => compressor.attack,
             Self::Release => compressor.release,
             Self::Makeup => compressor.makeup,
+            Self::ScHpfHz => compressor.sc_hpf_hz,
         }
     }
 
@@ -108,6 +128,7 @@ impl CompressorParam {
             Self::Attack => compressor.attack = value,
             Self::Release => compressor.release = value,
             Self::Makeup => compressor.makeup = value,
+            Self::ScHpfHz => compressor.sc_hpf_hz = value,
         }
     }
 }
@@ -138,10 +159,18 @@ pub(crate) struct Run {
     release: f64,
     detector: f64,
     makeup: f64,
+    sc_hpf: Option<(f32, Coefficients)>,
 }
 
 impl Run {
     pub(crate) fn new(compressor: &Compressor) -> Self {
+        let cutoff = compressor.sc_hpf_hz;
+        let sc_hpf = (cutoff > SC_HPF_OFF_HZ + 0.5).then(|| {
+            (
+                cutoff,
+                Coefficients::high_pass(f64::from(cutoff), FRAC_1_SQRT_2),
+            )
+        });
         Self {
             threshold: f64::from(compressor.threshold),
             ratio: f64::from(compressor.ratio),
@@ -149,15 +178,33 @@ impl Run {
             release: pole(f64::from(compressor.release) / 1000.0),
             detector: pole(DETECTOR),
             makeup: f64::from(compressor.makeup),
+            sc_hpf,
         }
     }
 
     /// Compress interleaved stereo frames in place. The state carries from
     /// block to block.
     pub(crate) fn process(&self, frames: &mut [f32], state: &mut State) {
+        if let Some((cutoff, coeffs)) = self.sc_hpf {
+            if cutoff != state.sc_hpf_hz {
+                state.sc_filter.clear();
+                state.sc_hpf_hz = cutoff;
+            }
+            state.sc_filter.set(coeffs);
+        } else {
+            state.sc_hpf_hz = SC_HPF_OFF_HZ;
+        }
         for frame in frames.as_chunks_mut::<2>().0 {
             let (left, right) = (f64::from(frame[0]), f64::from(frame[1]));
-            let power = 0.5 * (left * left + right * right);
+            let (sc_l, sc_r) = if self.sc_hpf.is_some() {
+                (
+                    state.sc_filter.process(0, left),
+                    state.sc_filter.process(1, right),
+                )
+            } else {
+                (left, right)
+            };
+            let power = 0.5 * (sc_l * sc_l + sc_r * sc_r);
             state.power = flush(power + (state.power - power) * self.detector);
             let level = 10.0 * state.power.max(1e-12).log10();
             let target = reduction(level, self.threshold, self.ratio, KNEE_DB);
@@ -176,28 +223,60 @@ impl Run {
     }
 }
 
-/// The compressor's history: the detector's power and the current
-/// reduction in dB.
-#[derive(Clone, Copy, Debug, Default)]
+/// The compressor's history: the detector's power, the current reduction
+/// in dB, and optional sidechain HPF state.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
     power: f64,
     reduction: f64,
+    sc_hpf_hz: f32,
+    sc_filter: Biquad,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            power: 0.0,
+            reduction: 0.0,
+            sc_hpf_hz: SC_HPF_OFF_HZ,
+            sc_filter: Biquad::FLAT,
+        }
+    }
 }
 
 impl State {
-    /// The power and the reduction as two f32 in one value, for an atomic
-    /// store that a reader cannot tear.
-    pub(crate) fn pack(self) -> u64 {
-        let [power, reduction] = [self.power, self.reduction].map(|value| (value as f32).to_bits());
-        u64::from(power) | (u64::from(reduction) << 32)
+    /// Current gain reduction in dB (`>= 0.0`) for live telemetry.
+    pub(crate) fn reduction_db(&self) -> f32 {
+        self.reduction as f32
     }
 
-    /// A history that `pack` stored, if one is there: NaN bits mean none.
-    pub(crate) fn unpack(packed: u64) -> Option<Self> {
-        let [power, reduction] = [packed as u32, (packed >> 32) as u32].map(f32::from_bits);
-        (power.is_finite() && reduction.is_finite()).then(|| Self {
+    pub(crate) const WORDS: usize = 6;
+
+    /// Pack the detector and optional sidechain filter history for live carry.
+    pub(crate) fn pack(self) -> [u64; Self::WORDS] {
+        let [power, reduction] = [self.power, self.reduction].map(|value| (value as f32).to_bits());
+        let detector = u64::from(power) | (u64::from(reduction) << 32);
+        let [[l1, l2], [r1, r2]] = self.sc_filter.history();
+        [
+            detector,
+            u64::from(self.sc_hpf_hz.to_bits()),
+            l1.to_bits(),
+            l2.to_bits(),
+            r1.to_bits(),
+            r2.to_bits(),
+        ]
+    }
+
+    /// A history that `pack` stored, if one is there. NaN detector bits mean none.
+    pub(crate) fn unpack([detector, cutoff, l1, l2, r1, r2]: [u64; Self::WORDS]) -> Option<Self> {
+        let [power, reduction] = [detector as u32, (detector >> 32) as u32].map(f32::from_bits);
+        let mut sc_filter = Biquad::FLAT;
+        sc_filter.set_history([[l1, l2], [r1, r2]].map(|channel| channel.map(f64::from_bits)));
+        (power.is_finite() && reduction.is_finite()).then_some(Self {
             power: f64::from(power),
             reduction: f64::from(reduction),
+            sc_hpf_hz: f32::from_bits(cutoff as u32),
+            sc_filter,
         })
     }
 }
@@ -239,6 +318,7 @@ mod tests {
             attack: 1.0,
             release: 50.0,
             makeup: 0.0,
+            ..Compressor::default()
         };
         // 20 dB over the threshold at 4:1 leaves 5 dB over it.
         let out = level_db(&compress(&compressor, &tone(-10.0, 44_100)));
@@ -256,6 +336,43 @@ mod tests {
     }
 
     #[test]
+    fn sidechain_hpf_stops_sub_bass_from_pumping_highs() {
+        let frames = 44_100;
+        let composite: Vec<f32> = (0..frames)
+            .flat_map(|i| {
+                let t = i as f64 / 44_100.0;
+                let sub = 0.6 * (std::f64::consts::TAU * 45.0 * t).sin();
+                let hi = 0.05 * (std::f64::consts::TAU * 5000.0 * t).sin();
+                let x = (sub + hi) as f32;
+                [x, x]
+            })
+            .collect();
+        let flat = Compressor {
+            on: true,
+            threshold: -24.0,
+            ratio: 8.0,
+            attack: 1.0,
+            release: 80.0,
+            makeup: 0.0,
+            sc_hpf_hz: 20.0,
+        };
+        let filtered = Compressor {
+            sc_hpf_hz: 150.0,
+            ..flat
+        };
+        let mut s_flat = State::default();
+        let mut s_filt = State::default();
+        Run::new(&flat).process(&mut composite.clone(), &mut s_flat);
+        Run::new(&filtered).process(&mut composite.clone(), &mut s_filt);
+        assert!(
+            s_filt.reduction_db() + 2.0 < s_flat.reduction_db(),
+            "flat GR {:.2}, sc_hpf GR {:.2}",
+            s_flat.reduction_db(),
+            s_filt.reduction_db()
+        );
+    }
+
+    #[test]
     fn a_fast_attack_catches_a_transient_that_a_slow_one_lets_through() {
         let mut input = tone(-40.0, 22_050);
         input.extend(tone(-6.0, 4_410));
@@ -268,6 +385,7 @@ mod tests {
                     attack,
                     release: 100.0,
                     makeup: 0.0,
+                    ..Compressor::default()
                 },
                 &input,
             );
@@ -290,9 +408,10 @@ mod tests {
                 compressor.ratio,
                 compressor.attack,
                 compressor.release,
-                compressor.makeup
+                compressor.makeup,
+                compressor.sc_hpf_hz,
             ),
-            (-20.0, 4.0, 10.0, 100.0, 0.0)
+            (-20.0, 4.0, 10.0, 100.0, 0.0, 20.0)
         );
         compressor.validate().unwrap();
         for param in CompressorParam::ALL {
@@ -305,6 +424,7 @@ mod tests {
                     CompressorParam::Attack => changed.attack = bad,
                     CompressorParam::Release => changed.release = bad,
                     CompressorParam::Makeup => changed.makeup = bad,
+                    CompressorParam::ScHpfHz => changed.sc_hpf_hz = bad,
                 }
                 assert!(changed.validate().is_err(), "{param:?} {bad}");
             }

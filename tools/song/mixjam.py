@@ -53,7 +53,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 28
+FORMAT_VERSION = 29
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -352,14 +352,22 @@ class Song:
     def eq(self, track, **settings):
         """Switch on a lane's channel EQ. Settings use the song's keys: lowCut, lowHz, lowDb,
         midHz, midDb, midQ, the second peak's peak2Hz, peak2Db, peak2Q, highHz, highDb,
-        highCut; on=False disables it. The rest keep a new track's values; the second peak's
-        keys are written only when they differ from a new track's, as the app saves them."""
+        highCut, cutSlope ('12db' default or '24db'); on=False disables it. The rest keep a
+        new track's values; optional keys are written only when they differ from defaults."""
         track = _whole_track(track)
-        eq = dict(EQ_DEFAULT, **PEAK2_DEFAULT, on=True)
+        eq = dict(EQ_DEFAULT, **PEAK2_DEFAULT, cutSlope='12db', on=True)
         unknown = set(settings) - set(eq)
         if unknown:
             raise ValueError(f'These EQ settings are not recognized: {sorted(unknown)}.')
-        eq.update({key: bool(value) if key == 'on' else float(value) for key, value in settings.items()})
+        for key, value in settings.items():
+            if key == 'on':
+                eq[key] = bool(value)
+            elif key == 'cutSlope':
+                if value not in ('12db', '24db'):
+                    raise ValueError(f'Track {track} eq cutSlope must be "12db" or "24db", not {value!r}.')
+                eq[key] = value
+            else:
+                eq[key] = float(value)
         for key, (low, high) in EQ_RANGES.items():
             if not low <= eq[key] <= high:
                 raise ValueError(f'The EQ setting {key} on track {track} is {eq[key]:g}. '
@@ -367,6 +375,8 @@ class Song:
         for key, default in PEAK2_DEFAULT.items():
             if eq[key] == default:
                 del eq[key]
+        if eq['cutSlope'] == '12db':
+            del eq['cutSlope']
         self.lanes[track - 1]['eq'] = eq
 
     def drive(self, track, amount=12.0, character=25.0, mix=50.0, focus=100.0, output=0.0, on=True):
@@ -391,32 +401,64 @@ class Song:
             lane['drive'] = drive
 
     def compressor(self, track, threshold=-20.0, ratio=4.0, attack=10.0, release=100.0, makeup=0.0,
-                   on=True):
+                   on=True, *, sc_hpf_hz=20.0):
         """Switch on a lane's compressor, after its EQ and drive and before its width, automation and
         fader: above `threshold` dBFS (the mean power of both channels) the level comes down
-        by `ratio`, with a 6 dB soft knee; attack and release in ms, `makeup` in dB after it."""
+        by `ratio`, with a 6 dB soft knee; attack and release in ms, `makeup` in dB after it,
+        and `sc_hpf_hz` sidechain high-pass cutoff in Hz (20 = off)."""
         _whole_track(track)
-        settings = dict(threshold=threshold, ratio=ratio, attack=attack, release=release, makeup=makeup)
+        settings = dict(threshold=threshold, ratio=ratio, attack=attack, release=release,
+                        makeup=makeup, scHpfHz=sc_hpf_hz)
         settings = {name: float(value) for name, value in settings.items()}
         for name, (low, high) in COMPRESSOR_RANGES.items():
             if not low <= settings[name] <= high:
                 raise ValueError(f'The compressor setting {name} on track {track} is {settings[name]:g}. '
                                  f'It must be from {low:g} to {high:g}.')
+        if settings['scHpfHz'] == 20.0:
+            del settings['scHpfHz']
         self.lanes[int(track) - 1]['compressor'] = dict(on=bool(on), **settings)
 
-    def width(self, track, percent):
+    def width(self, track, percent, mono_below=None):
         """Set a lane's stereo width before its pan: 0 is mono, 100 leaves the lane as it is,
-        200 doubles its side. It needs both outputs on. 100 removes the setting."""
-        _whole_track(track)
+        200 doubles its side. It needs both outputs on. 100 removes `width`. `mono_below`
+        (20 to 300 Hz; 20 = off) sums bass below that frequency to mono on the side channel."""
+        track = _whole_track(track)
         percent = float(percent)
         low, high = WIDTH_RANGE
         if not low <= percent <= high:
             raise ValueError(f'The width {percent:g}% of track {track} must be from {low:g} to {high:g}%.')
-        lane = self.lanes[int(track) - 1]
+        hz = None if mono_below is None else float(mono_below)
+        mlow, mhigh = MONO_BELOW_RANGE
+        if hz is not None and not mlow <= hz <= mhigh:
+            raise ValueError(f'The mono-below frequency on track {track} must be from {mlow:g} to {mhigh:g} Hz.')
+        lane = self.lanes[track - 1]
         if percent == 100.0:
             lane.pop('width', None)
         else:
             lane['width'] = percent
+        if hz is not None:
+            if hz == mlow:
+                lane.pop('monoBelowHz', None)
+            else:
+                lane['monoBelowHz'] = hz
+
+    def filter_settings(self, track, resonance=0.0, slope='12db'):
+        """Set per-track automated Filter resonance (0 to 100%) and slope ('12db' or '24db')."""
+        track = _whole_track(track)
+        res = float(resonance)
+        if not 0.0 <= res <= 100.0:
+            raise ValueError(f'Track {track} filter resonance must be from 0 to 100%, not {resonance}.')
+        if slope not in ('12db', '24db'):
+            raise ValueError(f'Track {track} filter slope must be "12db" or "24db", not {slope!r}.')
+        lane = self.lanes[track - 1]
+        if res == 0.0:
+            lane.pop('filterResonance', None)
+        else:
+            lane['filterResonance'] = res
+        if slope == '12db':
+            lane.pop('filterSlope', None)
+        else:
+            lane['filterSlope'] = slope
 
     def ducker(self, track, key, threshold=-30.0, depth=6.0, attack=2.0, release=120.0):
         """Switch on a lane's ducker: after its level, the lane drops by as much as lane `key`'s
@@ -782,8 +824,9 @@ DRIVE_RANGES = dict(amount=(0.0, 24.0), character=(0.0, 100.0), mix=(0.0, 100.0)
 DRIVE_DEFAULT = dict(on=False, amount=12.0, character=25.0, mix=50.0, focus=100.0, output=0.0)
 # The lane compressor's ranges (`src/compressor.rs`) and the lane width's (`TRACK_WIDTH`).
 COMPRESSOR_RANGES = dict(threshold=(-60.0, 0.0), ratio=(1.0, 20.0), attack=(0.1, 100.0),
-                         release=(10.0, 1000.0), makeup=(0.0, 24.0))
+                         release=(10.0, 1000.0), makeup=(0.0, 24.0), scHpfHz=(20.0, 250.0))
 WIDTH_RANGE = (0.0, 200.0)
+MONO_BELOW_RANGE = (20.0, 300.0)
 # The most tracks that the duckers, pedals and FX may listen to together (`MAX_KEYS`).
 MAX_KEYS = 8
 

@@ -160,8 +160,12 @@ fn sequence_scan() {
         // With MIXJAM_SEQUENCE_REFERENCE=export, the reference is the
         // export of the same prepared mix instead of a fresh session's playback.
         let fresh = if std::env::var("MIXJAM_SEQUENCE_REFERENCE").as_deref() == Ok("export") {
+            // Playback prepares a live mix, and export needs an offline one.
             let project = session.editor.project();
-            let mut export = match mix.to_pcm(&project.master, &project.fx) {
+            let (_, library, _) = crate::project_io::open_song(path, &base).expect("opens again");
+            let offline = audio::prepare_project(project, &library);
+            let mut export = match offline.and_then(|mix| mix.to_pcm(&project.master, &project.fx))
+            {
                 Ok(pcm) => pcm.samples,
                 Err(error) => {
                     println!("{index:3} {name}: does not export: {error}");

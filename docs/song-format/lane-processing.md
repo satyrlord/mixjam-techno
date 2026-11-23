@@ -12,15 +12,17 @@ The bands run in this order:
 
 | Band | Keys | Range |
 | --- | --- | --- |
-| Low cut, a 12 dB/octave high-pass | `lowCut` | 20 to 2000 Hz (20 is off) |
+| Low cut, a high-pass | `lowCut` | 20 to 2000 Hz (20 is off) |
 | Low shelf | `lowHz` | 40 to 500 Hz |
 | First peak | `midHz`, `midQ` | 150 to 10,000 Hz, 0.3 to 8 |
 | Second peak | `peak2Hz`, `peak2Q` | 40 to 16,000 Hz, 0.3 to 8 |
 | High shelf | `highHz` | 1500 to 16,000 Hz |
-| High cut, a 12 dB/octave low-pass | `highCut` | 1000 to 20,000 Hz (20,000 is off) |
+| High cut, a low-pass | `highCut` | 1000 to 20,000 Hz (20,000 is off) |
 
 Each gain (`lowDb`, `midDb`, `peak2Db`, and `highDb`) is from -18 to 18 dB. A
 gain of 0 is off. A lane whose EQ is off at the default settings omits `eq`.
+From version 29, `cutSlope` sets both cuts to `12db` or `24db` per octave. A
+lane at the default `12db` omits `cutSlope`. Earlier versions reject the key.
 
 ## `drive`
 
@@ -54,14 +56,28 @@ omits `drive`. Versions 21 and earlier reject the key.
 - `attack` is from 0.1 to 100 ms.
 - `release` is from 10 to 1000 ms.
 - `makeup` is from 0 to 24 dB.
+- `scHpfHz`, from version 29, is the detector's high-pass frequency from 20 to
+  250 Hz. Values at or below 20.5 Hz bypass it. The default of 20 Hz omits the
+  key. Earlier versions reject the key.
 
 A lane whose compressor is off at the default settings (-20 dBFS, 4:1, 10 ms,
-100 ms, 0 dB) omits `compressor`.
+100 ms, 0 dB, 20 Hz) omits `compressor`.
 
 ## `width`
 
 `width` is the stereo width of the lane in percent, before its pan. It is from 0
 (mono) to 200. It exists from version 18. A lane at 100% omits it.
+
+`monoBelowHz` is the crossover frequency from 20 to 300 Hz. It reduces the
+stereo difference below that frequency. Values at or below 20.5 Hz bypass the
+crossover. The key exists from version 29 and is omitted at 20 Hz.
+
+## Filter settings
+
+`filterResonance` is the resonance of the automated Filter lane, from 0 to
+100 percent. `filterSlope` sets its slope to `12db` or `24db` per octave. Both
+keys exist from version 29. A lane at 0 percent or `12db` omits that key.
+Earlier versions reject both Filter keys and `monoBelowHz`.
 
 ## `ducker`
 

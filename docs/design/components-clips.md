@@ -168,11 +168,11 @@ shows its "No tracks" note instead.
 
 The first switch to the Mix view in a session puts its shortcuts in the status
 bar. A double-click resets a fader or knob. Shift with the wheel scrolls the
-columns. From the Mix view, the channel EQ window of a track first opens beside
-the number of its row through Pan. If the window does not fit beside the row, it
+columns. From the Mix view, the channel strip of a track first opens beside the
+number of its row through Pan. If the window does not fit beside the row, it
 opens above or below the row. So the level and pan of the row stay in view. That
-window stays above the status bar. Help has a Mix view page after the Mixer
-page.
+window stays above the status bar. Its track switcher keeps it in place. Help
+has a Mix view page after the Mixer page.
 
 A 70-point block follows the last row, and stays at the foot of the score
 while more rows scroll. It holds two rows:

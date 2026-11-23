@@ -5,7 +5,13 @@ use super::{
     frames::{ChainState, Ramp},
     resample,
 };
-use crate::{automation::Envelope, engine::FadeCurve, eq::Curve, fx::BUSES};
+use crate::{
+    automation::{Envelope, FilterSlope},
+    engine::FadeCurve,
+    eq::Curve,
+    fx::{BUSES, RenderQuality},
+    master::dsp::{Biquad, Coefficients},
+};
 use std::{ops::Range, sync::Arc};
 
 /// One clip, resolved to output frames and its decoded source.
@@ -215,9 +221,13 @@ pub(super) struct TrackChain {
     compression: Option<Envelope>,
     /// The side's gain: the width as a fraction of 100%.
     width: Option<f32>,
+    /// Fourth-order Linkwitz-Riley side high-pass for sub-mono summing.
+    width_hpf: Option<[Coefficients; 2]>,
     volume: Option<Envelope>,
     sends: [SendLevel; BUSES],
     filter: Option<Envelope>,
+    filter_resonance: f32,
+    filter_slope: FilterSlope,
     /// The pan lane, which replaces the pan knob: the track's level then
     /// holds no pan, and the lane's balance gains apply at each frame.
     pan: Option<Envelope>,
@@ -234,8 +244,16 @@ impl TrackChain {
         track: &crate::engine::Track,
         frames_per_tick: f64,
         quality: crate::playback_quality::PlaybackQuality,
+        render_quality: RenderQuality,
     ) -> Self {
         let automation = &track.automation;
+        let widens = track.widens();
+        let width_hpf = (widens && track.mono_below_hz > 20.5).then(|| {
+            [Coefficients::high_pass(
+                f64::from(track.mono_below_hz),
+                std::f64::consts::FRAC_1_SQRT_2,
+            ); 2]
+        });
         Self {
             track: index,
             voices: Vec::new(),
@@ -248,7 +266,7 @@ impl TrackChain {
             // The mix gives each drive its slot.
             drive: track.drive.on.then(|| {
                 (
-                    crate::drive::Run::with_quality(&track.drive, quality.drive),
+                    crate::drive::Run::with_quality(&track.drive, quality.drive, render_quality),
                     0,
                 )
             }),
@@ -261,12 +279,15 @@ impl TrackChain {
                 .on
                 .then(|| Envelope::new(&automation.compression, frames_per_tick))
                 .flatten(),
-            width: track.widens().then_some(track.width / 100.0),
+            width: widens.then_some(track.width / 100.0),
+            width_hpf,
             volume: Envelope::new(&automation.volume, frames_per_tick),
             sends: std::array::from_fn(|bus| {
                 SendLevel::new(track.sends[bus], &automation.sends[bus], frames_per_tick)
             }),
             filter: Envelope::new(&automation.filter, frames_per_tick),
+            filter_resonance: track.filter_resonance,
+            filter_slope: track.filter_slope,
             pan: Envelope::new(&automation.pan, frames_per_tick),
             ducker: None,
         }
@@ -347,43 +368,56 @@ impl TrackChain {
         &self,
         span: Range<u64>,
         buffer: &mut [f32],
+        level: &Ramp,
+        duck: Option<(&[f32], &mut crate::ducker::State)>,
         state: &mut ChainState,
         drives: &mut [crate::drive::State],
-        level: &Ramp,
-        mut duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
         let at = span.start;
-        match &self.drive {
-            Some((run, slot)) => {
-                // The drive's output follows its input by its latency, so the
-                // sound before it runs that far ahead. A history that does not
-                // lead up to this block, after a seek or at the start, first
-                // takes the frames from `at`, as the EQ starts from silence.
-                const LEAD: usize = crate::drive::LATENCY;
-                let history = &mut drives[*slot];
-                if history.next != Some(at + LEAD as u64) {
-                    *history = crate::drive::State::new(run);
-                    let mut lead = [0.0_f32; LEAD * 2];
-                    self.sound(span.clone(), &mut lead);
-                    if let Some(curve) = &self.eq {
-                        state.eq.process(&mut lead, curve);
-                    }
-                    run.process(&mut lead, history);
-                }
-                self.sound(at + LEAD as u64..span.end, buffer);
-                if let Some(curve) = &self.eq {
-                    state.eq.process(buffer, curve);
-                }
-                run.process(buffer, history);
-                history.next = Some(at + (LEAD + buffer.len() / 2) as u64);
-            }
-            None => {
-                self.sound(span, buffer);
-                if let Some(curve) = &self.eq {
-                    state.eq.process(buffer, curve);
-                }
-            }
+        self.sound_through_drive(span, buffer, &mut state.eq, drives);
+        self.compress(at, buffer, &mut state.compressor);
+        if let Some(width) = self.width {
+            widen(buffer, width, self.width_hpf, &mut state.width_hpf);
         }
+        self.apply_automation(at, buffer, &mut state.filter, level, duck);
+    }
+
+    fn sound_through_drive(
+        &self,
+        span: Range<u64>,
+        buffer: &mut [f32],
+        eq: &mut crate::eq::Filters,
+        drives: &mut [crate::drive::State],
+    ) {
+        let mut shaped_sound = |span, buffer: &mut [f32]| {
+            self.sound(span, buffer);
+            if let Some(curve) = &self.eq {
+                eq.process(buffer, curve);
+            }
+        };
+        if let Some((run, slot)) = &self.drive {
+            // The drive's output follows its input by its latency, so the
+            // sound before it runs that far ahead. A history that does not
+            // lead up to this block, after a seek or at the start, first
+            // takes the frames from `at`, as the EQ starts from silence.
+            const LEAD: usize = crate::drive::LATENCY;
+            let at = span.start;
+            let history = &mut drives[*slot];
+            if history.next != Some(at + LEAD as u64) {
+                *history = crate::drive::State::new(run);
+                let mut lead = [0.0_f32; LEAD * 2];
+                shaped_sound(span.clone(), &mut lead);
+                run.process(&mut lead, history);
+            }
+            shaped_sound(at + LEAD as u64..span.end, buffer);
+            run.process(buffer, history);
+            history.next = Some(at + (LEAD + buffer.len() / 2) as u64);
+        } else {
+            shaped_sound(span, buffer);
+        }
+    }
+
+    fn compress(&self, at: u64, buffer: &mut [f32], history: &mut crate::compressor::State) {
         if let Some(compressor) = &self.compressor {
             match &self.compression {
                 Some(envelope) => {
@@ -392,7 +426,7 @@ impl TrackChain {
                     let mut dry = [0.0_f32; Self::CHUNK * 2];
                     let dry = &mut dry[..buffer.len()];
                     dry.copy_from_slice(buffer);
-                    compressor.process(buffer, &mut state.compressor);
+                    compressor.process(buffer, history);
                     for (index, (wet, dry)) in buffer
                         .as_chunks_mut::<2>()
                         .0
@@ -411,19 +445,28 @@ impl TrackChain {
                         }
                     }
                 }
-                None => compressor.process(buffer, &mut state.compressor),
+                None => compressor.process(buffer, history),
             }
         }
-        if let Some(width) = self.width {
-            widen(buffer, width);
-        }
+    }
+
+    fn apply_automation(
+        &self,
+        at: u64,
+        buffer: &mut [f32],
+        filter: &mut crate::automation::Filter,
+        level: &Ramp,
+        mut duck: Option<(&[f32], &mut crate::ducker::State)>,
+    ) {
         for index in 0..buffer.len() / 2 {
             let frame = at + index as u64;
             if let Some(envelope) = &self.filter {
-                state.filter.process(
+                filter.process_with(
                     &mut buffer[index * 2..index * 2 + 2],
                     envelope.at(frame),
                     Mix::SAMPLE_RATE as f32,
+                    self.filter_resonance,
+                    self.filter_slope,
                 );
             }
             let mut gain = self.volume.as_ref().map_or(1.0, |envelope| {
@@ -462,7 +505,7 @@ impl TrackChain {
         let at = span.start;
         let mut buffer = [0.0_f32; Self::CHUNK * 2];
         let buffer = &mut buffer[..count * 2];
-        self.shape(span, buffer, state, drives, level, duck);
+        self.shape(span, buffer, level, duck, state, drives);
         for (sum, value) in out[offset * 2..(offset + count) * 2]
             .iter_mut()
             .zip(buffer.iter())
@@ -490,12 +533,117 @@ impl TrackChain {
     }
 }
 
-/// Scale the side of interleaved stereo frames by `width`, 1 for no change,
-/// and keep the mid: 0 folds the frames to mono.
-fn widen(frames: &mut [f32], width: f32) {
+/// Scale the side of interleaved stereo frames by `width` (1 for no change,
+/// 0 folds to mono) and optionally high-pass only the side signal with an LR4
+/// filter (`2x` cascaded 2nd-order Butterworth HPF) while preserving Mid.
+fn widen(
+    frames: &mut [f32],
+    width: f32,
+    hpf: Option<[Coefficients; 2]>,
+    filters: &mut [Biquad; 2],
+) {
+    if let Some([c0, c1]) = hpf {
+        filters[0].set(c0);
+        filters[1].set(c1);
+    }
+    let width = f64::from(width);
     for frame in frames.as_chunks_mut::<2>().0 {
-        let mid = 0.5 * (frame[0] + frame[1]);
-        let side = 0.5 * (frame[0] - frame[1]) * width;
-        *frame = [mid + side, mid - side];
+        let l = f64::from(frame[0]);
+        let r = f64::from(frame[1]);
+        let mid = 0.5 * (l + r);
+        let mut side = 0.5 * (l - r);
+        if hpf.is_some() {
+            let s1 = filters[0].process(0, side);
+            side = filters[1].process(0, s1);
+        }
+        side *= width;
+        *frame = [(mid + side) as f32, (mid - side) as f32];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f64::consts::TAU;
+
+    fn sine_stereo(hz_l: f64, hz_r: f64, frames: usize) -> Vec<f32> {
+        (0..frames)
+            .flat_map(|i| {
+                let t = i as f64 / Mix::SAMPLE_RATE as f64;
+                [(TAU * hz_l * t).sin() as f32, (TAU * hz_r * t).sin() as f32]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn width_lr4_mono_below_correlates_sub_bass_and_preserves_mid() {
+        let fc = 120.0;
+        let coeffs = [Coefficients::high_pass(fc, std::f64::consts::FRAC_1_SQRT_2); 2];
+        // Sub-bass well below 0.6 * fc with decorrelated L/R phases.
+        let mut low = (0..Mix::SAMPLE_RATE as usize)
+            .flat_map(|i| {
+                let t = i as f64 / Mix::SAMPLE_RATE as f64;
+                [(TAU * 50.0 * t).sin() as f32, (TAU * 50.0 * t).cos() as f32]
+            })
+            .collect::<Vec<_>>();
+        let expected_mid: Vec<f64> = low
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[l, r]| 0.5 * (f64::from(l) + f64::from(r)))
+            .collect();
+        let mut filters = [Biquad::FLAT; 2];
+        widen(&mut low, 1.0, Some(coeffs), &mut filters);
+
+        let settle = Mix::SAMPLE_RATE as usize / 2;
+        let mut dot = 0.0_f64;
+        let mut ll = 0.0_f64;
+        let mut rr = 0.0_f64;
+        let mut mid_err = 0.0_f64;
+        let mut mid_sig = 0.0_f64;
+        for (pair, m0) in low.as_chunks::<2>().0[settle..]
+            .iter()
+            .zip(&expected_mid[settle..])
+        {
+            let l = f64::from(pair[0]);
+            let r = f64::from(pair[1]);
+            dot += l * r;
+            ll += l * l;
+            rr += r * r;
+            let m1 = 0.5 * (l + r);
+            mid_err += (m1 - m0) * (m1 - m0);
+            mid_sig += m0 * m0;
+        }
+        let corr = dot / (ll * rr).sqrt();
+        let mid_null_db = 10.0 * ((mid_err + 1e-30) / (mid_sig + 1e-30)).log10();
+        assert!(corr >= 0.97, "expected corr >= 0.97 at 50 Hz, got {corr}");
+        assert!(
+            mid_null_db < -100.0,
+            "Mid must stay bit-accurate, null = {mid_null_db:.1} dB"
+        );
+
+        // Stereo separation above crossover stays intact (LR4 allpass phase shift
+        // moves waveforms slightly while preserving L and R magnitudes).
+        let mut high = sine_stereo(1000.0, 2200.0, Mix::SAMPLE_RATE as usize);
+        let ref_high = high.clone();
+        filters = [Biquad::FLAT; 2];
+        widen(&mut high, 1.0, Some(coeffs), &mut filters);
+        let rms_ch = |buf: &[f32], ch: usize| {
+            let mut sum = 0.0_f64;
+            let mut count = 0usize;
+            for pair in buf.as_chunks::<2>().0[settle..].iter() {
+                let v = f64::from(pair[ch]);
+                sum += v * v;
+                count += 1;
+            }
+            (sum / count as f64).sqrt()
+        };
+        for ch in 0..2 {
+            let diff = (rms_ch(&high, ch) - rms_ch(&ref_high, ch)).abs() / rms_ch(&ref_high, ch);
+            assert!(
+                diff < 0.02,
+                "ch {ch} high stereo magnitude changed by {diff}"
+            );
+        }
     }
 }

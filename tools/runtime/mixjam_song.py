@@ -10,7 +10,7 @@ import math
 from copy import deepcopy
 from pathlib import Path
 
-FORMAT_VERSION = 28
+FORMAT_VERSION = 29
 
 
 def _reference(reference):
@@ -134,6 +134,43 @@ _NO_COMPRESSOR = {'on': False, 'threshold': -20.0, 'ratio': 4.0, 'attack': 10.0,
 # Match TRACK_WIDTH's default: the lane as wide as its clips.
 _FULL_WIDTH = 100.0
 
+
+def _check_strip_value(record, key, acceptable):
+    if key in record and not acceptable(record[key]):
+        raise RuntimeError(f'{key} is not a valid version-29 channel strip setting.')
+
+
+def _check_strip_number(record, key, low, high):
+    _check_strip_value(record, key,
+                       lambda value: type(value) in (int, float) and low <= value <= high)
+
+
+def _channel_strip(lane, version):
+    eq, compressor = lane.get('eq'), lane.get('compressor')
+    fields = ('monoBelowHz', 'filterResonance', 'filterSlope')
+    for name, settings in (('EQ', eq), ('compressor', compressor)):
+        if settings is not None and not isinstance(settings, dict):
+            raise RuntimeError(f'The channel {name} must be a JSON object.')
+    if version < 29 and (
+            any(field in lane for field in fields)
+            or 'cutSlope' in (eq or {}) or 'scHpfHz' in (compressor or {})):
+        raise RuntimeError(f'Version {version} lanes cannot contain v29 channel strip keys.')
+    slopes = ('12db', '24db')
+    _check_strip_value(eq or {}, 'cutSlope', lambda slope: slope in slopes)
+    _check_strip_value(lane, 'filterSlope', lambda slope: slope in slopes)
+    _check_strip_number(compressor or {}, 'scHpfHz', 20.0, 250.0)
+    _check_strip_number(lane, 'monoBelowHz', 20.0, 300.0)
+    _check_strip_number(lane, 'filterResonance', 0.0, 100.0)
+    return {
+        'eq': deepcopy(_FLAT_EQ if eq is None else eq),
+        'compressor': deepcopy(_NO_COMPRESSOR if compressor is None else compressor),
+        'width': lane.get('width', _FULL_WIDTH),
+        'mono_below_hz': lane.get('monoBelowHz', 20.0),
+        'filter_resonance': lane.get('filterResonance', 0.0),
+        'filter_slope': lane.get('filterSlope', '12db'),
+    }
+
+
 # Match Fades::default: no fade at either edge.
 _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve': 'linear'}}
 
@@ -180,10 +217,8 @@ def read_song(path):
                     'solo': lane.get('solo', False),
                     'sends': lane.get('sends', [0.0] * 4),
                     'automation': lane.get('automation', {}),
-                    'eq': deepcopy(lane.get('eq', _FLAT_EQ)),
                     'drive': deepcopy(lane.get('drive', _NO_DRIVE)),
-                    'compressor': deepcopy(lane.get('compressor', _NO_COMPRESSOR)),
-                    'width': lane.get('width', _FULL_WIDTH),
+                    **_channel_strip(lane, version),
                     'ducker': _ducker(lane, version, song['masterGain'])}
                    for lane in document['lanes']],
         'clips': sorted(clips, key=lambda clip: clip['id']),

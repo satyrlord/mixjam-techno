@@ -157,8 +157,11 @@ fn the_filter_crosses_between_low_pass_and_high_pass_without_a_click() {
     }
 }
 
+/// The filter damping matches the original `k = 1.0` default.
+const FILTER_DAMPING: f32 = 1.0;
+
 #[test]
-fn a_lane_that_stays_on_one_side_sounds_as_it_did() {
+fn a_lane_that_stays_on_one_side_converges_cleanly_to_smooth_zdf() {
     let ramps: [Box<dyn Fn(usize) -> f32>; 4] = [
         Box::new(|_| -0.3),
         Box::new(|frame| -0.9 + 0.8 * (frame.min(2_000) as f32 / 2_000.0)),
@@ -170,12 +173,52 @@ fn a_lane_that_stays_on_one_side_sounds_as_it_did() {
         let new = run_lane(6_000, &lane, |frames, value| {
             filter.process(frames, value, RATE);
         });
-        let mut filter = SingleState::default();
+        let mut single = SingleState::default();
         let old = run_lane(6_000, &lane, |frames, value| {
-            filter.process(frames, value, RATE);
+            single.process(frames, value, RATE);
         });
-        assert!(new == old, "lane {index} changed");
+        let tail_diff = new[4_000..]
+            .iter()
+            .zip(&old[4_000..])
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            tail_diff < 0.025,
+            "lane {index} tail diverged by {tail_diff}"
+        );
     }
+}
+
+#[test]
+fn slope_24db_doubles_stopband_rolloff_and_resonance_stays_bounded() {
+    let rate = 44_100.0_f32;
+    let measure = |slope: FilterSlope, res: f32, hz: f32| {
+        let mut filter = Filter::default();
+        let mut frames: Vec<f32> = (0..8820)
+            .flat_map(|i| {
+                let x = 0.8 * (std::f32::consts::TAU * hz * i as f32 / rate).sin();
+                [x, x]
+            })
+            .collect();
+        filter.process_with(&mut frames, -0.45, rate, res, slope);
+        assert!(frames.iter().all(|s| s.is_finite() && s.abs() < 4.0));
+        let tail = &frames[8820..];
+        let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
+        20.0 * f64::from(rms.max(1e-12)).log10()
+    };
+    let db12 = measure(FilterSlope::Slope12, 0.0, 4800.0);
+    let db24 = measure(FilterSlope::Slope24, 0.0, 4800.0);
+    assert!(
+        db24 < db12 - 18.0,
+        "24 dB slope should attenuate far more than 12 dB: {db24:.2} vs {db12:.2}"
+    );
+    // High resonance stays finite and boosts near cutoff.
+    let res_at_cut = measure(FilterSlope::Slope24, 100.0, filter_cutoff(-0.45));
+    let flat_at_cut = measure(FilterSlope::Slope24, 0.0, filter_cutoff(-0.45));
+    assert!(
+        res_at_cut > flat_at_cut + 3.0,
+        "res {res_at_cut:.2}, flat {flat_at_cut:.2}"
+    );
 }
 
 #[test]

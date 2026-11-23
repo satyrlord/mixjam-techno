@@ -65,17 +65,17 @@ impl Session {
         self.unsaved = false;
         Ok(())
     }
-    /// Playback's mix, when it is current and an export can use it.
+    /// A current prepared mix that meets the export quality requirements.
     fn reusable_render(&self) -> Option<Arc<audio::Mix>> {
         self.render.clone().filter(|mix| {
             !self.render_dirty
                 && mix.has_levels(self.project())
                 && mix.quality() == crate::playback_quality::PlaybackQuality::FULL
+                && mix.render_quality() == crate::fx::RenderQuality::Offline
         })
     }
 
-    /// The mix prepared for the project as it is now: playback's, when it
-    /// is current, or a new one.
+    /// The offline mix for the project as it is now.
     pub(super) fn current_mix(&self) -> Result<Arc<audio::Mix>, String> {
         match self.reusable_render() {
             Some(mix) => Ok(mix),
@@ -87,7 +87,6 @@ impl Session {
     /// the GUI calls `start_export` so that the window stays responsive.
     pub fn export(&self, path: &Path) -> Result<(), String> {
         let (master, fx) = (&self.project().master, &self.project().fx);
-        // Playback already rendered an unchanged mix; write that audio.
         self.current_mix()?.write_wav(path, master, fx)
     }
 

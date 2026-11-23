@@ -163,7 +163,7 @@ fn audio_options_wait_for_transport_but_workspace_changes_do_not() {
     session.wants_playback = false;
     session.recorder = Some(crate::recording::Recorder::fixture());
     let mut draft = session.options().clone();
-    draft.drive_playback_oversampling = crate::options::Oversampling::Off;
+    draft.drive_playback_oversampling = crate::options::DriveOversampling::Off;
     assert!(session.apply_options(draft.clone(), 1, false).is_err());
     session.recorder.take();
     let project = session.project().clone();
@@ -238,6 +238,22 @@ fn quality_apply_rejects_old_preparation_and_exports_use_full_quality() {
         .unwrap();
     let old_revision = session.revision;
     let full = Arc::new(audio::prepare_project(session.project(), &session.library).unwrap());
+    let live_full = Arc::new(
+        audio::prepare_project_with_quality(
+            session.project(),
+            &session.library,
+            crate::playback_quality::PlaybackQuality::FULL,
+        )
+        .unwrap(),
+    );
+    session.render = Some(live_full.clone());
+    session.render_dirty = false;
+    let export_mix = session.current_mix().unwrap();
+    assert_eq!(
+        export_mix.render_quality(),
+        crate::fx::RenderQuality::Offline
+    );
+    assert!(!Arc::ptr_eq(&live_full, &export_mix));
     let (sender, _requests) = mpsc::channel();
     let (results, receiver) = mpsc::channel();
     session.render_worker = RenderWorker {
@@ -250,7 +266,7 @@ fn quality_apply_rejects_old_preparation_and_exports_use_full_quality() {
     session.render = Some(full.clone());
     session.render_dirty = false;
     let mut draft = session.options().clone();
-    draft.drive_playback_oversampling = crate::options::Oversampling::Off;
+    draft.drive_playback_oversampling = crate::options::DriveOversampling::Off;
     draft.master_playback_oversampling = crate::options::Oversampling::Off;
     session.apply_options(draft, 0, false).unwrap();
     results

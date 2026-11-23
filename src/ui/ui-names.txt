@@ -185,6 +185,8 @@ button	Stop
 button	Stretch
 button	Time Stretcher help
 button	Track 1 EQ
+button	Track 1 EQ next track
+button	Track 1 EQ previous track
 button	Track 2 EQ
 button	Track 3 EQ
 button	Track 4 EQ
@@ -889,6 +891,7 @@ number	Track 1 compressor attack value
 number	Track 1 compressor makeup value
 number	Track 1 compressor ratio value
 number	Track 1 compressor release value
+number	Track 1 compressor sidechain HPF value
 number	Track 1 compressor threshold value
 number	Track 1 drive amount value
 number	Track 1 drive character value
@@ -900,7 +903,9 @@ number	Track 1 ducker depth value
 number	Track 1 ducker key value
 number	Track 1 ducker release value
 number	Track 1 ducker threshold value
+number	Track 1 filter resonance value
 number	Track 1 gain value
+number	Track 1 mono below value
 number	Track 1 width value
 number	Track 2 gain value
 number	Track 3 gain value
@@ -948,10 +953,17 @@ other	TIME STRETCHER HELP
 other	TRACK 1 EQ
 other	Time Stretcher status
 other	Track 1 EQ response curve
+other	Track 1 compressor gain reduction
+other	Track 1 drive transfer curve
+other	Track 1 ducker gain reduction
 radio	Record on track 1
 radio	Record on track 2
 radio	Record on track 3
 radio	Record on track 4
+radio	Track 1 EQ cut slope 12 dB
+radio	Track 1 EQ cut slope 24 dB
+radio	Track 1 filter 12 dB
+radio	Track 1 filter 24 dB
 slider	Booster EQ 1100 Hz
 slider	Booster EQ 12000 Hz
 slider	Booster EQ 160 Hz
@@ -1027,6 +1039,7 @@ slider	Track 1 compressor attack
 slider	Track 1 compressor makeup
 slider	Track 1 compressor ratio
 slider	Track 1 compressor release
+slider	Track 1 compressor sidechain HPF
 slider	Track 1 compressor threshold
 slider	Track 1 drive amount
 slider	Track 1 drive character
@@ -1038,7 +1051,9 @@ slider	Track 1 ducker depth
 slider	Track 1 ducker key
 slider	Track 1 ducker release
 slider	Track 1 ducker threshold
+slider	Track 1 filter resonance
 slider	Track 1 gain
+slider	Track 1 mono below
 slider	Track 1 pan
 slider	Track 1 send FX 1
 slider	Track 1 send FX 2

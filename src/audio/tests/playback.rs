@@ -154,7 +154,7 @@ fn a_mix_reads_any_block_like_the_whole_render_and_has_no_length_limit() {
 
 #[test]
 fn playback_quality_keeps_key_alignment_seeks_loops_and_export_boundary() {
-    use crate::playback_quality::{Oversampling, PlaybackQuality};
+    use crate::playback_quality::{DriveOversampling, Oversampling, PlaybackQuality};
     let mut editor = crate::engine::Editor::new(Project::default());
     editor.place(1, 0, 0, 256).unwrap();
     editor.place(1, 1, 0, 256).unwrap();
@@ -187,7 +187,7 @@ fn playback_quality_keeps_key_alignment_seeks_loops_and_export_boundary() {
         .unwrap()
         .to_pcm(&project.master, &project.fx)
         .unwrap();
-    for drive in [Oversampling::FourX, Oversampling::Off] {
+    for drive in [DriveOversampling::FourX, DriveOversampling::Off] {
         for master in [Oversampling::FourX, Oversampling::Off] {
             let quality = PlaybackQuality {
                 drive,

@@ -1,7 +1,8 @@
 //! What a project must satisfy to be played, saved, or opened.
 use super::{
-    MAX_CLIPS, MAX_KEYS, MAX_TICKS, PROJECT_SCHEMA_VERSION, Project, SUPPORTED_BPMS, TRACK_COUNT,
-    TRACK_WIDTH, check_pitch, sections_error, validate_import_metadata,
+    FILTER_RESONANCE, MAX_CLIPS, MAX_KEYS, MAX_TICKS, PROJECT_SCHEMA_VERSION, Project,
+    SUPPORTED_BPMS, TRACK_COUNT, TRACK_MONO_BELOW, TRACK_WIDTH, check_pitch, sections_error,
+    validate_import_metadata,
 };
 use std::collections::HashSet;
 
@@ -25,73 +26,15 @@ impl Project {
             .tracks
             .get(index)
             .ok_or("The track is outside the project.")?;
-        if !valid_mixer_gain(track.gain) {
-            return Err("Track amplitude must be from 0 to 4.".into());
-        }
-        if !track.pan.is_finite() || !(-1.0..=1.0).contains(&track.pan) {
-            return Err("Track pan must be from -1 to 1.".into());
-        }
-        if track
-            .sends
-            .iter()
-            .any(|send| !send.is_finite() || !(0.0..=1.0).contains(send))
-        {
-            return Err("Track sends must be from 0 to 1.".into());
-        }
-        if !track.width.is_finite() || !(TRACK_WIDTH.low..=TRACK_WIDTH.high).contains(&track.width)
-        {
-            return Err("Track width must be from 0 to 200%.".into());
-        }
-        track
-            .automation
-            .validate()
-            .and_then(|()| track.eq.validate())
-            .and_then(|()| track.drive.validate())
-            .and_then(|()| track.compressor.validate())
-            .and_then(|()| track.ducker.validate(index))
-            .map_err(|error| format!("Track {}: {error}", index + 1))
+        validate_track_fields(index, track)
     }
 
     pub(crate) fn validate_tracks(&self) -> Result<(), String> {
         if self.tracks.len() != TRACK_COUNT {
             return Err("The project must have 64 track slots.".into());
         }
-        if self
-            .tracks
-            .iter()
-            .any(|track| !valid_mixer_gain(track.gain))
-        {
-            return Err("Track amplitude must be from 0 to 4.".into());
-        }
-        if self
-            .tracks
-            .iter()
-            .any(|track| !track.pan.is_finite() || !(-1.0..=1.0).contains(&track.pan))
-        {
-            return Err("Track pan must be from -1 to 1.".into());
-        }
-        if self.tracks.iter().any(|track| {
-            track
-                .sends
-                .iter()
-                .any(|send| !send.is_finite() || !(0.0..=1.0).contains(send))
-        }) {
-            return Err("Track sends must be from 0 to 1.".into());
-        }
-        if self.tracks.iter().any(|track| {
-            !track.width.is_finite() || !(TRACK_WIDTH.low..=TRACK_WIDTH.high).contains(&track.width)
-        }) {
-            return Err("Track width must be from 0 to 200%.".into());
-        }
         for (index, track) in self.tracks.iter().enumerate() {
-            track
-                .automation
-                .validate()
-                .and_then(|()| track.eq.validate())
-                .and_then(|()| track.drive.validate())
-                .and_then(|()| track.compressor.validate())
-                .and_then(|()| track.ducker.validate(index))
-                .map_err(|error| format!("Track {}: {error}", index + 1))?;
+            validate_track_fields(index, track)?;
         }
         Ok(())
     }
@@ -281,6 +224,40 @@ impl Project {
 /// A clip gain, or the master gain of a schema 3 or older song.
 pub(super) fn valid_gain(g: f32) -> bool {
     g.is_finite() && (0.0..=super::MAX_CLIP_GAIN).contains(&g)
+}
+
+fn validate_track_fields(index: usize, track: &super::Track) -> Result<(), String> {
+    validate_track_mix(track)?;
+    track
+        .automation
+        .validate()
+        .and_then(|()| track.eq.validate())
+        .and_then(|()| track.drive.validate())
+        .and_then(|()| track.compressor.validate())
+        .and_then(|()| track.ducker.validate(index))
+        .map_err(|error| format!("Track {}: {error}", index + 1))
+}
+
+fn validate_track_mix(track: &super::Track) -> Result<(), String> {
+    if !valid_mixer_gain(track.gain) {
+        return Err("Track amplitude must be from 0 to 4.".into());
+    }
+    if !(-1.0..=1.0).contains(&track.pan) {
+        return Err("Track pan must be from -1 to 1.".into());
+    }
+    if track.sends.iter().any(|send| !(0.0..=1.0).contains(send)) {
+        return Err("Track sends must be from 0 to 1.".into());
+    }
+    if !TRACK_WIDTH.contains(track.width) {
+        return Err("Track width must be from 0 to 200%.".into());
+    }
+    if !TRACK_MONO_BELOW.contains(track.mono_below_hz) {
+        return Err("Track mono-below frequency must be from 20 to 300 Hz.".into());
+    }
+    if !FILTER_RESONANCE.contains(track.filter_resonance) {
+        return Err("Track filter resonance must be from 0 to 100%.".into());
+    }
+    Ok(())
 }
 
 fn valid_mixer_gain(g: f32) -> bool {

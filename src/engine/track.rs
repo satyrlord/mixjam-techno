@@ -1,5 +1,5 @@
 //! A track's mixer settings and the reading of saved tracks.
-use super::TRACK_WIDTH;
+use super::{FILTER_RESONANCE, TRACK_MONO_BELOW, TRACK_WIDTH};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -26,6 +26,12 @@ pub struct Track {
     /// The stereo width in percent (`TRACK_WIDTH`), after the compressor
     /// and before the automation, fader, and pan.
     pub width: f32,
+    /// Mono-below crossover in Hz (`TRACK_MONO_BELOW`; `<= 20.5` = off).
+    pub mono_below_hz: f32,
+    /// Automated filter resonance in percent (`FILTER_RESONANCE`; `0.0` = default).
+    pub filter_resonance: f32,
+    /// Automated filter rolloff slope (`12db` default or `24db`).
+    pub filter_slope: crate::automation::FilterSlope,
     /// Lowers the track while its key track sounds, after the level.
     pub ducker: crate::ducker::Ducker,
 }
@@ -96,6 +102,9 @@ impl Default for Track {
             drive: Default::default(),
             compressor: Default::default(),
             width: TRACK_WIDTH.default,
+            mono_below_hz: TRACK_MONO_BELOW.default,
+            filter_resonance: FILTER_RESONANCE.default,
+            filter_slope: Default::default(),
             ducker: Default::default(),
         }
     }
@@ -129,13 +138,15 @@ impl Track {
     }
 
     /// Whether the channel EQ, drive, compressor, or ducker is on, or the
-    /// width is not 100%: whether the track's channel processing differs
-    /// from a plain track.
+    /// width/mono-below or filter resonance/slope differs from neutral.
     pub fn processing_on(&self) -> bool {
         self.eq.on
             || self.drive.on
             || self.compressor.on
             || self.width != TRACK_WIDTH.default
+            || self.mono_below_hz > TRACK_MONO_BELOW.low + 0.5
+            || self.filter_resonance > 0.0
+            || self.filter_slope != crate::automation::FilterSlope::Slope12
             || self.ducker.on
     }
 
@@ -181,15 +192,21 @@ impl Track {
         self.polarity_inverted = signed.is_sign_negative();
     }
 
-    /// Whether the width changes the track: both outputs on and a width
-    /// other than 100%. A track that plays on one output has no side.
+    /// Whether the width or bass mono-below changes the track: both outputs
+    /// on and either width != 100% or `mono_below_hz > 20.5`.
     pub fn widens(&self) -> bool {
-        self.width != TRACK_WIDTH.default && self.left_enabled && self.right_enabled
+        (self.width != TRACK_WIDTH.default || self.mono_below_hz > TRACK_MONO_BELOW.low + 0.5)
+            && self.left_enabled
+            && self.right_enabled
     }
 }
 
 fn default_width() -> f32 {
     TRACK_WIDTH.default
+}
+
+fn default_mono_below() -> f32 {
+    TRACK_MONO_BELOW.default
 }
 
 impl<'de> Deserialize<'de> for Track {
@@ -225,6 +242,12 @@ impl<'de> Deserialize<'de> for Track {
             compressor: crate::compressor::Compressor,
             #[serde(default = "default_width")]
             width: f32,
+            #[serde(default = "default_mono_below")]
+            mono_below_hz: f32,
+            #[serde(default)]
+            filter_resonance: f32,
+            #[serde(default)]
+            filter_slope: crate::automation::FilterSlope,
             // Projects saved before the ducker existed have it off.
             #[serde(default)]
             ducker: crate::ducker::Ducker,
@@ -244,6 +267,9 @@ impl<'de> Deserialize<'de> for Track {
             drive: saved.drive,
             compressor: saved.compressor,
             width: saved.width,
+            mono_below_hz: saved.mono_below_hz,
+            filter_resonance: saved.filter_resonance,
+            filter_slope: saved.filter_slope,
             ducker: saved.ducker,
         };
         if saved.polarity_inverted.is_none() {

@@ -126,6 +126,14 @@ fn digests() -> Vec<(String, u64)> {
     for later_ducker in [false, true] {
         let (project, samples) = fixture(later_ducker);
         let mix = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let live = Arc::new(
+            mix_with_samples_quality(
+                &project,
+                &samples,
+                crate::playback_quality::PlaybackQuality::FULL,
+            )
+            .unwrap(),
+        );
         let name = |path: &str| format!("{path}, later ducker {later_ducker}");
         // The pedals delay the sound, and the buses ring on after the song.
         assert!(project.master.latency() > 0);
@@ -143,7 +151,7 @@ fn digests() -> Vec<(String, u64)> {
         }
         let mut live_ref: Option<Vec<f32>> = None;
         for block in [PlaybackSource::BLOCK_FRAMES, 100] {
-            let played = play(&mix, &project, 0, None, block, usize::MAX);
+            let played = play(&live, &project, 0, None, block, usize::MAX);
             if let Some(first) = &live_ref {
                 assert_eq!(&played, first, "{block}-frame live playback drifted");
             } else {
@@ -154,11 +162,18 @@ fn digests() -> Vec<(String, u64)> {
         }
         add(
             name("playback from a later start"),
-            &play(&mix, &project, 20_000, None, 256, usize::MAX),
+            &play(&live, &project, 20_000, None, 256, usize::MAX),
         );
         add(
             name("playback through a loop"),
-            &play(&mix, &project, 30_000, Some([10_000, 40_000]), 256, 200_000),
+            &play(
+                &live,
+                &project,
+                30_000,
+                Some([10_000, 40_000]),
+                256,
+                200_000,
+            ),
         );
         let mut read = vec![0.0; (mix.frames() as usize + 100) * 2];
         mix.read(0, &mut read);
@@ -188,60 +203,60 @@ fn digests() -> Vec<(String, u64)> {
 fn every_render_path_keeps_its_samples() {
     let actual = digests();
     let expected: &[(&str, u64)] = &[
-        ("export, later ducker false", 0xda8d972aee19c818),
+        ("export, later ducker false", 0xd6b1c55b45b465be),
         (
             "export without buses, later ducker false",
-            0x9efd13452d0c7631,
+            0x974011af7875a611,
         ),
-        ("stem 0, later ducker false", 0x80b2a787acb82c19),
-        ("stem 1, later ducker false", 0xefac1d01627c866f),
+        ("stem 0, later ducker false", 0x02c153ddc99aa075),
+        ("stem 1, later ducker false", 0x645043dcc90d21e9),
         ("stem 2, later ducker false", 0xbaf9536bb7dfac91),
-        ("stem 3, later ducker false", 0xc091345d7f4f773d),
-        ("stem 4, later ducker false", 0x8e522612e0cae6e9),
+        ("stem 3, later ducker false", 0x0359f54aba4bb5db),
+        ("stem 4, later ducker false", 0xd1300d8928575d15),
         (
             "playback in 256-frame blocks, later ducker false",
-            0x577fb643b7fcb1f6,
+            0x79dbe53e3eaa94d7,
         ),
         (
             "playback in 100-frame blocks, later ducker false",
-            0x577fb643b7fcb1f6,
+            0x79dbe53e3eaa94d7,
         ),
         (
             "playback from a later start, later ducker false",
-            0xf7a4a7f9464a0540,
+            0x565373350e0c91a8,
         ),
         (
             "playback through a loop, later ducker false",
-            0xca2eba283e96a8e0,
+            0x915872f8e62839ca,
         ),
-        ("read, later ducker false", 0x937f6d5ad8872edf),
-        ("export, later ducker true", 0x4f1989b256e7dd4f),
+        ("read, later ducker false", 0x25eee86543767d85),
+        ("export, later ducker true", 0xff933c194f2c9eb5),
         (
             "export without buses, later ducker true",
-            0x4ca60d3b2d1e0c0b,
+            0xbc59443861417e61,
         ),
-        ("stem 0, later ducker true", 0x9278d153d59cfcdd),
-        ("stem 1, later ducker true", 0xb6ad07949a603e6f),
-        ("stem 2, later ducker true", 0xc36b3c7ec5779449),
-        ("stem 3, later ducker true", 0xae5fdd7e313d2f0b),
-        ("stem 4, later ducker true", 0xaabcfec537ff4ee9),
+        ("stem 0, later ducker true", 0x73314d04b2dadcb3),
+        ("stem 1, later ducker true", 0x432c2f71c4ae39e9),
+        ("stem 2, later ducker true", 0x5d2a8e0722588667),
+        ("stem 3, later ducker true", 0xe14c9ee76064d4e3),
+        ("stem 4, later ducker true", 0x7128ce242f61a515),
         (
             "playback in 256-frame blocks, later ducker true",
-            0xb69bae484a2095c1,
+            0xbfab1791fa414393,
         ),
         (
             "playback in 100-frame blocks, later ducker true",
-            0xb69bae484a2095c1,
+            0xbfab1791fa414393,
         ),
         (
             "playback from a later start, later ducker true",
-            0x8ba08b6f7538a3a8,
+            0xada7fb4b80a58135,
         ),
         (
             "playback through a loop, later ducker true",
-            0x7aa5632531d9f096,
+            0xd84b14e0788753b3,
         ),
-        ("read, later ducker true", 0xe04c2ac476adfad5),
+        ("read, later ducker true", 0x3961a53880e25ff7),
         ("decoded audio through the board", 0xf70603c6afdbde4c),
         ("decoded audio alone", 0x91a1607d612e209f),
     ];
