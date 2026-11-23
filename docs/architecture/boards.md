@@ -21,7 +21,8 @@ paint the strips and fader caps in code at the same physical-pixel scale.
 Each strip is 108 logical points wide. Master stays outside the occupied-track
 bank, which scrolls horizontally. On each track strip, the EQ button starts the
 row of Mute and Solo, above polarity. The Bypass of the Master strip is under
-its output labels. The two buttons show the project state.
+its meter, which `master::strip_meter` draws from the same `Metering` sample
+and OVER latch as Mastering. The two buttons show the project state.
 
 `src/ui/eq.rs` owns the channel EQ window. The frontend keeps the track that
 the window shows. The window edits copies of the `ChannelEq`, `Drive`,

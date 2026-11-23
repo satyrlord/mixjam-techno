@@ -529,6 +529,7 @@ fn telemetry_column(
         "Deep edit Clear OVER",
         &metering.reading,
         &mut lamps,
+        roles().legend,
     );
     lamps.store(ui.ctx());
 }

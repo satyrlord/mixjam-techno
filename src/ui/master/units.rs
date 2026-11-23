@@ -148,7 +148,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         rect.right_top() + Vec2::new(-32.0, 14.0),
         Vec2::new(54.0, 22.0),
     );
-    over_control(ui, over, "Clear OVER", reading, lamps);
+    over_control(ui, over, "Clear OVER", reading, lamps, roles().legend);
     output_readouts(ui, rect, reading, live);
 
     let left = rect.left() + 26.0;
@@ -162,7 +162,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
         Pos2::new(left, rect.top() + 144.0),
         Pos2::new(right, rect.top() + 153.0),
     );
-    peak_bar(ui, peak_bounds, reading, live);
+    peak_bar(ui, peak_bounds, reading, live, true);
 
     // The socket at the left edge takes the last pedal's output.
     let socket = Pos2::new(rect.left() + 10.0, rect.top() - PEDAL_TOP + SIGNAL_Y);
@@ -181,12 +181,15 @@ fn unit_face(ui: &egui::Ui, rect: Rect, title: &str) {
     );
 }
 
+/// The OVER lamp and its label in `legend`. Every OVER lamp shares one latch,
+/// so clearing it in one place clears it everywhere.
 pub(super) fn over_control(
     ui: &egui::Ui,
     over: Rect,
     name: &str,
     reading: &MeterReading,
     lamps: &mut Lamps,
+    legend: Color32,
 ) {
     if reading.run != lamps.run {
         (lamps.run, lamps.overs) = (reading.run, 0);
@@ -211,7 +214,7 @@ pub(super) fn over_control(
         Align2::LEFT_CENTER,
         "OVER",
         FontId::proportional(10.5),
-        roles().legend,
+        legend,
     );
     if response.has_focus() {
         ui.painter().rect_stroke(
@@ -366,7 +369,51 @@ fn loudness_bar(ui: &egui::Ui, loudness: Rect, reading: &MeterReading, live: boo
     );
 }
 
-fn peak_bar(ui: &egui::Ui, peak: Rect, reading: &MeterReading, live: bool) {
+/// The Mixer's Master strip meter: the output unit's true-peak bar without
+/// its scale in `bar`, the highest true peak as text at `readout`, and the
+/// OVER lamp in `over`, on the latch that Mastering shares. `ink` is the
+/// strip's text colour.
+pub(in super::super) fn strip_meter(
+    ui: &egui::Ui,
+    [bar, readout, over]: [Rect; 3],
+    metering: &Metering,
+    ink: Color32,
+) {
+    let reading = &metering.reading;
+    let live = metering.playing && reading.run > 0;
+    if metering.playing {
+        ui.ctx().request_repaint_after(metering.repaint_delay());
+    }
+    peak_bar(ui, bar, reading, live, false);
+    let peak = if reading.true_peak_max.is_finite() {
+        format!("Peak {} dBTP", show_level(reading.true_peak_max))
+    } else {
+        "Peak —".to_owned()
+    };
+    let hot = reading.true_peak_max > OVER_DBTP;
+    let response = ui.interact(readout, ui.id().with("master-peak"), Sense::hover());
+    ui.painter().text(
+        readout.center(),
+        Align2::CENTER_CENTER,
+        &peak,
+        FontId::proportional(11.0),
+        ink,
+    );
+    response.hover_hint(format!(
+        "{peak}{}. The highest true peak of the playback so far, after the master \
+         pedalboard. Mastering shows the full meters.",
+        if hot {
+            ", above the -1 dBTP delivery limit"
+        } else {
+            ""
+        }
+    ));
+    let mut lamps = Lamps::load(ui.ctx());
+    over_control(ui, over, "Master clear OVER", reading, &mut lamps, ink);
+    lamps.store(ui.ctx());
+}
+
+fn peak_bar(ui: &egui::Ui, peak: Rect, reading: &MeterReading, live: bool, labels: bool) {
     bar(ui, peak);
     if live && reading.true_peak.is_finite() {
         let fill = Rect::from_min_max(
@@ -394,12 +441,14 @@ fn peak_bar(ui: &egui::Ui, peak: Rect, reading: &MeterReading, live: bool) {
         ],
         Stroke::new(2.0_f32, roles().lamp_peak),
     );
-    scale(
-        ui,
-        peak,
-        &[(-24.0, "-24"), (-12.0, "-12"), (-1.0, "-1 dBTP")],
-        -24.0,
-    );
+    if labels {
+        scale(
+            ui,
+            peak,
+            &[(-24.0, "-24"), (-12.0, "-12"), (-1.0, "-1 dBTP")],
+            -24.0,
+        );
+    }
 }
 
 /// A meter's dark track.

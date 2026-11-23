@@ -177,8 +177,9 @@ page.
 A 70-point block follows the last row, and stays at the foot of the score
 while more rows scroll. It holds two rows:
 
-- The Master row: Master over "Stereo output", Bypass under the switches, the
-  level, and Export tracks….
+- The Master row: Master over the pedalboard state, as on the Mixer's Master
+  strip ("No pedals on", "3 pedals on", or "Bypassed"), Bypass under the
+  switches, the level, and Export tracks….
 - The returns row: four groups that share the width of the columns, with a Strip
   slot rule between them. Each group holds the effect in 11 points. It then
   holds the bus and the return state in 10 points ("FX 1 · Return 88%" or "FX 2

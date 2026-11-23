@@ -45,6 +45,8 @@ pub(super) enum Action {
     OpenDeepEdit(PedalKind),
 }
 
+pub(super) use units::strip_meter;
+
 /// What the meters show: the latest reading, and whether a mix plays.
 pub(super) struct Metering {
     pub reading: MeterReading,

@@ -29,10 +29,18 @@ change the saved amplitude or the audio. Relative increases must leave
 silence and raise very quiet positive gains. A saved gain below -96 dB must
 not become silent when it increases.
 
-Master uses the same dB presentation and stays outside the scroller. In place
-of pan and routing, it shows Main output and L + R. Under them, an 80 by
-24-point Bypass button fills amber while the master pedalboard is on bypass. A
-Mastering board on bypass draws at 45% opacity and stays usable.
+Master uses the same dB presentation and stays outside the scroller. Its name
+uses the heading face at the 15-point section size, so it ranks above the
+13-point track names. Its
+summary line gives the pedalboard state: Bypassed, No pedals on, or the count
+of pedals that are on. In place of pan and routing, it shows the master meter:
+the Mastering true-peak bar (-24 to 0 dBTP, with the peak hold and the -1 dBTP
+line), the highest true peak of the playback in dBTP, and the OVER lamp. The
+lamp shares its latch with Mastering; a click on either clears it. Under them,
+an 80 by 24-point Bypass button, in line with the Edit buttons of the return
+strips, has a lamp bar over its label like M, S, L, and R. It lights and the
+face fills amber while the master pedalboard is on bypass. A Mastering board
+on bypass draws at 45% opacity and stays usable.
 
 ### Channel EQ window
 
@@ -86,8 +94,9 @@ are:
 The bottom segment maps linear amplitude to exact zero. The other segments
 interpolate in dB. Thus 72% of the travel serves -24 through +12 dB. The scale
 marks useful values and does not spread very quiet settings over most of the
-rail. Its labels are +12, 0, -12, -24, -48, and negative infinity. The 0 label
-sits left of the rail, beside the Unity button. These knots record the current
+rail. Its labels are +12, 0, −12, −24, and −inf, with the minus sign U+2212
+and no tick marks; a tick before a minus sign reads as a second minus. The 0
+label sits left of the rail, beside the Unity button. These knots record the current
 implementation, not a universal DAW taper.
 
 ### Strip controls

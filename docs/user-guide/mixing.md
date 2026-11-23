@@ -94,8 +94,14 @@ during playback.
 
 ### Master bypass and track export
 
+The line under **Master** tells you how many master pedals are on, or that
+the board is bypassed. The bar under the fader shows the true peak of the
+output, and the text under it gives the highest true peak of the playback.
+**OVER** lights when the true peak passes -1 dBTP, and stays lit until you
+click it, here or on Mastering.
+
 **Bypass** on the Master strip skips the master pedalboard. It does the same
-as **Bypass all** on Mastering.
+as **Bypass all** on Mastering. Its lamp lights while the board is bypassed.
 
 To export each track to its own WAV file, for a mix in a different
 application:

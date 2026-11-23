@@ -8,7 +8,7 @@ pub(crate) fn show(
     summaries: &[(String, String)],
     master: &mut f32,
     fx: &mut FxBuses,
-    bypass: &mut bool,
+    state: MasterState<'_>,
 ) -> Changes {
     // Vintage reuses the ivory and graphite artwork; the other themes paint
     // their strips in code.
@@ -79,7 +79,7 @@ pub(crate) fn show(
                                                     detail.as_str(),
                                                 ),
                                                 &mut gain,
-                                                Some(TrackControls {
+                                                Controls::Track(TrackControls {
                                                     index,
                                                     mix: &mut mix,
                                                     automated: std::array::from_fn(|bus| {
@@ -125,6 +125,8 @@ pub(crate) fn show(
             },
         );
         ui.scope_builder(egui::UiBuilder::new().id_salt("mixer_master"), |ui| {
+            let summary = master_summary(*state.bypass, state.pedals);
+            let mut bypassed = false;
             result.master |= strip(
                 ui,
                 art,
@@ -132,21 +134,49 @@ pub(crate) fn show(
                 height,
                 (
                     "Master",
-                    "Stereo output",
-                    "Master level affects the complete mix.",
+                    summary.as_str(),
+                    "The master pedalboard, after the mix. Mastering edits its pedals; \
+                     Bypass skips them.",
                 ),
                 master,
-                None,
+                Controls::Master {
+                    state,
+                    bypassed: &mut bypassed,
+                },
             );
-            // Below the output labels, where a track strip has its switches.
-            let rect = Rect::from_min_size(
-                ui.min_rect().min + Vec2::new(14.0, height / scale - 56.0) * scale,
-                Vec2::new(80.0, 24.0) * scale,
-            );
-            result.bypass = bypass_button(ui, rect, scale, bypass);
+            result.bypass = bypassed;
         });
     });
     result
+}
+
+/// What the Mixer's Master strip shows besides its level: the master
+/// pedalboard's bypass, how many of its pedals are on, and the output meters.
+pub(crate) struct MasterState<'a> {
+    pub bypass: &'a mut bool,
+    pub pedals: usize,
+    pub metering: &'a super::super::master::Metering,
+}
+
+/// The Master strip's summary line: the state of the master pedalboard.
+pub(crate) fn master_summary(bypass: bool, pedals: usize) -> String {
+    match (bypass, pedals) {
+        (true, _) => "Bypassed".into(),
+        (false, 0) => "No pedals on".into(),
+        (false, 1) => "1 pedal on".into(),
+        (false, count) => format!("{count} pedals on"),
+    }
+}
+
+/// What a strip holds under its fader: a track's sends, pan, and switches,
+/// or the Master strip's meter and Bypass.
+enum Controls<'a> {
+    Track(TrackControls<'a>),
+    Master {
+        state: MasterState<'a>,
+        /// Whether Bypass was pressed.
+        bypassed: &'a mut bool,
+    },
 }
 
 struct TrackControls<'a> {
@@ -172,7 +202,7 @@ fn strip(
     height: f32,
     identity: (&str, &str, &str),
     gain: &mut f32,
-    controls: Option<TrackControls<'_>>,
+    controls: Controls<'_>,
 ) -> bool {
     let (name, summary, detail) = identity;
     let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
@@ -183,12 +213,24 @@ fn strip(
     }
     ui.painter().rect_stroke(
         rect.shrink(0.5 * scale),
-        3.0,
+        roles().corner(3.0),
         Stroke::new(1.0 * scale, roles().strip_edge),
         egui::StrokeKind::Inside,
     );
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
-    text(ui, at(54.0, 14.0), name, 13.0 * scale, roles().strip_text);
+    // Master ends the signal chain: its name takes the heading face at the
+    // section size, which holds its rank even in Aero's light, wide face.
+    if matches!(controls, Controls::Master { .. }) {
+        ui.painter().text(
+            at(54.0, 14.0),
+            Align2::CENTER_CENTER,
+            name,
+            FontId::new(theme::type_size::SECTION * scale, theme::heading_family()),
+            roles().strip_text,
+        );
+    } else {
+        text(ui, at(54.0, 14.0), name, 13.0 * scale, roles().strip_text);
+    }
     let summary_rect = Rect::from_min_size(at(6.0, 23.0), Vec2::new(96.0, 16.0) * scale);
     ui.put(
         summary_rect,
@@ -207,38 +249,25 @@ fn strip(
     let rail = Rect::from_min_max(at(18.0, 84.0), at(50.0, bottom));
     changed |= gain_rail(ui, art, scale, rail, name, gain);
     let zero_y = egui::lerp(rail.bottom()..=rail.top(), gain_fraction(1.0));
-    for (db, label) in [
-        (12.0, "+12"),
-        (-12.0, "−12"),
-        (-24.0, "−24"),
-        (-48.0, "−48"),
-    ] {
+    // Each label is centred on its level. The labels carry no ticks: a tick
+    // before a minus sign read as a second minus.
+    for (db, label) in [(12.0, "+12"), (-12.0, "−12"), (-24.0, "−24")] {
         let y = egui::lerp(
             rail.bottom()..=rail.top(),
             gain_fraction(db_to_amplitude(db)),
         );
-        ui.painter().line_segment(
-            [
-                Pos2::new(rail.right() + 2.0 * scale, y),
-                Pos2::new(rail.right() + 6.0 * scale, y),
-            ],
-            Stroke::new(1.0 * scale, roles().strip_text),
+        ui.painter().text(
+            Pos2::new(rail.right() + 4.0 * scale, y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(10.0 * scale),
+            roles().strip_text,
         );
-        // A short rail keeps the tick but drops a label that would touch -inf.
-        if rail.bottom() - y >= 12.0 * scale {
-            ui.painter().text(
-                Pos2::new(rail.right() + 9.0 * scale, y),
-                Align2::LEFT_CENTER,
-                label,
-                FontId::proportional(10.0 * scale),
-                roles().strip_text,
-            );
-        }
     }
     ui.painter().text(
-        Pos2::new(rail.right() + 9.0 * scale, rail.bottom()),
+        Pos2::new(rail.right() + 4.0 * scale, rail.bottom()),
         Align2::LEFT_CENTER,
-        "-inf",
+        "−inf",
         FontId::proportional(10.0 * scale),
         roles().strip_text,
     );
@@ -261,7 +290,48 @@ fn strip(
         changed |= *gain != 1.0;
         *gain = 1.0;
     }
-    if let Some(TrackControls {
+    let (state, bypassed) = match controls {
+        Controls::Master { state, bypassed } => (state, bypassed),
+        Controls::Track(track) => {
+            return track_controls(ui, scale, height, rect, name, track) || changed;
+        }
+    };
+    // Where a track has its sends, pan, and state, Master meters the output:
+    // the true-peak bar, the highest peak, and the OVER lamp.
+    let foot = height / scale;
+    super::super::master::strip_meter(
+        ui,
+        [
+            Rect::from_min_size(at(8.0, foot - 124.0), Vec2::new(92.0, 10.0) * scale),
+            Rect::from_min_size(at(8.0, foot - 106.0), Vec2::new(92.0, 16.0) * scale),
+            Rect::from_center_size(at(54.0, foot - 74.0), Vec2::new(54.0, 22.0) * scale),
+        ],
+        state.metering,
+        roles().strip_text,
+    );
+    // In line with the Edit buttons of the return strips beside it.
+    *bypassed = bypass_button(
+        ui,
+        Rect::from_min_size(at(14.0, foot - 40.0), Vec2::new(80.0, 24.0) * scale),
+        scale,
+        state.bypass,
+    );
+    changed
+}
+
+/// A track strip's sends, pan, state, and switches under its fader. Returns
+/// whether the track's mix changed.
+fn track_controls(
+    ui: &mut egui::Ui,
+    scale: f32,
+    height: f32,
+    rect: Rect,
+    name: &str,
+    controls: TrackControls<'_>,
+) -> bool {
+    let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
+    let mut changed = false;
+    let TrackControls {
         index,
         mix,
         automated,
@@ -269,116 +339,99 @@ fn strip(
         any_solo,
         eq_on,
         open_eq,
-    }) = controls
-    {
-        // The sends to FX 1 to 4, from left to right, in the gap between the
-        // rail and the pan.
-        for (bus, send) in mix.sends.iter_mut().enumerate() {
-            let x = 15.0 + bus as f32 * 26.0;
-            changed |= send_knob(
-                ui,
-                Rect::from_center_size(at(x, height / scale - 123.0), Vec2::splat(13.0 * scale)),
-                Look::Strip(scale),
-                &format!("{name} send FX {}", bus + 1),
-                send,
-                automated[bus],
-            );
-        }
-        let pan_rect = Rect::from_min_size(
-            at(8.0, height / scale - 116.0),
-            Vec2::new(92.0, 16.0) * scale,
-        );
-        changed |= pan_slider(
+    } = controls;
+    // The sends to FX 1 to 4, from left to right, in the gap between the
+    // rail and the pan.
+    for (bus, send) in mix.sends.iter_mut().enumerate() {
+        let x = 15.0 + bus as f32 * 26.0;
+        changed |= send_knob(
             ui,
-            pan_rect,
+            Rect::from_center_size(at(x, height / scale - 123.0), Vec2::splat(13.0 * scale)),
             Look::Strip(scale),
-            &format!("Track {}", index + 1),
-            &mut mix.pan,
-            pan_automated,
+            &format!("{name} send FX {}", bus + 1),
+            send,
+            automated[bus],
         );
-        if center_button(
+    }
+    let pan_rect = Rect::from_min_size(
+        at(8.0, height / scale - 116.0),
+        Vec2::new(92.0, 16.0) * scale,
+    );
+    changed |= pan_slider(
+        ui,
+        pan_rect,
+        Look::Strip(scale),
+        &format!("Track {}", index + 1),
+        &mut mix.pan,
+        pan_automated,
+    );
+    if center_button(
+        ui,
+        Rect::from_center_size(
+            at(54.0, height / scale - 90.0),
+            Vec2::new(40.0, 14.0) * scale,
+        ),
+        Look::Strip(scale),
+        name,
+    ) {
+        changed |= mix.pan != 0.0;
+        mix.pan = 0.0;
+    }
+    text(
+        ui,
+        at(54.0, height / scale - 72.0),
+        &track_state(mix.silence(any_solo), pan_automated, mix.pan),
+        11.0 * scale,
+        roles().strip_text,
+    );
+    // The EQ button completes the row of Mute and Solo, above polarity.
+    if eq_button(
+        ui,
+        Rect::from_min_size(
+            at(8.0, height / scale - 56.0),
+            Vec2::new(26.0, 24.0) * scale,
+        ),
+        Look::Strip(scale),
+        name,
+        eq_on,
+        false,
+    ) {
+        *open_eq = true;
+    }
+    for (switch, x, on) in [
+        (TrackSwitch::Mute, 40.0, &mut mix.muted),
+        (TrackSwitch::Solo, 72.0, &mut mix.solo),
+    ] {
+        changed |= switch_button(
             ui,
-            Rect::from_center_size(
-                at(54.0, height / scale - 90.0),
-                Vec2::new(40.0, 14.0) * scale,
-            ),
-            Look::Strip(scale),
-            name,
-        ) {
-            changed |= mix.pan != 0.0;
-            mix.pan = 0.0;
-        }
-        text(
-            ui,
-            at(54.0, height / scale - 72.0),
-            &track_state(mix.silence(any_solo), pan_automated, mix.pan),
-            11.0 * scale,
-            roles().strip_text,
-        );
-        // The EQ button completes the row of Mute and Solo, above polarity.
-        if eq_button(
-            ui,
-            Rect::from_min_size(
-                at(8.0, height / scale - 56.0),
-                Vec2::new(26.0, 24.0) * scale,
-            ),
-            Look::Strip(scale),
-            name,
-            eq_on,
-            false,
-        ) {
-            *open_eq = true;
-        }
-        for (switch, x, on) in [
-            (TrackSwitch::Mute, 40.0, &mut mix.muted),
-            (TrackSwitch::Solo, 72.0, &mut mix.solo),
-        ] {
-            changed |= switch_button(
-                ui,
-                Rect::from_min_size(at(x, height / scale - 56.0), Vec2::new(28.0, 24.0) * scale),
-                Look::Strip(scale),
-                name,
-                switch,
-                on,
-            );
-        }
-        changed |= polarity_button(
-            ui,
-            Rect::from_min_size(
-                at(8.0, height / scale - 28.0),
-                Vec2::new(26.0, 24.0) * scale,
-            ),
+            Rect::from_min_size(at(x, height / scale - 56.0), Vec2::new(28.0, 24.0) * scale),
             Look::Strip(scale),
             name,
-            &mut mix.polarity_inverted,
+            switch,
+            on,
         );
-        for (switch, x, on) in [
-            (TrackSwitch::Left, 40.0, &mut mix.left_enabled),
-            (TrackSwitch::Right, 72.0, &mut mix.right_enabled),
-        ] {
-            changed |= switch_button(
-                ui,
-                Rect::from_min_size(at(x, height / scale - 28.0), Vec2::new(28.0, 24.0) * scale),
-                Look::Strip(scale),
-                name,
-                switch,
-                on,
-            );
-        }
-    } else {
-        text(
+    }
+    changed |= polarity_button(
+        ui,
+        Rect::from_min_size(
+            at(8.0, height / scale - 28.0),
+            Vec2::new(26.0, 24.0) * scale,
+        ),
+        Look::Strip(scale),
+        name,
+        &mut mix.polarity_inverted,
+    );
+    for (switch, x, on) in [
+        (TrackSwitch::Left, 40.0, &mut mix.left_enabled),
+        (TrackSwitch::Right, 72.0, &mut mix.right_enabled),
+    ] {
+        changed |= switch_button(
             ui,
-            at(54.0, height / scale - 93.0),
-            "Main output",
-            11.0 * scale,
-            roles().strip_text,
-        );
-        text(
-            ui,
-            at(54.0, height / scale - 75.0),
-            "L + R",
-            11.0 * scale,
-            roles().strip_text,
+            Rect::from_min_size(at(x, height / scale - 28.0), Vec2::new(28.0, 24.0) * scale),
+            Look::Strip(scale),
+            name,
+            switch,
+            on,
         );
     }
     changed
@@ -412,7 +465,7 @@ fn return_strip(
     }
     ui.painter().rect_stroke(
         rect.shrink(0.5 * scale),
-        3.0,
+        roles().corner(3.0),
         Stroke::new(1.0 * scale, roles().strip_edge),
         egui::StrokeKind::Inside,
     );

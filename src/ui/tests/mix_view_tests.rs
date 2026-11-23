@@ -90,7 +90,7 @@ fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
         ] {
             accessible_node(&output, name);
         }
-        text_rect(&output, "Stereo output");
+        text_rect(&output, "No pedals on");
         for bus in 1..=4 {
             for name in [
                 format!("FX {bus} return level"),
@@ -116,7 +116,7 @@ fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
         };
         let row = left("Track 1 gain", 10.0);
         let master = left("Master gain", 16.0);
-        for (label, area) in [("Stereo output", master), ("good grasp 2", row)] {
+        for (label, area) in [("No pedals on", master), ("good grasp 2", row)] {
             assert_eq!(
                 screen(&output).within(area).text(label).color(),
                 roles().strip_text,

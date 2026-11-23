@@ -1,6 +1,7 @@
 //! Compact mixer presentation. Gain magnitude and polarity remain separate project edits.
 //! Each track strip also sends to the four FX buses, whose return strips follow the tracks,
-//! and opens its channel EQ. The Master strip can bypass the master pedalboard.
+//! and opens its channel EQ. The Master strip meters the output and can bypass
+//! the master pedalboard.
 use super::view::switch_hint;
 use super::*;
 use mixjam_techno::application::fx::{BUSES, FxBus, FxBuses};
@@ -26,7 +27,7 @@ use gain::*;
 pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value, gain_value_in};
 #[cfg(test)]
 pub(super) use gain::{GAIN_FINE_STEP_DB, GAIN_STEP_DB, useful_taper_span};
-pub(super) use strips::{return_state, show, track_state};
+pub(super) use strips::{MasterState, master_summary, return_state, show, track_state};
 
 /// What the mixer changed: the mix of each edited track with its index,
 /// whether the master level moved, the FX buses, the master pedalboard's

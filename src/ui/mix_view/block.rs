@@ -14,15 +14,16 @@ pub(super) struct MasterOutcome {
     pub export: Rect,
 }
 
-/// The Master row: "Stereo output", Bypass under the switches, and the
-/// master level's fader, exact dB, and Unity, aligned with the tracks'
-/// columns. The caller puts Export tracks in the returned rectangle.
+/// The Master row: the pedalboard state, as on the Mixer's Master strip,
+/// Bypass under the switches, and the master level's fader, exact dB, and
+/// Unity, aligned with the tracks' columns. The caller puts Export tracks in
+/// the returned rectangle.
 pub(super) fn master_row(
     ui: &mut egui::Ui,
     rect: Rect,
     offset: f32,
     gain: &mut f32,
-    bypass: &mut bool,
+    (bypass, pedals): (&mut bool, usize),
 ) -> MasterOutcome {
     row_surface(ui, rect, false);
     let columns = Columns::of(rect, offset);
@@ -41,7 +42,7 @@ pub(super) fn master_row(
         ui,
         name,
         Pos2::new(name.left(), name.center().y + 7.0),
-        "Stereo output",
+        &master_summary(*bypass, pedals),
         METADATA,
         roles().strip_text,
     );
@@ -243,7 +244,17 @@ impl MixJamApp {
             std::array::from_fn(|bus| !self.session.project().return_automation[bus].is_empty());
         let master_rect = Rect::from_min_size(block.min, Vec2::new(column, BLOCK_ROW));
         let returns_rect = master_rect.translate(Vec2::new(0.0, BLOCK_ROW + 2.0));
-        let row = master_row(ui, master_rect, offset, &mut master, &mut board.bypass);
+        let pedals = PedalKind::ALL
+            .into_iter()
+            .filter(|kind| board.is_on(*kind))
+            .count();
+        let row = master_row(
+            ui,
+            master_rect,
+            offset,
+            &mut master,
+            (&mut board.bypass, pedals),
+        );
         changes.master |= row.changed;
         changes.bypass = row.bypass;
         let mut export = ui.new_child(

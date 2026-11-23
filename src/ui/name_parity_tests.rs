@@ -221,6 +221,8 @@ const RENAMED: &[(&str, &str)] = &[
         "number\tMultiband key value",
         "number\tDeep edit Multiband key value",
     ),
+    // The Master strip's summary shows the pedalboard state, not the output.
+    ("label\tStereo output", "label\tNo pedals on"),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {

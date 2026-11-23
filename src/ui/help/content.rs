@@ -274,6 +274,7 @@ pub(super) const MIXER: &[Block] = &[
     Facts(&[
         "The four small knobs under the fader send the track, after its fader and pan, to FX 1 to FX 4.",
         "Bypass, on the Master strip, skips the master pedalboard for playback and export, as Mastering's Bypass all does.",
+        "The Master strip's meter shows the output's true peak and the playback's highest one. OVER lights above -1 dBTP until you click it, here or on Mastering.",
         "Export tracks…, in the Mixer's toolbar, writes each track that plays, and each FX return that it feeds, to its own WAV file in a folder.",
         "A track's file holds the track after its EQ, automation, fader, pan, and outputs, without its sends; the FX returns hold the sends. The master pedalboard is left out.",
         "Every file is as long as the mix export. The files sum to the mix with the board bypassed when that sum does not clip.",

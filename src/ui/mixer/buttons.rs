@@ -294,9 +294,37 @@ pub(crate) fn edit_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str)
         .clicked()
 }
 
-/// "Master bypass": skips the master pedalboard. Returns whether it changed.
+/// "Master bypass": skips the master pedalboard. Like the M, S, L, and R
+/// switches, a lamp bar over its label shows that it latches; on bypass the
+/// whole face fills amber. Returns whether it changed.
 pub(crate) fn bypass_button(ui: &mut egui::Ui, rect: Rect, scale: f32, bypass: &mut bool) -> bool {
-    let response = button(ui, rect, "Bypass", "Master bypass", scale, *bypass);
+    let response = face(
+        ui,
+        rect,
+        "Master bypass",
+        scale,
+        bypass.then(|| roles().strip_lit),
+    );
+    let (lamp, label) = if *bypass {
+        (roles().ink, roles().ink)
+    } else {
+        (roles().muted, roles().legend)
+    };
+    ui.painter().rect_filled(
+        Rect::from_center_size(
+            rect.center_top() + Vec2::new(0.0, 5.0) * scale,
+            Vec2::new(12.0, 2.0) * scale,
+        ),
+        1.0,
+        lamp,
+    );
+    text(
+        ui,
+        rect.center() + Vec2::new(0.0, 3.0) * scale,
+        "Bypass",
+        10.0 * scale,
+        label,
+    );
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::Checkbox,

@@ -628,6 +628,11 @@ impl MixJamApp {
         let mut master = self.session.project().master_gain;
         let mut buses = self.session.project().fx;
         let mut board = self.session.project().master;
+        let metering = self.master_metering(ui.ctx());
+        let pedals = PedalKind::ALL
+            .into_iter()
+            .filter(|kind| board.is_on(*kind))
+            .count();
         let changes = ui
             .push_id(self.boards.master_view_generation, |ui| {
                 mixer::show(
@@ -636,7 +641,11 @@ impl MixJamApp {
                     &summaries,
                     &mut master,
                     &mut buses,
-                    &mut board.bypass,
+                    mixer::MasterState {
+                        bypass: &mut board.bypass,
+                        pedals,
+                        metering: &metering,
+                    },
                 )
             })
             .inner;
@@ -763,6 +772,7 @@ impl MixJamApp {
 
     fn master_metering(&mut self, ctx: &egui::Context) -> master::Metering {
         let sample = self.capture_view_is("master-metering")
+            || self.capture_view_is("mixer-states")
             || self.capture_view_is("master-deep-edit-comp")
             || self.capture_view_is("master-deep-edit-multiband")
             || self.capture_view_is("master-deep-edit-limiter");
