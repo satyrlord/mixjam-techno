@@ -758,3 +758,137 @@ fn limiter_reduction_reports_the_gain_each_sample_received() {
         "reported {reported:.2} dB, the samples received {most:.2} dB"
     );
 }
+
+/// The gain, in dB, of a settled pedal on a steady sine, measured over the
+/// second half of one second.
+fn sine_gain_db(hz: f64, mut pedal: impl FnMut(f32, f32) -> (f32, f32)) -> f64 {
+    let frames = RATE as usize;
+    let (mut input, mut output) = (0.0_f64, 0.0_f64);
+    for i in 0..frames {
+        let x = (0.25 * (2.0 * PI * hz * i as f64 / RATE).sin()) as f32;
+        let (y, _) = pedal(x, x);
+        if i >= frames / 2 {
+            input += f64::from(x) * f64::from(x);
+            output += f64::from(y) * f64::from(y);
+        }
+    }
+    10.0 * (output / input).log10()
+}
+
+#[test]
+fn eq_curve_sampler_matches_the_trim_and_lift_filters() {
+    use super::sample_master_eq_curve;
+    use crate::master::{MasterChain, PedalKind};
+
+    let chain = MasterChain {
+        trim_eq: settings::TrimEq {
+            on: true,
+            high_pass: 20.0,
+            mud: -3.0,
+            harsh: -3.0,
+        },
+        lift_eq: settings::LiftEq {
+            on: true,
+            low: 1.5,
+            air: 2.0,
+        },
+        ..MasterChain::default()
+    };
+    let mut trim = TrimEq::new();
+    trim.set(&chain.trim_eq);
+    trim.clear();
+    let mut lift = LiftEq::new();
+    lift.set(&chain.lift_eq);
+    lift.clear();
+    let (mut trim_curve, mut lift_curve) = ([0.0_f32; 65], [0.0_f32; 65]);
+    sample_master_eq_curve(&chain, PedalKind::TrimEq, &mut trim_curve);
+    sample_master_eq_curve(&chain, PedalKind::LiftEq, &mut lift_curve);
+    // Every fourth point, from 20 Hz to 20 kHz. Points 24 and 48 are near
+    // the cuts at 250 Hz and 3.5 kHz, and point 60 is near the air shelf.
+    for i in (0..=64).step_by(4) {
+        let hz = 20.0 * 1000.0_f64.powf(i as f64 / 64.0);
+        let trim_db = sine_gain_db(hz, |l, r| trim.process(l, r));
+        let lift_db = sine_gain_db(hz, |l, r| lift.process(l, r));
+        assert!(
+            (trim_db - f64::from(trim_curve[i])).abs() < 0.05,
+            "Trim at {hz:.0} Hz: audio {trim_db:.3} dB, curve {:.3} dB",
+            trim_curve[i]
+        );
+        assert!(
+            (lift_db - f64::from(lift_curve[i])).abs() < 0.05,
+            "Lift at {hz:.0} Hz: audio {lift_db:.3} dB, curve {:.3} dB",
+            lift_curve[i]
+        );
+    }
+}
+
+#[test]
+fn mono_below_makes_low_stereo_audio_mono() {
+    let mut imaging = Imaging::new();
+    imaging.set(&settings::Imaging {
+        on: true,
+        width: 140.0,
+        mono_below: 120.0,
+    });
+    imaging.clear();
+    let sub: Vec<(f32, f32)> = (0..16_000)
+        .map(|i| {
+            let l = (0.5 * (2.0 * PI * 60.0 * i as f64 / RATE).sin()) as f32;
+            let r = (0.5 * (2.0 * PI * 60.0 * i as f64 / RATE + 1.2).sin()) as f32;
+            (l, r)
+        })
+        .collect();
+    let out = run(&sub, |l, r| imaging.process(l, r));
+    let (lr, ll, rr) = out[4096..]
+        .iter()
+        .fold((0.0_f64, 0.0_f64, 0.0_f64), |acc, &(l, r)| {
+            let (l, r) = (f64::from(l), f64::from(r));
+            (acc.0 + l * r, acc.1 + l * l, acc.2 + r * r)
+        });
+    let corr = lr / (ll * rr).sqrt();
+    assert!(corr > 0.97, "60 Hz correlation {corr:.4}");
+}
+
+/// The CPU time of a 256-frame live block with all 13 pedals on. Run it on
+/// a release build, on a quiet machine:
+///
+/// ```text
+/// cargo test --release --lib full_13_pedal_live_block_cpu_p99 -- --ignored --nocapture
+/// ```
+///
+/// A debug build only prints the times, because it is far slower.
+#[test]
+#[ignore = "release benchmark; use a quiet machine"]
+fn full_13_pedal_live_block_cpu_p99() {
+    use crate::master::{MasterChain, MasterControl, MasterProcessor, PedalKind};
+    use crate::playback_quality::Oversampling;
+    use std::time::Instant;
+
+    let mut chain = MasterChain::default();
+    for kind in PedalKind::ALL {
+        chain.set_on(kind, true);
+    }
+    let control = MasterControl::new(&chain);
+    let mut processor = MasterProcessor::live_with_quality(control, Oversampling::FourX);
+    let seed: Vec<f32> = program(256).into_iter().flat_map(|(l, r)| [l, r]).collect();
+    let mut block = vec![0.0_f32; 512];
+    for _ in 0..24 {
+        block.copy_from_slice(&seed);
+        processor.process(&mut block);
+    }
+    let mut times_ms = Vec::with_capacity(400);
+    for _ in 0..400 {
+        block.copy_from_slice(&seed);
+        let t0 = Instant::now();
+        processor.process(&mut block);
+        times_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
+    }
+    times_ms.sort_by(f64::total_cmp);
+    let p50 = times_ms[200];
+    let p95 = times_ms[380];
+    let p99 = times_ms[396];
+    println!("Live 13-pedal 256-frame block CPU: p50={p50:.3} ms p95={p95:.3} ms p99={p99:.3} ms");
+    if !cfg!(debug_assertions) {
+        assert!(p99 <= 1.0, "p99 {p99:.3} ms exceeded 1.0 ms budget");
+    }
+}

@@ -7,6 +7,14 @@ use eframe::egui::{
 use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::ReverbProfile;
 
+#[path = "instrument_scopes.rs"]
+mod scopes;
+pub(in super::super) use scopes::*;
+
+#[cfg(test)]
+#[path = "instrument_tests.rs"]
+mod tests;
+
 /// Draw a recessed chassis bay with material-aware framing and title legend.
 pub(in super::super) fn bay(
     ui: &egui::Ui,
@@ -293,7 +301,7 @@ fn meter_readout(reading: FxBusMeterReading) -> String {
     )
 }
 
-fn draw_scope_chrome(
+pub(super) fn draw_scope_chrome(
     ui: &egui::Ui,
     rect: Rect,
     title: &str,
@@ -386,7 +394,12 @@ pub(in super::super) fn scope_frame(
     }
 }
 
-fn draw_glow_trace(painter: &egui::Painter, poly: Vec<Pos2>, trace: Color32, glow: bool) {
+pub(super) fn draw_glow_trace(
+    painter: &egui::Painter,
+    poly: Vec<Pos2>,
+    trace: Color32,
+    glow: bool,
+) {
     if glow {
         painter.add(egui::Shape::line(
             poly.clone(),
@@ -396,7 +409,12 @@ fn draw_glow_trace(painter: &egui::Painter, poly: Vec<Pos2>, trace: Color32, glo
     painter.add(egui::Shape::line(poly, Stroke::new(1.8_f32, trace)));
 }
 
-fn draw_horiz_fractions(painter: &egui::Painter, plot: Rect, fractions: &[f32], grid: Color32) {
+pub(super) fn draw_horiz_fractions(
+    painter: &egui::Painter,
+    plot: Rect,
+    fractions: &[f32],
+    grid: Color32,
+) {
     for &frac in fractions {
         let y = plot.top() + frac * plot.height();
         painter.line_segment(
@@ -406,7 +424,7 @@ fn draw_horiz_fractions(painter: &egui::Painter, plot: Rect, fractions: &[f32], 
     }
 }
 
-fn hover_access_label(ui: &egui::Ui, rect: Rect, title: &str, value: String) {
+pub(super) fn hover_access_label(ui: &egui::Ui, rect: Rect, title: &str, value: String) {
     let response = ui.interact(rect, ui.id().with(title), egui::Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
     response.ctx.accesskit_node_builder(response.id, |node| {
@@ -476,7 +494,7 @@ pub(in super::super) fn delay_scope_frame(
 }
 
 /// The color of the high band's curve, apart from the middle and low bands.
-fn high_band_color(material: Material) -> Color32 {
+pub(super) fn high_band_color(material: Material) -> Color32 {
     match material {
         Material::Metal => Color32::from_rgb(196, 226, 168),
         Material::Plastic => Color32::from_rgb(232, 240, 255),
@@ -514,119 +532,12 @@ fn draw_decay_curve(
 }
 
 /// A gain reduction as a level change: `-2.1 dB`, or `0.0 dB` below a twentieth of a dB.
-fn reduction_text(db: f32) -> String {
+pub(super) fn reduction_text(db: f32) -> String {
     if db >= 0.05 {
         format!("-{db:.1} dB")
     } else {
         "0.0 dB".to_owned()
     }
-}
-
-/// Top-down scrolling gain-reduction waveform scope (`0` dB at top to `-max_db`).
-pub(in super::super) fn gr_history_scope(
-    ui: &egui::Ui,
-    rect: Rect,
-    title: &str,
-    history: &[f32],
-    max_db: f32,
-    current_db: f32,
-    accent: Color32,
-) {
-    let r = roles();
-    let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
-    let painter = ui.painter();
-    let tag = reduction_text(current_db);
-    painter.text(
-        Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
-        Align2::RIGHT_CENTER,
-        &tag,
-        FontId::proportional(9.5),
-        if current_db >= 0.05 { trace } else { r.legend },
-    );
-    draw_horiz_fractions(
-        painter,
-        plot,
-        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
-        grid,
-    );
-    if history.len() >= 2 {
-        let denom = (history.len() - 1) as f32;
-        let poly: Vec<Pos2> = history
-            .iter()
-            .enumerate()
-            .map(|(i, &db)| {
-                let frac = (db / max_db).clamp(0.0, 1.0);
-                Pos2::new(
-                    plot.left() + (i as f32 / denom) * plot.width(),
-                    plot.top() + frac * plot.height(),
-                )
-            })
-            .collect();
-        draw_glow_trace(painter, poly, trace, r.material != Material::Flat);
-    }
-    hover_access_label(ui, rect, title, format!("Current reduction {tag}"));
-}
-
-/// Top-down 3-band (`Low <200 Hz`, `Mid 200-3k`, `High >3 kHz`) gain-reduction meter scope.
-pub(in super::super) fn multiband_gr_scope(
-    ui: &egui::Ui,
-    rect: Rect,
-    title: &str,
-    reductions: [f32; 3],
-    max_db: f32,
-    accent: Color32,
-) {
-    let r = roles();
-    let (full_plot, mid_color, grid, low_color) = draw_scope_chrome(ui, rect, title, accent);
-    let plot = Rect::from_min_max(full_plot.min, full_plot.max - Vec2::new(0.0, 14.0));
-    let painter = ui.painter();
-    draw_horiz_fractions(
-        painter,
-        plot,
-        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
-        grid,
-    );
-    let band_defs = [
-        ("LOW <200", low_color, reductions[0]),
-        ("MID 200-3k", mid_color, reductions[1]),
-        ("HIGH >3k", high_band_color(r.material), reductions[2]),
-    ];
-    let col_w = plot.width() / 3.0;
-    for (idx, (label, color, db)) in band_defs.iter().enumerate() {
-        let bar_w = (col_w * 0.48).clamp(24.0, 56.0);
-        let cx = plot.left() + (idx as f32 + 0.5) * col_w;
-        let track = Rect::from_min_max(
-            Pos2::new(cx - bar_w * 0.5, plot.top() + 2.0),
-            Pos2::new(cx + bar_w * 0.5, plot.bottom() - 2.0),
-        );
-        painter.rect_filled(track, 2.0, r.well_edge.gamma_multiply(0.35));
-        let frac = (*db / max_db).clamp(0.0, 1.0);
-        if frac > 0.005 {
-            let fill = Rect::from_min_max(
-                track.min,
-                Pos2::new(track.right(), track.top() + track.height() * frac),
-            );
-            painter.rect_filled(fill, 2.0, *color);
-        }
-        painter.text(
-            Pos2::new(cx, rect.bottom() - 9.0),
-            Align2::CENTER_CENTER,
-            format!("{label}  {}", reduction_text(*db)),
-            FontId::proportional(9.0),
-            r.legend,
-        );
-    }
-    hover_access_label(
-        ui,
-        rect,
-        title,
-        format!(
-            "Low {}, Mid {}, High {}",
-            reduction_text(reductions[0]),
-            reduction_text(reductions[1]),
-            reduction_text(reductions[2])
-        ),
-    );
 }
 
 /// Plot the early reflections, the pre-delay, and the decay of the low,
@@ -732,273 +643,5 @@ fn draw_early_reflections(
         let tip = Pos2::new(x, axis - 15.0 * strength);
         painter.line_segment([Pos2::new(x, axis), tip], Stroke::new(1.4_f32, trace));
         painter.circle_filled(tip, 1.6, trace);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::super::{fx, master, theme};
-    use super::super::contrast;
-    use super::roles;
-    use mixjam_techno::application::options::Theme;
-
-    #[test]
-    fn transfer_scope_reference_matches_an_identity_curve() {
-        use super::{Color32, Pos2, Rect, Vec2, egui, scope_frame};
-
-        let ctx = egui::Context::default();
-        let output = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let rect = Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(240.0, 160.0));
-                scope_frame(ui, rect, "Transfer curve", &[-1.0, 1.0], Color32::GRAY);
-            });
-        });
-        let trace = output.shapes.iter().find_map(|shape| match &shape.shape {
-            egui::Shape::Path(path) if path.points.len() == 2 => Some(path.points.as_slice()),
-            _ => None,
-        });
-        let trace = trace.expect("The transfer scope draws a trace.");
-        assert!(output.shapes.iter().any(|shape| matches!(
-            &shape.shape,
-            egui::Shape::LineSegment { points, .. } if points.as_slice() == trace
-        )));
-    }
-
-    #[test]
-    fn instrument_palette_meets_contrast_targets_across_all_three_themes() {
-        for theme_kind in [Theme::Studio, Theme::Aero, Theme::Vintage] {
-            theme::paint_as(theme_kind);
-            let r = roles();
-            let panel_text = contrast(r.panel, r.text);
-            assert!(
-                panel_text >= 5.0,
-                "{theme_kind:?} panel/text contrast {panel_text:.2}:1 < 5.0:1"
-            );
-            let face_legend = contrast(r.face, r.legend);
-            assert!(
-                face_legend >= 5.0,
-                "{theme_kind:?} face/legend contrast {face_legend:.2}:1 < 5.0:1"
-            );
-            let meter_ink = contrast(r.meter_face, r.ink);
-            assert!(
-                meter_ink >= 5.0,
-                "{theme_kind:?} meter_face/ink contrast {meter_ink:.2}:1 < 5.0:1"
-            );
-            let primary_btn = contrast(r.primary, r.on_light);
-            assert!(
-                primary_btn >= 4.5,
-                "{theme_kind:?} primary button contrast {primary_btn:.2}:1 < 4.5:1"
-            );
-            let danger_btn = contrast(r.danger, r.legend);
-            assert!(
-                danger_btn >= 4.5,
-                "{theme_kind:?} danger button contrast {danger_btn:.2}:1 < 4.5:1"
-            );
-            for enamel in [
-                fx::DELAY_ENAMEL,
-                fx::REVERB_ENAMEL,
-                fx::DRIVE_ENAMEL,
-                fx::EMPTY_ENAMEL,
-            ] {
-                for on in [true, false] {
-                    let ratio = contrast(master::enamel_of(enamel, on), r.ink);
-                    assert!(
-                        ratio >= 5.0,
-                        "{theme_kind:?} enamel {enamel:?} (on={on}) contrast {ratio:.2}:1 < 5.0:1"
-                    );
-                }
-            }
-        }
-        theme::paint_as(Theme::Studio);
-    }
-
-    #[test]
-    fn instrument_controls_render_telemetry_scope_and_all_materials() {
-        use super::{
-            bay, delay_scope_frame, gr_history_scope, meter_bar, multiband_gr_scope,
-            reverb_scope_frame, scope_frame,
-        };
-        use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
-        use mixjam_techno::application::FxBusMeterReading;
-        use mixjam_techno::application::Session;
-        use mixjam_techno::application::fx::Aetherform;
-
-        let profile = Session::fx_reverb_profile(&Aetherform::default());
-        let points: Vec<f32> = (0..65).map(|i| (i as f32 / 32.0) - 1.0).collect();
-        let readings = [
-            (
-                "Hot meter",
-                FxBusMeterReading {
-                    peak_l: 0.25,
-                    rms_l: 0.1,
-                    peak_r: 0.98,
-                    rms_r: 0.5,
-                    ducker_gr_db: 6.0,
-                    limiter_gr_db: 3.5,
-                    tail_active: true,
-                },
-                &[
-                    "dBFS",
-                    "Ducker reduction 6.0 dB",
-                    "Limiter reduction 3.5 dB",
-                    "Tail active",
-                ][..],
-            ),
-            (
-                "Active tail meter",
-                FxBusMeterReading {
-                    peak_l: 0.1,
-                    rms_l: 0.05,
-                    peak_r: 0.1,
-                    rms_r: 0.05,
-                    ducker_gr_db: 0.0,
-                    limiter_gr_db: 0.0,
-                    tail_active: true,
-                },
-                &["Tail active"][..],
-            ),
-            (
-                "Idle meter",
-                FxBusMeterReading::default(),
-                &["Left peak silent, RMS silent", "Tail idle"][..],
-            ),
-        ];
-
-        for theme_kind in [Theme::Studio, Theme::Aero, Theme::Vintage] {
-            theme::paint_as(theme_kind);
-            let ctx = egui::Context::default();
-            ctx.enable_accesskit();
-            let meter_rect = Rect::from_min_size(Pos2::new(20.0, 260.0), Vec2::new(180.0, 24.0));
-            let delay_rect = Rect::from_min_size(Pos2::new(320.0, 330.0), Vec2::new(240.0, 140.0));
-            let reverb_rect = Rect::from_min_size(Pos2::new(20.0, 350.0), Vec2::new(246.0, 120.0));
-            for pass in 0..2 {
-                let raw = egui::RawInput {
-                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(640.0, 480.0))),
-                    events: if pass == 1 {
-                        vec![egui::Event::PointerMoved(meter_rect.center())]
-                    } else {
-                        vec![]
-                    },
-                    ..Default::default()
-                };
-                let output = ctx.run(raw, |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let accent = Color32::from_rgb(234, 164, 120);
-                        bay(
-                            ui,
-                            Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(280.0, 110.0)),
-                            "Drive & Curve",
-                            accent,
-                            true,
-                        );
-                        bay(
-                            ui,
-                            Rect::from_min_size(Pos2::new(20.0, 140.0), Vec2::new(280.0, 110.0)),
-                            "Tone",
-                            accent,
-                            false,
-                        );
-                        for (idx, (name, reading, _)) in readings.iter().enumerate() {
-                            let y = 260.0 + idx as f32 * 30.0;
-                            meter_bar(
-                                ui,
-                                Rect::from_min_size(Pos2::new(20.0, y), Vec2::new(180.0, 24.0)),
-                                name,
-                                *reading,
-                                idx == 0,
-                            );
-                        }
-
-                        scope_frame(
-                            ui,
-                            Rect::from_min_size(Pos2::new(320.0, 50.0), Vec2::new(240.0, 160.0)),
-                            "Transfer Curve",
-                            &points,
-                            accent,
-                        );
-                        scope_frame(
-                            ui,
-                            Rect::from_min_size(Pos2::new(320.0, 220.0), Vec2::new(240.0, 100.0)),
-                            "Empty Scope",
-                            &[],
-                            accent,
-                        );
-                        delay_scope_frame(
-                            ui,
-                            delay_rect,
-                            "Tap & Decay",
-                            &[(0.15, 1.0, -0.25)],
-                            true,
-                            accent,
-                        );
-                        reverb_scope_frame(
-                            ui,
-                            reverb_rect,
-                            "Decay & Space",
-                            "HALL · BLOOM +12",
-                            &profile,
-                            accent,
-                        );
-                        gr_history_scope(
-                            ui,
-                            Rect::from_min_size(Pos2::new(20.0, 480.0), Vec2::new(240.0, 90.0)),
-                            "Bus compressor GR history",
-                            &[0.0, 1.5, 2.4, 1.2],
-                            12.0,
-                            1.7,
-                            accent,
-                        );
-                        multiband_gr_scope(
-                            ui,
-                            Rect::from_min_size(Pos2::new(280.0, 480.0), Vec2::new(240.0, 90.0)),
-                            "Multiband 3-band GR",
-                            [2.1, 1.4, 0.9],
-                            12.0,
-                            accent,
-                        );
-                    });
-                });
-                if pass == 1 {
-                    let update = output
-                        .platform_output
-                        .accesskit_update
-                        .expect("accesskit update");
-                    for (name, _, expected_parts) in readings {
-                        let value = update
-                            .nodes
-                            .iter()
-                            .find_map(|(_, node)| {
-                                (node.label() == Some(name))
-                                    .then(|| node.value().map(str::to_owned))
-                                    .flatten()
-                            })
-                            .unwrap_or_else(|| panic!("{theme_kind:?}: missing {name}"));
-                        for part in expected_parts {
-                            assert!(
-                                value.contains(part),
-                                "{theme_kind:?} {name}: {value:?} missing {part:?}"
-                            );
-                        }
-                    }
-                    assert!(
-                        output
-                            .shapes
-                            .iter()
-                            .any(|s| matches!(s.shape, egui::Shape::Path(_))),
-                        "{theme_kind:?}: scope_frame must emit polyline trace for 65 samples"
-                    );
-                    assert!(
-                        output.shapes.iter().any(|shape| matches!(
-                            &shape.shape,
-                            egui::Shape::Circle(tip)
-                                if delay_rect.contains(tip.center)
-                                    && tip.center.y > delay_rect.center().y
-                        )),
-                        "{theme_kind:?}: the inverted right tap must appear below the center line"
-                    );
-                }
-            }
-        }
-        theme::paint_as(Theme::Studio);
     }
 }

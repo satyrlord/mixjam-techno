@@ -455,3 +455,56 @@ fn mastering_deep_edit_edits_the_dynamics_and_shows_multiband_reduction() {
         Some("Low 0.0 dB, Mid 0.0 dB, High 0.0 dB")
     );
 }
+
+#[test]
+fn mastering_deep_edit_displays_and_edits_tone_and_imaging_scopes() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let mut chain = app.session.project().master;
+    chain.trim_eq.on = true;
+    chain.lift_eq.on = true;
+    chain.imaging.on = true;
+    app.session.edit(EditCommand::SetMaster(chain)).unwrap();
+
+    click_named(&ctx, &mut app, "Edit Trim EQ");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    accessible_node(&output, "Trim EQ response");
+    focus_control(&ctx, &mut app, &output, "Deep edit Trim EQ harsh");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.trim_eq.harsh < 0.0);
+
+    click_named(&ctx, &mut app, "Deep edit select Lift EQ");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    accessible_node(&output, "Lift EQ response");
+    focus_control(&ctx, &mut app, &output, "Deep edit Lift EQ air");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.lift_eq.air > 0.0);
+
+    click_named(&ctx, &mut app, "Deep edit select Stereo imaging");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let (_, imaging_scope) = accessible_node(&output, "Stereo imaging scope");
+    assert_eq!(
+        imaging_scope.value(),
+        Some("Correlation +0.00, Mono below 120 Hz")
+    );
+    focus_control(&ctx, &mut app, &output, "Deep edit Stereo imaging width");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.imaging.width > 100.0);
+}

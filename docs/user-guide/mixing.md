@@ -151,9 +151,11 @@ to get its full set of controls. The window shows the master meters and a
 scope for some pedals:
 
 - Soft clip, Tube, Maximizer, and Tape show a preview of the transfer curve.
+- Trim EQ and Lift EQ show a 20 Hz to 20 kHz magnitude response curve.
 - Bus compressor and Limiter show the gain reduction of the last seconds of
   playback.
 - Multiband shows the gain reduction of its low, mid, and high bands.
+- Stereo imaging shows a live M/S vectorscope and stereo correlation bar.
 
 The Bus compressor has three more dials in this window. **SC HPF** removes
 low frequencies from what the compressor listens to, so the kick does not

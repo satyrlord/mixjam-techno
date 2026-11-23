@@ -16,7 +16,8 @@ pub use crate::{
     master::{
         EQ_BAND_MAX, EQ_FREQUENCIES, FxBusMeterReading, INPUT_PEAK_LAMP_DBFS, KNOB_MAX, Knob,
         KnobRange, LimiterStyle, MasterChain, MeterReading, OVER_DBTP, PedalKind,
-        VU_REFERENCE_DBFS, presets, sample_saturation_curve,
+        VECTORSCOPE_POINTS, VU_REFERENCE_DBFS, presets, sample_master_eq_curve,
+        sample_saturation_curve,
     },
     peaks::{PeakState, Peaks},
     products::Product,

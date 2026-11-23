@@ -137,13 +137,18 @@ changes keep those commands.
 
 ## Mastering board and Deep Edit
 
-The compact Mastering board docks Input at the left and Output at the right.
-Its pedal cards scroll between those units. A card shows its main dials, the
-power switch, and Edit. The signal-order strip scrolls to a card on click and
-opens its editor on double-click. The floating Mastering deep edit window
-uses the shared shell and gives each pedal access to its full set of controls.
-The Studio cards use graphite, Aero uses molded plastic, and Vintage uses
-dark anodized metal. All three use the same layout and controls.
+The compact Mastering board docks Input at the left and Output at the right so
+it fits the minimum window size of 960 by 720. Its pedal cards scroll between
+those units. A card shows its main dials, power switch, live gain-reduction
+readout (including 3-band L/M/H bars on Multiband), and Edit. The signal-order
+strip scrolls to a card on click and opens its editor on double-click. The
+floating Mastering deep edit window uses the shared shell and gives each pedal
+access to its full set of controls. Two curves show the current settings: the
+saturation transfer curve and the 20 Hz to 20 kHz EQ magnitude curve. Live
+scopes show the playback: GR history, 3-band GR, and a rotated M/S stereo
+vectorscope with phase correlation. Studio cards use graphite, Aero uses molded
+plastic, and Vintage uses dark anodized metal. All three use the same layout and
+controls.
 
 ## FX returns board and Deep Edit
 

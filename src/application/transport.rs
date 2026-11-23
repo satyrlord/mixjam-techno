@@ -13,6 +13,14 @@ impl Session {
     pub fn master_meters(&self) -> MeterReading {
         self.master.meters()
     }
+    /// Live decimated post-board stereo `(left, right)` vectorscope points.
+    pub fn master_vectorscope(&self) -> [(f32, f32); crate::master::VECTORSCOPE_POINTS] {
+        if self.playing_mix() {
+            self.master.master_vectorscope()
+        } else {
+            [(0.0, 0.0); crate::master::VECTORSCOPE_POINTS]
+        }
+    }
     /// Live meter and gain reduction readings for the four FX returns.
     pub fn fx_meters(&self) -> [crate::master::FxBusMeterReading; crate::fx::BUSES] {
         if self.playing_mix() {

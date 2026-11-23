@@ -11,6 +11,7 @@ mod saturation;
 mod tests;
 
 pub(super) use dynamics::{BusCompressor, Limiter, Multiband};
+pub use filters::sample_master_eq_curve;
 pub(super) use filters::{Imaging, LiftEq, TrimEq};
 pub use sat_adaa::sample_saturation_curve;
 pub(super) use sat_adaa::{LIVE_SAT_LATENCY, OFFLINE_SAT_LATENCY};

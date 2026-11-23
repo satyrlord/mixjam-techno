@@ -296,6 +296,10 @@ impl MasterControl {
     pub fn meters(&self) -> MeterReading {
         self.meters.read()
     }
+    /// The latest decimated post-board stereo vectorscope snapshot.
+    pub fn master_vectorscope(&self) -> [(f32, f32); meters::VECTORSCOPE_POINTS] {
+        self.meters.read_vectorscope()
+    }
     /// New settings since `seen`. A read that a write overlaps leaves
     /// `seen` unchanged, so the next block tries again.
     pub(super) fn poll(&self, seen: &mut u64) -> Option<MasterChain> {

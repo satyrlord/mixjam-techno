@@ -468,6 +468,7 @@ fn opening_mastering_preserves_saved_values_between_dial_steps() {
         let metering = master::Metering {
             reduced: false,
             reading: MeterReading::default(),
+            vectorscope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
             playing: false,
         };
         for _ in 0..3 {
@@ -620,6 +621,7 @@ fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
                 let metering = master::Metering {
                     reduced: false,
                     reading,
+                    vectorscope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
                     playing: true,
                 };
                 let action = egui::CentralPanel::default()
@@ -713,6 +715,51 @@ fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
 }
 
 #[test]
+fn imaging_scope_and_telemetry_show_one_correlation_with_imaging_off() {
+    let (ctx, _) = fixture();
+    ctx.enable_accesskit();
+    let chain = MasterChain::default();
+    assert!(!chain.is_on(PedalKind::Imaging));
+    let metering = master::Metering {
+        reduced: false,
+        reading: MeterReading {
+            run: 1,
+            stereo_correlation: 0.78,
+            ..MeterReading::default()
+        },
+        vectorscope: [(0.3, 0.2); mixjam_techno::application::VECTORSCOPE_POINTS],
+        playing: true,
+    };
+    let mut output = egui::FullOutput::default();
+    for _ in 0..3 {
+        output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                master::show_deep_edit(
+                    ctx,
+                    &mut true,
+                    &mut PedalKind::Imaging,
+                    &chain,
+                    &metering,
+                    true,
+                    0,
+                );
+            },
+        );
+    }
+    // The meters measure after the whole board, so a bypassed Imaging
+    // pedal does not make the scope's bar disagree with the telemetry.
+    accessible_label(&output, "Correlation: +0.78");
+    assert_eq!(
+        accessible_node(&output, "Stereo imaging scope").1.value(),
+        Some("Correlation +0.78, Mono below 120 Hz")
+    );
+}
+
+#[test]
 fn mastering_meters_show_the_playback_reading() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -726,6 +773,7 @@ fn mastering_meters_show_the_playback_reading() {
         compressor_reduction: 1.7,
         multiband_reduction: [2.1, 1.4, 0.9],
         limiter_reduction: 2.6,
+        stereo_correlation: 0.0,
         momentary: -12.6,
         short_term: -13.4,
         integrated: -13.9,
@@ -736,6 +784,7 @@ fn mastering_meters_show_the_playback_reading() {
     let metering = master::Metering {
         reduced: false,
         reading,
+        vectorscope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
         playing: true,
     };
     let mut chain = MasterChain::default();
@@ -776,6 +825,7 @@ fn mastering_meters_show_the_playback_reading() {
     let stopped = master::Metering {
         reduced: false,
         reading,
+        vectorscope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
         playing: false,
     };
     let output = ctx.run(egui::RawInput::default(), |ctx| {
@@ -911,31 +961,58 @@ fn mastering_knobs_take_the_wheel_once() {
 #[test]
 fn reduced_meter_display_holds_values_and_retains_peak_events() {
     let mut display = view::MeterDisplay::default();
+    let scope = [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS];
+    let mut sample = |reading, now| display.sample(reading, scope, true, now).0;
     let mut reading = MeterReading {
         run: 1,
         input_vu: -4.0,
         ..MeterReading::default()
     };
-    assert_eq!(display.sample(reading, true, 0.0).input_vu, -4.0);
+    assert_eq!(sample(reading, 0.0).input_vu, -4.0);
     reading.input_vu = -2.0;
     reading.input_peak_counts = [1, 0];
     reading.overs = 1;
-    let held = display.sample(reading, true, 0.02);
+    let held = sample(reading, 0.02);
     assert_eq!(held.input_vu, -4.0);
     assert_eq!(held.overs, 0);
     reading.input_vu = -6.0;
-    let shown = display.sample(reading, true, 0.07);
+    let shown = sample(reading, 0.07);
     assert_eq!(shown.input_vu, -6.0);
     assert_eq!(shown.overs, 1);
     assert_eq!(shown.input_peaks, [true, false]);
-    assert_eq!(display.sample(reading, true, 0.09), shown);
-    assert!(!display.sample(reading, true, 0.14).input_peaks[0]);
+    assert_eq!(sample(reading, 0.09), shown);
+    assert!(!sample(reading, 0.14).input_peaks[0]);
     reading.run = 2;
     reading.input_peak_counts = [0, 0];
     reading.overs = 0;
-    let restarted = display.sample(reading, true, 0.15);
+    let restarted = sample(reading, 0.15);
     assert_eq!(restarted.input_peaks, [false, false]);
     assert_eq!(restarted.overs, 0);
+}
+
+#[test]
+fn reduced_meter_display_holds_the_vectorscope_with_its_reading() {
+    let points = |value: f32| [(value, -value); mixjam_techno::application::VECTORSCOPE_POINTS];
+    let reading = |correlation| MeterReading {
+        run: 1,
+        stereo_correlation: correlation,
+        ..MeterReading::default()
+    };
+    let mut display = view::MeterDisplay::default();
+    assert_eq!(
+        display.sample(reading(0.1), points(0.1), true, 0.0),
+        (reading(0.1), points(0.1))
+    );
+    // Within 1/15 s, a reduced display holds the points with the reading.
+    let (held, scope) = display.sample(reading(0.2), points(0.2), true, 0.02);
+    assert_eq!(held.stereo_correlation, 0.1);
+    assert_eq!(scope, points(0.1));
+    let (shown, scope) = display.sample(reading(0.3), points(0.3), true, 0.07);
+    assert_eq!(shown.stereo_correlation, 0.3);
+    assert_eq!(scope, points(0.3));
+    // A normal display shows every frame's points.
+    let (_, scope) = display.sample(reading(0.4), points(0.4), false, 0.08);
+    assert_eq!(scope, points(0.4));
 }
 
 #[test]
@@ -955,6 +1032,7 @@ fn reduced_meter_needle_does_not_interpolate_between_display_samples() {
     }
     let reduced = master::Metering {
         reading: MeterReading::default(),
+        vectorscope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
         playing: true,
         reduced: true,
     };

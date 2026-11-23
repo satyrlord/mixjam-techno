@@ -40,16 +40,23 @@ pub(super) fn prepare_session(session: &mut Session, view: &str) {
     }
 }
 
+const MASTERING_EDITORS: &[(&str, PedalKind)] = &[
+    ("master-deep-edit", PedalKind::SoftClip),
+    ("master-deep-edit-eq", PedalKind::BoosterEq),
+    ("master-deep-edit-trim", PedalKind::TrimEq),
+    ("master-deep-edit-lift", PedalKind::LiftEq),
+    ("master-deep-edit-imaging", PedalKind::Imaging),
+    ("master-deep-edit-tape", PedalKind::Tape),
+    ("master-deep-edit-comp", PedalKind::BusCompressor),
+    ("master-deep-edit-multiband", PedalKind::Multiband),
+    ("master-deep-edit-limiter", PedalKind::Limiter),
+];
+
 pub(super) fn mastering_editor(view: &str) -> Option<PedalKind> {
-    match view {
-        "master-deep-edit" => Some(PedalKind::SoftClip),
-        "master-deep-edit-eq" => Some(PedalKind::BoosterEq),
-        "master-deep-edit-tape" => Some(PedalKind::Tape),
-        "master-deep-edit-comp" => Some(PedalKind::BusCompressor),
-        "master-deep-edit-multiband" => Some(PedalKind::Multiband),
-        "master-deep-edit-limiter" => Some(PedalKind::Limiter),
-        _ => None,
-    }
+    MASTERING_EDITORS
+        .iter()
+        .find(|(name, _)| *name == view)
+        .map(|(_, kind)| *kind)
 }
 
 /// The Booster settings of a D4 factory song, and every mastering pedal at its
@@ -84,41 +91,61 @@ fn master_board(session: &mut Session, view: &str) {
     let _ = session.edit(EditCommand::SetMaster(chain));
 }
 
-fn apply_master_capture_case(chain: &mut MasterChain, editor: Option<PedalKind>, view: &str) {
-    match (editor, view) {
-        (Some(PedalKind::SoftClip), _) => {
+fn apply_editor_capture_preset(chain: &mut MasterChain, editor: PedalKind) {
+    match editor {
+        PedalKind::SoftClip => {
             chain.soft_clip.amount = 6.0;
             chain.soft_clip.ceiling = -1.0;
         }
-        (Some(PedalKind::Tape), _) => {
+        PedalKind::TrimEq => {
+            chain.trim_eq.high_pass = 45.0;
+            chain.trim_eq.mud = -2.5;
+            chain.trim_eq.harsh = -3.0;
+        }
+        PedalKind::LiftEq => {
+            chain.lift_eq.low = 1.5;
+            chain.lift_eq.air = 2.0;
+        }
+        PedalKind::Imaging => {
+            chain.imaging.width = 135.0;
+            chain.imaging.mono_below = 120.0;
+        }
+        PedalKind::Tape => {
             chain.tape.drive = 6.5;
             chain.tape.speed = 15;
         }
-        (Some(PedalKind::BusCompressor), _) => {
-            chain.bus_compressor.threshold = -11.0;
-            chain.bus_compressor.ratio = 2.5;
-            chain.bus_compressor.sc_hpf_hz = 90.0;
-            chain.bus_compressor.mix = 85.0;
-            chain.bus_compressor.makeup_db = 0.8;
-        }
-        (Some(PedalKind::Multiband), _) => {
-            chain.multiband.low = 55.0;
-            chain.multiband.mid = 45.0;
-            chain.multiband.high = 50.0;
-        }
-        (Some(PedalKind::Limiter), _) => {
-            chain.limiter.gain = 3.0;
-            chain.limiter.ceiling = -1.0;
-            chain.limiter.style = mixjam_techno::application::LimiterStyle::Modern;
-        }
-        (_, "master-reordered") => {
-            chain.move_pedal(9, 0);
-            chain.move_pedal(3, 5);
-            chain.booster_compressor.on = false;
-            chain.tube.on = false;
-        }
-        (_, "master-bypass") => chain.bypass = true,
-        _ => {}
+        other => apply_dynamics_capture_preset(chain, other),
+    }
+}
+
+fn apply_dynamics_capture_preset(chain: &mut MasterChain, editor: PedalKind) {
+    if editor == PedalKind::BusCompressor {
+        chain.bus_compressor.threshold = -11.0;
+        chain.bus_compressor.ratio = 2.5;
+        chain.bus_compressor.sc_hpf_hz = 90.0;
+        chain.bus_compressor.mix = 85.0;
+        chain.bus_compressor.makeup_db = 0.8;
+    } else if editor == PedalKind::Multiband {
+        chain.multiband.low = 55.0;
+        chain.multiband.mid = 45.0;
+        chain.multiband.high = 50.0;
+    } else if editor == PedalKind::Limiter {
+        chain.limiter.gain = 3.0;
+        chain.limiter.ceiling = -1.0;
+        chain.limiter.style = mixjam_techno::application::LimiterStyle::Modern;
+    }
+}
+
+fn apply_master_capture_case(chain: &mut MasterChain, editor: Option<PedalKind>, view: &str) {
+    if let Some(kind) = editor {
+        apply_editor_capture_preset(chain, kind);
+    } else if view == "master-reordered" {
+        chain.move_pedal(9, 0);
+        chain.move_pedal(3, 5);
+        chain.booster_compressor.on = false;
+        chain.tube.on = false;
+    } else if view == "master-bypass" {
+        chain.bypass = true;
     }
 }
 

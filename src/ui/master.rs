@@ -7,7 +7,7 @@
 //! presentation; the caller turns a changed chain into an edit.
 use super::*;
 use mixjam_techno::application::{
-    Knob, KnobRange, MIX_SAMPLE_RATE, MeterReading, OVER_DBTP, presets,
+    Knob, KnobRange, MIX_SAMPLE_RATE, MeterReading, OVER_DBTP, VECTORSCOPE_POINTS, presets,
 };
 #[path = "master/board.rs"]
 mod board;
@@ -50,6 +50,7 @@ pub(super) use units::strip_meter;
 /// What the meters show: the latest reading, and whether a mix plays.
 pub(super) struct Metering {
     pub reading: MeterReading,
+    pub vectorscope: [(f32, f32); VECTORSCOPE_POINTS],
     pub playing: bool,
     pub reduced: bool,
 }

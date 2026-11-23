@@ -276,6 +276,49 @@ fn a_cascade_runs_each_channel_through_the_sections_in_order() {
 }
 
 #[test]
+fn decramped_high_shelf_and_peaking_match_analog_prototypes() {
+    let analog_peaking_db = |hz: f64, fc: f64, q: f64, db: f64| -> f64 {
+        let a = 10f64.powf(db / 40.0);
+        let u = hz / fc;
+        let uu = (1.0 - u * u).powi(2);
+        10.0 * ((uu + (u * a / q).powi(2)) / (uu + (u / (q * a)).powi(2))).log10()
+    };
+    for db in [0.5, 1.0, 2.0, -2.0] {
+        let matched = Coefficients::high_shelf_matched(12_000.0, 0.6, db);
+        let max_err_18k = (20..=18_000)
+            .step_by(20)
+            .map(|hz| {
+                let f = f64::from(hz);
+                let got = gain_to_db(matched.magnitude(f));
+                let want =
+                    10.0 * Coefficients::analog_high_shelf_mag2(f, 12_000.0, 0.6, db).log10();
+                (got - want).abs()
+            })
+            .fold(0.0_f64, f64::max);
+        assert!(
+            max_err_18k <= 0.12,
+            "12 kHz shelf {db} dB err {max_err_18k:.4} dB"
+        );
+    }
+    let plus = Coefficients::high_shelf_matched(12_000.0, 0.6, 2.0);
+    let minus = Coefficients::high_shelf_matched(12_000.0, 0.6, -2.0);
+    for hz in [100.0, 5000.0, 15_000.0, 18_000.0] {
+        assert!((plus.magnitude(hz) * minus.magnitude(hz) - 1.0).abs() < 1e-10);
+    }
+    for (fc, q, db) in [(3500.0, 3.0, -3.0), (3500.0, 3.0, -6.0), (250.0, 2.5, -3.0)] {
+        let matched = Coefficients::peaking_matched(fc, q, db);
+        let max_err = (20..=20_000)
+            .step_by(20)
+            .map(|hz| {
+                let f = f64::from(hz);
+                (gain_to_db(matched.magnitude(f)) - analog_peaking_db(f, fc, q, db)).abs()
+            })
+            .fold(0.0_f64, f64::max);
+        assert!(max_err <= 0.05, "{fc} Hz Q={q} {db} dB err {max_err:.4} dB");
+    }
+}
+
+#[test]
 fn a_low_pass_at_any_rate_matches_the_cookbook_written_out() {
     // The Effect Studio and the sample editor wrote this design out by hand.
     for rate in [8000.0, 22_050.0, 44_100.0, 48_000.0, 96_000.0] {

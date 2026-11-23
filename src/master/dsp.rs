@@ -476,6 +476,86 @@ impl Coefficients {
             ],
         )
     }
+    /// Poles mapped from continuous-time `s^2 + 2*zeta*w0*s + w0^2` via `z = exp(s*T)`.
+    fn matched_poles(w0: f64, zeta: f64) -> (f64, f64) {
+        if zeta <= 1.0 {
+            let r = (-zeta * w0).exp();
+            let a1 = -2.0 * r * (w0 * (1.0 - zeta * zeta).max(0.0).sqrt()).cos();
+            (a1, r * r)
+        } else {
+            let s = (zeta * zeta - 1.0).sqrt();
+            let r1 = (-w0 * (zeta + s)).exp();
+            let r2 = (-w0 * (zeta - s)).exp();
+            (-(r1 + r2), r1 * r2)
+        }
+    }
+    /// Solve symmetric real biquad numerator `[b0, b1, b2]` matching DC, Nyquist,
+    /// and crossover frequency `f0` squared magnitudes against analog prototype.
+    fn solve_matched_numerator(
+        a1: f64,
+        a2: f64,
+        f0: f64,
+        g0_sq: f64,
+        g_nyq_sq: f64,
+        g_f0_sq: f64,
+    ) -> [f64; 3] {
+        let a0_sq = (1.0 + a1 + a2).powi(2);
+        let a1_sq = (1.0 - a1 + a2).powi(2);
+        let phi0 = (PI * f0 / RATE).sin().powi(2);
+        let a_f0 = a0_sq * (1.0 - phi0) + a1_sq * phi0 - 16.0 * a2 * phi0 * (1.0 - phi0);
+        let b0_sq = g0_sq * a0_sq;
+        let b1_sq = g_nyq_sq * a1_sq;
+        let b_f0 = g_f0_sq * a_f0;
+        let four_b0b2 = -(b_f0 - b0_sq * (1.0 - phi0) - b1_sq * phi0) / (4.0 * phi0 * (1.0 - phi0));
+        let sb0 = b0_sq.max(0.0).sqrt();
+        let sb1 = b1_sq.max(0.0).sqrt();
+        let w = 0.5 * (sb0 + sb1);
+        let b1 = 0.5 * (sb0 - sb1);
+        let disc = (w * w - four_b0b2).max(0.0).sqrt();
+        [0.5 * (w + disc), b1, 0.5 * (w - disc)]
+    }
+    /// Continuous-time analog RBJ high-shelf squared magnitude at frequency `hz`.
+    pub(crate) fn analog_high_shelf_mag2(hz: f64, fc: f64, slope: f64, db: f64) -> f64 {
+        let slope = slope.clamp(f64::EPSILON, 1.0);
+        let a = 10f64.powf(db / 40.0);
+        let inv_q = ((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0).sqrt();
+        let k = a.sqrt() * inv_q;
+        let u = hz / fc;
+        let uu = u * u;
+        (a * a) * ((1.0 - a * uu).powi(2) + (k * u).powi(2)) / ((a - uu).powi(2) + (k * u).powi(2))
+    }
+    /// Nyquist-decramped high-shelf filter matching the continuous-time analog prototype.
+    pub(crate) fn high_shelf_matched(hz: f64, slope: f64, db: f64) -> Self {
+        if db.abs() < 1e-9 {
+            return Self::FLAT;
+        }
+        if db < 0.0 {
+            let boost = Self::high_shelf_matched(hz, slope, -db);
+            return Self::new([1.0, boost.a1, boost.a2], [boost.b0, boost.b1, boost.b2]);
+        }
+        let slope = slope.clamp(f64::EPSILON, 1.0);
+        let a = 10f64.powf(db / 40.0);
+        let inv_q = ((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0).sqrt();
+        let w_p = 2.0 * PI * hz * a.sqrt() / RATE;
+        let (a1, a2) = Self::matched_poles(w_p, 0.5 * inv_q);
+        let g_nyq_sq = Self::analog_high_shelf_mag2(0.5 * RATE, hz, slope, db);
+        let b = Self::solve_matched_numerator(a1, a2, hz, 1.0, g_nyq_sq, a * a);
+        Self::new(b, [1.0, a1, a2])
+    }
+    /// Nyquist-decramped peaking EQ filter matching the continuous-time analog prototype.
+    pub(crate) fn peaking_matched(hz: f64, q: f64, db: f64) -> Self {
+        if db.abs() < 1e-9 {
+            return Self::FLAT;
+        }
+        let a = 10f64.powf(db / 40.0);
+        let w0 = 2.0 * PI * hz / RATE;
+        let (a1, a2) = Self::matched_poles(w0, 1.0 / (2.0 * q * a));
+        let u = 0.5 * RATE / hz;
+        let uu = 1.0 - u * u;
+        let g_nyq_sq = (uu * uu + (u * a / q).powi(2)) / (uu * uu + (u / (q * a)).powi(2));
+        let b = Self::solve_matched_numerator(a1, a2, hz, 1.0, g_nyq_sq, a.powi(4));
+        Self::new(b, [1.0, a1, a2])
+    }
     /// Coefficients given directly, for filters designed elsewhere.
     pub(crate) fn raw(b: [f64; 3], a: [f64; 3]) -> Self {
         Self::new(b, a)

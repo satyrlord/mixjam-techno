@@ -117,6 +117,13 @@ before the lookahead gain. A style change fades that shave in or out over
 the setting glide, because the shave has no zero depth that leaves loud
 peaks unchanged.
 
+The two `TrimEq` peaks, at 250 Hz and 3.5 kHz, and the `LiftEq` 12 kHz air
+shelf use matched pole-zero biquads. Their poles come from the analog design,
+and their gains match it at DC, at Nyquist, and at the center frequency. Thus
+the response does not cramp near 20 kHz. `sample_master_eq_curve` calculates
+the magnitude curve of the Trim and Lift settings from 20 Hz to 20 kHz for the
+UI.
+
 `MasterChain` is `Copy`. Its `order` is a fixed array that names each pedal one
 time. Thus a settings copy never allocates on the audio thread, and the state of
 the whole board has a fixed size. A pedal that is off passes the signal
@@ -184,13 +191,15 @@ export starts the pedalboard in the same settled state.
 ### Meters
 
 A live processor also measures. Each 1024 frames, it publishes a `MeterReading`
-through atomics in the `MasterControl`, and `Session::master_meters` reads it
+and 32 decimated stereo vectorscope pairs through atomics in `MasterControl`,
+and `Session::master_meters` and `Session::master_vectorscope` read them
 without a wait. Each playback gives a number to its readings, and only the start
-of a playback changes that number. A stopped playback that is still in its last
-block can show its levels for one block. But the readings of the next playback
-still reach the window. The cumulative OVER count carries its playback number in
-the same atomic value. Thus a stale count cannot become the lamp baseline of the
-new playback.
+of a playback changes that number. The reading includes smoothed post-board
+stereo phase correlation from -1 to +1 alongside LUFS, true peak, and gain
+reductions. A stopped playback that is still in its last block can show its
+levels for one block. But the readings of the next playback still reach the
+window. The cumulative OVER count carries its playback number in the same atomic
+value. Thus a stale count cannot become the lamp baseline of the new playback.
 
 Readings change more than 30 times a second. Each reading covers the same frames
 for each playback block size. Thus the block size does not change the true peak

@@ -259,8 +259,11 @@ fn has_deep_scope(kind: PedalKind) -> bool {
         kind,
         PedalKind::SoftClip
             | PedalKind::Tube
+            | PedalKind::TrimEq
             | PedalKind::Maximizer
+            | PedalKind::LiftEq
             | PedalKind::Tape
+            | PedalKind::Imaging
             | PedalKind::BusCompressor
             | PedalKind::Multiband
             | PedalKind::Limiter
@@ -312,6 +315,31 @@ fn draw_gr_history_scope(
     );
 }
 
+fn draw_imaging_scope(
+    ui: &egui::Ui,
+    rect: Rect,
+    chain: &MasterChain,
+    metering: &Metering,
+    accent: Color32,
+) {
+    // The meters measure the correlation after the whole board, so it is
+    // valid with Imaging off, as the vectorscope points and telemetry are.
+    let corr = if metering.playing {
+        metering.reading.stereo_correlation
+    } else {
+        0.0
+    };
+    controls::instrument::stereo_vectorscope(
+        ui,
+        rect,
+        "Stereo imaging scope",
+        &metering.vectorscope,
+        corr,
+        chain.imaging.mono_below,
+        accent,
+    );
+}
+
 fn scope_panel(
     ui: &egui::Ui,
     rect: Rect,
@@ -332,6 +360,20 @@ fn scope_panel(
                 accent,
             );
         }
+        PedalKind::TrimEq | PedalKind::LiftEq => {
+            let mut curve = [0.0_f32; 65];
+            mixjam_techno::application::sample_master_eq_curve(chain, kind, &mut curve);
+            controls::instrument::eq_response_scope(
+                ui,
+                rect,
+                &format!("{} response", name(kind)),
+                &curve,
+                6.0,
+                chain.is_on(kind),
+                accent,
+            );
+        }
+        PedalKind::Imaging => draw_imaging_scope(ui, rect, chain, metering, accent),
         PedalKind::BusCompressor | PedalKind::Limiter => {
             draw_gr_history_scope(ui, rect, kind, chain, metering);
         }
@@ -545,7 +587,15 @@ fn telemetry_readout(ui: &egui::Ui, column: Rect, y: f32, label: &str, value: f3
     );
     let well = Rect::from_center_size(Pos2::new(column.right() - 46.0, y), Vec2::new(72.0, 20.0));
     controls::well(ui, well);
-    let text = format!("{} {unit}", show_level(value));
+    let text = if unit.is_empty() {
+        if value.is_finite() {
+            format!("{value:+.2}")
+        } else {
+            "—".to_owned()
+        }
+    } else {
+        format!("{} {unit}", show_level(value))
+    };
     ui.painter().text(
         well.center(),
         Align2::CENTER_CENTER,
@@ -569,6 +619,25 @@ fn telemetry_readout(ui: &egui::Ui, column: Rect, y: f32, label: &str, value: f3
     );
 }
 
+fn pedal_telemetry_row(
+    kind: PedalKind,
+    reading: &MeterReading,
+) -> Option<(&'static str, f32, &'static str)> {
+    match kind {
+        PedalKind::Imaging => Some(("Correlation", reading.stereo_correlation, "")),
+        PedalKind::BusCompressor => Some(("Gain reduction", reading.compressor_reduction, "dB")),
+        PedalKind::Multiband => {
+            let peak = reading
+                .multiband_reduction
+                .into_iter()
+                .fold(0.0_f32, f32::max);
+            Some(("Band GR", peak, "dB"))
+        }
+        PedalKind::Limiter => Some(("Gain reduction", reading.limiter_reduction, "dB")),
+        _ => None,
+    }
+}
+
 fn telemetry_rows(
     kind: PedalKind,
     metering: &Metering,
@@ -581,21 +650,9 @@ fn telemetry_rows(
             f32::NEG_INFINITY
         }
     };
-    let reduction = match kind {
-        PedalKind::BusCompressor => Some(("Gain reduction", reading.compressor_reduction)),
-        PedalKind::Multiband => {
-            let peak = reading
-                .multiband_reduction
-                .into_iter()
-                .fold(0.0_f32, f32::max);
-            Some(("Band GR", peak))
-        }
-        PedalKind::Limiter => Some(("Gain reduction", reading.limiter_reduction)),
-        _ => None,
-    };
     [("Input VU", live(reading.input_vu), "VU")]
         .into_iter()
-        .chain(reduction.map(|(label, gr)| (label, live(gr), "dB")))
+        .chain(pedal_telemetry_row(kind, reading).map(|(label, gr, unit)| (label, live(gr), unit)))
         .chain([
             ("Momentary", live(reading.momentary), "LUFS"),
             ("Short-term", live(reading.short_term), "LUFS"),

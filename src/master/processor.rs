@@ -2,16 +2,14 @@
 //! settings, crossfades between boards, and feeds the meters.
 use super::board::{Board, KeyFrame, LIVE_LATENCY};
 use super::dsp::{self, Smoothed};
-use super::{MasterChain, MasterControl, PedalKind, meters};
+use super::{
+    MasterChain, MasterControl, PedalKind,
+    meters::{self, PUBLISH_FRAMES},
+};
 use std::sync::Arc;
 
 /// The crossfade after a pedal is switched or moved during playback: 30 ms.
 pub(super) const FADE: usize = 1323;
-/// The meters publish a reading once this many frames, about 23 ms, however
-/// short playback's blocks are: more than 30 times a second. A reading holds
-/// the true peak of its frames and counts one over if it passes the limit,
-/// so its length sets what the window shows and counts.
-const PUBLISH_FRAMES: usize = 1024;
 
 /// Runs the board over stereo audio. Its state carries from one block to
 /// the next.

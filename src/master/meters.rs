@@ -12,6 +12,28 @@ use std::{
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
+/// The meters publish a reading once this many frames, about 23 ms, however
+/// short playback's blocks are: more than 30 times a second. A reading holds
+/// the true peak of its frames and counts one over if it passes the limit,
+/// so its length sets what the window shows and counts.
+pub(super) const PUBLISH_FRAMES: usize = 1024;
+/// Number of decimated `(left, right)` stereo samples per published vectorscope frame.
+pub const VECTORSCOPE_POINTS: usize = 32;
+/// The frames between two vectorscope points, so that the points of a
+/// reading spread evenly over all of its frames.
+const SCOPE_STRIDE: usize = PUBLISH_FRAMES / VECTORSCOPE_POINTS;
+const _: () = assert!(SCOPE_STRIDE > 0 && SCOPE_STRIDE * VECTORSCOPE_POINTS == PUBLISH_FRAMES);
+
+fn pack_stereo(left: f32, right: f32) -> u32 {
+    let encode = |v: f32| (v.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16 as u16;
+    u32::from(encode(left)) | (u32::from(encode(right)) << 16)
+}
+
+fn unpack_stereo(packed: u32) -> (f32, f32) {
+    let decode = |bits: u16| f32::from(bits as i16) / f32::from(i16::MAX);
+    (decode(packed as u16), decode((packed >> 16) as u16))
+}
+
 /// What the master meters read. Levels are in decibels; a level with
 /// nothing measured is negative infinity.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,6 +53,8 @@ pub struct MeterReading {
     pub compressor_reduction: f32,
     pub multiband_reduction: [f32; 3],
     pub limiter_reduction: f32,
+    /// Smoothed post-board stereo phase correlation in `[-1.0, 1.0]`.
+    pub stereo_correlation: f32,
     /// Output loudness in LUFS over the last 400 ms and 3 s, and gated over
     /// the whole playback.
     pub momentary: f32,
@@ -53,6 +77,7 @@ impl Default for MeterReading {
             compressor_reduction: 0.0,
             multiband_reduction: [0.0; 3],
             limiter_reduction: 0.0,
+            stereo_correlation: 0.0,
             momentary: f32::NEG_INFINITY,
             short_term: f32::NEG_INFINITY,
             integrated: f32::NEG_INFINITY,
@@ -76,6 +101,8 @@ pub(super) struct Shared {
     compressor_reduction: AtomicU32,
     multiband_reduction: [AtomicU32; 3],
     limiter_reduction: AtomicU32,
+    stereo_correlation: AtomicU32,
+    vectorscope: [AtomicU32; VECTORSCOPE_POINTS],
     momentary: AtomicU32,
     short_term: AtomicU32,
     integrated: AtomicU32,
@@ -96,6 +123,8 @@ impl Shared {
             compressor_reduction: AtomicU32::new(0),
             multiband_reduction: std::array::from_fn(|_| AtomicU32::new(0)),
             limiter_reduction: AtomicU32::new(0),
+            stereo_correlation: AtomicU32::new(0.0_f32.to_bits()),
+            vectorscope: std::array::from_fn(|_| AtomicU32::new(0)),
             momentary: level(),
             short_term: level(),
             integrated: level(),
@@ -109,6 +138,9 @@ impl Shared {
         let run = self.run.load(Ordering::Relaxed).wrapping_add(1).max(1);
         for count in &self.input_peak_counts {
             count.store(u64::from(run) << 32, Ordering::Relaxed);
+        }
+        for point in &self.vectorscope {
+            point.store(0, Ordering::Relaxed);
         }
         self.store_levels(&MeterReading {
             run,
@@ -154,6 +186,7 @@ impl Shared {
             float(slot, value);
         }
         float(&self.limiter_reduction, reading.limiter_reduction);
+        float(&self.stereo_correlation, reading.stereo_correlation);
         float(&self.momentary, reading.momentary);
         float(&self.short_term, reading.short_term);
         float(&self.integrated, reading.integrated);
@@ -163,6 +196,16 @@ impl Shared {
             (u64::from(reading.run) << 32) | u64::from(reading.overs),
             Ordering::Relaxed,
         );
+    }
+    fn store_vectorscope(&self, run: u32, scope: &[u32; VECTORSCOPE_POINTS]) {
+        if self.run.load(Ordering::Acquire) == run {
+            for (slot, &packed) in self.vectorscope.iter().zip(scope) {
+                slot.store(packed, Ordering::Relaxed);
+            }
+        }
+    }
+    pub(super) fn read_vectorscope(&self) -> [(f32, f32); VECTORSCOPE_POINTS] {
+        std::array::from_fn(|i| unpack_stereo(self.vectorscope[i].load(Ordering::Relaxed)))
     }
     pub(super) fn read(&self) -> MeterReading {
         let run = self.run.load(Ordering::Acquire);
@@ -184,6 +227,7 @@ impl Shared {
             compressor_reduction: float(&self.compressor_reduction),
             multiband_reduction: std::array::from_fn(|band| float(&self.multiband_reduction[band])),
             limiter_reduction: float(&self.limiter_reduction),
+            stereo_correlation: float(&self.stereo_correlation),
             momentary: float(&self.momentary),
             short_term: float(&self.short_term),
             integrated: float(&self.integrated),
@@ -368,6 +412,12 @@ pub(super) struct Meters {
     block_peak: f32,
     peak: f32,
     overs: u32,
+    corr_lr: f64,
+    corr_ll: f64,
+    corr_rr: f64,
+    corr_step: f64,
+    scope: [u32; VECTORSCOPE_POINTS],
+    scope_phase: usize,
     run: u32,
 }
 impl Meters {
@@ -383,6 +433,12 @@ impl Meters {
             block_peak: 0.0,
             peak: 0.0,
             overs: 0,
+            corr_lr: 0.0,
+            corr_ll: 0.0,
+            corr_rr: 0.0,
+            corr_step: 1.0 - pole(0.300),
+            scope: [0; VECTORSCOPE_POINTS],
+            scope_phase: 0,
             run,
         }
     }
@@ -403,6 +459,16 @@ impl Meters {
             .push(left)
             .max(self.true_peaks[1].push(right));
         self.block_peak = self.block_peak.max(peak);
+        let (l, r) = (f64::from(left), f64::from(right));
+        self.corr_lr = flush(self.corr_lr + (l * r - self.corr_lr) * self.corr_step);
+        self.corr_ll = flush(self.corr_ll + (l * l - self.corr_ll) * self.corr_step);
+        self.corr_rr = flush(self.corr_rr + (r * r - self.corr_rr) * self.corr_step);
+        if self.scope_phase.is_multiple_of(SCOPE_STRIDE)
+            && let Some(point) = self.scope.get_mut(self.scope_phase / SCOPE_STRIDE)
+        {
+            *point = pack_stereo(left, right);
+        }
+        self.scope_phase = self.scope_phase.wrapping_add(1);
     }
     /// The interpolator still holds the last output intervals. Complete
     /// only that detector; silence here is not part of the played program.
@@ -445,6 +511,12 @@ impl Meters {
         for (count, peak) in self.input_peak_counts.iter_mut().zip(input_peaks) {
             *count = count.saturating_add(u32::from(peak));
         }
+        let denom = (self.corr_ll * self.corr_rr).sqrt();
+        let stereo_correlation = if denom > 1e-12 {
+            (self.corr_lr / denom).clamp(-1.0, 1.0) as f32
+        } else {
+            0.0
+        };
         shared.store_current(&MeterReading {
             run: self.run,
             input_vu: (gain_to_db(needle) + SINE_FORM_DB - VU_REFERENCE_DBFS) as f32,
@@ -453,6 +525,7 @@ impl Meters {
             compressor_reduction: compressor,
             multiband_reduction: multiband,
             limiter_reduction: limiter,
+            stereo_correlation,
             momentary: self.loudness.momentary as f32,
             short_term: self.loudness.short_term as f32,
             integrated: self.loudness.integrated as f32,
@@ -460,6 +533,8 @@ impl Meters {
             true_peak_max: gain_to_db(f64::from(self.peak)) as f32,
             overs: self.overs,
         });
+        shared.store_vectorscope(self.run, &self.scope);
+        self.scope_phase = 0;
         self.block_peak = 0.0;
     }
 }
@@ -687,5 +762,67 @@ mod tests {
         for value in meters.needle.iter().flatten() {
             assert!(*value == 0.0 || value.is_normal(), "{value:e}");
         }
+    }
+
+    #[test]
+    fn the_vectorscope_points_spread_evenly_over_one_published_reading() {
+        let shared = Shared::new();
+        let mut meters = Meters::new(&shared);
+        let level = |frame: usize| frame as f32 / PUBLISH_FRAMES as f32;
+        for frame in 0..PUBLISH_FRAMES {
+            meters.output(level(frame), -level(frame));
+        }
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
+        for (point, (left, right)) in shared.read_vectorscope().into_iter().enumerate() {
+            // Point k holds frame k * stride, so the last point is near the end.
+            let expected = level(point * SCOPE_STRIDE);
+            assert!(
+                (left - expected).abs() < 1e-4,
+                "point {point}: {left} for {expected}"
+            );
+            assert!(
+                (right + expected).abs() < 1e-4,
+                "point {point}: {right} for {}",
+                -expected
+            );
+        }
+    }
+
+    #[test]
+    fn correlation_and_vectorscope_track_stereo_phase_and_reset_per_run() {
+        let shared = Shared::new();
+        let mut meters = Meters::new(&shared);
+        // Mono signal -> correlation > 0.99
+        for sample in tone(440.0, -12.0, 0.6, RATE) {
+            meters.output(sample, sample);
+        }
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
+        assert!(shared.read().stereo_correlation > 0.99);
+        assert!(
+            shared
+                .read_vectorscope()
+                .iter()
+                .any(|&(l, _)| l.abs() > 0.01)
+        );
+
+        // Phase-inverted stereo -> correlation < -0.99
+        let mut meters = Meters::new(&shared);
+        assert_eq!(shared.read().stereo_correlation, 0.0);
+        assert!(shared.read_vectorscope().iter().all(|&p| p == (0.0, 0.0)));
+        for sample in tone(440.0, -12.0, 0.6, RATE) {
+            meters.output(sample, -sample);
+        }
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
+        assert!(shared.read().stereo_correlation < -0.99);
+
+        // Orthogonal quadrature sine/cosine -> near zero correlation
+        let mut meters = Meters::new(&shared);
+        let frames = (0.6 * RATE) as usize;
+        for i in 0..frames {
+            let phase = 2.0 * PI * 440.0 * i as f64 / RATE;
+            meters.output((0.25 * phase.sin()) as f32, (0.25 * phase.cos()) as f32);
+        }
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
+        assert!(shared.read().stereo_correlation.abs() < 0.05);
     }
 }

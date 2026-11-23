@@ -771,16 +771,21 @@ impl MixJamApp {
     }
 
     fn master_metering(&mut self, ctx: &egui::Context) -> master::Metering {
-        let sample = self.capture_view_is("master-metering")
-            || self.capture_view_is("mixer-states")
-            || self.capture_view_is("master-deep-edit-comp")
-            || self.capture_view_is("master-deep-edit-multiband")
-            || self.capture_view_is("master-deep-edit-limiter");
+        const CAPTURE_SAMPLE_VIEWS: &[&str] = &[
+            "master-metering",
+            "mixer-states",
+            "master-deep-edit-comp",
+            "master-deep-edit-multiband",
+            "master-deep-edit-limiter",
+            "master-deep-edit-imaging",
+        ];
+        let sample = CAPTURE_SAMPLE_VIEWS
+            .iter()
+            .any(|view| self.capture_view_is(view));
         let reduced = self.session.options().meter_display_rate
             == mixjam_techno::application::options::MeterDisplayRate::Reduced;
-        master::Metering {
-            reduced,
-            reading: if sample {
+        let (reading, vectorscope) = if sample {
+            (
                 MeterReading {
                     run: 1,
                     input_vu: -1.5,
@@ -789,20 +794,28 @@ impl MixJamApp {
                     compressor_reduction: 1.7,
                     multiband_reduction: [2.1, 1.4, 0.9],
                     limiter_reduction: 2.6,
+                    stereo_correlation: 0.78,
                     momentary: -12.6,
                     short_term: -13.4,
                     integrated: -13.9,
                     true_peak: -2.4,
                     true_peak_max: -0.8,
                     overs: 1,
-                }
-            } else {
-                self.boards.meter_display.sample(
-                    self.session.master_meters(),
-                    reduced,
-                    ctx.input(|input| input.time),
-                )
-            },
+                },
+                sample_vectorscope(),
+            )
+        } else {
+            self.boards.meter_display.sample(
+                self.session.master_meters(),
+                self.session.master_vectorscope(),
+                reduced,
+                ctx.input(|input| input.time),
+            )
+        };
+        master::Metering {
+            reduced,
+            reading,
+            vectorscope,
             playing: sample || self.session.playing_mix(),
         }
     }
@@ -859,13 +872,41 @@ impl MixJamApp {
     }
 }
 
+/// The decimated `(left, right)` points of one vectorscope frame.
+type Vectorscope = [(f32, f32); mixjam_techno::application::VECTORSCOPE_POINTS];
+
+fn sample_vectorscope() -> Vectorscope {
+    std::array::from_fn(|i| {
+        let t = i as f32 * 0.37;
+        let mid = 0.55 * t.sin() + 0.20 * (2.0 * t).cos();
+        let side = 0.24 * (1.7 * t + 0.8).cos();
+        (
+            (mid + side).clamp(-0.95, 0.95),
+            (mid - side).clamp(-0.95, 0.95),
+        )
+    })
+}
+
 /// What the master meters show. A reduced display rate holds a reading
-/// between draws, and keeps every peak that happened in between.
-#[derive(Default)]
+/// between draws, and keeps every peak that happened in between. It holds
+/// the vectorscope points with the reading, so the scope and its
+/// correlation bar change together.
 pub(in super::super) struct MeterDisplay {
     shown: MeterReading,
     pending: MeterReading,
     next: f64,
+    scope: Vectorscope,
+}
+
+impl Default for MeterDisplay {
+    fn default() -> Self {
+        Self {
+            shown: MeterReading::default(),
+            pending: MeterReading::default(),
+            next: 0.0,
+            scope: [(0.0, 0.0); mixjam_techno::application::VECTORSCOPE_POINTS],
+        }
+    }
 }
 
 impl MeterDisplay {
@@ -889,12 +930,22 @@ impl MeterDisplay {
     }
 
     /// Keep transient peaks between draws. Audio still measures every block.
+    /// The vectorscope `scope` changes only when the reading does.
     pub(in super::super) fn sample(
         &mut self,
         reading: MeterReading,
+        scope: Vectorscope,
         reduced: bool,
         now: f64,
-    ) -> MeterReading {
+    ) -> (MeterReading, Vectorscope) {
+        if self.advance(reading, reduced, now) {
+            self.scope = scope;
+        }
+        (self.shown, self.scope)
+    }
+
+    /// Take a reading, and return true when the shown reading changes to it.
+    fn advance(&mut self, reading: MeterReading, reduced: bool, now: f64) -> bool {
         if reading.run != self.pending.run {
             self.pending = reading;
             self.pending.input_peaks = std::array::from_fn(|side| {
@@ -905,7 +956,8 @@ impl MeterDisplay {
         } else {
             self.merge_pending(reading);
         }
-        if !reduced || now >= self.next {
+        let due = !reduced || now >= self.next;
+        if due {
             self.shown = self.pending;
             self.pending = reading;
             self.pending.input_peaks = [false; 2];
@@ -915,7 +967,7 @@ impl MeterDisplay {
             self.pending.limiter_reduction = 0.0;
             self.next = now + 1.0 / 15.0;
         }
-        self.shown
+        due
     }
 }
 

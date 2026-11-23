@@ -10,6 +10,68 @@ use std::f64::consts::FRAC_1_SQRT_2;
 const MUD: (f64, f64) = (250.0, 2.5);
 const HARSH: (f64, f64) = (3500.0, 3.0);
 
+fn trim_eq_coefficients(high_pass: f64, mud: f64, harsh: f64) -> [Coefficients; 3] {
+    [
+        Coefficients::high_pass(high_pass, FRAC_1_SQRT_2),
+        Coefficients::peaking_matched(MUD.0, MUD.1, mud),
+        Coefficients::peaking_matched(HARSH.0, HARSH.1, harsh),
+    ]
+}
+
+fn lift_eq_coefficients(low: f64, air: f64) -> [Coefficients; 2] {
+    [
+        Coefficients::low_shelf(LOW_SHELF_HZ, LIFT_SLOPE, low),
+        Coefficients::high_shelf_matched(AIR_SHELF_HZ, LIFT_SLOPE, air),
+    ]
+}
+
+/// Sample the steady-state magnitude response (in dB) of `TrimEq` or `LiftEq`
+/// across logarithmically spaced frequencies from 20 Hz to 20 kHz.
+pub fn sample_master_eq_curve(
+    chain: &settings::MasterChain,
+    kind: settings::PedalKind,
+    out_db: &mut [f32],
+) {
+    let n = out_db.len();
+    if n == 0 {
+        return;
+    }
+    let trim;
+    let lift;
+    let sections: &[Coefficients] = match kind {
+        settings::PedalKind::TrimEq => {
+            trim = trim_eq_coefficients(
+                f64::from(chain.trim_eq.high_pass),
+                f64::from(chain.trim_eq.mud),
+                f64::from(chain.trim_eq.harsh),
+            );
+            &trim
+        }
+        settings::PedalKind::LiftEq => {
+            lift = lift_eq_coefficients(f64::from(chain.lift_eq.low), f64::from(chain.lift_eq.air));
+            &lift
+        }
+        _ => {
+            out_db.fill(0.0);
+            return;
+        }
+    };
+    let denom = (n - 1).max(1) as f64;
+    for (i, slot) in out_db.iter_mut().enumerate() {
+        let hz = 20.0 * 1000.0_f64.powf(i as f64 / denom);
+        let mag = sections
+            .iter()
+            .fold(1.0_f64, |acc, section| acc * section.magnitude(hz));
+        *slot = (20.0 * mag.max(1e-6).log10()) as f32;
+    }
+}
+
+fn set_biquads<const N: usize>(filters: &mut [Biquad; N], coeffs: [Coefficients; N]) {
+    for (filter, c) in filters.iter_mut().zip(coeffs) {
+        filter.set(c);
+    }
+}
+
 /// Cleanup: a 12 dB per octave Butterworth high-pass, and narrow cuts at
 /// 250 Hz and 3.5 kHz.
 #[derive(Clone, Copy)]
@@ -36,12 +98,10 @@ impl TrimEq {
         self.harsh.set(f64::from(settings.harsh));
     }
     fn design(&mut self) {
-        self.filters[0].set(Coefficients::high_pass(
-            self.high_pass.value(),
-            FRAC_1_SQRT_2,
-        ));
-        self.filters[1].set(Coefficients::peaking(MUD.0, MUD.1, self.mud.value()));
-        self.filters[2].set(Coefficients::peaking(HARSH.0, HARSH.1, self.harsh.value()));
+        set_biquads(
+            &mut self.filters,
+            trim_eq_coefficients(self.high_pass.value(), self.mud.value(), self.harsh.value()),
+        );
     }
     pub(in crate::master) fn clear(&mut self) {
         self.filters.iter_mut().for_each(Biquad::clear);
@@ -98,16 +158,10 @@ impl LiftEq {
         self.air.set(f64::from(settings.air));
     }
     fn design(&mut self) {
-        self.filters[0].set(Coefficients::low_shelf(
-            LOW_SHELF_HZ,
-            LIFT_SLOPE,
-            self.low.value(),
-        ));
-        self.filters[1].set(Coefficients::high_shelf(
-            AIR_SHELF_HZ,
-            LIFT_SLOPE,
-            self.air.value(),
-        ));
+        set_biquads(
+            &mut self.filters,
+            lift_eq_coefficients(self.low.value(), self.air.value()),
+        );
     }
     pub(in crate::master) fn clear(&mut self) {
         self.filters.iter_mut().for_each(Biquad::clear);
