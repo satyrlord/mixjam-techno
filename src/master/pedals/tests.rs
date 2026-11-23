@@ -511,3 +511,250 @@ fn a_glide_has_no_steps() {
         previous = out;
     }
 }
+
+#[test]
+fn bus_compressor_sc_hpf_reduces_kick_induced_pumping() {
+    // 50 Hz loud kick bursts mixed with a steady quiet 8 kHz hi-hat carrier.
+    let signal: Vec<(f32, f32)> = (0..44_100)
+        .map(|i| {
+            let phase = (i % 22_050) as f64 / RATE;
+            let kick = if phase < 0.08 {
+                0.7 * (2.0 * PI * 50.0 * i as f64 / RATE).sin() * (-phase * 25.0).exp()
+            } else {
+                0.0
+            };
+            let hat = 0.04 * (2.0 * PI * 8000.0 * i as f64 / RATE).sin();
+            let v = (kick + hat) as f32;
+            (v, v)
+        })
+        .collect();
+    let measure_pump = |sc_hpf_hz: f32| {
+        let mut comp = BusCompressor::new();
+        comp.set(&settings::BusCompressor {
+            on: true,
+            threshold: -20.0,
+            ratio: 4.0,
+            attack: 0.5,
+            release: 300.0,
+            key: 0,
+            sc_hpf_hz,
+            mix: 100.0,
+            makeup_db: 0.0,
+        });
+        comp.clear();
+        let wet = run(&signal, |l, r| comp.process(l, r));
+        let mut hp = Biquad::new(Coefficients::high_pass(3000.0, FRAC_1_SQRT_2));
+        let filtered: Vec<f64> = wet[22_050..]
+            .iter()
+            .map(|(l, _)| hp.process(0, f64::from(*l)))
+            .collect();
+        let envelope =
+            |slice: &[f64]| (slice.iter().map(|x| x * x).sum::<f64>() / slice.len() as f64).sqrt();
+        // Window immediately after kick decay vs settled window later in the beat.
+        let during = gain_to_db(envelope(&filtered[1800..3200]));
+        let recovered = gain_to_db(envelope(&filtered[16_000..21_000]));
+        (recovered - during).abs()
+    };
+    let flat_pump = measure_pump(20.0);
+    let hpf_pump = measure_pump(100.0);
+    assert!(
+        flat_pump > 1.5 && hpf_pump < 0.8 && hpf_pump < flat_pump * 0.3,
+        "flat_pump={flat_pump:.2} dB, hpf_pump={hpf_pump:.2} dB"
+    );
+}
+
+#[test]
+fn bus_compressor_mix_and_makeup_blend_cleanly() {
+    let input = program(22_050);
+    let mut comp = BusCompressor::new();
+    let mut cfg = settings::BusCompressor {
+        on: true,
+        threshold: -24.0,
+        ratio: 4.0,
+        attack: 1.0,
+        release: 150.0,
+        key: 0,
+        sc_hpf_hz: 20.0,
+        mix: 0.0,
+        makeup_db: 0.0,
+    };
+    comp.set(&cfg);
+    comp.clear();
+    assert_eq!(run(&input, |l, r| comp.process(l, r)), input);
+
+    cfg.mix = 100.0;
+    comp.set(&cfg);
+    comp.clear();
+    let full_wet = run(&input, |l, r| comp.process(l, r));
+
+    cfg.mix = 50.0;
+    comp.set(&cfg);
+    comp.clear();
+    let half_mix = run(&input, |l, r| comp.process(l, r));
+    for ((d, _), ((w, _), (h, _))) in input.iter().zip(full_wet.iter().zip(&half_mix)) {
+        assert!((h - 0.5 * (d + w)).abs() < 1e-5);
+    }
+
+    cfg.mix = 100.0;
+    cfg.makeup_db = 3.0;
+    comp.set(&cfg);
+    comp.clear();
+    let boosted = run(&input, |l, r| comp.process(l, r));
+    let delta_db = rms_db(&boosted[4410..]) - rms_db(&full_wet[4410..]);
+    assert!((delta_db - 3.0).abs() < 0.05, "makeup delta {delta_db:.3}");
+}
+
+#[test]
+fn multiband_reports_per_band_gain_reduction() {
+    let tone = |hz: f64| -> Vec<(f32, f32)> {
+        (0..22_050)
+            .map(|i| {
+                let s = (0.6 * (2.0 * PI * hz * i as f64 / RATE).sin()) as f32;
+                (s, s)
+            })
+            .collect()
+    };
+    let mut zero = Multiband::new();
+    zero.set(&settings::Multiband {
+        on: true,
+        low: 0.0,
+        mid: 0.0,
+        high: 0.0,
+        key: 0,
+    });
+    zero.clear();
+    let _ = run(&tone(80.0), |l, r| zero.process(l, r));
+    assert_eq!(zero.take_reductions(), [0.0; 3]);
+
+    let mut active = Multiband::new();
+    active.set(&settings::Multiband {
+        on: true,
+        low: 80.0,
+        mid: 80.0,
+        high: 80.0,
+        key: 0,
+    });
+    active.clear();
+    // Skip crossover startup edge from t=0 sine slope before sampling steady-state band GR.
+    let low_tone = tone(70.0);
+    let _ = run(&low_tone[..2048], |l, r| active.process(l, r));
+    let _ = active.take_reductions();
+    let _ = run(&low_tone[2048..], |l, r| active.process(l, r));
+    let low_gr = active.take_reductions();
+    assert!(low_gr[0] > 1.0 && low_gr[0] > low_gr[2] * 3.0, "{low_gr:?}");
+    assert_eq!(active.take_reductions(), [0.0; 3]);
+
+    active.clear();
+    let high_tone = tone(8000.0);
+    let _ = run(&high_tone[..2048], |l, r| active.process(l, r));
+    let _ = active.take_reductions();
+    let _ = run(&high_tone[2048..], |l, r| active.process(l, r));
+    let high_gr = active.take_reductions();
+    assert!(
+        high_gr[2] > 1.0 && high_gr[2] > high_gr[0] * 3.0,
+        "{high_gr:?}"
+    );
+}
+
+#[test]
+fn limiter_all_styles_hold_true_peak_and_preserve_stereo_ratio() {
+    let signal = program(30_000);
+    for style in [
+        settings::LimiterStyle::Transparent,
+        settings::LimiterStyle::Punchy,
+        settings::LimiterStyle::Modern,
+    ] {
+        let mut limiter = Limiter::new();
+        limiter.set(&settings::Limiter {
+            on: true,
+            gain: 9.0,
+            ceiling: -1.0,
+            key: 0,
+            style,
+        });
+        limiter.clear();
+        let unbalanced: Vec<(f32, f32)> = signal.iter().map(|(l, _)| (*l, *l * 0.5)).collect();
+        let output = run(&unbalanced, |l, r| limiter.process(l, r));
+        let mut meters = [TruePeak::ZERO; 2];
+        let mut peak = 0.0_f32;
+        for (l, r) in &output {
+            peak = peak.max(meters[0].push(*l)).max(meters[1].push(*r));
+            if l.abs() > 1e-3 {
+                assert!((r / l - 0.5).abs() < 1e-4, "{style:?} skewed stereo ratio");
+            }
+        }
+        let peak_db = gain_to_db(f64::from(peak));
+        assert!(peak_db <= -1.0 + 1e-3, "{style:?} peaked at {peak_db:.3}");
+        assert!(limiter.take_reduction() > 0.5, "{style:?} reported 0 GR");
+    }
+}
+
+fn loud_limiter(style: settings::LimiterStyle) -> settings::Limiter {
+    settings::Limiter {
+        on: true,
+        gain: 9.0,
+        ceiling: -1.0,
+        key: 0,
+        style,
+    }
+}
+
+#[test]
+fn a_limiter_style_change_glides_without_a_step() {
+    // A style change during playback reaches the pre-shave without a jump.
+    let sine = |i: usize| (0.5 * (2.0 * PI * 100.0 * i as f64 / RATE).sin()) as f32;
+    let mut limiter = Limiter::new();
+    limiter.set(&loud_limiter(settings::LimiterStyle::Transparent));
+    limiter.clear();
+    let mut previous = 0.0_f32;
+    let mut settled_step = 0.0_f32;
+    for i in 0..20_000 {
+        let (out, _) = limiter.process(sine(i), sine(i));
+        if i >= 10_000 {
+            settled_step = settled_step.max((out - previous).abs());
+        }
+        previous = out;
+    }
+    limiter.set(&loud_limiter(settings::LimiterStyle::Modern));
+    let mut switch_step = 0.0_f32;
+    for i in 20_000..26_000 {
+        let (out, _) = limiter.process(sine(i), sine(i));
+        switch_step = switch_step.max((out - previous).abs());
+        previous = out;
+    }
+    assert!(
+        switch_step < 1.5 * settled_step,
+        "style switch stepped by {switch_step}, a settled frame moves {settled_step}"
+    );
+}
+
+#[test]
+fn limiter_reduction_reports_the_gain_each_sample_received() {
+    // The pre-shave and the lookahead gain reach the same sample at
+    // different times; the meter reports their product on that sample.
+    // One short burst after silence: no earlier reduction lingers.
+    let input: Vec<f32> = (0..30_000)
+        .map(|i| {
+            let burst = (20_000..20_300).contains(&i);
+            f32::from(u8::from(burst)) * (0.5 * (2.0 * PI * 1000.0 * i as f64 / RATE).sin()) as f32
+        })
+        .collect();
+    let mut limiter = Limiter::new();
+    limiter.set(&loud_limiter(settings::LimiterStyle::Modern));
+    limiter.clear();
+    let gain = db_to_gain(9.0) as f32;
+    let (mut most, mut reported) = (0.0_f64, 0.0_f32);
+    for (i, v) in input.iter().enumerate() {
+        let out = limiter.process(*v, *v).0;
+        let reduction = limiter.take_reduction();
+        let entered = input[i.saturating_sub(Limiter::LATENCY)] * gain;
+        if i >= 20_000 && entered.abs() > 0.5 {
+            most = most.max(-gain_to_db(f64::from(out / entered)));
+            reported = reported.max(reduction);
+        }
+    }
+    assert!(
+        (f64::from(reported) - most).abs() < 0.1,
+        "reported {reported:.2} dB, the samples received {most:.2} dB"
+    );
+}

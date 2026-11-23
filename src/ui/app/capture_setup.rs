@@ -45,6 +45,9 @@ pub(super) fn mastering_editor(view: &str) -> Option<PedalKind> {
         "master-deep-edit" => Some(PedalKind::SoftClip),
         "master-deep-edit-eq" => Some(PedalKind::BoosterEq),
         "master-deep-edit-tape" => Some(PedalKind::Tape),
+        "master-deep-edit-comp" => Some(PedalKind::BusCompressor),
+        "master-deep-edit-multiband" => Some(PedalKind::Multiband),
+        "master-deep-edit-limiter" => Some(PedalKind::Limiter),
         _ => None,
     }
 }
@@ -77,6 +80,11 @@ fn master_board(session: &mut Session, view: &str) {
     ) = (1000, 1000);
     chain.booster_compressor.gain = 278;
     chain.booster_wide.spread = 444;
+    apply_master_capture_case(&mut chain, editor, view);
+    let _ = session.edit(EditCommand::SetMaster(chain));
+}
+
+fn apply_master_capture_case(chain: &mut MasterChain, editor: Option<PedalKind>, view: &str) {
     match (editor, view) {
         (Some(PedalKind::SoftClip), _) => {
             chain.soft_clip.amount = 6.0;
@@ -85,6 +93,23 @@ fn master_board(session: &mut Session, view: &str) {
         (Some(PedalKind::Tape), _) => {
             chain.tape.drive = 6.5;
             chain.tape.speed = 15;
+        }
+        (Some(PedalKind::BusCompressor), _) => {
+            chain.bus_compressor.threshold = -11.0;
+            chain.bus_compressor.ratio = 2.5;
+            chain.bus_compressor.sc_hpf_hz = 90.0;
+            chain.bus_compressor.mix = 85.0;
+            chain.bus_compressor.makeup_db = 0.8;
+        }
+        (Some(PedalKind::Multiband), _) => {
+            chain.multiband.low = 55.0;
+            chain.multiband.mid = 45.0;
+            chain.multiband.high = 50.0;
+        }
+        (Some(PedalKind::Limiter), _) => {
+            chain.limiter.gain = 3.0;
+            chain.limiter.ceiling = -1.0;
+            chain.limiter.style = mixjam_techno::application::LimiterStyle::Modern;
         }
         (_, "master-reordered") => {
             chain.move_pedal(9, 0);
@@ -95,7 +120,6 @@ fn master_board(session: &mut Session, view: &str) {
         (_, "master-bypass") => chain.bypass = true,
         _ => {}
     }
-    let _ = session.edit(EditCommand::SetMaster(chain));
 }
 
 /// Hi-hats tamed: a low cut, a dip at the harsh band, and less top.

@@ -2,11 +2,52 @@
 //! controls, saturation curves, and master meter readings.
 use super::*;
 
+use mixjam_techno::application::LimiterStyle;
+
 pub(in super::super) const DEEP_EDIT_TITLE: &str = "Mastering deep edit";
 const WINDOW_WIDTH: f32 = 780.0;
 // The shell adds 68 points outside this height and uses 12 inside for its inset.
 const WINDOW_BODY_HEIGHT: f32 = 412.0;
 const WORKSPACE_MIN: Vec2 = Vec2::new(650.0, 400.0);
+const GR_HISTORY_LEN: usize = 96;
+/// Seconds between two points of a gain-reduction history.
+const GR_HISTORY_STEP: f64 = 0.06;
+
+/// The measured gain reductions of one playback, oldest first.
+#[derive(Clone)]
+struct GrTrace {
+    samples: [f32; GR_HISTORY_LEN],
+    run: u32,
+    /// When the newest point was taken, before the first point `None`.
+    last_t: Option<f64>,
+}
+
+impl Default for GrTrace {
+    fn default() -> Self {
+        Self {
+            samples: [0.0; GR_HISTORY_LEN],
+            run: 0,
+            last_t: None,
+        }
+    }
+}
+
+impl GrTrace {
+    /// Add the current reduction once per step. A new playback starts empty.
+    fn record(&mut self, run: u32, current_db: f32, now: f64) {
+        if self.run != run {
+            *self = Self {
+                run,
+                ..Self::default()
+            };
+        }
+        if self.last_t.is_none_or(|last| now - last >= GR_HISTORY_STEP) {
+            self.samples.copy_within(1.., 0);
+            self.samples[GR_HISTORY_LEN - 1] = current_db;
+            self.last_t = Some(now);
+        }
+    }
+}
 
 pub(in super::super) fn show_deep_edit(
     ctx: &egui::Context,
@@ -70,10 +111,15 @@ fn workspace(
         Pos2::new(rect.left(), top),
         Pos2::new(rect.left() + left_w, rect.bottom()),
     );
-    if has_transfer_curve(*active) {
-        let scope_h = (bay.height() - 194.0).min(152.0);
+    if has_deep_scope(*active) {
+        let two_rows = *active == PedalKind::BusCompressor;
+        let scope_h = if two_rows {
+            (bay.height() - 208.0).clamp(96.0, 140.0)
+        } else {
+            (bay.height() - 194.0).min(152.0)
+        };
         let scope = Rect::from_min_size(bay.min, Vec2::new(left_w, scope_h));
-        scope_panel(ui, scope, *active, chain);
+        scope_panel(ui, scope, *active, chain, metering);
         bay.min.y += scope_h + 8.0;
     }
     let telemetry = Rect::from_min_max(Pos2::new(bay.right() + 10.0, top), rect.max);
@@ -208,23 +254,104 @@ fn chain_ribbon(ui: &mut egui::Ui, rect: Rect, active: &mut PedalKind, chain: &M
     }
 }
 
-fn has_transfer_curve(kind: PedalKind) -> bool {
+fn has_deep_scope(kind: PedalKind) -> bool {
     matches!(
         kind,
-        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape
+        PedalKind::SoftClip
+            | PedalKind::Tube
+            | PedalKind::Maximizer
+            | PedalKind::Tape
+            | PedalKind::BusCompressor
+            | PedalKind::Multiband
+            | PedalKind::Limiter
     )
 }
 
-fn scope_panel(ui: &egui::Ui, rect: Rect, kind: PedalKind, chain: &MasterChain) {
-    let mut points = [0.0_f32; 65];
-    mixjam_techno::application::sample_saturation_curve(chain, kind, &mut points);
-    controls::instrument::scope_frame(
+fn update_gr_history(
+    ui: &egui::Ui,
+    kind: PedalKind,
+    current_db: f32,
+    metering: &Metering,
+) -> [f32; GR_HISTORY_LEN] {
+    let now = ui.ctx().input(|input| input.time);
+    let id = ui.id().with(("deep-gr-history", kind));
+    let mut trace: GrTrace = ui.ctx().data(|data| data.get_temp(id)).unwrap_or_default();
+    if metering.playing {
+        trace.record(metering.reading.run, current_db, now);
+    } else {
+        trace = GrTrace::default();
+    }
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(id, trace.clone()));
+    trace.samples
+}
+
+fn draw_gr_history_scope(
+    ui: &egui::Ui,
+    rect: Rect,
+    kind: PedalKind,
+    chain: &MasterChain,
+    metering: &Metering,
+) {
+    let current = if !chain.is_on(kind) || !metering.playing {
+        0.0
+    } else if kind == PedalKind::BusCompressor {
+        metering.reading.compressor_reduction
+    } else {
+        metering.reading.limiter_reduction
+    };
+    let history = update_gr_history(ui, kind, current, metering);
+    controls::instrument::gr_history_scope(
         ui,
         rect,
-        &format!("{} transfer curve", name(kind)),
-        &points,
+        &format!("{} GR history", name(kind)),
+        &history,
+        12.0,
+        current,
         family_accent(kind),
     );
+}
+
+fn scope_panel(
+    ui: &egui::Ui,
+    rect: Rect,
+    kind: PedalKind,
+    chain: &MasterChain,
+    metering: &Metering,
+) {
+    let accent = family_accent(kind);
+    match kind {
+        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape => {
+            let mut points = [0.0_f32; 65];
+            mixjam_techno::application::sample_saturation_curve(chain, kind, &mut points);
+            controls::instrument::scope_frame(
+                ui,
+                rect,
+                &format!("{} transfer curve", name(kind)),
+                &points,
+                accent,
+            );
+        }
+        PedalKind::BusCompressor | PedalKind::Limiter => {
+            draw_gr_history_scope(ui, rect, kind, chain, metering);
+        }
+        PedalKind::Multiband => {
+            let bands = if chain.is_on(kind) && metering.playing {
+                metering.reading.multiband_reduction
+            } else {
+                [0.0; 3]
+            };
+            controls::instrument::multiband_gr_scope(
+                ui,
+                rect,
+                "Multiband 3-band GR",
+                bands,
+                12.0,
+                accent,
+            );
+        }
+        _ => {}
+    }
 }
 
 fn parameter_bays(ui: &mut egui::Ui, rect: Rect, kind: PedalKind, chain: &mut MasterChain) {
@@ -234,24 +361,90 @@ fn parameter_bays(ui: &mut egui::Ui, rect: Rect, kind: PedalKind, chain: &mut Ma
     let on = chain.is_on(kind);
     let knobs = kind.knobs();
     let total = knobs.len() + usize::from(kind == PedalKind::Tape);
-    let cols = total.clamp(1, 5);
+    let cols = if kind == PedalKind::BusCompressor {
+        4
+    } else {
+        total.clamp(1, 5)
+    };
     let rows = total.div_ceil(cols).max(1);
     let body = Rect::from_min_max(rect.min + Vec2::new(8.0, 22.0), rect.max - Vec2::splat(6.0));
-    let cell_w = body.width() / cols as f32;
-    let cell_h = body.height() / rows as f32;
+    let knob_area = if kind == PedalKind::Limiter {
+        Rect::from_min_max(body.min, body.max - Vec2::new(0.0, 40.0))
+    } else {
+        body
+    };
+    let cell_w = knob_area.width() / cols as f32;
+    let cell_h = knob_area.height() / rows as f32;
 
     ui.scope(|ui| {
         for (slot, knob) in knobs.iter().enumerate() {
             let (col, row) = (slot % cols, slot / cols);
-            let cx = body.left() + (col as f32 + 0.5) * cell_w;
-            let top = body.top() + row as f32 * cell_h;
+            let cx = knob_area.left() + (col as f32 + 0.5) * cell_w;
+            let top = knob_area.top() + row as f32 * cell_h;
             draw_deep_knob(ui, *knob, cx, top, cell_w, chain, on);
         }
         if kind == PedalKind::Tape {
-            let cx = body.left() + 1.5 * cell_w;
-            draw_deep_tape_speed(ui, cx, body.top(), chain, on);
+            let cx = knob_area.left() + 1.5 * cell_w;
+            draw_deep_tape_speed(ui, cx, knob_area.top(), chain, on);
+        }
+        if kind == PedalKind::Limiter {
+            let style_row =
+                Rect::from_min_max(Pos2::new(body.left(), knob_area.bottom() + 4.0), body.max);
+            limiter_style_selector(ui, style_row, &mut chain.limiter.style, on);
         }
     });
+}
+
+fn limiter_style_selector(ui: &mut egui::Ui, rect: Rect, style: &mut LimiterStyle, enabled: bool) {
+    ui.painter().text(
+        Pos2::new(rect.left() + 6.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        "Style",
+        FontId::proportional(11.0),
+        roles().legend,
+    );
+    let choices = [
+        (
+            LimiterStyle::Transparent,
+            "Transparent",
+            "Clean dual-stage limiting without pre-clipping.",
+        ),
+        (
+            LimiterStyle::Punchy,
+            "Punchy",
+            "Fast transient recovery with light soft shaving to keep drum snap.",
+        ),
+        (
+            LimiterStyle::Modern,
+            "Modern",
+            "Tightly linked release and soft micro-shave for dense club loudness.",
+        ),
+    ];
+    let start_x = rect.left() + 50.0;
+    let gap = 8.0;
+    let btn_w = ((rect.width() - 56.0 - gap * 2.0) / 3.0).max(76.0);
+    for (idx, (candidate, label, hint)) in choices.into_iter().enumerate() {
+        let btn = Rect::from_center_size(
+            Pos2::new(
+                start_x + (idx as f32 + 0.5) * btn_w + idx as f32 * gap,
+                rect.center().y,
+            ),
+            Vec2::new(btn_w, 24.0),
+        );
+        let selected = *style == candidate;
+        let access_name = format!("Deep edit Limiter style {label}");
+        let role = if selected {
+            controls::ButtonRole::Primary
+        } else {
+            controls::ButtonRole::Secondary
+        };
+        let resp = controls::button_at(ui, btn, &access_name, label, role, enabled);
+        resp.ctx
+            .accesskit_node_builder(resp.id, |node| node.set_selected(selected));
+        if name_control(resp, &access_name).hover_hint(hint).clicked() {
+            *style = candidate;
+        }
+    }
 }
 
 fn draw_deep_knob(
@@ -388,17 +581,55 @@ fn telemetry_rows(
         }
     };
     let reduction = match kind {
-        PedalKind::BusCompressor => Some(reading.compressor_reduction),
-        PedalKind::Limiter => Some(reading.limiter_reduction),
+        PedalKind::BusCompressor => Some(("Gain reduction", reading.compressor_reduction)),
+        PedalKind::Multiband => {
+            let peak = reading
+                .multiband_reduction
+                .into_iter()
+                .fold(0.0_f32, f32::max);
+            Some(("Band GR", peak))
+        }
+        PedalKind::Limiter => Some(("Gain reduction", reading.limiter_reduction)),
         _ => None,
     };
     [("Input VU", live(reading.input_vu), "VU")]
         .into_iter()
-        .chain(reduction.map(|gr| ("Gain reduction", live(gr), "dB")))
+        .chain(reduction.map(|(label, gr)| (label, live(gr), "dB")))
         .chain([
             ("Momentary", live(reading.momentary), "LUFS"),
             ("Short-term", live(reading.short_term), "LUFS"),
             ("Integrated", reading.integrated, "LUFS"),
             ("True peak", reading.true_peak_max, "dBTP"),
         ])
+}
+
+#[cfg(test)]
+mod gr_trace_tests {
+    use super::{GR_HISTORY_LEN, GR_HISTORY_STEP, GrTrace};
+
+    #[test]
+    fn the_gain_reduction_history_holds_only_measured_points() {
+        let mut trace = GrTrace::default();
+        trace.record(1, 3.0, 0.0);
+        // Only the reading appears; the older points stay empty.
+        assert_eq!(trace.samples[GR_HISTORY_LEN - 1], 3.0);
+        assert!(
+            trace.samples[..GR_HISTORY_LEN - 1]
+                .iter()
+                .all(|db| *db == 0.0)
+        );
+        // A redraw within one step adds no point.
+        trace.record(1, 5.0, GR_HISTORY_STEP / 2.0);
+        assert_eq!(trace.samples[GR_HISTORY_LEN - 2..], [0.0, 3.0]);
+        trace.record(1, 1.5, GR_HISTORY_STEP);
+        assert_eq!(trace.samples[GR_HISTORY_LEN - 3..], [0.0, 3.0, 1.5]);
+        // The next playback starts empty.
+        trace.record(2, 0.5, 2.0 * GR_HISTORY_STEP);
+        assert_eq!(trace.samples[GR_HISTORY_LEN - 1], 0.5);
+        assert!(
+            trace.samples[..GR_HISTORY_LEN - 1]
+                .iter()
+                .all(|db| *db == 0.0)
+        );
+    }
 }

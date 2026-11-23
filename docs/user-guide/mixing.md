@@ -141,8 +141,21 @@ below the board.
 
 Select **Edit** on a pedal, or double-click its name in the strip, to open
 **Mastering deep edit**. Select a pedal in the window's signal-order strip
-to get its full set of controls. The window shows the master meters and, for
-the saturation pedals, a preview of the transfer curve.
+to get its full set of controls. The window shows the master meters and a
+scope for some pedals:
+
+- Soft clip, Tube, Maximizer, and Tape show a preview of the transfer curve.
+- Bus compressor and Limiter show the gain reduction of the last seconds of
+  playback.
+- Multiband shows the gain reduction of its low, mid, and high bands.
+
+The Bus compressor has three more dials in this window. **SC HPF** removes
+low frequencies from what the compressor listens to, so the kick does not
+pull down the full mix. **Mix** blends the compressed mix with the dry mix.
+**Makeup** adds level after the compression. The Limiter has a **Style**
+selector. **Transparent** only limits. **Punchy** and **Modern** also shave
+the loudest peaks softly before the limiter, and recover faster after a
+transient.
 
 ### Key dials
 

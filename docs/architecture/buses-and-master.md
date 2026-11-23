@@ -106,9 +106,16 @@ requested depth, within the bounds of the new space.
   - the setting glide (`Smoothed`)
   - the biquad filters and a chain of them (`cascade`)
   - oversampling and true-peak interpolation
-  - the lookahead limiter gain (`LookaheadGain`)
+  - the lookahead limiter gain (`LookaheadGain`) and its ramp (`Ramp`)
 
-The limiters of the pedals and of the FX buses use the same `LookaheadGain`.
+The Maximizer's output guard and the limiters of the FX buses use
+`LookaheadGain`, which recovers with one release. The Multiband and the
+Limiter use `DualStageGain` in `pedals/dynamics.rs`: a fast release after a
+transient and a slow release after sustained reduction, through the same
+`Ramp`. The Limiter's Punchy and Modern styles also shave peaks softly
+before the lookahead gain. A style change fades that shave in or out over
+the setting glide, because the shave has no zero depth that leaves loud
+peaks unchanged.
 
 `MasterChain` is `Copy`. Its `order` is a fixed array that names each pedal one
 time. Thus a settings copy never allocates on the audio thread, and the state of

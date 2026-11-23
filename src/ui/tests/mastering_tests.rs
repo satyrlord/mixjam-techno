@@ -724,6 +724,7 @@ fn mastering_meters_show_the_playback_reading() {
         input_peaks: [false, true],
         input_peak_counts: [0, 1],
         compressor_reduction: 1.7,
+        multiband_reduction: [2.1, 1.4, 0.9],
         limiter_reduction: 2.6,
         momentary: -12.6,
         short_term: -13.4,

@@ -122,9 +122,36 @@ pub(crate) struct LookaheadGain<T, const LOOKAHEAD: usize, const SPAN: usize> {
     span: usize,
     held: T,
     release: T,
-    ramp: [f64; LOOKAHEAD],
-    ramp_at: usize,
-    ramp_sum: f64,
+    ramp: Ramp<LOOKAHEAD>,
+}
+
+/// The mean of the last `N` held gains, at most 1. A lookahead limiter
+/// ramps its gain with it, so the gain is already down when a peak arrives.
+#[derive(Clone, Copy)]
+pub(crate) struct Ramp<const N: usize> {
+    held: [f64; N],
+    at: usize,
+    sum: f64,
+}
+impl<const N: usize> Ramp<N> {
+    pub(crate) const UNITY: Self = Self {
+        held: [1.0; N],
+        at: 0,
+        sum: N as f64,
+    };
+
+    #[inline]
+    pub(crate) fn push(&mut self, held: f64) -> f64 {
+        self.sum += held - self.held[self.at];
+        self.held[self.at] = held;
+        self.at += 1;
+        if self.at == N {
+            // Recount now and then, so rounding cannot build up.
+            self.at = 0;
+            self.sum = self.held.iter().sum();
+        }
+        (self.sum / N as f64).min(1.0)
+    }
 }
 impl<T: Held, const LOOKAHEAD: usize, const SPAN: usize> LookaheadGain<T, LOOKAHEAD, SPAN> {
     /// `span` is at most `SPAN`, and `release` is the release's pole.
@@ -134,9 +161,7 @@ impl<T: Held, const LOOKAHEAD: usize, const SPAN: usize> LookaheadGain<T, LOOKAH
             span,
             held: T::ONE,
             release,
-            ramp: [1.0; LOOKAHEAD],
-            ramp_at: 0,
-            ramp_sum: LOOKAHEAD as f64,
+            ramp: Ramp::UNITY,
         }
     }
     /// Forget every need, and keep the span and the release.
@@ -153,16 +178,7 @@ impl<T: Held, const LOOKAHEAD: usize, const SPAN: usize> LookaheadGain<T, LOOKAH
         } else {
             T::release(lowest, self.held, self.release)
         };
-        let held: f64 = self.held.into();
-        self.ramp_sum += held - self.ramp[self.ramp_at];
-        self.ramp[self.ramp_at] = held;
-        self.ramp_at += 1;
-        if self.ramp_at == LOOKAHEAD {
-            // Recount now and then, so rounding cannot build up.
-            self.ramp_at = 0;
-            self.ramp_sum = self.ramp.iter().sum();
-        }
-        (self.ramp_sum / LOOKAHEAD as f64).min(1.0)
+        self.ramp.push(self.held.into())
     }
 }
 

@@ -166,12 +166,17 @@ impl MasterProcessor {
             } else {
                 0.0
             };
+            let multiband = if board.chain.runs(PedalKind::Multiband) {
+                board.multiband.take_reductions()
+            } else {
+                [0.0; 3]
+            };
             let limiter = if board.chain.runs(PedalKind::Limiter) {
                 board.limiter.take_reduction()
             } else {
                 0.0
             };
-            meters.publish(&control.meters, compressor, limiter);
+            meters.publish(&control.meters, compressor, multiband, limiter);
         }
     }
     /// Complete delayed peak measurement after the last audible frame.

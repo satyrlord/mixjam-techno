@@ -188,10 +188,10 @@ fn digests() -> Vec<(String, u64)> {
 fn every_render_path_keeps_its_samples() {
     let actual = digests();
     let expected: &[(&str, u64)] = &[
-        ("export, later ducker false", 0xe0bfefbc8c94ee4f),
+        ("export, later ducker false", 0xda8d972aee19c818),
         (
             "export without buses, later ducker false",
-            0xc0b0a73765e7b9a3,
+            0x9efd13452d0c7631,
         ),
         ("stem 0, later ducker false", 0x80b2a787acb82c19),
         ("stem 1, later ducker false", 0xefac1d01627c866f),
@@ -200,25 +200,25 @@ fn every_render_path_keeps_its_samples() {
         ("stem 4, later ducker false", 0x8e522612e0cae6e9),
         (
             "playback in 256-frame blocks, later ducker false",
-            0x560d5c3918fd81f1,
+            0x577fb643b7fcb1f6,
         ),
         (
             "playback in 100-frame blocks, later ducker false",
-            0x560d5c3918fd81f1,
+            0x577fb643b7fcb1f6,
         ),
         (
             "playback from a later start, later ducker false",
-            0x955424e545ce1f25,
+            0xf7a4a7f9464a0540,
         ),
         (
             "playback through a loop, later ducker false",
-            0x7907beacf3d5b0db,
+            0xca2eba283e96a8e0,
         ),
         ("read, later ducker false", 0x937f6d5ad8872edf),
-        ("export, later ducker true", 0x0ef1631a1c6b3148),
+        ("export, later ducker true", 0x4f1989b256e7dd4f),
         (
             "export without buses, later ducker true",
-            0xaf5dea72c6b14407,
+            0x4ca60d3b2d1e0c0b,
         ),
         ("stem 0, later ducker true", 0x9278d153d59cfcdd),
         ("stem 1, later ducker true", 0xb6ad07949a603e6f),
@@ -227,22 +227,22 @@ fn every_render_path_keeps_its_samples() {
         ("stem 4, later ducker true", 0xaabcfec537ff4ee9),
         (
             "playback in 256-frame blocks, later ducker true",
-            0x156099774923dac1,
+            0xb69bae484a2095c1,
         ),
         (
             "playback in 100-frame blocks, later ducker true",
-            0x156099774923dac1,
+            0xb69bae484a2095c1,
         ),
         (
             "playback from a later start, later ducker true",
-            0x2e2879601ccb16e0,
+            0x8ba08b6f7538a3a8,
         ),
         (
             "playback through a loop, later ducker true",
-            0x599e96a141f8193f,
+            0x7aa5632531d9f096,
         ),
         ("read, later ducker true", 0xe04c2ac476adfad5),
-        ("decoded audio through the board", 0xe5f3cdd18320e637),
+        ("decoded audio through the board", 0xf70603c6afdbde4c),
         ("decoded audio alone", 0x91a1607d612e209f),
     ];
     let listed: String = actual

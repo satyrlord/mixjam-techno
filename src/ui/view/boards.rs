@@ -762,7 +762,10 @@ impl MixJamApp {
     }
 
     fn master_metering(&mut self, ctx: &egui::Context) -> master::Metering {
-        let sample = self.capture_view_is("master-metering");
+        let sample = self.capture_view_is("master-metering")
+            || self.capture_view_is("master-deep-edit-comp")
+            || self.capture_view_is("master-deep-edit-multiband")
+            || self.capture_view_is("master-deep-edit-limiter");
         let reduced = self.session.options().meter_display_rate
             == mixjam_techno::application::options::MeterDisplayRate::Reduced;
         master::Metering {
@@ -774,6 +777,7 @@ impl MixJamApp {
                     input_peaks: [false, true],
                     input_peak_counts: [0, 1],
                     compressor_reduction: 1.7,
+                    multiband_reduction: [2.1, 1.4, 0.9],
                     limiter_reduction: 2.6,
                     momentary: -12.6,
                     short_term: -13.4,
@@ -855,6 +859,25 @@ pub(in super::super) struct MeterDisplay {
 }
 
 impl MeterDisplay {
+    fn merge_pending(&mut self, reading: MeterReading) {
+        let peaks = std::array::from_fn::<_, 2, _>(|side| {
+            self.pending.input_peaks[side]
+                || self.pending.input_peak_counts[side] != reading.input_peak_counts[side]
+        });
+        let true_peak = self.pending.true_peak;
+        let compressor = self.pending.compressor_reduction;
+        let multiband = self.pending.multiband_reduction;
+        let limiter = self.pending.limiter_reduction;
+        self.pending = reading;
+        self.pending.input_peaks =
+            std::array::from_fn(|side| peaks[side] || reading.input_peaks[side]);
+        self.pending.true_peak = true_peak.max(reading.true_peak);
+        self.pending.compressor_reduction = compressor.max(reading.compressor_reduction);
+        self.pending.multiband_reduction =
+            std::array::from_fn(|band| multiband[band].max(reading.multiband_reduction[band]));
+        self.pending.limiter_reduction = limiter.max(reading.limiter_reduction);
+    }
+
     /// Keep transient peaks between draws. Audio still measures every block.
     pub(in super::super) fn sample(
         &mut self,
@@ -870,19 +893,7 @@ impl MeterDisplay {
             self.shown = reading;
             self.next = now;
         } else {
-            let peaks = std::array::from_fn::<_, 2, _>(|side| {
-                self.pending.input_peaks[side]
-                    || self.pending.input_peak_counts[side] != reading.input_peak_counts[side]
-            });
-            let true_peak = self.pending.true_peak;
-            let compressor = self.pending.compressor_reduction;
-            let limiter = self.pending.limiter_reduction;
-            self.pending = reading;
-            self.pending.input_peaks =
-                std::array::from_fn(|side| peaks[side] || reading.input_peaks[side]);
-            self.pending.true_peak = true_peak.max(reading.true_peak);
-            self.pending.compressor_reduction = compressor.max(reading.compressor_reduction);
-            self.pending.limiter_reduction = limiter.max(reading.limiter_reduction);
+            self.merge_pending(reading);
         }
         if !reduced || now >= self.next {
             self.shown = self.pending;
@@ -890,6 +901,7 @@ impl MeterDisplay {
             self.pending.input_peaks = [false; 2];
             self.pending.true_peak = f32::NEG_INFINITY;
             self.pending.compressor_reduction = 0.0;
+            self.pending.multiband_reduction = [0.0; 3];
             self.pending.limiter_reduction = 0.0;
             self.next = now + 1.0 / 15.0;
         }

@@ -236,6 +236,24 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "How fast compression lets go.",
             Format::whole("ms"),
         ),
+        Knob::CompressorScHpf => (
+            "SC HPF",
+            "Bus compressor sidechain high-pass",
+            "Filters sub bass out of the detector sidechain so the kick does not pump the highs.",
+            Format::whole("Hz"),
+        ),
+        Knob::CompressorMix => (
+            "Mix",
+            "Bus compressor mix",
+            "Parallel blend between dry signal and compressed mix.",
+            Format::whole("%"),
+        ),
+        Knob::CompressorMakeup => (
+            "Makeup",
+            "Bus compressor makeup",
+            "Output gain after compression.",
+            Format::db(true),
+        ),
         Knob::MaximizerBoost => (
             "Boost",
             "Maximizer boost",

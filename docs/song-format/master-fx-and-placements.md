@@ -45,7 +45,8 @@ Version 28 adds these saved values:
 
 Earlier songs reject these keys, including explicit defaults. The reader uses
 the defaults for missing keys. The writer omits values at their defaults.
-The settings are stored for the planned dynamics upgrade.
+Playback and export use these values. At their defaults, the Bus compressor
+has no sidechain filter, no dry blend, and no makeup gain.
 
 Versions 11 to 15 name the three Booster pedals with earlier keys, in the
 record and in `order`. `BOOSTER_KEYS` in `src/mixjam/song/migration.rs` lists

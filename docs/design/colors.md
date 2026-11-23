@@ -118,8 +118,9 @@ peak lamps. The Output unit shows:
 - a true-peak bar with a Mastering Red line at -1 dBTP,
 - a Mastering Red OVER lamp in the position of the lamp of a pedal.
 
-The gain-reduction lamps on the Bus compressor and Limiter are Mastering
-Amber. These four tokens are local to the board.
+The gain-reduction lamps on the Bus compressor and Limiter, and the L, M, and
+H reduction bars on the Multiband, are Mastering Amber. These four tokens are
+local to the board.
 
 Each dynamics pedal ends its dials with Key, which reads Own or a track
 number. The five dials of the Bus compressor take three columns, and the three

@@ -158,7 +158,7 @@ impl MasterChain {
         if self.bypass != other.bypass
             || self.order != other.order
             || self.tape.speed != other.tape.speed
-            || self.advanced_dynamics() != other.advanced_dynamics()
+            || self.limiter.style != other.limiter.style
             || PedalKind::ALL
                 .into_iter()
                 .any(|kind| self.is_on(kind) != other.is_on(kind))
@@ -168,14 +168,6 @@ impl MasterChain {
         let mut changed = Knob::all().filter(|knob| knob.get(self) != knob.get(other));
         let knob = changed.next()?;
         changed.next().is_none().then_some(knob)
-    }
-
-    fn advanced_dynamics(&self) -> ([f32; 3], super::LimiterStyle) {
-        let compressor = self.bus_compressor;
-        (
-            [compressor.sc_hpf_hz, compressor.mix, compressor.makeup_db],
-            self.limiter.style,
-        )
     }
     /// The trim as a gain: unity while the board is bypassed.
     pub(super) fn trim_gain(&self) -> f64 {
@@ -195,21 +187,12 @@ impl MasterChain {
         if self.order.last() != Some(&PedalKind::Limiter) {
             return Err("The limiter must be the last master pedal.".into());
         }
-        if !Knob::all().all(|knob| knob.range().contains(knob.get(self)))
-            || !self.advanced_dynamics_in_range()
-        {
+        if !Knob::all().all(|knob| knob.range().contains(knob.get(self))) {
             return Err("A master pedal setting is out of range.".into());
         }
         if ![15, 30].contains(&self.tape.speed) {
             return Err("The tape speed must be 15 or 30 inches per second.".into());
         }
         Ok(())
-    }
-
-    fn advanced_dynamics_in_range(&self) -> bool {
-        let compressor = self.bus_compressor;
-        (20.0..=250.0).contains(&compressor.sc_hpf_hz)
-            && (0.0..=100.0).contains(&compressor.mix)
-            && (0.0..=12.0).contains(&compressor.makeup_db)
     }
 }

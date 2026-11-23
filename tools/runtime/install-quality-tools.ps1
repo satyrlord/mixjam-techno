@@ -1,5 +1,5 @@
 #requires -Version 7.0
-# Installs the measurement tools of the ub-mode skill into the local toolchain:
+# Installs the change measurement tools into the local toolchain:
 # line coverage and function complexity. Run
 # install-rust.ps1 first. The duplication tool, jscpd, is an npm development
 # dependency: `npm ci` installs it.

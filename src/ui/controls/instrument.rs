@@ -377,23 +377,42 @@ pub(in super::super) fn scope_frame(
 
     if points.len() >= 2 {
         let denom = (points.len() - 1) as f32;
-        let to_screen = |i: usize, val: f32| {
-            let x = plot.left() + (i as f32 / denom) * plot.width();
-            Pos2::new(x, y(val))
-        };
         let poly: Vec<Pos2> = points
             .iter()
             .enumerate()
-            .map(|(i, &v)| to_screen(i, v))
+            .map(|(i, &v)| Pos2::new(plot.left() + (i as f32 / denom) * plot.width(), y(v)))
             .collect();
-        if r.material != Material::Flat {
-            painter.add(egui::Shape::line(
-                poly.clone(),
-                Stroke::new(3.5_f32, trace.gamma_multiply(0.28)),
-            ));
-        }
-        painter.add(egui::Shape::line(poly, Stroke::new(1.8_f32, trace)));
+        draw_glow_trace(painter, poly, trace, r.material != Material::Flat);
     }
+}
+
+fn draw_glow_trace(painter: &egui::Painter, poly: Vec<Pos2>, trace: Color32, glow: bool) {
+    if glow {
+        painter.add(egui::Shape::line(
+            poly.clone(),
+            Stroke::new(3.5_f32, trace.gamma_multiply(0.28)),
+        ));
+    }
+    painter.add(egui::Shape::line(poly, Stroke::new(1.8_f32, trace)));
+}
+
+fn draw_horiz_fractions(painter: &egui::Painter, plot: Rect, fractions: &[f32], grid: Color32) {
+    for &frac in fractions {
+        let y = plot.top() + frac * plot.height();
+        painter.line_segment(
+            [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
+            Stroke::new(1.0_f32, grid.gamma_multiply(0.7)),
+        );
+    }
+}
+
+fn hover_access_label(ui: &egui::Ui, rect: Rect, title: &str, value: String) {
+    let response = ui.interact(rect, ui.id().with(title), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
+    response.ctx.accesskit_node_builder(response.id, |node| {
+        node.set_label(title);
+        node.set_value(value);
+    });
 }
 
 /// Plot the magnitudes of `(norm_t, L, R)` taps in separate left and right lanes.
@@ -494,6 +513,122 @@ fn draw_decay_curve(
         .add(egui::Shape::line(poly, Stroke::new(width, color)));
 }
 
+/// A gain reduction as a level change: `-2.1 dB`, or `0.0 dB` below a twentieth of a dB.
+fn reduction_text(db: f32) -> String {
+    if db >= 0.05 {
+        format!("-{db:.1} dB")
+    } else {
+        "0.0 dB".to_owned()
+    }
+}
+
+/// Top-down scrolling gain-reduction waveform scope (`0` dB at top to `-max_db`).
+pub(in super::super) fn gr_history_scope(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    history: &[f32],
+    max_db: f32,
+    current_db: f32,
+    accent: Color32,
+) {
+    let r = roles();
+    let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
+    let painter = ui.painter();
+    let tag = reduction_text(current_db);
+    painter.text(
+        Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
+        Align2::RIGHT_CENTER,
+        &tag,
+        FontId::proportional(9.5),
+        if current_db >= 0.05 { trace } else { r.legend },
+    );
+    draw_horiz_fractions(
+        painter,
+        plot,
+        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
+        grid,
+    );
+    if history.len() >= 2 {
+        let denom = (history.len() - 1) as f32;
+        let poly: Vec<Pos2> = history
+            .iter()
+            .enumerate()
+            .map(|(i, &db)| {
+                let frac = (db / max_db).clamp(0.0, 1.0);
+                Pos2::new(
+                    plot.left() + (i as f32 / denom) * plot.width(),
+                    plot.top() + frac * plot.height(),
+                )
+            })
+            .collect();
+        draw_glow_trace(painter, poly, trace, r.material != Material::Flat);
+    }
+    hover_access_label(ui, rect, title, format!("Current reduction {tag}"));
+}
+
+/// Top-down 3-band (`Low <200 Hz`, `Mid 200-3k`, `High >3 kHz`) gain-reduction meter scope.
+pub(in super::super) fn multiband_gr_scope(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    reductions: [f32; 3],
+    max_db: f32,
+    accent: Color32,
+) {
+    let r = roles();
+    let (full_plot, mid_color, grid, low_color) = draw_scope_chrome(ui, rect, title, accent);
+    let plot = Rect::from_min_max(full_plot.min, full_plot.max - Vec2::new(0.0, 14.0));
+    let painter = ui.painter();
+    draw_horiz_fractions(
+        painter,
+        plot,
+        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
+        grid,
+    );
+    let band_defs = [
+        ("LOW <200", low_color, reductions[0]),
+        ("MID 200-3k", mid_color, reductions[1]),
+        ("HIGH >3k", high_band_color(r.material), reductions[2]),
+    ];
+    let col_w = plot.width() / 3.0;
+    for (idx, (label, color, db)) in band_defs.iter().enumerate() {
+        let bar_w = (col_w * 0.48).clamp(24.0, 56.0);
+        let cx = plot.left() + (idx as f32 + 0.5) * col_w;
+        let track = Rect::from_min_max(
+            Pos2::new(cx - bar_w * 0.5, plot.top() + 2.0),
+            Pos2::new(cx + bar_w * 0.5, plot.bottom() - 2.0),
+        );
+        painter.rect_filled(track, 2.0, r.well_edge.gamma_multiply(0.35));
+        let frac = (*db / max_db).clamp(0.0, 1.0);
+        if frac > 0.005 {
+            let fill = Rect::from_min_max(
+                track.min,
+                Pos2::new(track.right(), track.top() + track.height() * frac),
+            );
+            painter.rect_filled(fill, 2.0, *color);
+        }
+        painter.text(
+            Pos2::new(cx, rect.bottom() - 9.0),
+            Align2::CENTER_CENTER,
+            format!("{label}  {}", reduction_text(*db)),
+            FontId::proportional(9.0),
+            r.legend,
+        );
+    }
+    hover_access_label(
+        ui,
+        rect,
+        title,
+        format!(
+            "Low {}, Mid {}, High {}",
+            reduction_text(reductions[0]),
+            reduction_text(reductions[1]),
+            reduction_text(reductions[2])
+        ),
+    );
+}
+
 /// Plot the early reflections, the pre-delay, and the decay of the low,
 /// middle, and high bands of a reverb, with their times in the footer.
 pub(in super::super) fn reverb_scope_frame(
@@ -520,13 +655,7 @@ pub(in super::super) fn reverb_scope_frame(
         plot.max.y = early.top() - 6.0;
     }
     // -20 and -40 dB; the bottom edge is -60 dB.
-    for level in [1.0_f32 / 3.0, 2.0 / 3.0] {
-        let y = plot.bottom() - level * plot.height();
-        painter.line_segment(
-            [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
-            Stroke::new(1.0_f32, grid.gamma_multiply(0.7)),
-        );
-    }
+    draw_horiz_fractions(painter, plot, &[1.0 / 3.0, 2.0 / 3.0], grid);
     let pre_x = plot.left() + profile.pre_delay_norm * plot.width();
     painter.line_segment(
         [
@@ -685,7 +814,10 @@ mod tests {
 
     #[test]
     fn instrument_controls_render_telemetry_scope_and_all_materials() {
-        use super::{bay, delay_scope_frame, meter_bar, reverb_scope_frame, scope_frame};
+        use super::{
+            bay, delay_scope_frame, gr_history_scope, meter_bar, multiband_gr_scope,
+            reverb_scope_frame, scope_frame,
+        };
         use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
         use mixjam_techno::application::FxBusMeterReading;
         use mixjam_techno::application::Session;
@@ -805,6 +937,23 @@ mod tests {
                             "Decay & Space",
                             "HALL · BLOOM +12",
                             &profile,
+                            accent,
+                        );
+                        gr_history_scope(
+                            ui,
+                            Rect::from_min_size(Pos2::new(20.0, 480.0), Vec2::new(240.0, 90.0)),
+                            "Bus compressor GR history",
+                            &[0.0, 1.5, 2.4, 1.2],
+                            12.0,
+                            1.7,
+                            accent,
+                        );
+                        multiband_gr_scope(
+                            ui,
+                            Rect::from_min_size(Pos2::new(280.0, 480.0), Vec2::new(240.0, 90.0)),
+                            "Multiband 3-band GR",
+                            [2.1, 1.4, 0.9],
+                            12.0,
                             accent,
                         );
                     });

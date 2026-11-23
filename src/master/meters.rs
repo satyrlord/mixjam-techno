@@ -25,9 +25,11 @@ pub struct MeterReading {
     /// Per-channel peak-block counts in this playback. Display readers can
     /// retain peaks between draws without consuming another reader's events.
     pub input_peak_counts: [u32; 2],
-    /// Gain reduction of the bus compressor and of the limiter in the last
+    /// Gain reduction of the bus compressor, the three multiband bands
+    /// (`<200 Hz`, `200 Hz–3 kHz`, `>3 kHz`), and the limiter in the last
     /// block, in dB.
     pub compressor_reduction: f32,
+    pub multiband_reduction: [f32; 3],
     pub limiter_reduction: f32,
     /// Output loudness in LUFS over the last 400 ms and 3 s, and gated over
     /// the whole playback.
@@ -49,6 +51,7 @@ impl Default for MeterReading {
             input_peaks: [false; 2],
             input_peak_counts: [0; 2],
             compressor_reduction: 0.0,
+            multiband_reduction: [0.0; 3],
             limiter_reduction: 0.0,
             momentary: f32::NEG_INFINITY,
             short_term: f32::NEG_INFINITY,
@@ -71,6 +74,7 @@ pub(super) struct Shared {
     input_peaks: AtomicU32,
     input_peak_counts: [AtomicU64; 2],
     compressor_reduction: AtomicU32,
+    multiband_reduction: [AtomicU32; 3],
     limiter_reduction: AtomicU32,
     momentary: AtomicU32,
     short_term: AtomicU32,
@@ -90,6 +94,7 @@ impl Shared {
             input_peaks: AtomicU32::new(0),
             input_peak_counts: [AtomicU64::new(0), AtomicU64::new(0)],
             compressor_reduction: AtomicU32::new(0),
+            multiband_reduction: std::array::from_fn(|_| AtomicU32::new(0)),
             limiter_reduction: AtomicU32::new(0),
             momentary: level(),
             short_term: level(),
@@ -141,6 +146,13 @@ impl Shared {
             });
         }
         float(&self.compressor_reduction, reading.compressor_reduction);
+        for (slot, value) in self
+            .multiband_reduction
+            .iter()
+            .zip(reading.multiband_reduction)
+        {
+            float(slot, value);
+        }
         float(&self.limiter_reduction, reading.limiter_reduction);
         float(&self.momentary, reading.momentary);
         float(&self.short_term, reading.short_term);
@@ -170,6 +182,7 @@ impl Shared {
                 }
             }),
             compressor_reduction: float(&self.compressor_reduction),
+            multiband_reduction: std::array::from_fn(|band| float(&self.multiband_reduction[band])),
             limiter_reduction: float(&self.limiter_reduction),
             momentary: float(&self.momentary),
             short_term: float(&self.short_term),
@@ -415,7 +428,13 @@ impl Meters {
         shared.store_current(&reading);
     }
     /// Publish the block's reading and start the next block.
-    pub(super) fn publish(&mut self, shared: &Shared, compressor: f32, limiter: f32) {
+    pub(super) fn publish(
+        &mut self,
+        shared: &Shared,
+        compressor: f32,
+        multiband: [f32; 3],
+        limiter: f32,
+    ) {
         let needle = self.needle[0][1].max(self.needle[1][1]);
         let block_peak = gain_to_db(f64::from(self.block_peak)) as f32;
         self.peak = self.peak.max(self.block_peak);
@@ -432,6 +451,7 @@ impl Meters {
             input_peaks,
             input_peak_counts: self.input_peak_counts,
             compressor_reduction: compressor,
+            multiband_reduction: multiband,
             limiter_reduction: limiter,
             momentary: self.loudness.momentary as f32,
             short_term: self.loudness.short_term as f32,
@@ -540,18 +560,19 @@ mod tests {
             meters.input(sample, sample);
             meters.output(sample, sample);
         }
-        meters.publish(&shared, 1.5, 0.0);
+        meters.publish(&shared, 1.5, [0.4, 0.8, 0.2], 0.0);
         let reading = shared.read();
         assert_eq!(reading.run, 1);
         assert!(reading.input_vu.abs() < 0.1, "{}", reading.input_vu);
         assert_eq!(reading.input_peaks, [false; 2]);
         assert_eq!(reading.compressor_reduction, 1.5);
+        assert_eq!(reading.multiband_reduction, [0.4, 0.8, 0.2]);
         assert_eq!(reading.overs, 0);
         for sample in tone(1000.0, 0.0, 0.1, RATE) {
             meters.input(sample, -sample);
             meters.output(sample, -sample);
         }
-        meters.publish(&shared, 0.0, 0.0);
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
         let reading = shared.read();
         assert_eq!(reading.input_peaks, [true; 2]);
         assert!(reading.true_peak.abs() < 0.05 && reading.true_peak_max.abs() < 0.05);
@@ -568,7 +589,7 @@ mod tests {
         );
         // The stopped playback can still finish a block, and its end, after
         // the next one starts; neither reaches the new readings.
-        meters.publish(&shared, 0.0, 0.0);
+        meters.publish(&shared, 0.0, [0.0; 3], 0.0);
         meters.finish(&shared);
         assert_eq!(
             shared.read(),
@@ -639,7 +660,7 @@ mod tests {
             next.input(sample, sample);
             next.output(sample, sample);
         }
-        next.publish(&shared, 0.0, 0.0);
+        next.publish(&shared, 0.0, [0.0; 3], 0.0);
         let reading = shared.read();
         assert_eq!(reading.run, next.run);
         assert_eq!(reading.overs, 0);
@@ -647,7 +668,7 @@ mod tests {
         for sample in tone(1000.0, 0.0, 0.1, RATE) {
             next.output(sample, sample);
         }
-        next.publish(&shared, 0.0, 0.0);
+        next.publish(&shared, 0.0, [0.0; 3], 0.0);
         assert_eq!(shared.read().overs, 1);
     }
 

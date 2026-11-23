@@ -106,7 +106,8 @@ The Mixer cases cover these states:
 - The EQ window of a track.
 
 The Mastering cases include a bypassed board and the Deep Edit window for
-Soft clip, Tape, and Booster EQ. The capture set also covers Help,
+Soft clip, Tape, Booster EQ, Bus compressor, Multiband, and Limiter. The last
+three show sample meter readings. The capture set also covers Help,
 Sample libraries, Import sound, Import details, Save your changes?, and Sample
 conflicts. The Album Review cases are the grid, a filtered grid, an album page,
 and a missing reviews folder. The set covers the three tool windows and the

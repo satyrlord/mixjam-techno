@@ -14,8 +14,8 @@
 //! drops. A board is "in" a preset while its pedals equal the preset's; the
 //! song saves the board, not the name.
 use super::{
-    BusCompressor, Imaging, Knob, LiftEq, Limiter, MasterChain, Maximizer, Multiband, SoftClip,
-    Tape, TrimEq, Tube,
+    BusCompressor, Imaging, Knob, LiftEq, Limiter, LimiterStyle, MasterChain, Maximizer, Multiband,
+    SoftClip, Tape, TrimEq, Tube,
 };
 use std::sync::LazyLock;
 
@@ -45,176 +45,176 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
     vec![
         preset("Subtle", |b| {
             b.trim_eq = trim_eq(20.0, -1.0, -0.5);
-            b.bus_compressor = compressor(-9.0, 1.5, 30.0, 300.0);
+            b.bus_compressor = compressor(-9.0, 1.5, 30.0, 300.0, 60.0, 80.0, 0.2);
             b.lift_eq = lift(0.5, 0.5);
             b.multiband = multiband(40.0);
-            b.limiter = limiter(1.5);
+            b.limiter = limiter(1.5, LimiterStyle::Transparent);
         }),
         preset("Revive", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(20.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0);
+            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0, 75.0, 85.0, 0.0);
             b.maximizer = maximizer(2.0);
             b.lift_eq = lift(1.0, 1.5);
             b.tape = tape(1.5, 30);
             b.imaging = imaging(110.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(2.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.5, LimiterStyle::Punchy);
         }),
         preset("Loud", |b| {
             b.trim_eq = trim_eq(25.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-11.0, 2.5, 15.0, 150.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-11.0, 2.5, 15.0, 150.0, 90.0, 90.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 1.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Techno", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-9.0, 2.0, 15.0, 150.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-9.0, 2.0, 15.0, 150.0, 90.0, 90.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 30);
             b.imaging = imaging(105.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Minimal", |b| {
             b.trim_eq = trim_eq(25.0, -1.0, -0.5);
-            b.bus_compressor = compressor(-10.0, 1.8, 20.0, 200.0);
+            b.bus_compressor = compressor(-10.0, 1.8, 20.0, 200.0, 70.0, 85.0, 0.2);
             b.lift_eq = lift(0.5, 1.0);
             b.imaging = imaging(105.0, 120.0);
-            b.multiband = multiband(40.0);
-            b.limiter = limiter(2.5);
+            b.multiband = multiband(35.0);
+            b.limiter = limiter(2.5, LimiterStyle::Transparent);
         }),
         preset("Acid", |b| {
             b.tube = tube(3.0, 50.0);
             b.trim_eq = trim_eq(30.0, -1.5, -1.5);
-            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 150.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 150.0, 85.0, 90.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 0.5);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Hard Techno", |b| {
             b.trim_eq = trim_eq(30.0, -2.0, -1.5);
-            b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0);
-            b.maximizer = maximizer(12.0);
+            b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0, 110.0, 95.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.tape = tape(3.0, 15);
             b.imaging = imaging(100.0, 150.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Dub Techno", |b| {
             b.trim_eq = trim_eq(25.0, -1.0, -2.0);
-            b.bus_compressor = compressor(-13.0, 1.8, 30.0, 400.0);
+            b.bus_compressor = compressor(-13.0, 1.8, 30.0, 400.0, 65.0, 75.0, 0.2);
             b.lift_eq = lift(1.5, 0.0);
             b.tape = tape(2.5, 15);
             b.imaging = imaging(120.0, 120.0);
-            b.multiband = multiband(40.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(35.0);
+            b.limiter = limiter(1.5, LimiterStyle::Transparent);
         }),
         preset("House", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(25.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0, 80.0, 85.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 1.0);
             b.imaging = imaging(110.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Punchy);
         }),
         preset("Deep House", |b| {
             b.trim_eq = trim_eq(25.0, -1.0, -1.5);
-            b.bus_compressor = compressor(-11.0, 1.8, 20.0, 300.0);
+            b.bus_compressor = compressor(-11.0, 1.8, 20.0, 300.0, 70.0, 80.0, 0.2);
             b.lift_eq = lift(1.5, 0.5);
             b.tape = tape(2.0, 15);
             b.imaging = imaging(110.0, 120.0);
-            b.multiband = multiband(40.0);
-            b.limiter = limiter(2.5);
+            b.multiband = multiband(35.0);
+            b.limiter = limiter(2.5, LimiterStyle::Transparent);
         }),
         preset("Tech House", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-10.0, 2.2, 15.0, 150.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-10.0, 2.2, 15.0, 150.0, 90.0, 90.0, 0.0);
+            b.maximizer = maximizer(7.0);
             b.lift_eq = lift(1.0, 1.0);
-            b.imaging = imaging(105.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.imaging = imaging(108.0, 125.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Trance", |b| {
             b.trim_eq = trim_eq(25.0, -1.5, -0.5);
-            b.bus_compressor = compressor(-9.0, 2.0, 15.0, 250.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-9.0, 2.0, 15.0, 250.0, 85.0, 90.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 1.5);
             b.imaging = imaging(115.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Progressive", |b| {
             b.trim_eq = trim_eq(25.0, -1.5, -0.5);
-            b.bus_compressor = compressor(-10.0, 1.8, 15.0, 300.0);
+            b.bus_compressor = compressor(-10.0, 1.8, 15.0, 300.0, 75.0, 80.0, 0.2);
             b.lift_eq = lift(0.5, 1.5);
             b.tape = tape(1.5, 30);
             b.imaging = imaging(110.0, 120.0);
-            b.multiband = multiband(40.0);
-            b.limiter = limiter(2.5);
+            b.multiband = multiband(35.0);
+            b.limiter = limiter(2.5, LimiterStyle::Transparent);
         }),
         preset("Electro", |b| {
             b.tube = tube(2.5, 50.0);
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
-            b.bus_compressor = compressor(-11.0, 2.5, 15.0, 120.0);
-            b.maximizer = maximizer(10.0);
+            b.bus_compressor = compressor(-11.0, 2.5, 15.0, 120.0, 90.0, 90.0, 0.0);
+            b.maximizer = maximizer(8.0);
             b.lift_eq = lift(1.0, 1.0);
             b.imaging = imaging(105.0, 120.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Breakbeat", |b| {
             b.trim_eq = trim_eq(30.0, -1.0, -1.0);
             // A slow attack lets the breaks' transients through.
-            b.bus_compressor = compressor(-11.0, 2.0, 20.0, 150.0);
+            b.bus_compressor = compressor(-11.0, 2.0, 20.0, 150.0, 85.0, 80.0, 0.0);
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 30);
-            b.multiband = multiband(40.0);
-            b.limiter = limiter(2.5);
+            b.multiband = multiband(35.0);
+            b.limiter = limiter(2.3, LimiterStyle::Punchy);
         }),
         preset("Drum & Bass", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.5);
-            b.bus_compressor = compressor(-10.0, 2.5, 15.0, 100.0);
-            b.maximizer = maximizer(12.0);
+            b.bus_compressor = compressor(-10.0, 2.5, 15.0, 100.0, 95.0, 95.0, 0.0);
+            b.maximizer = maximizer(7.0);
             b.lift_eq = lift(1.5, 1.0);
             b.imaging = imaging(105.0, 150.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Hardcore", |b| {
             b.soft_clip = soft_clip(2.0, -0.5);
             b.trim_eq = trim_eq(35.0, -2.0, -2.0);
-            b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0);
-            b.maximizer = maximizer(12.0);
+            b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0, 100.0, 100.0, 0.0);
+            b.maximizer = maximizer(7.0);
             b.imaging = imaging(100.0, 150.0);
-            b.multiband = multiband(50.0);
-            b.limiter = limiter(1.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.3, LimiterStyle::Modern);
         }),
         preset("Ambient", |b| {
             b.trim_eq = trim_eq(20.0, -1.0, -1.0);
-            b.bus_compressor = compressor(-10.0, 1.5, 30.0, 600.0);
+            b.bus_compressor = compressor(-10.0, 1.5, 30.0, 600.0, 40.0, 70.0, 0.2);
             b.lift_eq = lift(0.5, 1.0);
             b.tape = tape(1.0, 30);
             b.imaging = imaging(120.0, 100.0);
             b.multiband = multiband(40.0);
-            b.limiter = limiter(1.0);
+            b.limiter = limiter(1.0, LimiterStyle::Transparent);
         }),
         preset("Downtempo", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(20.0, -1.5, -1.5);
-            b.bus_compressor = compressor(-13.0, 2.0, 20.0, 300.0);
+            b.bus_compressor = compressor(-13.0, 2.0, 20.0, 300.0, 65.0, 80.0, 0.3);
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 15);
             b.imaging = imaging(110.0, 120.0);
             b.multiband = multiband(40.0);
-            b.limiter = limiter(1.5);
+            b.limiter = limiter(1.5, LimiterStyle::Transparent);
         }),
     ]
 });
@@ -255,13 +255,24 @@ fn trim_eq(high_pass: f32, mud: f32, harsh: f32) -> TrimEq {
         harsh,
     }
 }
-fn compressor(threshold: f32, ratio: f32, attack: f32, release: f32) -> BusCompressor {
+fn compressor(
+    threshold: f32,
+    ratio: f32,
+    attack: f32,
+    release: f32,
+    sc_hpf_hz: f32,
+    mix: f32,
+    makeup_db: f32,
+) -> BusCompressor {
     BusCompressor {
         on: true,
         threshold,
         ratio,
         attack,
         release,
+        sc_hpf_hz,
+        mix,
+        makeup_db,
         ..BusCompressor::default()
     }
 }
@@ -296,11 +307,12 @@ fn imaging(width: f32, mono_below: f32) -> Imaging {
     }
 }
 /// Every preset delivers at -1 dBTP.
-fn limiter(gain: f32) -> Limiter {
+fn limiter(gain: f32, style: LimiterStyle) -> Limiter {
     Limiter {
         on: true,
         gain,
         ceiling: -1.0,
+        style,
         ..Limiter::default()
     }
 }

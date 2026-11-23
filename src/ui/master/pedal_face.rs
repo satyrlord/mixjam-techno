@@ -30,24 +30,13 @@ pub(super) fn pedal(
     }
 
     let mut open_deep_edit = card_edit_button(ui, rect, kind);
-    let lamps = reduction_lamps(kind);
-    if let Some(thresholds) = lamps {
-        let reduction = card_reduction(kind, on, metering);
-        reduction_meter(
-            ui,
-            at(rect.width() / 2.0, 39.0),
-            name(kind),
-            reduction,
-            &thresholds,
-            ink,
-        );
-    }
+    let has_meter = card_meter(ui, at(rect.width() / 2.0, 39.0), kind, on, metering, ink);
     ui.scope(|ui| {
         ui.visuals_mut().dark_mode = master_face_dark_mode();
         if kind == PedalKind::BoosterEq {
             open_deep_edit |= booster_eq_preview(ui, rect, chain, on);
         } else {
-            card_hero_dials(ui, rect, chain, kind, on, lamps.is_some());
+            card_hero_dials(ui, rect, chain, kind, on, has_meter);
         }
     });
     let moved_to = card_footer(ui, rect, chain, kind, index, on);
@@ -113,6 +102,33 @@ fn card_edit_button(ui: &mut egui::Ui, rect: Rect, kind: PedalKind) -> bool {
             name(kind)
         ))
         .clicked()
+}
+
+/// Paint a dynamics pedal's gain-reduction meter under the header, and
+/// tell whether the card has one.
+fn card_meter(
+    ui: &egui::Ui,
+    center: Pos2,
+    kind: PedalKind,
+    on: bool,
+    metering: &Metering,
+    ink: Color32,
+) -> bool {
+    if let Some(thresholds) = reduction_lamps(kind) {
+        let reduction = card_reduction(kind, on, metering);
+        reduction_meter(ui, center, name(kind), reduction, &thresholds, ink);
+        true
+    } else if kind == PedalKind::Multiband {
+        let bands = if on && metering.playing {
+            metering.reading.multiband_reduction
+        } else {
+            [0.0; 3]
+        };
+        multiband_reduction_strip(ui, center, bands, ink);
+        true
+    } else {
+        false
+    }
 }
 
 fn card_reduction(kind: PedalKind, on: bool, metering: &Metering) -> f32 {
@@ -442,4 +458,46 @@ fn reduction_meter(
         "Gain reduction. The lamps light at {} dB.",
         steps.map(|step| step.to_string()).join(", ")
     ));
+}
+
+/// Compact 3-band `L / M / H` gain reduction bars on the Multiband card.
+fn multiband_reduction_strip(ui: &egui::Ui, center: Pos2, bands: [f32; 3], ink: Color32) {
+    let strip = Rect::from_center_size(center, Vec2::new(136.0, 14.0));
+    controls::well(ui, strip);
+    let slot_w = (strip.width() - 8.0) / 3.0;
+    let warn = roles().lamp_warn;
+    let track_bg = roles().well_edge.gamma_multiply(0.35);
+    for (idx, (letter, db)) in ["L", "M", "H"].into_iter().zip(bands).enumerate() {
+        let x0 = strip.left() + 4.0 + idx as f32 * slot_w;
+        ui.painter().text(
+            Pos2::new(x0 + 5.0, center.y),
+            Align2::CENTER_CENTER,
+            letter,
+            FontId::proportional(8.5),
+            ink,
+        );
+        let track = Rect::from_center_size(
+            Pos2::new(x0 + 11.0 + (slot_w - 13.0) * 0.5, center.y),
+            Vec2::new(slot_w - 14.0, 6.0),
+        );
+        ui.painter().rect_filled(track, 1.0, track_bg);
+        let frac = (db / 6.0).clamp(0.0, 1.0);
+        if frac > 0.01 {
+            let fill = Rect::from_min_max(
+                track.min,
+                Pos2::new(track.left() + track.width() * frac, track.max.y),
+            );
+            ui.painter().rect_filled(fill, 1.0, warn);
+        }
+    }
+    let response = ui.interact(strip, ui.id().with("multiband-gr-strip"), Sense::hover());
+    named(
+        &response,
+        egui::WidgetType::Label,
+        &format!(
+            "Multiband gain reduction L {:.1} dB, M {:.1} dB, H {:.1} dB",
+            bands[0], bands[1], bands[2]
+        ),
+    );
+    response.hover_hint("Live 3-band gain reduction (Low <200 Hz, Mid 200-3k, High >3 kHz).");
 }

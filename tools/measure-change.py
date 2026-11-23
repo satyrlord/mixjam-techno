@@ -1,4 +1,4 @@
-"""Measure a change for the ub-mode skill: complexity and duplication.
+"""Measure a change: complexity and duplication.
 
 Usage, from the repository root:
 

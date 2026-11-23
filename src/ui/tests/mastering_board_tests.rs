@@ -375,3 +375,83 @@ fn the_preset_list_uses_its_full_height() {
         "The list stays in the window: {menu:?}."
     );
 }
+
+#[test]
+fn mastering_deep_edit_edits_the_dynamics_and_shows_multiband_reduction() {
+    use mixjam_techno::application::LimiterStyle;
+
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let mut chain = app.session.project().master;
+    chain.bus_compressor.on = true;
+    chain.multiband.on = true;
+    chain.limiter.on = true;
+    app.session.edit(EditCommand::SetMaster(chain)).unwrap();
+
+    // Open BusCompressor in Mastering deep edit and adjust SC HPF, Mix, and Makeup.
+    click_named(&ctx, &mut app, "Edit Bus compressor");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(
+        &ctx,
+        &mut app,
+        &output,
+        "Deep edit Bus compressor sidechain high-pass",
+    );
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.bus_compressor.sc_hpf_hz > 20.0);
+    focus_control(&ctx, &mut app, &output, "Deep edit Bus compressor mix");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.bus_compressor.mix < 100.0);
+    focus_control(&ctx, &mut app, &output, "Deep edit Bus compressor makeup");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.session.project().master.bus_compressor.makeup_db > 0.0);
+
+    // Switch to Limiter, choose Modern style, then undo/redo.
+    click_named(&ctx, &mut app, "Deep edit select Limiter");
+    let _ = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    click_named(&ctx, &mut app, "Deep edit Limiter style Modern");
+    assert_eq!(
+        app.session.project().master.limiter.style,
+        LimiterStyle::Modern
+    );
+    assert!(app.session.history_step(false).unwrap());
+    assert_eq!(
+        app.session.project().master.limiter.style,
+        LimiterStyle::Transparent
+    );
+    assert!(app.session.history_step(true).unwrap());
+    assert_eq!(
+        app.session.project().master.limiter.style,
+        LimiterStyle::Modern
+    );
+
+    // Multiband scope and compact card show 3-band GR label.
+    click_named(&ctx, &mut app, "Deep edit select Multiband");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    accessible_label(
+        &output,
+        "Multiband gain reduction L 0.0 dB, M 0.0 dB, H 0.0 dB",
+    );
+    let (_, scope_node) = accessible_node(&output, "Multiband 3-band GR");
+    assert_eq!(
+        scope_node.value(),
+        Some("Low 0.0 dB, Mid 0.0 dB, High 0.0 dB")
+    );
+}

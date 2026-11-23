@@ -344,7 +344,15 @@ fn playback_measures_the_input_and_output() {
         reading.true_peak_max <= chain.limiter.ceiling + 1e-3,
         "{reading:?}"
     );
-    assert!(reading.compressor_reduction > 0.0 || reading.limiter_reduction > 0.0);
+    assert!(
+        reading.compressor_reduction > 0.0
+            || reading.limiter_reduction > 0.0
+            || reading.multiband_reduction.iter().any(|&v| v > 0.0)
+    );
+    assert!(
+        reading.multiband_reduction.iter().any(|&v| v > 0.0),
+        "multiband GR telemetry expected: {reading:?}"
+    );
     // Export measures nothing.
     let mut exported = interleaved(&program);
     MasterProcessor::new(&chain).process(&mut exported);
@@ -387,6 +395,20 @@ fn knob_gestures_name_the_one_knob_that_moved() {
     let mut moved = chain;
     Knob::CompressorAttack.set(&mut moved, 0.3);
     assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorAttack));
+    moved = chain;
+    Knob::CompressorScHpf.set(&mut moved, 90.0);
+    assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorScHpf));
+    moved = chain;
+    Knob::CompressorMix.set(&mut moved, 75.0);
+    assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorMix));
+    moved = chain;
+    Knob::CompressorMakeup.set(&mut moved, 2.5);
+    assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorMakeup));
+    let mut style_edit = chain;
+    style_edit.limiter.style = LimiterStyle::Modern;
+    assert_eq!(chain.changed_knob(&style_edit), None);
+    moved = chain;
+    Knob::CompressorAttack.set(&mut moved, 0.3);
     Knob::BoosterBand(4).set(&mut moved, 70.4);
     assert_eq!(moved.booster_eq.bands[4], 70);
     assert_eq!(chain.changed_knob(&moved), None);
@@ -397,7 +419,7 @@ fn knob_gestures_name_the_one_knob_that_moved() {
     assert_eq!(switched.trim, 24.0);
     assert_eq!(Knob::LiftAir.pedal(), Some(PedalKind::LiftEq));
     assert_eq!(Knob::Trim.pedal(), None);
-    assert_eq!(Knob::all().count(), 41);
+    assert_eq!(Knob::all().count(), 44);
     // Every default sits inside its range, on its step.
     for knob in Knob::all() {
         let range = knob.range();

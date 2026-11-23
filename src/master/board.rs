@@ -79,7 +79,7 @@ pub(super) struct Board {
     lift_eq: pedals::LiftEq,
     tape: pedals::Tape,
     imaging: pedals::Imaging,
-    multiband: pedals::Multiband,
+    pub(super) multiband: pedals::Multiband,
     pub(super) limiter: pedals::Limiter,
     /// Each keyed pedal's key, in `PedalKind::KEYED` order, delayed by the
     /// pedals that run before it, so that it lines up with the sound.
