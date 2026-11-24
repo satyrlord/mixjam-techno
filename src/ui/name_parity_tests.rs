@@ -91,8 +91,12 @@ const RENAMED: &[(&str, &str)] = &[
     ("button	Done", "button	Close Sample libraries"),
     ("button	Sample libraries", "button	Open sample libraries"),
     (
-        "button	Restore options defaults",
-        "button	Restore all defaults",
+        "button\tRestore options defaults",
+        "button\tRestore all defaults",
+    ),
+    (
+        "label\t4x keeps track drive saturation clean. Off can sound harsher.",
+        "label\t2x keeps track drive saturation clean. Off can sound harsher.",
     ),
     (
         "label	Changes here take effect right away.",

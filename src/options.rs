@@ -117,7 +117,7 @@ impl Default for AppOptions {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            drive_playback_oversampling: DriveOversampling::FourX,
+            drive_playback_oversampling: DriveOversampling::TwoX,
             master_playback_oversampling: Oversampling::FourX,
             sample_playback_quality: SampleQuality::High,
             preview_level_db: 0.0,
@@ -533,7 +533,7 @@ mod tests {
             ..AppOptions::default()
         };
         let mut draft = serde_json::to_value(&options).unwrap();
-        draft["drivePlaybackOversampling"] = serde_json::json!("2x");
+        draft["drivePlaybackOversampling"] = serde_json::json!("4x");
         fs::write(
             root.join("options.json"),
             serde_json::to_vec(&draft).unwrap(),
@@ -543,7 +543,7 @@ mod tests {
         assert!(!migrated.invalid);
         assert_eq!(migrated.values, options);
         let resaved = serde_json::to_value(&migrated.values).unwrap();
-        assert_eq!(resaved["drivePlaybackOversampling"], "4x");
+        assert_eq!(resaved["drivePlaybackOversampling"], "2x");
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

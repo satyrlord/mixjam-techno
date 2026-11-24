@@ -169,9 +169,21 @@ impl Mix {
         state
             .master_gain
             .advance(first_frame, continues, [master_gain; 2]);
+        self.ensure_drives(state);
+    }
+
+    fn ensure_drives(&self, state: &mut RenderState) {
         // Playback allocated the drives before the device read the mix.
         if state.drives.len() < self.drives {
-            state.drives.resize(self.drives, Default::default());
+            for (run, _) in self
+                .keys
+                .iter()
+                .chain(&self.chains)
+                .filter_map(|chain| chain.drive.as_ref())
+                .skip(state.drives.len())
+            {
+                state.drives.push(crate::drive::State::new(run));
+            }
         }
     }
 
@@ -411,7 +423,15 @@ impl Frames for Mix {
         self.returns.as_ref()
     }
     fn prepare_state(&self, state: &mut RenderState) {
-        state.drives.resize(self.drives, Default::default());
+        state.drives.clear();
+        for (run, _) in self
+            .keys
+            .iter()
+            .chain(&self.chains)
+            .filter_map(|chain| chain.drive.as_ref())
+        {
+            state.drives.push(crate::drive::State::new(run));
+        }
     }
     fn tempo(&self) -> Option<f64> {
         Some(self.bpm)

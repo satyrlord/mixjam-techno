@@ -16,6 +16,7 @@ pub(crate) fn prepare_tables() {
     LazyLock::force(&INNER);
     LazyLock::force(&PHASES);
     crate::fx::oversample::prepare_tables();
+    crate::drive::prepare_tables();
 }
 
 /// The mix rate, in frames per second.
@@ -27,6 +28,61 @@ pub(crate) fn db_to_gain(db: f64) -> f64 {
 
 pub(crate) fn gain_to_db(gain: f64) -> f64 {
     20.0 * gain.log10()
+}
+
+/// Fast audio-rate base-2 logarithm (`x > 0`, normal), `< 2e-6` error (worst
+/// near a mantissa of 2).
+#[inline]
+pub(crate) fn fast_log2(x: f64) -> f64 {
+    let bits = x.to_bits();
+    let exp = ((bits >> 52) as i64 - 1023) as f64;
+    let m = f64::from_bits((bits & 0x000F_FFFF_FFFF_FFFF) | 0x3FF0_0000_0000_0000);
+    let t = (m - 1.0) / (m + 1.0);
+    let t2 = t * t;
+    let ln_m =
+        2.0 * t * (1.0 + t2 * (1.0 / 3.0 + t2 * (1.0 / 5.0 + t2 * (1.0 / 7.0 + t2 * (1.0 / 9.0)))));
+    exp + ln_m * std::f64::consts::LOG2_E
+}
+
+/// Fast audio-rate base-10 logarithm (`x > 0`), `< 5e-7` error.
+#[inline]
+pub(crate) fn fast_log10(x: f64) -> f64 {
+    fast_log2(x) * (1.0 / std::f64::consts::LOG2_10)
+}
+
+/// Fast audio-rate base-2 exponential, `< 2e-7` relative error.
+#[inline]
+pub(crate) fn fast_exp2(x: f64) -> f64 {
+    let k = x.round();
+    let y = (x - k) * std::f64::consts::LN_2;
+    let pow2_f = 1.0
+        + y * (1.0
+            + y * (0.5
+                + y * (1.0 / 6.0 + y * (1.0 / 24.0 + y * (1.0 / 120.0 + y * (1.0 / 720.0))))));
+    let pow2_k = f64::from_bits((((k as i64) + 1023).clamp(1, 2046) as u64) << 52);
+    pow2_k * pow2_f
+}
+
+/// Fast audio-rate dB-to-amplitude conversion (`< 0.00001 dB` error).
+#[inline]
+pub(crate) fn fast_db_to_gain(db: f64) -> f64 {
+    fast_exp2(db * (std::f64::consts::LOG2_10 / 20.0))
+}
+
+#[inline]
+fn tan_small(u: f64) -> f64 {
+    let u2 = u * u;
+    u * (945.0 - u2 * (105.0 - u2)) / (945.0 - u2 * (420.0 - 15.0 * u2))
+}
+
+/// Fast audio-rate `tan(x)` for `x in (0, 0.48 * PI]`, `< 1e-7` error.
+#[inline]
+pub(crate) fn fast_tan(x: f64) -> f64 {
+    if x <= std::f64::consts::FRAC_PI_4 {
+        tan_small(x)
+    } else {
+        1.0 / tan_small(std::f64::consts::FRAC_PI_2 - x)
+    }
 }
 
 /// Zero for a value far below hearing, so that recursive states never turn
@@ -613,6 +669,76 @@ impl Biquad {
         *s2 = flush(c.b2 * input - c.a2 * output);
         output
     }
+
+    #[inline]
+    pub(crate) fn process_unflushed(&mut self, channel: usize, input: f64) -> f64 {
+        let c = &self.coefficients;
+        let [s1, s2] = &mut self.state[channel];
+        let output = c.b0 * input + *s1;
+        *s1 = c.b1 * input - c.a1 * output + *s2;
+        *s2 = c.b2 * input - c.a2 * output;
+        output
+    }
+
+    pub(crate) fn flush_state(&mut self) {
+        for ch in &mut self.state {
+            if ch[0].abs() < 1e-46 {
+                ch[0] = 0.0;
+            }
+            if ch[1].abs() < 1e-46 {
+                ch[1] = 0.0;
+            }
+        }
+    }
+}
+
+/// A `Biquad` that holds each state of both channels side by side, so that
+/// one frame runs as one pair of lanes. Each lane does the same arithmetic as
+/// `Biquad::process_unflushed`, so it gives the same bits.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StereoBiquad {
+    coefficients: Coefficients,
+    s1: [f64; 2],
+    s2: [f64; 2],
+}
+impl StereoBiquad {
+    pub(crate) const FLAT: Self = Self::new(Coefficients::FLAT);
+
+    pub(crate) const fn new(coefficients: Coefficients) -> Self {
+        Self {
+            coefficients,
+            s1: [0.0; 2],
+            s2: [0.0; 2],
+        }
+    }
+
+    pub(crate) fn set(&mut self, coefficients: Coefficients) {
+        self.coefficients = coefficients;
+    }
+
+    #[inline]
+    pub(crate) fn process_unflushed(&mut self, input: [f64; 2]) -> [f64; 2] {
+        let c = &self.coefficients;
+        let output = [c.b0 * input[0] + self.s1[0], c.b0 * input[1] + self.s1[1]];
+        self.s1 = [
+            c.b1 * input[0] - c.a1 * output[0] + self.s2[0],
+            c.b1 * input[1] - c.a1 * output[1] + self.s2[1],
+        ];
+        self.s2 = [
+            c.b2 * input[0] - c.a2 * output[0],
+            c.b2 * input[1] - c.a2 * output[1],
+        ];
+        output
+    }
+
+    /// The block-end guard of `Biquad::flush_state`.
+    pub(crate) fn flush_state(&mut self) {
+        for state in self.s1.iter_mut().chain(&mut self.s2) {
+            if state.abs() < 1e-46 {
+                *state = 0.0;
+            }
+        }
+    }
 }
 
 /// One channel's sample through biquads in a row.
@@ -770,6 +896,7 @@ impl Oversampler {
     /// filters. Both histories must start at ZERO and remain paired: the
     /// reference's input filters are unused, so do not call `process` on it.
     /// Each output keeps the arithmetic order of an independent processor.
+    #[cfg(test)]
     #[inline]
     pub(crate) fn process_pair(
         &mut self,
@@ -950,6 +1077,29 @@ impl DcBlocker {
     #[inline]
     pub(crate) fn process(&mut self, sample: f64, pole: f64) -> f64 {
         self.output = flush(sample - self.input + pole * self.output);
+        self.input = sample;
+        self.output
+    }
+}
+
+/// Two `DcBlocker`s side by side, one per lane, with the same arithmetic.
+#[derive(Clone, Copy)]
+pub(crate) struct StereoDcBlocker {
+    input: [f64; 2],
+    output: [f64; 2],
+}
+impl StereoDcBlocker {
+    pub(crate) const ZERO: Self = Self {
+        input: [0.0; 2],
+        output: [0.0; 2],
+    };
+
+    #[inline]
+    pub(crate) fn process(&mut self, sample: [f64; 2], pole: f64) -> [f64; 2] {
+        self.output = [
+            flush(sample[0] - self.input[0] + pole * self.output[0]),
+            flush(sample[1] - self.input[1] + pole * self.output[1]),
+        ];
         self.input = sample;
         self.output
     }

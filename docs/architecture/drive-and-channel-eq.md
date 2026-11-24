@@ -12,39 +12,58 @@ the automation and the sends. Thus they carry its harmonics.
 
 The drive (`drive::Run`) does these steps:
 
-1. It bends a copy of the track through its curve at four times the mix rate.
-   Antiderivative anti-aliasing acts on each sample.
-2. It matches the power of the copy to the power of the track.
-3. It high-passes the difference between the copy and the track at its focus.
+1. It bends a copy of the track through its curve. Second-order
+   antiderivative anti-aliasing (ADAA2) in `f64` acts on each sample. A
+   straight line takes the same ADAA2 path, `(x0 + x1 + x2) / 3`, as the
+   reference of the clean track.
+2. It matches the power of the copy to the power of the track. Below about
+   -55 dBFS the match relaxes to unity gain (`MATCH_GATE_POWER`), so quiet
+   tails do not pump.
+3. It high-passes the difference between the copy and the reference at its
+   focus.
 4. It adds the share of that difference that Mix sets to the track.
-5. It holds the result at the power of the track, before the output trim.
+5. It holds the result at the power of the track, with the same gate, before
+   the output trim. The two matching gains change at every eighth frame.
 
-The driven and reference signals use the same upsampling filters and keep
-separate downsampling histories. The curve reuses the integral of the previous
-sample. It does not calculate that integral a second time. Before the first
-input that is not zero, a drive skips the silent frames, because they change
-nothing. After the input starts, the processor handles each frame, so later
-silence keeps the filter tails. These paths keep the sample values.
+The render quality selects the oversampling path:
 
-The playback Options can run the Drive curve and its ADAA reference at the base
-rate. This mode keeps the matching, focus, Mix, Output, and DC-removal stages.
-A plain delay keeps the same 69-frame integer alignment, so a quality switch
-does not bypass Drive. Audible chains and separate key chains use the same
-explicit playback configuration. The default is the 4x path.
-Mix preparation records whether it is for live playback or offline export.
-Export reuses a prepared mix only if it is offline and uses full quality.
+- Export, stems, and song-tool renders (`RenderQuality::Offline`) run the
+  curve and the reference at 8 times the mix rate, through linear-phase
+  halfband FIR filters (`FirOversampler`). These filters delay the copy by
+  `drive::LATENCY` (71 frames). The track passes through a plain delay of the
+  same length. Thus the chain reads its voices, Repeat lane, and EQ 71 frames
+  ahead, and the output of the drive aligns with the song.
+- Playback (`RenderQuality::Live`) at the default `2x` runs the curve and the
+  reference at twice the mix rate, through polyphase IIR halfband filters
+  (`StereoUpsampler2x` and `StereoDownsampler2x`, the two halves of
+  `HalfBandIir2x` for both channels). The curve reads its antiderivatives
+  from a cubic table. With `Off`, the curve runs at the mix rate. Both
+  playback paths have no lookahead (`Run::latency` is 0), and the track
+  itself has no delay.
 
-The oversampling delays the copy by `drive::LATENCY` (69 frames). Thus a chain
-with a drive reads its voices, Repeat lane, and EQ 69 frames ahead. The output
-of the drive then aligns with the song. The track itself passes through a plain
-delay of the same length. Thus a mix of 0% at 0 dB output is bit for bit the
-track.
+A drive processes up to 32 frames at a time, one step at a time: the
+oversampling, the curve, the reference, the blockers and gains, the focus,
+and the output level. Each step goes through all the frames before the next
+step starts. Thus the processor can work on many frames in parallel, and each
+filter state gets the same values in the same order as with one frame at a
+time. The output does not change by a bit.
 
-If a read does not continue the last read, the drive first runs over the 69
-frames from its first frame. The other histories start from silence there. Thus
-a seek leaves no gap. During loop playback, those source reads stop at the loop
-end and fill the remaining lookahead with silence. Thus sound outside the loop
-cannot reach the final frames of the loop.
+A Mix of 0% at 0 dB output gives back the track bit for bit in each mode.
+
+In playback, the copy and the reference lag the track: by the ADAA2 delay of
+one sample at the processing rate, and at `2x` also by the phase of the IIR
+filters. The difference that Mix adds has the same lag. Export has only the
+ADAA2 lag of one eighth of a frame.
+
+Before the first input that is not zero, a drive skips the silent frames,
+because they change nothing. After the input starts, the processor handles each
+frame, so later silence keeps the filter tails. The recursive filters guard
+against denormal values at the end of each block. A test checks that the size
+of a block does not change a bit of the output, also over a long silent tail.
+
+If a read does not continue the last read, `drive::State::reset` clears the
+history in place. In export, the drive then runs over the 71 frames from the
+first frame of the read. Thus a seek leaves no gap.
 
 The `RenderState` holds the history of each drive, a key chain's history
 included, in a slot that the mix gives it. `Frames::prepare_state` allocates
@@ -57,7 +76,10 @@ track edit and prepares a new mix, as an EQ edit does.
 with its range. A mix designs the EQ curve of a chain once, using biquads. The
 cut bands share a 12 or 24 dB/octave slope. The window and Inspector plot the
 response of the same filters. An EQ edit prepares a new mix, and playback
-continues on that mix.
+continues on that mix. The EQ runs the two channels of a frame through each
+biquad side by side (`StereoBiquad`), with the same operations for each
+channel. The compressor processes up to 64 frames at a time in passes, as the
+drive does. The output does not change by a bit.
 
 A mix keeps the track levels from its preparation, and export uses them.
 Playback reads the levels live from the `MasterControl` instead. It glides from
@@ -82,4 +104,6 @@ normalization divides by that gain directly. Thus a very small positive gain
 cannot overflow a reciprocal and leave the detector of a ducker at infinity.
 Playback continues without a click. Export also prepares a mix again when the
 levels are different. The mix calculates automation values at each output
-frame, so short moves do not depend on the block size of the reader.
+frame. The Filter lane is the exception: it sets its cutoff at every eighth
+frame of the song. Thus short moves do not depend on the block size of the
+reader.

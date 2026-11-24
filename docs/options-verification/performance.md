@@ -23,21 +23,29 @@ song playback without glitches, or the acoustic latency.
 
 ## Drive tradeoff
 
-The test `playback_quality_records_alias_and_frequency_response_tradeoffs` in
+The test `every_quality_keeps_the_playback_alias_threshold` in
 `src/drive/tests.rs` uses a 5 kHz tone, 24 dB Drive, 100% Mix, and 20 Hz Focus.
-It prints the 19.1 kHz alias level of each mode. The 4x alias must be below
--65 dBc, and the Off alias must be at least 10 dB higher. Do not weaken the 4x
-threshold.
+It prints the 19.1 kHz alias level of each mode. The export and `2x` aliases
+must be below -65 dBc, and the Off alias must be at least 10 dB higher than
+`2x`. Do not weaken these thresholds. On 2026-11-24 the measured levels were
+-99.5 dBc for export, -116.6 dBc for `2x`, and -27.4 dBc for Off.
 
-The test also prints the response of the Off linear reference at 55 Hz, 1, 5,
-10, and 19 kHz. These values describe that reference, not the full mixed
-output of the Drive.
+The test `playback_quality_and_offline_8x_aliasing_targets` uses a 4048 Hz tone
+at -1 dBFS, 24 dB Drive, and 50% Character. Export must keep the total
+non-harmonic alias power below -90 dB and each spur below -85 dBc. The `2x`
+total and worst spur must be at least 15 dB below those of Off.
 
-Both modes keep the 69-frame integer stage delay and its chain compensation.
-Off keeps the antiderivative anti-aliasing at the base rate. Its matching
-linear reference has a phase lag of half a base frame. The 4x pair of curve
-and reference has a lag of one eighth of a frame. Matching integer delays do
-not make these paths equivalent in phase.
+The test `base_rate_curve_and_reference_share_one_sample_adaa2_delay` checks
+the Off reference: `(x0 + x1 + x2) / 3`, with the magnitude
+`(1 + 2 cos(2 pi f / rate)) / 3`. This value describes that reference, not the
+full mixed output of the Drive.
+
+Export keeps the 71-frame integer stage delay and its chain compensation. Its
+curve and reference lag by one eighth of a frame. Both playback modes have no
+lookahead and do not delay the track. Their curve and reference lag the track
+by one sample at the processing rate: one frame at Off and half a frame at
+`2x`, plus the phase of the IIR filters at `2x`. Thus the difference that Mix
+adds lags the track a little in playback.
 
 ## Playback performance
 

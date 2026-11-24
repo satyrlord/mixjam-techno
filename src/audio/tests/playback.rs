@@ -187,7 +187,7 @@ fn playback_quality_keeps_key_alignment_seeks_loops_and_export_boundary() {
         .unwrap()
         .to_pcm(&project.master, &project.fx)
         .unwrap();
-    for drive in [DriveOversampling::FourX, DriveOversampling::Off] {
+    for drive in [DriveOversampling::TwoX, DriveOversampling::Off] {
         for master in [Oversampling::FourX, Oversampling::Off] {
             let quality = PlaybackQuality {
                 drive,

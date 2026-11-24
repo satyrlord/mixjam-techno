@@ -54,22 +54,19 @@ process-global mutable switches. Do not read preference files on audio
 threads. Export construction must select full quality explicitly. It must not
 use the playback configuration of the last playback.
 
-With 4x selected, keep the reference algorithm, sample values, latency, block
-independence, and seek and loop behavior. Off still runs the saturation curve
-and the matching, mix, focus, output, and DC-removal stages of the Drive.
-Keep the antiderivative anti-aliasing of the Drive at the base rate. Define
-and test its reference path at that rate. Off is not a bypass, and its
-sound does not have to match 4x. Record the alias and frequency-response
-tradeoffs. Do not make the 4x acceptance thresholds weaker.
+With 2x selected, Drive runs zero-lookahead polyphase IIR ADAA2; Offline
+exports and renders always run 8x linear-phase FIR ADAA2 with 71-frame
+per-track lead compensation. Off still runs ADAA2 saturation and the matching,
+mix, focus, output, and DC-removal stages at the base rate. Off is not a
+bypass, and its sound does not have to match 2x or 8x. Record the alias and
+frequency-response tradeoffs. Do not make the acceptance thresholds weaker.
 
-Keep the integer alignment in both playback modes:
+Keep alignment in both quality modes:
 
-- If the oversampling filters are off, keep the 69-frame stage delay as a
-  simple delay. Keep the compensation at the chain boundary.
-- Account for a fractional phase difference in the base-rate curve and
-  reference pair. Matching integer delays do not prove phase equivalence.
+- Offline keeps 71-frame per-track lead compensation (`drive::LATENCY`); Live
+  modes (`2x` and `Off`) run at 0-frame dry lookahead (`latency() == 0`).
 - Track audio, parallel dry paths, sidechain keys, sends, and master inputs
-  must stay aligned.
+  stay aligned in both modes.
 - Keep the fixed live master delay, its pedal-switch crossfades, and the
   limiter timing.
 
@@ -127,8 +124,8 @@ quality crossfade is necessary.
 Stored fields:
 
 - `schemaVersion`
-- `drivePlaybackOversampling`: `4x` or `off`. A draft file with `2x` loads at
-  `4x` and saves as `4x`.
+- `drivePlaybackOversampling`: `2x` or `off` (default `2x`). An earlier `4x`
+  value loads as `2x` and saves as `2x`.
 - `masterPlaybackOversampling`: `4x` or `off`.
 - `samplePlaybackQuality`: `high` or `low`. A schema 1 file without it loads
   at `high`.

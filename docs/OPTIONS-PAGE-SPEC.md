@@ -37,7 +37,7 @@ Options use their own schema, separate from the song format.
 
 | Area | Behavior and owner |
 | --- | --- |
-| Track Drive | Four-times oversampling in `src/drive.rs`. The shared `Oversampler` in `src/master/dsp.rs` has a 69-frame delay. `TrackChain` in `src/audio/track.rs` compensates that delay and bounds reads at playback loop ends. |
+| Track Drive | `8x` FIR ADAA2 in offline export (`src/drive.rs`, 71-frame per-track lead via `fx::oversample::FirOversampler`) and zero-lookahead `2x` polyphase IIR (`HalfBandIir2x`) or `1x` Base-rate ADAA2 in live playback. |
 | Master saturation | Soft clip, Tube, Maximizer, and Tape use antiderivative antialiasing with 4x FIR oversampling or at the base rate in playback. Export uses 8x FIR oversampling. The other master processors have their own algorithms and timing. |
 | Master timing | `MasterProcessor` in `src/master/processor.rs` keeps a fixed live delay across pedal changes. Export compensates the active delays. |
 | Playback work | `PlaybackSource` in `src/audio/source.rs` renders 256-frame blocks. This is not the callback size of the audio device. |
@@ -133,8 +133,8 @@ clean-machine checks separately as passed, failed, or not available.
 
 The accepted baseline:
 
-- Separate Drive and master playback switches, with 4x defaults.
-- Exports always at full quality, including 8x master saturation.
+- Separate Drive (`2x` / `Off`) and master (`4x` / `Off`) playback switches.
+- Exports always at full quality: `8x` track Drive and `8x` master saturation.
 - Audio changes apply only while playback, previews, and recording are
   stopped.
 - A supported output buffer target, with truthful reports of the actual

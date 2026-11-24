@@ -9,7 +9,7 @@ Preview level, `Mute previews`, and Meter display rate.
 
 | Control | Choices and default | Required behavior |
 | --- | --- | --- |
-| Drive playback oversampling | `4x` (default), `Off` | Applies to all track Drives during song playback, also to separate sidechain-key chains. Does not switch the Drives off or change their saved knobs. |
+| Drive playback oversampling | `2x` (default), `Off` | Applies to all track Drives during song playback, also to separate sidechain-key chains. Does not switch the Drives off or change their saved knobs. |
 | Master playback oversampling | `4x` (default), `Off` | Applies only to Soft clip, Tube, Maximizer, and Tape during playback. Does not disable limiter lookahead, true-peak detection, metering filters, or other processors. |
 | Sample playback quality | `High` (default), `Low` | High uses band-limited sample reads. Low uses linear interpolation during playback. Exports always use High. This preference does not change source identity, song timing, or saved song data. |
 | Playback buffer target | `Automatic`, `20 ms`, `40 ms` (default where supported) | Requests a supported output-buffer configuration. Larger buffers can absorb processing bursts and increase the control-to-sound delay. Shows the actual negotiated buffer or the measured callback period separately. Never shows a 10 ms callback as 20 or 40 ms. |
@@ -57,9 +57,9 @@ A larger internal render block of `PlaybackSource` also does not change it.
 
 ### Export rule
 
-Normal mix exports, stems, and song-tool renders use 4x for track Drive and
-read samples at High. When a render includes the master pedalboard, its four
-saturation pedals use 8x.
+Normal mix exports, stems, and song-tool renders use `8x` FIR ADAA2 for track
+Drive and read samples at High. When a render includes the master pedalboard, its
+four saturation pedals use 8x.
 They ignore the playback quality preferences. Preview attenuation and display
 preferences also have no effect on export. Headless rendering must stay
 independent of the settings folder of the user. An explicit draft-export mode

@@ -212,8 +212,8 @@ pub(super) struct TrackChain {
     repeat: Option<crate::automation::Repeat>,
     eq: Option<Curve>,
     /// The drive and the slot of its history among the mix's drives. The
-    /// chain reads its sound `drive::LATENCY` frames ahead of the drive, so
-    /// the drive's output lines up with the song.
+    /// chain reads its sound `run.latency()` frames ahead of the drive, so
+    /// offline output lines up with the song (`0` in live mode).
     pub(super) drive: Option<(crate::drive::Run, usize)>,
     pub(super) compressor: Option<crate::compressor::Run>,
     /// The Compression lane, in percent of the compressor: only with the
@@ -396,22 +396,24 @@ impl TrackChain {
             }
         };
         if let Some((run, slot)) = &self.drive {
-            // The drive's output follows its input by its latency, so the
-            // sound before it runs that far ahead. A history that does not
-            // lead up to this block, after a seek or at the start, first
-            // takes the frames from `at`, as the EQ starts from silence.
-            const LEAD: usize = crate::drive::LATENCY;
+            // Offline output follows input by `run.latency()` (`71`) frames so
+            // linear-phase 8× oversampling lines up with zero cross-track PDC;
+            // Live modes (`2×` polyphase IIR or `Off`) run at zero lookahead.
+            let lead = run.latency();
             let at = span.start;
             let history = &mut drives[*slot];
-            if history.next != Some(at + LEAD as u64) {
-                *history = crate::drive::State::new(run);
-                let mut lead = [0.0_f32; LEAD * 2];
-                shaped_sound(span.clone(), &mut lead);
-                run.process(&mut lead, history);
+            if history.next != Some(at + lead as u64) {
+                history.reset(run);
+                if lead > 0 {
+                    let mut lead_buf = [0.0_f32; crate::drive::MAX_LATENCY * 2];
+                    let prime = &mut lead_buf[..lead * 2];
+                    shaped_sound(span.clone(), prime);
+                    run.process(prime, history);
+                }
             }
-            shaped_sound(at + LEAD as u64..span.end, buffer);
+            shaped_sound(at + lead as u64..span.end, buffer);
             run.process(buffer, history);
-            history.next = Some(at + (LEAD + buffer.len() / 2) as u64);
+            history.next = Some(at + (lead + buffer.len() / 2) as u64);
         } else {
             shaped_sound(span, buffer);
         }
@@ -450,6 +452,23 @@ impl TrackChain {
         }
     }
 
+    fn apply_still_gain(
+        &self,
+        buffer: &mut [f32],
+        level: [f32; 2],
+        duck: Option<(&[f32], &mut crate::ducker::State)>,
+    ) {
+        if let (Some((run, _)), Some((keys, history))) = (&self.ducker, duck) {
+            run.process_stereo_gain(keys, buffer, level, history);
+        } else if level != [1.0, 1.0] {
+            let [l0, l1] = level;
+            for frame in buffer.as_chunks_mut::<2>().0 {
+                frame[0] *= l0;
+                frame[1] *= l1;
+            }
+        }
+    }
+
     fn apply_automation(
         &self,
         at: u64,
@@ -458,31 +477,34 @@ impl TrackChain {
         level: &Ramp,
         mut duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
-        for index in 0..buffer.len() / 2 {
-            let frame = at + index as u64;
-            if let Some(envelope) = &self.filter {
-                filter.process_with(
-                    &mut buffer[index * 2..index * 2 + 2],
-                    envelope.at(frame),
-                    Mix::SAMPLE_RATE as f32,
-                    self.filter_resonance,
-                    self.filter_slope,
-                );
-            }
+        if let Some(envelope) = &self.filter {
+            filter.process_lane(
+                buffer,
+                at,
+                envelope,
+                Mix::SAMPLE_RATE as f32,
+                self.filter_resonance,
+                self.filter_slope,
+            );
+        }
+        if self.volume.is_none() && self.pan.is_none() && level.is_still(at) {
+            self.apply_still_gain(buffer, level.to, duck);
+            return;
+        }
+        for (index, frame) in buffer.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let pos = at + index as u64;
             let mut gain = self.volume.as_ref().map_or(1.0, |envelope| {
-                crate::automation::volume_gain(envelope.at(frame))
+                crate::automation::volume_gain(envelope.at(pos))
             });
             if let (Some((run, _)), Some((keys, history))) = (&self.ducker, duck.as_mut()) {
                 gain *= run.gain(keys[index], history);
             }
             // The lane moves at every frame, so a fast sweep has no steps.
             let sides = self.pan.as_ref().map_or([1.0; 2], |envelope| {
-                crate::automation::pan_gains(envelope.at(frame))
+                crate::automation::pan_gains(envelope.at(pos))
             });
-            for (channel, side) in sides.into_iter().enumerate() {
-                buffer[index * 2 + channel] =
-                    buffer[index * 2 + channel] * gain * level.at(frame, channel) * side;
-            }
+            frame[0] = frame[0] * gain * level.at(pos, 0) * sides[0];
+            frame[1] = frame[1] * gain * level.at(pos, 1) * sides[1];
         }
     }
 
@@ -553,11 +575,16 @@ fn widen(
         let mid = 0.5 * (l + r);
         let mut side = 0.5 * (l - r);
         if hpf.is_some() {
-            let s1 = filters[0].process(0, side);
-            side = filters[1].process(0, s1);
+            let s1 = filters[0].process_unflushed(0, side);
+            side = filters[1].process_unflushed(0, s1);
         }
         side *= width;
-        *frame = [(mid + side) as f32, (mid - side) as f32];
+        frame[0] = (mid + side) as f32;
+        frame[1] = (mid - side) as f32;
+    }
+    if hpf.is_some() {
+        filters[0].flush_state();
+        filters[1].flush_state();
     }
 }
 

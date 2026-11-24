@@ -11,7 +11,7 @@
 //! whose EQ is off mixes exactly as it did before the EQ existed.
 use crate::master::{
     KnobRange,
-    dsp::{Biquad, Coefficients},
+    dsp::{Coefficients, StereoBiquad},
     range, ratio_range,
 };
 use serde::{Deserialize, Serialize};
@@ -386,24 +386,31 @@ impl Curve {
 
 /// The history of one track's EQ filters. Each render reader owns its own.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Filters([Biquad; 8]);
+pub(crate) struct Filters([StereoBiquad; 8]);
 
 impl Default for Filters {
     fn default() -> Self {
-        Self([Biquad::FLAT; 8])
+        Self([StereoBiquad::FLAT; 8])
     }
 }
 
 impl Filters {
-    /// Filter interleaved stereo frames in place.
+    /// Filter interleaved stereo frames in place. Both channels of a frame
+    /// go through each filter side by side.
     pub(crate) fn process(&mut self, frames: &mut [f32], curve: &Curve) {
-        for (filter, coefficients) in self.0.iter_mut().zip(&curve.bands[..curve.count]) {
+        let active = &mut self.0[..curve.count];
+        for (filter, coefficients) in active.iter_mut().zip(&curve.bands[..curve.count]) {
             filter.set(*coefficients);
-            for frame in frames.as_chunks_mut::<2>().0 {
-                for (channel, sample) in frame.iter_mut().enumerate() {
-                    *sample = filter.process(channel, f64::from(*sample)) as f32;
-                }
+        }
+        for frame in frames.as_chunks_mut::<2>().0 {
+            let mut pair = [f64::from(frame[0]), f64::from(frame[1])];
+            for filter in active.iter_mut() {
+                pair = filter.process_unflushed(pair);
             }
+            *frame = pair.map(|sample| sample as f32);
+        }
+        for filter in active.iter_mut() {
+            filter.flush_state();
         }
     }
 }

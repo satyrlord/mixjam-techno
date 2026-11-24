@@ -40,8 +40,16 @@ sparse, dense Drive, master-heavy, and 64-track. It uses all four quality
 combinations at 44.1 and 48 kHz. It measures starts, seeks, replacements, and
 uninterrupted playback after eight seconds.
 
-The representative `realtime_bench` accepts `MIXJAM_BENCH_DRIVE` and
-`MIXJAM_BENCH_MASTER` (`4x` or `off`). Set `MIXJAM_BENCH_CONTINUOUS=1` to play
+The ignored `channel_strip_multitrack_bench` test measures the CPU time of
+256-frame blocks for 16 full channel strips with 2x Drive and for 32 strips
+without Drive. Its p99 limits are 2.0 ms and 1.5 ms. The test plays the 4 s
+song three times and takes the lowest time of each block position. A short
+burst of background work on the machine slows one pass only, so it does not
+fail the test. The test also prints the p99 of all blocks.
+
+The representative `realtime_bench` accepts `MIXJAM_BENCH_DRIVE` (`2x` or
+`off`) and `MIXJAM_BENCH_MASTER` (`4x` or `off`). Set
+`MIXJAM_BENCH_CONTINUOUS=1` to play
 from the start of the song before the measurement of the position that
 `MIXJAM_BENCH_START` selects. The measured sample excludes the warmup. The
 benchmark reports the audio and wall duration of the warmup. Do not change the

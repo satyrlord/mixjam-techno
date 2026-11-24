@@ -3,14 +3,17 @@
 //!
 //! One detector follows the mean power of both channels, as the master's
 //! Bus compressor does, so both get the same gain. Above the threshold a
-//! 6 dB soft knee bends the level toward the ratio, the attack and release
-//! smooth the reduction, and the makeup gain follows. It works before the
-//! track's width, automation, fader, pan, and ducker, so the fader does not
-//! change how hard it compresses. A track whose compressor is off mixes
-//! exactly as it did before the compressor existed.
+//! 6 dB soft knee bends the level toward the ratio, the attack and dual-stage
+//! program-dependent release smooth the reduction, and the makeup gain
+//! follows. It works before the track's width, automation, fader, pan, and
+//! ducker, so the fader does not change how hard it compresses. A track whose
+//! compressor is off mixes exactly as it did before the compressor existed.
 use crate::master::{
     KnobRange,
-    dsp::{Biquad, Coefficients, DETECTOR, KNEE_DB, db_to_gain, flush, pole, reduction},
+    dsp::{
+        Biquad, Coefficients, DETECTOR, KNEE_DB, fast_db_to_gain, fast_log10, flush, pole,
+        reduction,
+    },
     range, ratio_range,
 };
 use serde::{Deserialize, Serialize};
@@ -150,13 +153,24 @@ impl Compressor {
     }
 }
 
+const SLOW_ATTACK_SECONDS: f64 = 0.040;
+const FAST_RELEASE_SCALE: f64 = 0.35;
+const SLOW_RELEASE_SCALE: f64 = 2.5;
+const MIN_FAST_RELEASE_SECONDS: f64 = 0.005;
+const MAX_SLOW_RELEASE_SECONDS: f64 = 2.5;
+
+/// The most frames that `Run::process_stage` takes at once.
+const STAGE: usize = 64;
+
 /// A compressor's settings, ready for the audio thread at the mix rate.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Run {
     threshold: f64,
     ratio: f64,
-    attack: f64,
-    release: f64,
+    attack2: f64,
+    fast_release2: f64,
+    slow_release2: f64,
+    slow_attack2: f64,
     detector: f64,
     makeup: f64,
     sc_hpf: Option<(f32, Coefficients)>,
@@ -171,15 +185,99 @@ impl Run {
                 Coefficients::high_pass(f64::from(cutoff), FRAC_1_SQRT_2),
             )
         });
+        let release_s = f64::from(compressor.release) / 1000.0;
+        let fast_s = (release_s * FAST_RELEASE_SCALE).max(MIN_FAST_RELEASE_SECONDS);
+        let slow_s = (release_s * SLOW_RELEASE_SCALE).min(MAX_SLOW_RELEASE_SECONDS);
+        let attack = pole(f64::from(compressor.attack) / 1000.0);
+        let fast_release = pole(fast_s);
+        let slow_release = pole(slow_s);
+        let slow_attack = pole(SLOW_ATTACK_SECONDS);
         Self {
             threshold: f64::from(compressor.threshold),
             ratio: f64::from(compressor.ratio),
-            attack: pole(f64::from(compressor.attack) / 1000.0),
-            release: pole(f64::from(compressor.release) / 1000.0),
+            attack2: attack * attack,
+            fast_release2: fast_release * fast_release,
+            slow_release2: slow_release * slow_release,
+            slow_attack2: slow_attack * slow_attack,
             detector: pole(DETECTOR),
             makeup: f64::from(compressor.makeup),
             sc_hpf,
         }
+    }
+
+    /// The detector's power after each frame of `chunk`, into `powers`.
+    fn follow_power(&self, chunk: &[[f32; 2]], powers: &mut [f64], state: &mut State) {
+        let mut follow = |sc_l: f64, sc_r: f64| {
+            let power = 0.5 * (sc_l * sc_l + sc_r * sc_r);
+            state.power = power + (state.power - power) * self.detector;
+            state.power
+        };
+        if self.sc_hpf.is_some() {
+            for (power, frame) in powers.iter_mut().zip(chunk) {
+                let sc_l = state.sc_filter.process_unflushed(0, f64::from(frame[0]));
+                let sc_r = state.sc_filter.process_unflushed(1, f64::from(frame[1]));
+                *power = follow(sc_l, sc_r);
+            }
+        } else {
+            for (power, frame) in powers.iter_mut().zip(chunk) {
+                *power = follow(f64::from(frame[0]), f64::from(frame[1]));
+            }
+        }
+    }
+
+    /// The reduction after one update toward `target`.
+    #[inline]
+    fn update(&self, target: f64, state: &mut State) -> f64 {
+        let slow_speed = if target > state.slow_reduction {
+            self.slow_attack2
+        } else {
+            self.slow_release2
+        };
+        state.slow_reduction = target + (state.slow_reduction - target) * slow_speed;
+        let speed = if target > state.reduction {
+            self.attack2
+        } else {
+            let sustain = (state.slow_reduction / state.reduction.max(1e-9)).clamp(0.0, 1.0);
+            self.fast_release2 + sustain * (self.slow_release2 - self.fast_release2)
+        };
+        state.reduction = target + (state.reduction - target) * speed;
+        state.reduction
+    }
+
+    /// Compress up to `STAGE` frames in four passes: the detector's power at
+    /// each frame, the target reduction at each frame that updates the gain
+    /// (every second frame), the reductions in order, and the gains. Only
+    /// the third pass waits on the update before, so the processor overlaps
+    /// the frames of the others. Each state takes the same steps in the same
+    /// order as frame by frame, so the result does not change.
+    fn process_stage(&self, chunk: &mut [[f32; 2]], state: &mut State) {
+        let mut values = [0.0_f64; STAGE];
+        let values = &mut values[..chunk.len()];
+        self.follow_power(chunk, values, state);
+        // The frames at an even phase update the gain.
+        let first = usize::from(state.phase & 1);
+        for value in values.iter_mut().skip(first).step_by(2) {
+            let level = 10.0 * fast_log10(value.max(1e-12));
+            *value = reduction(level, self.threshold, self.ratio, KNEE_DB);
+        }
+        for value in values.iter_mut().skip(first).step_by(2) {
+            *value = self.update(*value, state);
+        }
+        for (index, (frame, value)) in chunk.iter_mut().zip(&*values).enumerate() {
+            if index % 2 == first {
+                state.cached_gain = if *value < 1e-12 && self.makeup == 0.0 {
+                    1.0
+                } else {
+                    fast_db_to_gain(self.makeup - *value)
+                };
+            }
+            let gain = state.cached_gain;
+            if gain != 1.0 {
+                frame[0] = (f64::from(frame[0]) * gain) as f32;
+                frame[1] = (f64::from(frame[1]) * gain) as f32;
+            }
+        }
+        state.phase = state.phase.wrapping_add(chunk.len() as u8);
     }
 
     /// Compress interleaved stereo frames in place. The state carries from
@@ -194,43 +292,33 @@ impl Run {
         } else {
             state.sc_hpf_hz = SC_HPF_OFF_HZ;
         }
-        for frame in frames.as_chunks_mut::<2>().0 {
-            let (left, right) = (f64::from(frame[0]), f64::from(frame[1]));
-            let (sc_l, sc_r) = if self.sc_hpf.is_some() {
-                (
-                    state.sc_filter.process(0, left),
-                    state.sc_filter.process(1, right),
-                )
-            } else {
-                (left, right)
-            };
-            let power = 0.5 * (sc_l * sc_l + sc_r * sc_r);
-            state.power = flush(power + (state.power - power) * self.detector);
-            let level = 10.0 * state.power.max(1e-12).log10();
-            let target = reduction(level, self.threshold, self.ratio, KNEE_DB);
-            let speed = if target > state.reduction {
-                self.attack
-            } else {
-                self.release
-            };
-            state.reduction = flush(target + (state.reduction - target) * speed);
-            if state.reduction == 0.0 && self.makeup == 0.0 {
-                continue;
-            }
-            let gain = db_to_gain(self.makeup - state.reduction);
-            *frame = [(left * gain) as f32, (right * gain) as f32];
+        for chunk in frames.as_chunks_mut::<2>().0.chunks_mut(STAGE) {
+            self.process_stage(chunk, state);
+        }
+        if self.sc_hpf.is_some() {
+            state.sc_filter.flush_state();
+        }
+        state.power = flush(state.power);
+        if state.slow_reduction < 1e-12 {
+            state.slow_reduction = 0.0;
+        }
+        if state.reduction < 1e-12 {
+            state.reduction = 0.0;
         }
     }
 }
 
-/// The compressor's history: the detector's power, the current reduction
-/// in dB, and optional sidechain HPF state.
+/// The compressor's history: the detector's power, active and slow-memory
+/// reduction in dB, and optional sidechain HPF state.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
     power: f64,
     reduction: f64,
+    slow_reduction: f64,
     sc_hpf_hz: f32,
     sc_filter: Biquad,
+    phase: u8,
+    cached_gain: f64,
 }
 
 impl Default for State {
@@ -238,8 +326,11 @@ impl Default for State {
         Self {
             power: 0.0,
             reduction: 0.0,
+            slow_reduction: 0.0,
             sc_hpf_hz: SC_HPF_OFF_HZ,
             sc_filter: Biquad::FLAT,
+            phase: 0,
+            cached_gain: 1.0,
         }
     }
 }
@@ -252,14 +343,16 @@ impl State {
 
     pub(crate) const WORDS: usize = 6;
 
-    /// Pack the detector and optional sidechain filter history for live carry.
+    /// Pack the detector, dual-stage release state, and optional sidechain filter history.
     pub(crate) fn pack(self) -> [u64; Self::WORDS] {
         let [power, reduction] = [self.power, self.reduction].map(|value| (value as f32).to_bits());
         let detector = u64::from(power) | (u64::from(reduction) << 32);
+        let cutoff_and_slow = u64::from(self.sc_hpf_hz.to_bits())
+            | (u64::from((self.slow_reduction as f32).to_bits()) << 32);
         let [[l1, l2], [r1, r2]] = self.sc_filter.history();
         [
             detector,
-            u64::from(self.sc_hpf_hz.to_bits()),
+            cutoff_and_slow,
             l1.to_bits(),
             l2.to_bits(),
             r1.to_bits(),
@@ -268,15 +361,22 @@ impl State {
     }
 
     /// A history that `pack` stored, if one is there. NaN detector bits mean none.
-    pub(crate) fn unpack([detector, cutoff, l1, l2, r1, r2]: [u64; Self::WORDS]) -> Option<Self> {
+    pub(crate) fn unpack(
+        [detector, cutoff_and_slow, l1, l2, r1, r2]: [u64; Self::WORDS],
+    ) -> Option<Self> {
         let [power, reduction] = [detector as u32, (detector >> 32) as u32].map(f32::from_bits);
+        let sc_hpf_hz = f32::from_bits(cutoff_and_slow as u32);
+        let slow_reduction = f32::from_bits((cutoff_and_slow >> 32) as u32);
         let mut sc_filter = Biquad::FLAT;
         sc_filter.set_history([[l1, l2], [r1, r2]].map(|channel| channel.map(f64::from_bits)));
-        (power.is_finite() && reduction.is_finite()).then_some(Self {
+        (power.is_finite() && reduction.is_finite() && slow_reduction.is_finite()).then_some(Self {
             power: f64::from(power),
             reduction: f64::from(reduction),
-            sc_hpf_hz: f32::from_bits(cutoff as u32),
+            slow_reduction: f64::from(slow_reduction),
+            sc_hpf_hz,
             sc_filter,
+            phase: 0,
+            cached_gain: 1.0,
         })
     }
 }
@@ -284,6 +384,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::master::dsp::db_to_gain;
 
     fn tone(level_db: f64, frames: usize) -> Vec<f32> {
         let peak = db_to_gain(level_db) * std::f64::consts::SQRT_2;
@@ -434,5 +535,53 @@ mod tests {
         }
         CompressorParam::Ratio.set(&mut compressor, 0.5);
         assert_eq!(compressor.ratio, 1.0);
+    }
+
+    #[test]
+    fn dual_stage_release_recovers_faster_from_short_transient_than_sustained_hold() {
+        let settings = Compressor {
+            on: true,
+            threshold: -24.0,
+            ratio: 8.0,
+            attack: 0.5,
+            release: 150.0,
+            makeup: 0.0,
+            ..Compressor::default()
+        };
+        let run = Run::new(&settings);
+        let measure_gr_after_gap = |hold_frames: usize| {
+            let mut input = tone(-6.0, hold_frames);
+            input.extend(tone(-45.0, 2_205)); // 50 ms recovery window
+            let mut state = State::default();
+            run.process(&mut input, &mut state);
+            state.reduction_db()
+        };
+        let after_short = measure_gr_after_gap(220); // ~5 ms transient
+        let after_long = measure_gr_after_gap(22_050); // 500 ms sustained hold
+        assert!(
+            after_short + 1.5 < after_long,
+            "short transient GR {after_short:.2} dB should release faster than sustained {after_long:.2} dB"
+        );
+    }
+
+    #[test]
+    fn state_pack_and_unpack_preserve_dual_stage_release_and_sidechain_filter() {
+        let settings = Compressor {
+            on: true,
+            threshold: -20.0,
+            ratio: 6.0,
+            attack: 1.0,
+            release: 120.0,
+            makeup: 0.0,
+            sc_hpf_hz: 120.0,
+        };
+        let run = Run::new(&settings);
+        let mut state = State::default();
+        run.process(&mut tone(-8.0, 2_000), &mut state);
+        let words = state.pack();
+        let unpacked = State::unpack(words).unwrap();
+        assert!((unpacked.reduction_db() - state.reduction_db()).abs() < 1e-5);
+        assert!((unpacked.slow_reduction - state.slow_reduction).abs() < 1e-5);
+        assert_eq!(unpacked.sc_hpf_hz, state.sc_hpf_hz);
     }
 }

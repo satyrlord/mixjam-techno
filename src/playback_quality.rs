@@ -15,8 +15,8 @@ pub enum Oversampling {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DriveOversampling {
     #[default]
-    #[serde(rename = "4x", alias = "2x")]
-    FourX,
+    #[serde(rename = "2x", alias = "4x")]
+    TwoX,
     #[serde(rename = "off")]
     Off,
 }
@@ -47,7 +47,7 @@ pub struct PlaybackQuality {
 impl PlaybackQuality {
     /// Every export and song-tool render explicitly uses full quality.
     pub const FULL: Self = Self {
-        drive: DriveOversampling::FourX,
+        drive: DriveOversampling::TwoX,
         master: Oversampling::FourX,
         samples: SampleQuality::High,
     };

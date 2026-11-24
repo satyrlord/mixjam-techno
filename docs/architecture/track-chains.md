@@ -112,16 +112,18 @@ pan, and master gain) applies at mix time. For a plain track it applies in the
 voice. For a chain it applies after the volume lane. The compressor and the
 width operate on the sound of the track before its level:
 
-- The compressor follows the mean power of the two channels with the curve of
-  the master Bus compressor (`master::dsp::reduction`). Its sidechain
-  high-pass filters the signal to the detector. The fader does not change
-  how hard the compressor works. The Compression lane mixes each compressed
-  frame with the frame before the compressor. The compressor only scales each
-  frame, so the mix stays in phase. The detector runs at every lane value.
-- The width scales the side of each frame, on a track whose two outputs are
-  on. Mono below high-passes the side with a fourth-order Linkwitz-Riley filter
-  and keeps the mid. The Filter lane runs after the width and applies its
-  resonance and 12 or 24 dB/octave slope with a smoothed cutoff.
+- The compressor (`src/compressor.rs`) follows the mean power of the two
+  channels with a 6 dB soft knee (`master::dsp::reduction`), dual-stage
+  program-dependent release (fast transient stage blended with slower sustained
+  stage), and optional 12 dB/octave sidechain high-pass filtering. The fader
+  does not change how hard the compressor works. The Compression lane mixes
+  each compressed frame with the frame before the compressor in phase.
+- The width scales the side of each frame on stereo tracks; Mono below
+  high-passes only the side with a fourth-order Linkwitz-Riley filter while
+  preserving Mid. The Filter lane runs after the width in 8-frame aligned ZDF
+  steps using resonance and a 12 or 24 dB/octave slope.
+- The ducker (`src/ducker.rs`) smooths its key in `f64` with a `0.4 ms`
+  pre-smooth pole, a 10 ms falling peak, and a 3 dB soft knee around threshold.
 
 After them, each stage is linear and operates on each channel separately, up to
 the ducker. The gain of the ducker follows the separate key. Thus this signal

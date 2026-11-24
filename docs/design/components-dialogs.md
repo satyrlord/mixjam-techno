@@ -39,11 +39,11 @@ edits and does not apply them.
 
 ### Audio page
 
-The Playback quality section holds Drive playback oversampling and Master
-playback oversampling (4x or Off), then Sample playback quality (High or Low).
-Each control has its help line under it. High is the default and reads clips
-band-limited. Low reads them in straight lines between samples, for less CPU.
-Exports use High for sample reading, 4x for track Drive, and 8x for master
+The Playback quality section holds Drive playback oversampling (2x or Off) and
+Master playback oversampling (4x or Off), then Sample playback quality (High or
+Low). Each control has its help line under it. High is the default and reads
+clips band-limited. Low reads them in straight lines between samples, for less
+CPU. Exports use High for sample reading, 8x for track Drive, and 8x for master
 saturation when the board runs. Low is a playback preference. If one of the three
 controls reduces the quality, Options and the accessible workspace status show
 "Playback quality reduced; exports use full quality".

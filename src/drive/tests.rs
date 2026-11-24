@@ -62,34 +62,45 @@ fn on() -> Drive {
 }
 
 #[test]
-fn cached_curve_means_match_uncached_means_across_small_steps() {
+fn antiderivative2_derivative_matches_first_integral_across_characters() {
+    let h = 1e-6;
     for character in [0.0, 0.25, 0.5, 1.0] {
-        let mut mean = Mean::default();
-        let mut previous = 0.0;
-        // Repeated and close samples take the midpoint branch. The
-        // wider step after them must calculate the correct endpoint,
-        // including a return to silence and a crossing through zero.
-        for next in [
-            0.0,
-            0.0,
-            1e-7,
-            0.5,
-            0.500_000_1,
-            -0.5,
-            -0.500_000_1,
-            10.0,
-            -10.0,
-            0.0,
-            0.0,
+        assert_eq!(antiderivative2(0.0, character), 0.0);
+        for u in [
+            -20.0, -5.0, -0.75, -0.5001, -0.4999, -0.1, -1e-4, 1e-4, 0.1, 0.4999, 0.5001, 0.75,
+            5.0, 20.0,
         ] {
-            let distance: f64 = next - previous;
-            let expected = if distance.abs() < 1e-5 {
-                curve(0.5 * (previous + next), character)
-            } else {
-                (integral(next, character) - integral(previous, character)) / distance
-            };
-            assert_eq!(mean.next(next, character).to_bits(), expected.to_bits());
-            previous = next;
+            let numeric =
+                (antiderivative2(u + h, character) - antiderivative2(u - h, character)) / (2.0 * h);
+            let exact = integral(u, character);
+            let tol = 1e-8 * (1.0 + exact.abs());
+            assert!(
+                (numeric - exact).abs() < tol,
+                "u={u} c={character}: numeric={numeric} exact={exact}"
+            );
+        }
+        // ADAA2 degenerate (< ADAA2_EPS) uses triangular tent weights [0.25, 0.5, 0.25];
+        // well-separated samples use exact ADAA2 quotient weights [1/3, 1/3, 1/3].
+        let lut = &*F2_TANH_LUT;
+        let mut adaa = Adaa2::default();
+        let mut x1 = 0.0;
+        let mut x2 = 0.0;
+        for x0 in [0.0, 0.0, 1e-8, 1e-8, 0.5e-8, -1e-8, 0.0, 0.0] {
+            let s = adaa.step::<false>(x0, character, lut);
+            let tent = curve(0.25 * x0 + 0.5 * x1 + 0.25 * x2, character);
+            assert!(
+                (s - tent).abs() < 1e-14,
+                "x={x0} c={character}: s={s} tent={tent}"
+            );
+            x2 = x1;
+            x1 = x0;
+        }
+        let mut adaa = Adaa2::default();
+        let mut line = LinearAdaa2::default();
+        for x0 in [0.0, 1e-2, -2e-2, 3e-2, -1e-2, 0.0] {
+            let s = adaa.step::<true>(x0, character, lut);
+            let l = line.step(x0);
+            assert!((s - l).abs() < 2e-5, "x={x0} c={character}: s={s} l={l}");
         }
     }
 }
@@ -207,7 +218,11 @@ fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
         frame[1] *= -0.5;
     }
     input[1024..2048].fill(0.0);
-    for quality in [DriveOversampling::FourX, DriveOversampling::Off] {
+    for (render_quality, quality) in [
+        (RenderQuality::Offline, DriveOversampling::TwoX),
+        (RenderQuality::Live, DriveOversampling::TwoX),
+        (RenderQuality::Live, DriveOversampling::Off),
+    ] {
         for mix in [0.0, 100.0] {
             let settings = Drive {
                 amount: 24.0,
@@ -215,101 +230,143 @@ fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
                 mix,
                 ..on()
             };
-            let run = Run::with_quality(&settings, quality, RenderQuality::Live);
+            let run = Run::with_quality(&settings, quality, render_quality);
+            let lead = run.latency();
+            let expected_lead = match render_quality {
+                RenderQuality::Offline => LATENCY,
+                RenderQuality::Live => 0,
+            };
+            assert_eq!(lead, expected_lead);
             let mut state = State::new(&run);
             let mut whole = input.clone();
-            whole.extend([0.0; LATENCY * 2]);
+            whole.extend(std::iter::repeat_n(0.0, lead * 2));
             run.process(&mut whole, &mut state);
-            if quality == DriveOversampling::Off || mix == 0.0 {
-                assert!(whole[..LATENCY * 2].iter().all(|x| *x == 0.0));
+            if lead > 0 && mix == 0.0 {
+                assert!(whole[..lead * 2].iter().all(|x| *x == 0.0));
             }
             let mut blocked = input.clone();
-            blocked.extend([0.0; LATENCY * 2]);
+            blocked.extend(std::iter::repeat_n(0.0, lead * 2));
             let mut state = State::new(&run);
             for block in blocked.chunks_mut(34) {
                 run.process(block, &mut state);
             }
-            assert_eq!(whole, blocked, "{quality:?} mix {mix}");
+            assert_eq!(whole, blocked, "{render_quality:?} {quality:?} mix {mix}");
             if mix == 0.0 {
-                assert_eq!(&whole[LATENCY * 2..], input);
+                assert_eq!(&whole[lead * 2..], input);
             } else {
-                assert_ne!(&whole[LATENCY * 2..], input, "Off must still saturate");
+                assert_ne!(
+                    &whole[lead * 2..],
+                    input,
+                    "{render_quality:?} {quality:?} must saturate"
+                );
                 assert!(whole.iter().all(|x| x.is_finite()));
             }
-            if quality == DriveOversampling::FourX {
-                let mut legacy = input.clone();
-                legacy.extend([0.0; LATENCY * 2]);
-                let legacy_run = Run::new(&settings);
-                legacy_run.process(&mut legacy, &mut State::new(&legacy_run));
-                assert_eq!(whole, legacy);
+            if render_quality == RenderQuality::Offline {
+                let mut offline_default = input.clone();
+                offline_default.extend(std::iter::repeat_n(0.0, LATENCY * 2));
+                let default_run = Run::new(&settings);
+                default_run.process(&mut offline_default, &mut State::new(&default_run));
+                assert_eq!(whole, offline_default);
             }
         }
     }
 }
 
 #[test]
-fn base_rate_curve_and_reference_have_the_same_half_frame_phase() {
-    let input = tone(10_000.0, 1e-8, 44_100);
-    // The reference is the straight line's interval mean at the base
-    // rate, not the undelayed current sample. Integer compensation does
-    // not remove its half-frame phase or its cos(pi*f/rate) roll-off.
-    let mut held = 0.0_f32;
-    let mut mean = Mean::default();
-    let mut pair_output = Vec::new();
-    for (frame, samples) in input.as_chunks::<2>().0.iter().enumerate() {
-        let pair = mean.pair(samples[0], &mut held, 1.0, 1.0, 0.0);
-        let previous = if frame == 0 {
-            0.0
+fn base_rate_curve_and_reference_share_one_sample_adaa2_delay() {
+    let input = tone(5_000.0, 1e-2, 44_100);
+    // Exact ADAA2 of f(x) = x is (x[n] + x[n-1] + x[n-2]) / 3, matching the
+    // curve's 1-sample group delay above ADAA2_EPS so copy - clean cancels.
+    let lut = &*F2_TANH_LUT;
+    let mut adaa = Adaa2::default();
+    let mut line = LinearAdaa2::default();
+    let mut ref_output = Vec::new();
+    for frame in 0..44_100 {
+        let s0 = f64::from(input[frame * 2]);
+        let s1 = if frame >= 1 {
+            f64::from(input[(frame - 1) * 2])
         } else {
-            input[(frame - 1) * 2]
+            0.0
         };
-        let expected = 0.5 * (previous + samples[0]);
-        assert!((pair[0] - expected).abs() < 2e-15);
-        assert_eq!(pair[1], expected);
-        pair_output.extend([pair[1], pair[1]]);
+        let s2 = if frame >= 2 {
+            f64::from(input[(frame - 2) * 2])
+        } else {
+            0.0
+        };
+        let expected = (s0 + s1 + s2) / 3.0;
+        let shaped = adaa.step::<true>(s0, 0.0, lut);
+        let reference = line.step(s0);
+        assert!((shaped - expected).abs() < 1e-6);
+        assert!((reference - expected).abs() < 1e-15);
+        ref_output.extend([reference as f32, reference as f32]);
     }
-    let magnitude = amplitude(&pair_output, 10_000.0) / amplitude(&input, 10_000.0);
-    let expected = (std::f64::consts::PI * 10_000.0 / RATE).cos();
-    assert!((magnitude - expected).abs() < 1e-4);
+    let magnitude = amplitude(&ref_output, 5_000.0) / amplitude(&input, 5_000.0);
+    let expected_mag = (1.0 + 2.0 * (std::f64::consts::TAU * 5_000.0 / RATE).cos()) / 3.0;
+    assert!((magnitude - expected_mag).abs() < 1e-4);
 }
 
 #[test]
-fn playback_quality_records_alias_and_frequency_response_tradeoffs() {
-    let input = tone(5000.0, 0.9, 2 * 44_100);
+fn playback_quality_and_offline_8x_aliasing_targets() {
+    // 4048 Hz at -1 dBFS with +24 dB Drive, character 50% (odd + even harmonics).
+    // Offline 8x FIR + ADAA2 must hold total non-harmonic aliasing < -90 dB
+    // and worst spur < -85 dBc; Live 2x IIR + ADAA2 must beat 1x Off.
+    let f0 = 4048.0;
+    let peak = db_to_gain(-1.0);
+    let settled_frames = 44_100;
+    let total_frames = 2 * 44_100;
+    let input = tone(f0, peak, total_frames);
     let settings = Drive {
         amount: 24.0,
-        character: 0.0,
+        character: 50.0,
         mix: 100.0,
         focus: 20.0,
         ..on()
     };
-    let mut aliases = [0.0; 2];
-    for (index, quality) in [DriveOversampling::FourX, DriveOversampling::Off]
-        .into_iter()
-        .enumerate()
-    {
-        let run = Run::with_quality(&settings, quality, RenderQuality::Live);
+    let measure = |render_quality: RenderQuality, drive_os: DriveOversampling| {
+        let run = Run::with_quality(&settings, drive_os, render_quality);
+        let lead = run.latency();
         let mut state = State::new(&run);
         let mut output = input.clone();
-        output.extend([0.0; LATENCY * 2]);
+        output.extend(std::iter::repeat_n(0.0, lead * 2));
         run.process(&mut output, &mut state);
-        let output = &output[(44_100 + LATENCY) * 2..];
-        let fundamental = amplitude(output, 5000.0);
-        // The fifth harmonic above Nyquist folds from 25 to 19.1 kHz.
-        aliases[index] = db(amplitude(output, 19_100.0) / fundamental);
-        println!(
-            "Drive {quality:?}: 5 kHz tone, 24 dB Drive, 19.1 kHz alias {:.2} dBc",
-            aliases[index]
-        );
-    }
-    assert!(aliases[0] < -65.0);
-    assert!(aliases[1] > aliases[0] + 10.0);
-    for hz in [55.0, 1000.0, 5000.0, 10_000.0, 19_000.0] {
-        let reference_db = db((std::f64::consts::PI * hz / RATE).cos());
-        println!(
-            "Drive Off interval-mean reference at {hz} Hz: {reference_db:.3} dB, half-frame phase lag"
-        );
-    }
+        let seg = &output[(44_100 + lead) * 2..(44_100 + lead + settled_frames) * 2];
+        // Harmonics k*f0 aliased into [0, Fs/2], excluding harmonic 1 (f0) and DC/Nyquist.
+        let fund = amplitude(seg, f0).max(1e-12);
+        let mut worst_spur_db = f64::NEG_INFINITY;
+        let mut alias_power = 0.0;
+        let fund_power = fund * fund;
+        for k in 2..=60_u32 {
+            let fk = f64::from(k) * f0;
+            // Folded frequency in [0, RATE/2]
+            let rem = fk % RATE;
+            let folded = if rem <= 0.5 * RATE { rem } else { RATE - rem };
+            // Skip exact true harmonics below Nyquist (< 20 kHz for k <= 4)
+            if fk < 0.5 * RATE {
+                continue;
+            }
+            // Skip near-DC / near-fundamental coincidences
+            if folded < 20.0 || (folded - f0).abs() < 2.0 {
+                continue;
+            }
+            let amp = amplitude(seg, folded);
+            let rel_db = db(amp / fund);
+            worst_spur_db = worst_spur_db.max(rel_db);
+            alias_power += amp * amp;
+        }
+        let total_alias_db = 10.0 * (alias_power / fund_power).max(1e-20).log10();
+        (total_alias_db, worst_spur_db)
+    };
+    let (off8_tot, off8_spur) = measure(RenderQuality::Offline, DriveOversampling::TwoX);
+    let (live2_tot, live2_spur) = measure(RenderQuality::Live, DriveOversampling::TwoX);
+    let (live1_tot, live1_spur) = measure(RenderQuality::Live, DriveOversampling::Off);
+    assert!(
+        off8_tot < -90.0 && off8_spur < -85.0,
+        "Offline 8x ADAA2 aliasing too high: total {off8_tot:.2} dB, spur {off8_spur:.2} dBc"
+    );
+    assert!(
+        live2_spur < live1_spur - 15.0 && live2_tot < live1_tot - 15.0,
+        "Live 2x IIR ({live2_tot:.1}/{live2_spur:.1}) must beat 1x Off ({live1_tot:.1}/{live1_spur:.1})"
+    );
 }
 
 #[test]
@@ -561,4 +618,124 @@ fn transfer_preview_keeps_the_straight_half_and_full_output_trim() {
     assert!((f64::from(trace[0]) + gain).abs() < 1e-6);
     assert_eq!(trace[1], 0.0);
     assert!((f64::from(trace[2]) - gain.tanh()).abs() < 1e-6);
+}
+
+#[test]
+fn every_quality_keeps_the_playback_alias_threshold() {
+    // The playback threshold that the earlier 4x default met: a 5 kHz tone
+    // at 24 dB Drive folds its fifth harmonic from 25 to 19.1 kHz. The 2x
+    // playback default and export must stay below -65 dBc, and Off must
+    // stay at least 10 dB above 2x. Do not weaken these thresholds.
+    let input = tone(5000.0, 0.9, 2 * 44_100);
+    let settings = Drive {
+        amount: 24.0,
+        character: 0.0,
+        mix: 100.0,
+        focus: 20.0,
+        ..on()
+    };
+    let alias = |render_quality, quality| {
+        let run = Run::with_quality(&settings, quality, render_quality);
+        let lead = run.latency();
+        let mut output = input.clone();
+        output.extend(std::iter::repeat_n(0.0, lead * 2));
+        run.process(&mut output, &mut State::new(&run));
+        let output = &output[(44_100 + lead) * 2..];
+        let alias = db(amplitude(output, 19_100.0) / amplitude(output, 5000.0));
+        println!("Drive {render_quality:?} {quality:?}: 19.1 kHz alias {alias:.2} dBc");
+        alias
+    };
+    let export = alias(RenderQuality::Offline, DriveOversampling::TwoX);
+    let two = alias(RenderQuality::Live, DriveOversampling::TwoX);
+    let off = alias(RenderQuality::Live, DriveOversampling::Off);
+    assert!(export < -65.0, "export alias {export:.2} dBc");
+    assert!(two < -65.0, "2x alias {two:.2} dBc");
+    assert!(off > two + 10.0, "Off {off:.2} dBc against 2x {two:.2} dBc");
+}
+
+#[test]
+fn every_quality_keeps_long_silent_tails_independent_of_block_size() {
+    // The filter histories decay through the denormal guard during a long
+    // silence. Where a block ends must not change a single output bit.
+    let mut input = tone(3_000.0, 0.9, 2_048);
+    input.extend(std::iter::repeat_n(0.0, 2 * 60_000));
+    for (render_quality, quality) in [
+        (RenderQuality::Offline, DriveOversampling::TwoX),
+        (RenderQuality::Live, DriveOversampling::TwoX),
+        (RenderQuality::Live, DriveOversampling::Off),
+    ] {
+        let settings = Drive {
+            amount: 24.0,
+            character: 50.0,
+            mix: 100.0,
+            focus: 200.0,
+            ..on()
+        };
+        let run = Run::with_quality(&settings, quality, render_quality);
+        let mut whole = input.clone();
+        run.process(&mut whole, &mut State::new(&run));
+        for frames in [7, 34, 128, 256] {
+            let mut blocked = input.clone();
+            let mut state = State::new(&run);
+            for block in blocked.chunks_mut(frames * 2) {
+                run.process(block, &mut state);
+            }
+            let first = whole
+                .iter()
+                .zip(&blocked)
+                .position(|(a, b)| a.to_bits() != b.to_bits());
+            assert_eq!(
+                first, None,
+                "{render_quality:?} {quality:?} in {frames}-frame blocks"
+            );
+        }
+    }
+}
+
+#[test]
+fn gated_power_matching_leaves_quiet_tails_unpumped() {
+    let mut input = tone(55.0, db_to_gain(-6.0), 44_100);
+    input.extend(tone(220.0, db_to_gain(-65.0), 2 * 44_100));
+    let output = drive(
+        &Drive {
+            amount: 24.0,
+            character: 100.0,
+            mix: 100.0,
+            focus: 20.0,
+            output: 0.0,
+            ..on()
+        },
+        &input,
+    );
+    let before_tail = power_db(&input[2 * 44_100 * 2..]);
+    let after_tail = power_db(&output[2 * 44_100 * 2..]);
+    assert!(
+        (after_tail - before_tail).abs() < 0.2,
+        "quiet tail moved by {:.2} dB",
+        after_tail - before_tail
+    );
+}
+
+#[test]
+fn offline_impulse_has_zero_sample_lag_after_lead_compensation() {
+    let mut input = vec![0.0_f32; 512 * 2];
+    input[200 * 2] = 0.8;
+    input[200 * 2 + 1] = 0.8;
+    let out = drive(
+        &Drive {
+            amount: 12.0,
+            character: 25.0,
+            mix: 50.0,
+            focus: 100.0,
+            ..on()
+        },
+        &input,
+    );
+    let (peak_idx, _) = out
+        .iter()
+        .step_by(2)
+        .enumerate()
+        .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+        .unwrap();
+    assert_eq!(peak_idx, 200, "impulse peak shifted to {peak_idx}");
 }

@@ -85,6 +85,13 @@ impl Ramp {
         }
     }
 
+    #[inline]
+    pub(super) fn is_still(&self, frame: u64) -> bool {
+        self.from == self.to
+            || (frame >= self.first_frame
+                && ((frame - self.first_frame) as f32 + 1.0) >= self.frames)
+    }
+
     pub(super) fn at(&self, frame: u64, channel: usize) -> f32 {
         let (from, to) = (self.from[channel], self.to[channel]);
         if from == to {

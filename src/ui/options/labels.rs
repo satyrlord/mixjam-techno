@@ -59,7 +59,7 @@ pub(crate) const MUTE_PREVIEWS: &str = "Mute previews";
 pub(crate) const METER_RATE: &str = "Meter display rate";
 
 pub(crate) const DRIVE_OVERSAMPLING_CHOICES: [(DriveOversampling, &str); 2] = [
-    (DriveOversampling::FourX, "4x"),
+    (DriveOversampling::TwoX, "2x"),
     (DriveOversampling::Off, "Off"),
 ];
 pub(crate) const OVERSAMPLING: [(Oversampling, &str); 2] =

@@ -299,7 +299,7 @@ fn realtime_options_bench() {
         ("64-track-stress", 64, 64, true),
     ] {
         let (project, samples) = options_fixture(tracks, drives, master_heavy);
-        for drive in [DriveOversampling::FourX, DriveOversampling::Off] {
+        for drive in [DriveOversampling::TwoX, DriveOversampling::Off] {
             for master in [Oversampling::FourX, Oversampling::Off] {
                 let quality = PlaybackQuality {
                     drive,
@@ -391,8 +391,8 @@ fn realtime_bench() {
     };
     let drive_oversampling = |name| match std::env::var(name).as_deref() {
         Ok("off") => DriveOversampling::Off,
-        Ok("4x") | Err(_) => DriveOversampling::FourX,
-        _ => panic!("Use off or 4x for {name}"),
+        Ok("2x") | Ok("4x") | Err(_) => DriveOversampling::TwoX,
+        _ => panic!("Use off or 2x for {name}"),
     };
     let quality = PlaybackQuality {
         drive: drive_oversampling("MIXJAM_BENCH_DRIVE"),
@@ -559,4 +559,159 @@ fn realtime_bench() {
         "48000 Hz, 20 callbacks after each replacement",
         replaces as f64 * 0.2,
     );
+}
+
+fn full_strip_bench_project(tracks: usize, with_drive: bool) -> (Project, HashMap<u32, Pcm>) {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    for track in 0..tracks {
+        for bar in 0..8 {
+            editor.place(1, track, (bar * 256) as u32, 256).unwrap();
+        }
+    }
+    let mut project = editor.project().clone();
+    for (index, track) in project.tracks[..tracks].iter_mut().enumerate() {
+        track.gain = 0.7 / tracks as f32;
+        track.eq = crate::eq::ChannelEq {
+            on: true,
+            low_cut: 40.0,
+            low_db: 2.0,
+            mid_db: -2.0,
+            peak2_db: 1.5,
+            high_db: 1.0,
+            high_cut: 16_000.0,
+            cut_slope: crate::eq::CutSlope::Slope24,
+            ..Default::default()
+        };
+        track.drive = crate::drive::Drive {
+            on: with_drive,
+            amount: 18.0,
+            character: 40.0,
+            mix: 80.0,
+            focus: 90.0,
+            output: 0.0,
+        };
+        track.compressor = crate::compressor::Compressor {
+            on: true,
+            threshold: -24.0,
+            ratio: 4.0,
+            attack: 2.0,
+            release: 80.0,
+            makeup: 0.0,
+            sc_hpf_hz: 120.0,
+        };
+        track.width = 110.0;
+        track.mono_below_hz = 120.0;
+        track.filter_resonance = 25.0;
+        track.filter_slope = crate::automation::FilterSlope::Slope24;
+        track.automation.filter = vec![
+            crate::automation::Point {
+                tick: 0,
+                value: 0.6,
+            },
+            crate::automation::Point {
+                tick: 2048,
+                value: -0.2,
+            },
+        ];
+        if index > 0 {
+            track.ducker = crate::ducker::Ducker {
+                on: true,
+                key: 1,
+                threshold: -28.0,
+                depth: 8.0,
+                attack: 0.5,
+                release: 80.0,
+            };
+        }
+    }
+    let source = Pcm {
+        sample_rate: Mix::SAMPLE_RATE,
+        channels: 2,
+        samples: (0..Mix::SAMPLE_RATE * 4)
+            .flat_map(|frame| {
+                let s = f64::from(frame) / f64::from(Mix::SAMPLE_RATE);
+                let x = (0.45 * (std::f64::consts::TAU * 65.0 * s).sin()
+                    + 0.20 * (std::f64::consts::TAU * 1800.0 * s).sin())
+                    as f32;
+                [x, -0.7 * x]
+            })
+            .collect(),
+    };
+    (project, HashMap::from([(1, source)]))
+}
+
+/// Multi-track Channel Strip CPU benchmark (`--release`):
+/// 16 full strips with 2x Drive (`<= 2.0 ms` p99) and 32 strips without Drive (`<= 1.5 ms` p99).
+/// The p99 takes the lowest CPU time of each song position over `BENCH_PASSES` passes.
+#[test]
+#[ignore = "release benchmark; run in --release"]
+fn channel_strip_multitrack_bench() {
+    use crate::audio::RenderState;
+    let cycles = cycles_per_ms();
+    SYSTEM_PRIORITY.with(|system| system.set(true));
+    let mut results = Vec::new();
+    for (label, tracks, with_drive, limit_p99_ms) in [
+        ("16 strips + 2x Drive", 16, true, 2.0),
+        ("32 strips (no Drive)", 32, false, 1.5),
+    ] {
+        let (project, samples) = full_strip_bench_project(tracks, with_drive);
+        let quality = PlaybackQuality::FULL;
+        let mix = mix_with_samples_quality(&project, &samples, quality).unwrap();
+        let mut state = RenderState::default();
+        mix.prepare_state(&mut state);
+        let drives_ptr = state.drives.as_ptr();
+        let mut out = vec![0.0_f32; 256 * 2];
+        let mut sends = vec![0.0_f32; 256 * 2 * crate::fx::BUSES];
+        // Warmup
+        for i in 0..100_u64 {
+            mix.read_block(i * 256, &mut out, Some(&mut sends), &mut state);
+        }
+        // Each position of the song plays once per pass. The cost of a
+        // position comes back on each pass, but a burst of background work
+        // on the machine (about 25 ms, which slows each block by up to half)
+        // lands on one pass only. Thus the check takes the lowest cost of
+        // each position over the passes.
+        let blocks = ((4 * 44_100) / 256) as u64;
+        let reads = (BENCH_PASSES * blocks) as usize;
+        let mut wall = Vec::with_capacity(reads);
+        let mut cpu = Vec::with_capacity(reads);
+        let mut steady = vec![f64::INFINITY; blocks as usize];
+        for i in 0..BENCH_PASSES * blocks {
+            let position = i % blocks;
+            let (t0, c0) = (Instant::now(), thread_cycles());
+            mix.read_block(position * 256, &mut out, Some(&mut sends), &mut state);
+            let ms = (thread_cycles() - c0) as f64 / cycles;
+            wall.push(t0.elapsed().as_secs_f64() * 1000.0);
+            cpu.push(ms);
+            let lowest = &mut steady[position as usize];
+            *lowest = lowest.min(ms);
+            std::hint::black_box(&out);
+        }
+        assert_eq!(state.drives.as_ptr(), drives_ptr, "drives reallocated");
+        let p99_steady = percentile(&mut steady, 0.99);
+        println!(
+            "{label}: wall p50={:.3} ms p99={:.3} ms max={:.3} ms | cpu p50={:.3} ms p99={:.3} ms | steady p99={p99_steady:.3} ms",
+            percentile(&mut wall, 0.5),
+            percentile(&mut wall, 0.99),
+            percentile(&mut wall, 1.0),
+            percentile(&mut cpu, 0.5),
+            percentile(&mut cpu, 0.99),
+        );
+        results.push((label, limit_p99_ms, p99_steady));
+    }
+    for (label, limit_p99_ms, p99_steady) in &results {
+        assert!(
+            p99_steady <= limit_p99_ms,
+            "{label} steady p99 CPU {p99_steady:.3} ms > {limit_p99_ms:.2} ms"
+        );
+    }
+}
+
+/// The passes of `channel_strip_multitrack_bench` over the 4 s song.
+const BENCH_PASSES: u64 = 3;
+
+/// The value at fraction `q` of `values`, sorted in place.
+fn percentile(values: &mut [f64], q: f64) -> f64 {
+    values.sort_by(f64::total_cmp);
+    values[((values.len() - 1) as f64 * q).round() as usize]
 }

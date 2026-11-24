@@ -357,3 +357,29 @@ fn a_low_pass_at_any_rate_matches_the_cookbook_written_out() {
         Coefficients::low_pass_at(1000.0, 0.7, RATE)
     );
 }
+
+#[test]
+fn fast_audio_math_matches_std_within_tight_tolerance() {
+    for power in [1e-12, 1e-8, 1e-4, 0.01, 0.25, 1.0, 4.0] {
+        assert!(
+            (fast_log10(power) - power.log10()).abs() < 1e-6,
+            "log10({power})"
+        );
+    }
+    for db in [-96.0, -30.0, -6.0, -0.5, 0.0, 6.0, 24.0] {
+        let fast = fast_db_to_gain(db);
+        let exact = db_to_gain(db);
+        assert!(
+            ((fast - exact) / exact).abs() < 1e-6,
+            "db_to_gain({db}): {fast} vs {exact}"
+        );
+    }
+    for x in [0.001, 0.05, 0.25, 0.78, 0.79, 1.1, 1.45] {
+        let fast = fast_tan(x);
+        let exact = x.tan();
+        assert!(
+            ((fast - exact) / exact).abs() < 1e-6,
+            "tan({x}): {fast} vs {exact}"
+        );
+    }
+}

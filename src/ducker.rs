@@ -13,7 +13,7 @@
 //! The same key tracks feed the master pedals' and the FX buses' keys
 //! (`Keys`): a dynamics pedal or an FX ducker whose key names a track
 //! listens to that track instead of its own input.
-use crate::master::dsp::{flush32, pole_at};
+use crate::master::dsp::{fast_db_to_gain, fast_log10, flush, pole_at};
 use crate::master::{KnobRange, range, ratio_range};
 use serde::{Deserialize, Serialize};
 
@@ -166,62 +166,128 @@ impl Ducker {
 }
 
 /// How fast the key's peak falls: 10 ms.
-const PEAK_FALL_SECONDS: f32 = 0.010;
+const PEAK_FALL_SECONDS: f64 = 0.010;
+/// Key envelope pre-smooth pole (`0.4 ms`) suppressing hard-transient click splash.
+const KEY_SMOOTH_SECONDS: f64 = 0.0004;
+/// Soft knee width around `threshold`, in dB.
+const KNEE_DB: f64 = 3.0;
+const HALF_KNEE_DB: f64 = 0.5 * KNEE_DB;
 
 /// A ducker's settings, ready for the audio thread.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Run {
-    threshold_db: f32,
-    depth_db: f32,
-    attack: f32,
-    release: f32,
-    fall: f32,
+    threshold_db: f64,
+    depth_db: f64,
+    attack2: f64,
+    release2: f64,
+    fall: f64,
+    key_smooth: f64,
 }
 
 impl Run {
     pub(crate) fn new(ducker: &Ducker, rate: f32) -> Self {
         let rate = f64::from(rate);
+        let attack = pole_at(f64::from(ducker.attack) / 1000.0, rate);
+        let release = pole_at(f64::from(ducker.release) / 1000.0, rate);
         Self {
-            threshold_db: ducker.threshold,
-            depth_db: ducker.depth,
-            attack: pole_at(f64::from(ducker.attack) / 1000.0, rate) as f32,
-            release: pole_at(f64::from(ducker.release) / 1000.0, rate) as f32,
-            fall: pole_at(f64::from(PEAK_FALL_SECONDS), rate) as f32,
+            threshold_db: f64::from(ducker.threshold),
+            depth_db: f64::from(ducker.depth),
+            attack2: attack * attack,
+            release2: release * release,
+            fall: pole_at(PEAK_FALL_SECONDS, rate),
+            key_smooth: pole_at(KEY_SMOOTH_SECONDS, rate),
         }
+    }
+
+    #[inline]
+    fn step_unflushed(&self, key: f32, state: &mut State) -> f32 {
+        let raw = f64::from(key);
+        state.smoothed_key = raw + (state.smoothed_key - raw) * self.key_smooth;
+        state.peak = state.smoothed_key.max(state.peak * self.fall);
+        if (state.phase & 1) == 0 {
+            let level = 20.0 * fast_log10(state.peak.max(1e-12));
+            let excess = level - self.threshold_db;
+            let knee_excess = if excess <= -HALF_KNEE_DB {
+                0.0
+            } else if excess >= HALF_KNEE_DB {
+                excess
+            } else {
+                let x = excess + HALF_KNEE_DB;
+                (x * x) / (2.0 * KNEE_DB)
+            };
+            let target = knee_excess.clamp(0.0, self.depth_db);
+            let speed = if target > state.reduction {
+                self.attack2
+            } else {
+                self.release2
+            };
+            state.reduction = target + (state.reduction - target) * speed;
+            state.cached_gain = if state.reduction < 1e-4 {
+                state.reduction = 0.0;
+                1.0
+            } else {
+                fast_db_to_gain(-state.reduction) as f32
+            };
+        }
+        state.phase = state.phase.wrapping_add(1);
+        state.cached_gain
     }
 
     /// The gain for one frame, given the key's level at that frame (the
     /// larger channel's magnitude). The state carries from frame to frame.
     #[inline]
     pub(crate) fn gain(&self, key: f32, state: &mut State) -> f32 {
-        state.peak = flush32(key.max(state.peak * self.fall));
-        let level = 20.0 * state.peak.max(1e-9).log10();
-        let target = (level - self.threshold_db).clamp(0.0, self.depth_db);
-        let speed = if target > state.reduction {
-            self.attack
-        } else {
-            self.release
-        };
-        state.reduction = target + (state.reduction - target) * speed;
-        if state.reduction < 1e-4 {
-            state.reduction = 0.0;
-            return 1.0;
+        let g = self.step_unflushed(key, state);
+        state.smoothed_key = flush(state.smoothed_key);
+        state.peak = flush(state.peak);
+        g
+    }
+
+    /// Duck a stereo block with constant track `level` in one tight loop.
+    pub(crate) fn process_stereo_gain(
+        &self,
+        keys: &[f32],
+        frames: &mut [f32],
+        level: [f32; 2],
+        state: &mut State,
+    ) {
+        let [l0, l1] = level;
+        for (&key, frame) in keys.iter().zip(frames.as_chunks_mut::<2>().0) {
+            let g = self.step_unflushed(key, state);
+            frame[0] = (frame[0] * g) * l0;
+            frame[1] = (frame[1] * g) * l1;
         }
-        10.0_f32.powf(-state.reduction / 20.0)
+        state.smoothed_key = flush(state.smoothed_key);
+        state.peak = flush(state.peak);
     }
 }
 
-/// The ducker's history: the key's falling peak and the current reduction
-/// in dB.
-#[derive(Clone, Copy, Debug, Default)]
+/// The ducker's history: the pre-smoothed key envelope, falling peak, and
+/// active gain reduction in dB.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
-    peak: f32,
-    reduction: f32,
+    smoothed_key: f64,
+    peak: f64,
+    reduction: f64,
+    phase: u8,
+    cached_gain: f32,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            smoothed_key: 0.0,
+            peak: 0.0,
+            reduction: 0.0,
+            phase: 0,
+            cached_gain: 1.0,
+        }
+    }
 }
 
 impl State {
     pub(crate) fn reduction_db(&self) -> f32 {
-        self.reduction
+        self.reduction as f32
     }
 }
 
@@ -383,5 +449,66 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn soft_knee_blends_smoothly_around_threshold() {
+        let ducker = Ducker {
+            on: true,
+            key: 2,
+            threshold: -20.0,
+            depth: 12.0,
+            attack: 0.1,
+            release: 50.0,
+        };
+        let run = Run::new(&ducker, 44_100.0);
+        let mut previous_db = -1.0_f64;
+        for offset in [-2.0, -1.5, -0.75, 0.0, 0.75, 1.5, 2.0] {
+            let key = 10_f32.powf((-20.0 + offset) / 20.0);
+            let mut state = State::default();
+            let gain = (0..4410).fold(1.0_f32, |_, _| run.gain(key, &mut state));
+            let gr_db = -20.0 * f64::from(gain).log10();
+            assert!(gr_db >= previous_db, "offset {offset}: {gr_db}");
+            previous_db = gr_db;
+            if offset == 0.0 {
+                // At threshold inside 3 dB soft knee: KNEE_DB / 8 = 0.375 dB.
+                assert!(
+                    (gr_db - 0.375).abs() < 0.02,
+                    "knee at threshold: {gr_db:.3}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fast_attack_hard_kick_suppresses_high_frequency_click_splash() {
+        let ducker = Ducker {
+            on: true,
+            key: 2,
+            threshold: -30.0,
+            depth: 18.0,
+            attack: 0.1,
+            release: 100.0,
+        };
+        let run = Run::new(&ducker, 44_100.0);
+        let mut state = State::default();
+        let n = 4096;
+        let mut ducked = vec![0.0_f64; n];
+        for (i, sample) in ducked.iter_mut().enumerate() {
+            let key = if (1024..1400).contains(&i) { 0.8 } else { 0.0 };
+            let bass = 0.5 * (std::f64::consts::TAU * 80.0 * i as f64 / 44_100.0).sin();
+            *sample = bass * f64::from(run.gain(key, &mut state));
+        }
+        // High-pass energy > 4 kHz via 4th-order difference proxy around click.
+        let mut splash = 0.0_f64;
+        for w in ducked[1000..1100].windows(2) {
+            let d = w[1] - w[0];
+            splash += d * d;
+        }
+        let rms_diff = (splash / 99.0).sqrt();
+        assert!(
+            rms_diff < 0.03,
+            "hard kick click splash derivative RMS too high: {rms_diff:.4}"
+        );
     }
 }

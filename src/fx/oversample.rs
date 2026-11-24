@@ -92,6 +92,95 @@ impl HalfBandIir2x {
     }
 }
 
+/// `PolyphasePath` for two channels side by side, one per lane. It flushes
+/// its states only at the end of a block, with `flush_state`.
+#[derive(Clone, Copy)]
+struct StereoPolyphasePath<const N: usize> {
+    x_prev: [[f64; 2]; N],
+    y_prev: [[f64; 2]; N],
+}
+impl<const N: usize> StereoPolyphasePath<N> {
+    const ZERO: Self = Self {
+        x_prev: [[0.0; 2]; N],
+        y_prev: [[0.0; 2]; N],
+    };
+
+    #[inline]
+    fn step_unflushed(&mut self, coefs: &[f64; N], mut x: [f64; 2]) -> [f64; 2] {
+        for (&a, (xp, yp)) in coefs
+            .iter()
+            .zip(self.x_prev.iter_mut().zip(&mut self.y_prev))
+        {
+            let y = [a * (x[0] - yp[0]) + xp[0], a * (x[1] - yp[1]) + xp[1]];
+            *xp = x;
+            *yp = y;
+            x = y;
+        }
+        x
+    }
+
+    fn flush_state(&mut self) {
+        for value in self.x_prev.iter_mut().chain(&mut self.y_prev).flatten() {
+            *value = flush(*value);
+        }
+    }
+}
+
+/// The up half of a `HalfBandIir2x` for both channels, one per lane, with
+/// its states flushed only at the end of a block.
+#[derive(Clone, Copy)]
+pub(crate) struct StereoUpsampler2x {
+    a: StereoPolyphasePath<4>,
+    b: StereoPolyphasePath<3>,
+}
+impl StereoUpsampler2x {
+    pub(crate) const ZERO: Self = Self {
+        a: StereoPolyphasePath::ZERO,
+        b: StereoPolyphasePath::ZERO,
+    };
+
+    /// The two high-rate frames that follow `frame`, in time order.
+    #[inline]
+    pub(crate) fn step(&mut self, frame: [f64; 2]) -> [[f64; 2]; 2] {
+        [
+            self.a.step_unflushed(&HB_A, frame),
+            self.b.step_unflushed(&HB_B, frame),
+        ]
+    }
+
+    pub(crate) fn flush_state(&mut self) {
+        self.a.flush_state();
+        self.b.flush_state();
+    }
+}
+
+/// The down half of a `HalfBandIir2x` for both channels, one per lane, with
+/// its states flushed only at the end of a block.
+#[derive(Clone, Copy)]
+pub(crate) struct StereoDownsampler2x {
+    a: StereoPolyphasePath<4>,
+    b: StereoPolyphasePath<3>,
+}
+impl StereoDownsampler2x {
+    pub(crate) const ZERO: Self = Self {
+        a: StereoPolyphasePath::ZERO,
+        b: StereoPolyphasePath::ZERO,
+    };
+
+    /// The base-rate frame of two high-rate frames in time order.
+    #[inline]
+    pub(crate) fn step(&mut self, [first, second]: [[f64; 2]; 2]) -> [f64; 2] {
+        let a = self.a.step_unflushed(&HB_A, second);
+        let b = self.b.step_unflushed(&HB_B, first);
+        [0.5 * (a[0] + b[0]), 0.5 * (a[1] + b[1])]
+    }
+
+    pub(crate) fn flush_state(&mut self) {
+        self.a.flush_state();
+        self.b.flush_state();
+    }
+}
+
 /// Linear-phase integer-latency 8x/16x FIR oversampler reusing `master::dsp::Halfband`.
 #[derive(Clone, Copy)]
 pub(crate) struct FirOversampler {

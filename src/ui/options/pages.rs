@@ -68,7 +68,7 @@ pub(crate) fn audio(
     );
     help(
         ui,
-        "4x keeps track drive saturation clean. Off can sound harsher.",
+        "2x keeps track drive saturation clean. Off can sound harsher.",
     );
     choice(
         ui,
