@@ -39,29 +39,11 @@ the ranges, reset values, logarithmic mapping, and discrete choices. Tool
 bodies own their content and drafts. They have no window skins or button
 implementations of their own.
 
-The shared chassis uses folded painted metal with a small amount of age. It has
-dark inset control bays, cream lettering, polished silver knobs, and pale metal
-primary buttons. `controls::Palette` supplies the Utility, Marine, Granite,
-Red, Olive, and Indigo variants:
-
-- Time Stretcher and the FX returns board use Marine.
-- Sample Editor uses Granite.
-- Effect Studio uses Red.
-- Step synth uses Olive.
-- Mastering uses Indigo.
-- Utilities use neutral metal with orange-yellow accents.
-
-Prepared material and control PNGs are in `assets/folded-metal/<palette>/100/`
-and in the shared `assets/folded-metal/controls/100/`.
-
-The chassis has no decorative screws or fasteners. Its continuous antialiased
-perimeter and bevel are native geometry. Raster material fades before the
-outer outline and at strip ends, so no joints are visible. Knob edges use 8x
-supersampling and one premultiplied-alpha Lanczos reduction. Fixed details fade
-to transparent over a solid chassis color that matches them. A resize extends
-the solid regions. Painting aligns one texel to one physical pixel. Text and
-input stay live. Content reflows or scrolls, and the artwork and controls do
-not scale. The palette variants share geometry and interaction.
+The shared chassis across Utility, Marine, Granite, Red, Olive, and Indigo
+variants renders procedurally in code via `src/ui/controls/` and
+`src/ui/theme.rs`, with no chassis bitmap assets. Content reflows or scrolls
+when resized, keeping geometry and interaction identical across all three
+themes.
 
 ## Collapse and blockers
 

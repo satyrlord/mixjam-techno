@@ -1,72 +1,199 @@
-//! The pedal enclosure: enamel colors, and the painted metal finish with its
-//! brushed grain, sheen, scratches, and bevel.
+//! The pedal and rack-unit enclosures: unified 3-theme hardware shells
+//! (Studio flat enamel, Aero molded plastic, Vintage 3D brushed metal) wrapping
+//! bespoke per-unit artwork from `master/motifs.rs`.
 use super::*;
+
+const MASTER_MOTIFS: [(PedalKind, MotifSpec); 13] = [
+    (
+        PedalKind::SoftClip,
+        MotifSpec {
+            base: [246, 162, 74],
+            secondary: [232, 138, 62],
+            trim: [46, 22, 8],
+            light_face: true,
+            style: MotifStyle::DiagonalStripe,
+            knob: theme::KnobStyle::Anodized([196, 98, 28]),
+        },
+    ),
+    (
+        PedalKind::Tube,
+        MotifSpec {
+            base: [106, 22, 28],
+            secondary: [74, 16, 22],
+            trim: [246, 198, 120],
+            light_face: false,
+            style: MotifStyle::TubeVents,
+            knob: theme::KnobStyle::DarkPhenolic([248, 196, 114]),
+        },
+    ),
+    (
+        PedalKind::TrimEq,
+        MotifSpec {
+            base: [198, 202, 204],
+            secondary: [176, 182, 186],
+            trim: [34, 38, 42],
+            light_face: true,
+            style: MotifStyle::AluminumCurve,
+            knob: theme::KnobStyle::BrushedChrome([24, 28, 32]),
+        },
+    ),
+    (
+        PedalKind::BusCompressor,
+        MotifSpec {
+            base: [30, 35, 40],
+            secondary: [52, 59, 67],
+            trim: [198, 210, 222],
+            light_face: false,
+            style: MotifStyle::RackMeterDeck,
+            knob: theme::KnobStyle::BrushedChrome([20, 24, 28]),
+        },
+    ),
+    (
+        PedalKind::LiftEq,
+        MotifSpec {
+            base: [202, 230, 248],
+            secondary: [124, 186, 238],
+            trim: [24, 54, 96],
+            light_face: true,
+            style: MotifStyle::AtmosphericGradient,
+            knob: theme::KnobStyle::BrushedChrome([22, 52, 98]),
+        },
+    ),
+    (
+        PedalKind::Maximizer,
+        MotifSpec {
+            base: [132, 218, 140],
+            secondary: [168, 228, 118],
+            trim: [14, 38, 22],
+            light_face: true,
+            style: MotifStyle::RadialSunburst,
+            knob: theme::KnobStyle::Anodized([44, 156, 78]),
+        },
+    ),
+    (
+        PedalKind::Tape,
+        MotifSpec {
+            base: [54, 59, 57],
+            secondary: [48, 68, 42],
+            trim: [220, 226, 208],
+            light_face: false,
+            style: MotifStyle::TapeDeckInset,
+            knob: theme::KnobStyle::DarkPhenolic([244, 238, 220]),
+        },
+    ),
+    (
+        PedalKind::Multiband,
+        MotifSpec {
+            base: [22, 30, 42],
+            secondary: [22, 46, 76],
+            trim: [132, 224, 242],
+            light_face: false,
+            style: MotifStyle::TriBandWells,
+            knob: theme::KnobStyle::Anodized([64, 162, 214]),
+        },
+    ),
+    (
+        PedalKind::Imaging,
+        MotifSpec {
+            base: [20, 22, 26],
+            secondary: [188, 194, 198],
+            trim: [236, 240, 244],
+            light_face: false,
+            style: MotifStyle::PhaseBezel,
+            knob: theme::KnobStyle::BrushedChrome([20, 22, 26]),
+        },
+    ),
+    (
+        PedalKind::Limiter,
+        MotifSpec {
+            base: [58, 18, 36],
+            secondary: [84, 24, 50],
+            trim: [248, 152, 176],
+            light_face: false,
+            style: MotifStyle::SteppedFrame,
+            knob: theme::KnobStyle::DarkPhenolic([252, 164, 182]),
+        },
+    ),
+    (
+        PedalKind::BoosterEq,
+        MotifSpec {
+            base: [232, 186, 82],
+            secondary: [216, 168, 66],
+            trim: [42, 30, 10],
+            light_face: true,
+            style: MotifStyle::GraphicGrid,
+            knob: theme::KnobStyle::Default,
+        },
+    ),
+    (
+        PedalKind::BoosterCompressor,
+        MotifSpec {
+            base: [108, 206, 186],
+            secondary: [86, 188, 168],
+            trim: [12, 38, 34],
+            light_face: true,
+            style: MotifStyle::SteppedFrame,
+            knob: theme::KnobStyle::Anodized([48, 152, 134]),
+        },
+    ),
+    (
+        PedalKind::BoosterWide,
+        MotifSpec {
+            base: [26, 28, 30],
+            secondary: [102, 58, 34],
+            trim: [234, 236, 238],
+            light_face: false,
+            style: MotifStyle::WoodCheeks,
+            knob: theme::KnobStyle::DarkPhenolic([230, 188, 255]),
+        },
+    ),
+];
 
 /// Family accent stripe color (Amber/Copper saturation, Steel dynamics, Teal tone/stereo, Brass booster).
 pub(super) fn family_accent(kind: PedalKind) -> Color32 {
     match kind {
         PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape => {
-            Color32::from_rgb(232, 152, 62)
+            Color32::from_rgb(236, 154, 62)
         }
         PedalKind::BusCompressor | PedalKind::Multiband | PedalKind::Limiter => {
-            Color32::from_rgb(92, 172, 224)
+            Color32::from_rgb(92, 184, 232)
         }
         PedalKind::TrimEq | PedalKind::LiftEq | PedalKind::Imaging => {
-            Color32::from_rgb(98, 198, 172)
+            Color32::from_rgb(102, 208, 178)
         }
         PedalKind::BoosterEq | PedalKind::BoosterCompressor | PedalKind::BoosterWide => {
-            Color32::from_rgb(206, 178, 92)
+            Color32::from_rgb(218, 184, 86)
         }
     }
 }
 
+/// Procedural stompbox motif for each Mastering pedal across all three themes.
+pub(super) fn master_motif(kind: PedalKind) -> MotifSpec {
+    MASTER_MOTIFS
+        .iter()
+        .find(|&&(entry_kind, _)| entry_kind == kind)
+        .expect("every PedalKind has a master motif")
+        .1
+}
+
 /// True when the mastering faceplate uses a dark background and light legend ink.
-pub(super) fn master_face_dark_mode() -> bool {
-    matches!(
-        roles().material,
-        theme::Material::Flat | theme::Material::Metal
-    )
+pub(super) fn master_face_dark_mode(kind: PedalKind) -> bool {
+    !master_motif(kind).light_face
 }
 
 /// High-contrast silk-screen ink for mastering cards and chips.
-pub(super) fn master_face_ink() -> Color32 {
-    if master_face_dark_mode() {
+pub(super) fn master_face_ink(kind: PedalKind) -> Color32 {
+    if master_face_dark_mode(kind) {
         roles().legend
     } else {
         roles().ink
     }
 }
 
-fn vintage_anodized_rgb(kind: PedalKind, on: bool) -> Color32 {
-    if !on {
-        return Color32::from_rgb(29, 30, 29);
-    }
-    let [r, g, b] = match kind {
-        PedalKind::SoftClip | PedalKind::Tube | PedalKind::Maximizer | PedalKind::Tape => {
-            [44, 37, 33]
-        }
-        PedalKind::BusCompressor | PedalKind::Multiband | PedalKind::Limiter => [33, 40, 46],
-        PedalKind::TrimEq | PedalKind::LiftEq | PedalKind::Imaging => [33, 43, 39],
-        _ => [42, 39, 32],
-    };
-    Color32::from_rgb(r, g, b)
-}
-
-/// 3-theme faceplate color for Mastering cards and chips:
-/// - `Metal` (`Vintage`): dark 1950s–70s anodized charcoal/espresso aluminum (no pastels!)
-/// - `Flat` (`Studio`): dark graphite faceplate
-/// - `Plastic` (`Aero`): light molded translucent enamel
+/// Primary base color used on the compact signal-order chip strip.
 pub(super) fn master_face_color(kind: PedalKind, on: bool) -> Color32 {
-    match roles().material {
-        theme::Material::Metal => vintage_anodized_rgb(kind, on),
-        theme::Material::Flat => {
-            let [r, g, b] = if on { [40, 44, 50] } else { [28, 31, 35] };
-            Color32::from_rgb(r, g, b)
-        }
-        theme::Material::Plastic => {
-            enamel(kind, on).lerp_to_gamma(Color32::from_rgb(232, 240, 250), 0.35)
-        }
-    }
+    let ([primary, _], _) = master_motif(kind).zones(on);
+    primary
 }
 
 /// A signal-order chip with the same focus and appearance in both views.
@@ -104,12 +231,12 @@ fn paint_signal_chip(
     hovered: bool,
 ) {
     let face = master_face_color(kind, on);
-    let ink = master_face_ink();
+    let ink = master_face_ink(kind);
     let accent = family_accent(kind);
     let stripe = if on || selected {
         accent
     } else {
-        accent.gamma_multiply(0.30)
+        accent.gamma_multiply(0.35)
     };
     ui.painter().rect_filled(chip, 4.0, face);
     ui.painter().rect_filled(
@@ -128,7 +255,7 @@ fn paint_signal_chip(
     let border_c = if selected {
         accent
     } else {
-        ink.gamma_multiply(0.35)
+        roles().ink.gamma_multiply(0.65)
     };
     ui.painter().rect_stroke(
         chip,
@@ -145,26 +272,119 @@ fn paint_signal_chip(
     );
 }
 
-/// Draw the 3-theme Mastering card chassis (`Vintage` dark anodized metal with corner
-/// screws, `Studio` dark graphite, `Aero` light molded plastic) plus top family stripe.
-pub(super) fn master_enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
-    let face = master_face_color(kind, on);
-    let accent = family_accent(kind);
+fn draw_metal_screws(painter: &egui::Painter, rect: Rect) {
+    for offset in [
+        Vec2::new(6.0, 6.0),
+        Vec2::new(rect.width() - 6.0, 6.0),
+        Vec2::new(6.0, rect.height() - 6.0),
+        Vec2::new(rect.width() - 6.0, rect.height() - 6.0),
+    ] {
+        let c = rect.min + offset;
+        painter.circle_filled(c, 2.2, roles().well_edge);
+        painter.circle_stroke(c, 2.2, Stroke::new(0.7_f32, roles().ink));
+        painter.line_segment(
+            [c - Vec2::new(1.3, 1.0), c + Vec2::new(1.3, 1.0)],
+            Stroke::new(0.8_f32, roles().ink),
+        );
+    }
+}
+
+fn paint_metal_shell(ui: &egui::Ui, rect: Rect, base: Color32) -> (Vec<Pos2>, egui::Mesh) {
+    let painter = ui.painter();
+    let radius = egui::CornerRadius::same(CORNER as u8);
+    let body = Rect::from_min_max(rect.min, rect.max + Vec2::splat(DEPTH));
+    for (offset, blur, alpha) in [([5, 8], 16, 160), ([1, 2], 4, 150)] {
+        painter.add(
+            egui::epaint::Shadow {
+                offset,
+                blur,
+                spread: 0,
+                color: Color32::from_black_alpha(alpha),
+            }
+            .as_shape(body, radius),
+        );
+    }
+    let along = Vec2::splat(DEPTH);
+    let mut outline = Vec::new();
+    for (point, facing) in contour(rect, 0.0) {
+        let away = facing.x + facing.y;
+        if away > 1e-3 {
+            outline.push(point + along);
+        } else if away < -1e-3 {
+            outline.push(point);
+        } else if facing.x > 0.0 {
+            outline.extend([point, point + along]);
+        } else {
+            outline.extend([point + along, point]);
+        }
+    }
+    painter.add(egui::Shape::convex_polygon(
+        outline.clone(),
+        lit(base, -0.62),
+        Stroke::NONE,
+    ));
+    let face = bevel(rect, base);
+    painter.add(face.clone());
+    (outline, face)
+}
+
+fn paint_metal_finish(
+    ui: &egui::Ui,
+    rect: Rect,
+    outline: Vec<Pos2>,
+    face: &egui::Mesh,
+    on: bool,
+    seed: u64,
+    scratches_on: bool,
+) {
+    let painter = ui.painter();
+    if on {
+        let finish = finish(ui.ctx());
+        let pixels = ui.ctx().pixels_per_point();
+        let start = Vec2::new((seed * 97 % 512) as f32, (seed * 61 % 256) as f32);
+        let grain = overlay(face, finish.grain.id(), |pt| {
+            let texel = (pt - rect.min) * pixels + start;
+            Pos2::new(texel.x / GRAIN[0] as f32, texel.y / GRAIN[1] as f32)
+        });
+        let sheen = overlay(face, finish.sheen.id(), |pt| {
+            let lean = SHEEN_LEAN * (rect.bottom() - pt.y);
+            let across = (pt.x - rect.left() + lean) / (rect.width() + SHEEN_LEAN * rect.height());
+            Pos2::new(across, 0.5)
+        });
+        painter.add(grain);
+        painter.add(sheen);
+        if scratches_on {
+            let below = rect.shrink(BEVEL + 3.0);
+            let below =
+                Rect::from_x_y_ranges(below.x_range(), rect.top() + HEADER + 4.0..=below.bottom());
+            scratches(painter, below, seed);
+        }
+    }
+    painter.add(egui::Shape::closed_line(
+        outline,
+        Stroke::new(1.5_f32, roles().ink),
+    ));
+    draw_metal_screws(painter, rect);
+}
+
+/// Shared 3-theme stompbox/rack card renderer for Mastering pedals and FX units.
+pub(crate) fn paint_motif_enclosure(
+    ui: &egui::Ui,
+    rect: Rect,
+    spec: MotifSpec,
+    on: bool,
+    seed: u64,
+) {
+    let ([zone_a, _], _) = spec.zones(on);
     let painter = ui.painter();
     match roles().material {
         theme::Material::Flat => {
-            painter.rect_filled(rect, 4.0, face);
+            painter.rect_filled(rect, 4.0, zone_a);
+            super::motifs::paint_motif_art(ui, rect, spec, on, seed);
             painter.rect_stroke(
                 rect,
                 4.0,
-                Stroke::new(
-                    1.0_f32,
-                    if on {
-                        accent.gamma_multiply(0.55)
-                    } else {
-                        roles().bay_edge
-                    },
-                ),
+                Stroke::new(1.4_f32, roles().ink),
                 egui::StrokeKind::Inside,
             );
         }
@@ -178,97 +398,34 @@ pub(super) fn master_enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: b
                 }
                 .as_shape(rect, egui::CornerRadius::same(10)),
             );
-            theme::plastic(painter, rect, 10.0, face);
-        }
-        theme::Material::Metal => {
-            enclosure_of(ui, rect, face, on, kind as u64 + 1);
-            // Engraved bezel & 4 corner slotted chassis screws for 1950s–70s hardware feel.
+            theme::plastic(painter, rect, 10.0, zone_a);
+            super::motifs::paint_motif_art(ui, rect, spec, on, seed);
             painter.rect_stroke(
-                rect.shrink(4.0),
-                5.0,
-                Stroke::new(1.0_f32, Color32::from_white_alpha(26)),
+                rect,
+                10.0,
+                Stroke::new(1.0_f32, zone_a.lerp_to_gamma(Color32::BLACK, 0.45)),
                 egui::StrokeKind::Inside,
             );
-            for offset in [
-                Vec2::new(6.0, 6.0),
-                Vec2::new(rect.width() - 6.0, 6.0),
-                Vec2::new(6.0, rect.height() - 6.0),
-                Vec2::new(rect.width() - 6.0, rect.height() - 6.0),
-            ] {
-                let c = rect.min + offset;
-                painter.circle_filled(c, 2.2, roles().well_edge);
-                painter.line_segment(
-                    [c - Vec2::new(1.3, 1.0), c + Vec2::new(1.3, 1.0)],
-                    Stroke::new(0.8_f32, Color32::from_black_alpha(160)),
-                );
-            }
+        }
+        theme::Material::Metal => {
+            let (outline, face) = paint_metal_shell(ui, rect, zone_a);
+            super::motifs::paint_motif_art(ui, rect, spec, on, seed);
+            paint_metal_finish(
+                ui,
+                rect,
+                outline,
+                &face,
+                on,
+                seed,
+                spec.style != MotifStyle::EmptyBay,
+            );
         }
     }
-    let stripe = Rect::from_min_size(
-        rect.min + Vec2::new(8.0, 1.5),
-        Vec2::new((rect.width() - 16.0).max(8.0), 2.5),
-    );
-    painter.rect_filled(
-        stripe,
-        1.0,
-        if on {
-            accent
-        } else {
-            accent.gamma_multiply(0.30)
-        },
-    );
 }
 
-/// The painted enclosure of each pedal. Like stompboxes, each kind has its
-/// own enamel; it always appears with the pedal's printed name. The families
-/// share hues: golds for equalisers, blues and greens for dynamics, warm
-/// oranges for saturation, and violets for stereo. A pedal that is off
-/// loses most of its color and some light, so the pedals in use stand out.
-/// Ink lettering keeps at least 5:1 contrast in both states.
-pub(super) fn enamel(kind: PedalKind, on: bool) -> Color32 {
-    enamel_of(
-        match kind {
-            PedalKind::BoosterEq => [222, 172, 64],
-            PedalKind::BoosterCompressor => [84, 184, 166],
-            PedalKind::BoosterWide => [200, 150, 220],
-            PedalKind::SoftClip => [240, 150, 120],
-            PedalKind::Tube => [240, 166, 80],
-            PedalKind::TrimEq => [196, 204, 92],
-            PedalKind::BusCompressor => [120, 178, 228],
-            PedalKind::Maximizer => [130, 206, 150],
-            PedalKind::LiftEq => [236, 208, 108],
-            PedalKind::Tape => [206, 180, 140],
-            PedalKind::Imaging => [166, 160, 232],
-            PedalKind::Multiband => [100, 196, 204],
-            PedalKind::Limiter => [238, 140, 160],
-        },
-        on,
-    )
-}
-
-/// An enamel colour, lit when its unit is on, greyed and darkened when off.
-pub(crate) fn enamel_of([red, green, blue]: [u8; 3], on: bool) -> Color32 {
-    let color = enamel_finish(red, green, blue, on);
-    match roles().material {
-        // Studio's software modules keep each hue but settle it toward a
-        // matte light gray.
-        theme::Material::Flat => color.lerp_to_gamma(Color32::from_rgb(218, 221, 224), 0.35),
-        // Unlit plastic stays a little lighter than unlit enamel, so ink
-        // keeps its contrast down to the molded foot.
-        theme::Material::Plastic if !on => color.lerp_to_gamma(Color32::WHITE, 0.12),
-        _ => color,
-    }
-}
-
-fn enamel_finish(red: u8, green: u8, blue: u8, on: bool) -> Color32 {
-    if on {
-        return Color32::from_rgb(red, green, blue);
-    }
-    let gray = 0.2126 * f32::from(red) + 0.7152 * f32::from(green) + 0.0722 * f32::from(blue);
-    let toward = |channel: u8| {
-        ((f32::from(channel) + (gray - f32::from(channel)) * 0.7) * 0.83).round() as u8
-    };
-    Color32::from_rgb(toward(red), toward(green), toward(blue))
+/// Draw the 3-theme Mastering card chassis.
+pub(super) fn master_enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
+    paint_motif_enclosure(ui, rect, master_motif(kind), on, kind as u64 + 1);
 }
 
 /// The pedal's corner radius, the width of its rounded bevel, and how far its
@@ -293,105 +450,6 @@ pub(super) const GRAIN: [usize; 2] = [512, 256];
 /// How far the sheen leans from upright, as a share of the pedal's height.
 const SHEEN_LEAN: f32 = 0.2;
 const ALUMINIUM: Color32 = Color32::from_rgb(236, 238, 240);
-
-pub(crate) fn enclosure_of(ui: &egui::Ui, rect: Rect, enamel: Color32, on: bool, seed: u64) {
-    let painter = ui.painter();
-    match roles().material {
-        // A software module: a flat face and a hairline edge.
-        theme::Material::Flat => {
-            painter.rect_filled(rect, 4.0, enamel);
-            painter.rect_stroke(
-                rect,
-                4.0,
-                Stroke::new(1.5_f32, roles().ink),
-                egui::StrokeKind::Inside,
-            );
-            return;
-        }
-        // A molded plastic case on a soft shadow.
-        theme::Material::Plastic => {
-            painter.add(
-                egui::epaint::Shadow {
-                    offset: [0, 4],
-                    blur: 10,
-                    spread: 0,
-                    color: Color32::from_black_alpha(110),
-                }
-                .as_shape(rect, egui::CornerRadius::same(14)),
-            );
-            theme::plastic(painter, rect, 14.0, enamel);
-            return;
-        }
-        theme::Material::Metal => {}
-    }
-    let radius = egui::CornerRadius::same(CORNER as u8);
-    let body = Rect::from_min_max(rect.min, rect.max + Vec2::splat(DEPTH));
-    // A wide soft shadow, and a close dark one where the body meets the board.
-    for (offset, blur, alpha) in [([5, 8], 16, 160), ([1, 2], 4, 150)] {
-        painter.add(
-            egui::epaint::Shadow {
-                offset,
-                blur,
-                spread: 0,
-                color: Color32::from_black_alpha(alpha),
-            }
-            .as_shape(body, radius),
-        );
-    }
-    // The outline of the face swept down and right: the walls facing away
-    // from the light show where the face does not cover them.
-    let along = Vec2::splat(DEPTH);
-    let mut outline = Vec::new();
-    for (point, facing) in contour(rect, 0.0) {
-        let away = facing.x + facing.y;
-        if away > 1e-3 {
-            outline.push(point + along);
-        } else if away < -1e-3 {
-            outline.push(point);
-        } else if facing.x > 0.0 {
-            outline.extend([point, point + along]);
-        } else {
-            outline.extend([point + along, point]);
-        }
-    }
-    painter.add(egui::Shape::convex_polygon(
-        outline.clone(),
-        lit(enamel, -0.62),
-        Stroke::NONE,
-    ));
-    let face = bevel(rect, enamel);
-    if on {
-        let finish = finish(ui.ctx());
-        // The grain keeps one texel to a screen pixel, from a different
-        // part of the tile on each pedal.
-        let pixels = ui.ctx().pixels_per_point();
-        let start = Vec2::new((seed * 97 % 512) as f32, (seed * 61 % 256) as f32);
-        let grain = overlay(&face, finish.grain.id(), |point| {
-            let texel = (point - rect.min) * pixels + start;
-            Pos2::new(texel.x / GRAIN[0] as f32, texel.y / GRAIN[1] as f32)
-        });
-        let sheen = overlay(&face, finish.sheen.id(), |point| {
-            let lean = SHEEN_LEAN * (rect.bottom() - point.y);
-            let across =
-                (point.x - rect.left() + lean) / (rect.width() + SHEEN_LEAN * rect.height());
-            Pos2::new(across, 0.5)
-        });
-        painter.add(face);
-        painter.add(grain);
-        painter.add(sheen);
-        // Scratches keep clear of the printed name.
-        let below = rect.shrink(BEVEL + 3.0);
-        let below =
-            Rect::from_x_y_ranges(below.x_range(), rect.top() + HEADER + 4.0..=below.bottom());
-        scratches(painter, below, seed);
-    } else {
-        painter.add(face);
-    }
-    painter.add(egui::Shape::closed_line(
-        outline,
-        Stroke::new(1.5_f32, roles().ink),
-    ));
-}
 
 /// The metal finish shared by every pedal that is on.
 struct Finish {

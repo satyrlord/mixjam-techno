@@ -99,6 +99,207 @@ pub(crate) fn wheel(ui: &egui::Ui, response: &Response) -> f32 {
     })
 }
 
+fn rotary_apply_drag(
+    ui: &egui::Ui,
+    draft_id: egui::Id,
+    value: &mut f64,
+    spec: &RotarySpec<'_>,
+    before: f64,
+) {
+    let draft = ui
+        .ctx()
+        .data(|data| data.get_temp::<f64>(draft_id))
+        .unwrap_or_else(|| spec.fraction(before));
+    let (delta, shift) = ui.input(|i| (i.pointer.delta(), i.modifiers.shift));
+    let scale = if shift { 0.1 } else { 1.0 };
+    let draft = (draft + f64::from((delta.x - delta.y) / 150.0) * scale).clamp(0.0, 1.0);
+    ui.ctx().data_mut(|data| data.insert_temp(draft_id, draft));
+    let precision = 10.0_f64.powi(spec.decimals as i32);
+    *value = spec.bounded((spec.value(draft) * precision).round() / precision);
+}
+
+fn rotary_drag(
+    ui: &egui::Ui,
+    response: &Response,
+    value: &mut f64,
+    spec: &RotarySpec<'_>,
+    before: f64,
+) {
+    let start = super::primary_drag_start(ui, response);
+    if response.clicked() || start.is_some() {
+        response.request_focus();
+    }
+    let draft_id = response.id.with("draft");
+    if start.is_some() {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(draft_id, spec.fraction(before)));
+    }
+    if super::primary_dragged(ui, response) {
+        rotary_apply_drag(ui, draft_id, value, spec, before);
+    }
+}
+
+fn rotary_keys(ui: &egui::Ui, direction: &mut f64, value: &mut f64, spec: &RotarySpec<'_>) {
+    ui.input_mut(|input| {
+        let m = input.modifiers;
+        let inc =
+            input.consume_key(m, egui::Key::ArrowUp) || input.consume_key(m, egui::Key::ArrowRight);
+        let dec = input.consume_key(m, egui::Key::ArrowDown)
+            || input.consume_key(m, egui::Key::ArrowLeft);
+        if inc {
+            *direction = 1.0;
+        } else if dec {
+            *direction = -1.0;
+        }
+        if input.consume_key(m, egui::Key::Home) {
+            *value = spec.low;
+        }
+        if input.consume_key(m, egui::Key::End) {
+            *value = spec.high;
+        }
+    });
+}
+
+fn numeric_action_value(req: &egui::accesskit::ActionRequest) -> Option<f64> {
+    match req.data {
+        Some(egui::accesskit::ActionData::NumericValue(v)) if v.is_finite() => Some(v),
+        _ => None,
+    }
+}
+
+fn rotary_accesskit_input(ui: &egui::Ui, id: egui::Id, value: &mut f64, spec: &RotarySpec<'_>) {
+    let (target, turns) = ui.input(|input| {
+        use egui::accesskit::Action;
+        let target = input
+            .accesskit_action_requests(id, Action::SetValue)
+            .filter_map(numeric_action_value)
+            .last();
+        let turns = input.num_accesskit_action_requests(id, Action::Increment) as i32
+            - input.num_accesskit_action_requests(id, Action::Decrement) as i32;
+        (target, turns)
+    });
+    if let Some(draft) = target {
+        *value = spec.bounded(draft);
+    }
+    for _ in 0..turns.abs() {
+        *value = spec.stepped(*value, f64::from(turns.signum()), false);
+    }
+}
+
+fn rotary_ring(ui: &egui::Ui, response: &Response, center: Pos2, radius: f32, on_light: bool) {
+    if !response.enabled() {
+        ui.painter()
+            .circle_filled(center, radius + 1.0, Color32::from_black_alpha(100));
+    } else if response.has_focus() || response.hovered() {
+        let width = if response.has_focus() {
+            2.0_f32
+        } else {
+            1.0_f32
+        };
+        // In a dark bay every accent is legible; on paint, ink is.
+        let ring = if on_light {
+            roles().ink
+        } else {
+            print_color(ui)
+        };
+        ui.painter()
+            .circle_stroke(center, radius + 1.0, Stroke::new(width, ring));
+    }
+}
+
+fn rotary_paint(ui: &egui::Ui, response: &Response, rect: Rect, fraction: f32) {
+    let center = rect.center();
+    // Every theme's knob has the 18-point face of the bitmap knob.
+    let radius = 18.0;
+    // Dials sit in dark bays. On a light painted surface, which a caller marks
+    // by turning `dark_mode` off, the scale and focus ring use ink instead.
+    let on_light = !ui.visuals().dark_mode;
+    // Studio's value arc replaces the printed scale.
+    if roles().material != Material::Flat {
+        let tick_color = if on_light {
+            roles().ink
+        } else {
+            roles().legend
+        };
+        for index in 0..=18 {
+            let vector = Vec2::angled((-225.0 + index as f32 * 15.0).to_radians());
+            let tick_len = if index % 3 == 0 { 6.0 } else { 4.0 };
+            ui.painter().line_segment(
+                [
+                    center + vector * (radius + 2.0),
+                    center + vector * (radius + tick_len),
+                ],
+                Stroke::new(1.0_f32, tick_color),
+            );
+        }
+    }
+    theme::dial(
+        ui.painter(),
+        center,
+        radius,
+        fraction,
+        print_color(ui),
+        on_light,
+    );
+    rotary_ring(ui, response, center, radius, on_light);
+}
+
+fn rotary_accesskit_node(ui: &egui::Ui, response: &Response, value: f64, spec: &RotarySpec<'_>) {
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        use egui::accesskit::Action;
+        builder.set_min_numeric_value(spec.low);
+        builder.set_max_numeric_value(spec.high);
+        builder.set_numeric_value_step(spec.step);
+        if response.enabled() {
+            builder.add_action(Action::SetValue);
+            if value < spec.high {
+                builder.add_action(Action::Increment);
+            }
+            if value > spec.low {
+                builder.add_action(Action::Decrement);
+            }
+        }
+    });
+}
+
+fn rotary_step_direction(
+    ui: &egui::Ui,
+    has_focus: bool,
+    direction: f64,
+    value: &mut f64,
+    spec: &RotarySpec<'_>,
+) {
+    if direction != 0.0 {
+        if has_focus {
+            ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+        }
+        *value = spec.stepped(*value, direction, ui.input(|i| i.modifiers.shift));
+    }
+}
+
+fn rotary_interact(
+    ui: &egui::Ui,
+    response: &Response,
+    value: &mut f64,
+    spec: &RotarySpec<'_>,
+    before: f64,
+) {
+    let focused = response.has_focus();
+    if focused {
+        super::lock_arrows(ui, response.id);
+    }
+    rotary_drag(ui, response, value, spec, before);
+    let mut direction = f64::from(wheel(ui, response));
+    if focused {
+        rotary_keys(ui, &mut direction, value, spec);
+    }
+    rotary_step_direction(ui, focused, direction, value, spec);
+    rotary_accesskit_input(ui, response.id, value, spec);
+    if response.double_clicked() {
+        *value = spec.bounded(spec.reset);
+    }
+}
+
 pub(crate) fn rotary(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -112,186 +313,14 @@ pub(crate) fn rotary(
     );
     let before = *value;
     if response.enabled() {
-        if response.has_focus() {
-            keep_transport_key(ui.ctx(), response.id);
-            ui.memory_mut(|memory| {
-                memory.set_focus_lock_filter(
-                    response.id,
-                    egui::EventFilter {
-                        horizontal_arrows: true,
-                        vertical_arrows: true,
-                        ..Default::default()
-                    },
-                )
-            });
-        }
-        let start = super::primary_drag_start(ui, &response);
-        if response.clicked() || start.is_some() {
-            response.request_focus();
-        }
-        let draft_id = response.id.with("draft");
-        if start.is_some() {
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(draft_id, spec.fraction(before)));
-        }
-        if super::primary_dragged(ui, &response) {
-            let draft = ui
-                .ctx()
-                .data(|data| data.get_temp::<f64>(draft_id))
-                .unwrap_or_else(|| spec.fraction(before));
-            let delta = ui.input(|input| input.pointer.delta());
-            let fine = ui.input(|input| input.modifiers.shift);
-            let draft = (draft
-                + f64::from((delta.x - delta.y) / 150.0) * if fine { 0.1 } else { 1.0 })
-            .clamp(0.0, 1.0);
-            ui.ctx().data_mut(|data| data.insert_temp(draft_id, draft));
-            let precision = 10.0_f64.powi(spec.decimals as i32);
-            *value = spec.bounded((spec.value(draft) * precision).round() / precision);
-        }
-        let mut direction = f64::from(wheel(ui, &response));
-        if response.has_focus() {
-            ui.input_mut(|input| {
-                let modifiers = input.modifiers;
-                if input.consume_key(modifiers, egui::Key::ArrowUp)
-                    || input.consume_key(modifiers, egui::Key::ArrowRight)
-                {
-                    direction = 1.0;
-                }
-                if input.consume_key(modifiers, egui::Key::ArrowDown)
-                    || input.consume_key(modifiers, egui::Key::ArrowLeft)
-                {
-                    direction = -1.0;
-                }
-                if input.consume_key(modifiers, egui::Key::Home) {
-                    *value = spec.low;
-                }
-                if input.consume_key(modifiers, egui::Key::End) {
-                    *value = spec.high;
-                }
-            });
-        }
-        if direction != 0.0 {
-            if response.has_focus() {
-                ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
-            }
-            *value = spec.stepped(*value, direction, ui.input(|input| input.modifiers.shift));
-        }
-        ui.input(|input| {
-            use egui::accesskit::{Action, ActionData};
-            for request in input.accesskit_action_requests(response.id, Action::SetValue) {
-                if let Some(ActionData::NumericValue(draft)) = request.data
-                    && draft.is_finite()
-                {
-                    *value = spec.bounded(draft);
-                }
-            }
-            let turns = input.num_accesskit_action_requests(response.id, Action::Increment) as i32
-                - input.num_accesskit_action_requests(response.id, Action::Decrement) as i32;
-            for _ in 0..turns.abs() {
-                *value = spec.stepped(*value, f64::from(turns.signum()), false);
-            }
-        });
-        if response.double_clicked() {
-            *value = spec.bounded(spec.reset);
-        }
+        rotary_interact(ui, &response, value, &spec, before);
     }
     if before != *value {
         response.mark_changed();
     }
-    let center = rect.center();
-    // Every theme's knob has the 18-point face of the bitmap knob.
-    let radius = 18.0;
-    // Dials sit in dark bays. On a light painted surface, which a caller marks
-    // by turning `dark_mode` off, the scale and focus ring use ink instead.
-    let on_light = !ui.visuals().dark_mode;
-    let fraction = spec.fraction(*value) as f32;
-    // Studio's value arc replaces the printed scale.
-    if roles().material != Material::Flat {
-        for index in 0..=18 {
-            let vector = Vec2::angled((-225.0 + index as f32 * 15.0).to_radians());
-            ui.painter().line_segment(
-                [
-                    center + vector * (radius + 2.0),
-                    center + vector * (radius + if index % 3 == 0 { 6.0 } else { 4.0 }),
-                ],
-                Stroke::new(
-                    1.0_f32,
-                    if on_light {
-                        roles().ink
-                    } else {
-                        roles().legend
-                    },
-                ),
-            );
-        }
-    }
-    if roles().material == Material::Metal {
-        let art = artwork(ui.ctx(), Palette::of(ui));
-        let ppp = ui.ctx().pixels_per_point();
-        let size = art.knob.size_vec2() / ppp;
-        let min = ((center - size / 2.0).to_vec2() * ppp).round().to_pos2() / ppp;
-        ui.painter().image(
-            art.knob.id(),
-            Rect::from_min_size(min, size),
-            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-            Color32::WHITE,
-        );
-        let vector = Vec2::angled((-225.0 + fraction * 270.0).to_radians());
-        ui.painter().line_segment(
-            [
-                center + vector * radius * 0.2,
-                center + vector * radius * 0.62,
-            ],
-            Stroke::new(2.0_f32, roles().ink),
-        );
-    } else {
-        theme::dial(
-            ui.painter(),
-            center,
-            radius,
-            fraction,
-            print_color(ui),
-            on_light,
-        );
-    }
-    if !response.enabled() {
-        ui.painter()
-            .circle_filled(center, radius + 1.0, Color32::from_black_alpha(100));
-    } else if response.has_focus() || response.hovered() {
-        ui.painter().circle_stroke(
-            center,
-            radius + 1.0,
-            Stroke::new(
-                if response.has_focus() {
-                    2.0_f32
-                } else {
-                    1.0_f32
-                },
-                // In a dark bay every accent is legible; on paint, ink is.
-                if on_light {
-                    roles().ink
-                } else {
-                    print_color(ui)
-                },
-            ),
-        );
-    }
+    rotary_paint(ui, &response, rect, spec.fraction(*value) as f32);
     response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), *value, spec.name));
-    ui.ctx().accesskit_node_builder(response.id, |builder| {
-        use egui::accesskit::Action;
-        builder.set_min_numeric_value(spec.low);
-        builder.set_max_numeric_value(spec.high);
-        builder.set_numeric_value_step(spec.step);
-        if response.enabled() {
-            builder.add_action(Action::SetValue);
-            if *value < spec.high {
-                builder.add_action(Action::Increment);
-            }
-            if *value > spec.low {
-                builder.add_action(Action::Decrement);
-            }
-        }
-    });
+    rotary_accesskit_node(ui, &response, *value, &spec);
     response.hover_hint(format!(
         "{}: drag or use arrow keys. Hold Shift for fine movement. Double-click to reset.",
         spec.name

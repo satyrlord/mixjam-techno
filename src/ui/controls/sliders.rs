@@ -52,6 +52,266 @@ pub(crate) fn slider(
     .inner
 }
 
+fn nearest_choice(choices: &[f64], target: f64) -> usize {
+    (0..choices.len())
+        .min_by(|a, b| {
+            (choices[*a] - target)
+                .abs()
+                .total_cmp(&(choices[*b] - target).abs())
+        })
+        .unwrap_or(0)
+}
+
+fn stepped_pointer(
+    ui: &egui::Ui,
+    response: &Response,
+    left: f32,
+    right: f32,
+    last: usize,
+    index: &mut usize,
+) {
+    let held = primary_down_on(ui, response);
+    if !(held || super::primary_clicked(ui, response)) {
+        return;
+    }
+    response.request_focus();
+    let pointer = if held {
+        super::drag_position(ui, response)
+    } else {
+        response.interact_pointer_pos()
+    };
+    if let Some(pointer) = pointer {
+        let fraction = ((pointer.x - left) / (right - left).max(1.0)).clamp(0.0, 1.0);
+        *index = (fraction * last as f32).round() as usize;
+    }
+}
+
+fn stepped_keys(ui: &egui::Ui, last: usize, direction: &mut i32, index: &mut usize) {
+    ui.input_mut(|input| {
+        let modifiers = input.modifiers;
+        let inc = input.consume_key(modifiers, egui::Key::ArrowUp)
+            || input.consume_key(modifiers, egui::Key::ArrowRight);
+        let dec = input.consume_key(modifiers, egui::Key::ArrowDown)
+            || input.consume_key(modifiers, egui::Key::ArrowLeft);
+        *direction += i32::from(inc) - i32::from(dec);
+        if input.consume_key(modifiers, egui::Key::Home) {
+            *index = 0;
+        }
+        if input.consume_key(modifiers, egui::Key::End) {
+            *index = last;
+        }
+    });
+}
+
+fn stepped_accesskit(
+    ui: &egui::Ui,
+    id: egui::Id,
+    choices: &[f64],
+    index: &mut usize,
+    direction: &mut i32,
+) {
+    let (target, turns) = ui.input(|input| {
+        use egui::accesskit::{Action, ActionData};
+        let target = input
+            .accesskit_action_requests(id, Action::SetValue)
+            .filter_map(|req| match req.data {
+                Some(ActionData::NumericValue(v)) if v.is_finite() => {
+                    Some(nearest_choice(choices, v))
+                }
+                _ => None,
+            })
+            .last();
+        let turns = input.num_accesskit_action_requests(id, Action::Increment) as i32
+            - input.num_accesskit_action_requests(id, Action::Decrement) as i32;
+        (target, turns)
+    });
+    if let Some(next_index) = target {
+        *index = next_index;
+    }
+    *direction += turns;
+}
+
+fn stepped_interact(
+    ui: &egui::Ui,
+    response: &Response,
+    value: &mut f64,
+    choices: &[f64],
+    left: f32,
+    right: f32,
+    reset: Option<f64>,
+) {
+    let last = choices.len().saturating_sub(1);
+    let before = *value;
+    let mut index = nearest_choice(choices, before);
+    if response.has_focus() {
+        super::lock_arrows(ui, response.id);
+    }
+    stepped_pointer(ui, response, left, right, last, &mut index);
+    let mut direction = wheel(ui, response) as i32;
+    if response.has_focus() {
+        stepped_keys(ui, last, &mut direction, &mut index);
+    }
+    stepped_accesskit(ui, response.id, choices, &mut index, &mut direction);
+    if direction != 0 && response.has_focus() {
+        // Arrow keys step the slider; they must not also move focus.
+        ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+    }
+    index = (index as i32 + direction).clamp(0, last as i32) as usize;
+    if index != nearest_choice(choices, before) {
+        *value = choices[index];
+    }
+    if let Some(reset) = reset
+        && response.double_clicked()
+    {
+        *value = choices[nearest_choice(choices, reset)];
+    }
+}
+
+struct SteppedGeom {
+    left: f32,
+    right: f32,
+    rail_y: f32,
+    radius: f32,
+    labels: bool,
+}
+
+fn paint_stepped_ticks(
+    painter: &egui::Painter,
+    choices: &[f64],
+    current: usize,
+    geom: &SteppedGeom,
+    mark: Color32,
+) {
+    let last = choices.len().saturating_sub(1).max(1) as f32;
+    for (index, choice) in choices.iter().enumerate() {
+        let x = egui::lerp(geom.left..=geom.right, index as f32 / last);
+        painter.line_segment(
+            [
+                Pos2::new(x, geom.rail_y - 6.0),
+                Pos2::new(x, geom.rail_y + 6.0),
+            ],
+            Stroke::new(1.0_f32, mark.gamma_multiply(0.7)),
+        );
+        if geom.labels {
+            let tint = if index == current {
+                mark
+            } else {
+                mark.gamma_multiply(0.6)
+            };
+            painter.text(
+                Pos2::new(x, geom.rail_y + geom.radius + 4.0),
+                egui::Align2::CENTER_TOP,
+                format!("{choice:.0}"),
+                FontId::proportional(11.0),
+                tint,
+            );
+        }
+    }
+}
+
+fn paint_stepped_ring(
+    ui: &egui::Ui,
+    response: &Response,
+    rect: Rect,
+    cap: Pos2,
+    radius: f32,
+    mark: Color32,
+) {
+    let painter = ui.painter();
+    if !response.enabled() {
+        painter.rect_filled(rect, 2.0, Color32::from_black_alpha(100));
+    } else if response.has_focus() {
+        painter.circle_stroke(cap, radius + 2.0, Stroke::new(2.0_f32, focus_color(ui)));
+    } else if response.hovered() {
+        painter.circle_stroke(cap, radius + 1.0, Stroke::new(1.0_f32, mark));
+    }
+}
+
+fn stepped_accesskit_node(
+    ui: &egui::Ui,
+    response: &Response,
+    choices: &[f64],
+    current: usize,
+    last: usize,
+) {
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        use egui::accesskit::Action;
+        if let (Some(low), Some(high)) = (choices.first(), choices.last()) {
+            builder.set_min_numeric_value(*low);
+            builder.set_max_numeric_value(*high);
+        }
+        if response.enabled() {
+            builder.add_action(Action::SetValue);
+            if current < last {
+                builder.add_action(Action::Increment);
+            }
+            if current > 0 {
+                builder.add_action(Action::Decrement);
+            }
+        }
+    });
+}
+
+fn paint_stepped_body(
+    ui: &egui::Ui,
+    response: &Response,
+    rect: Rect,
+    value: f64,
+    choices: &[f64],
+    geom: &SteppedGeom,
+) -> (usize, usize) {
+    // Sliders sit on dark panels; a caller marks a light surface by turning
+    // `dark_mode` off, and the scale then uses ink, as dials do.
+    let mark = if ui.visuals().dark_mode {
+        roles().legend
+    } else {
+        roles().ink
+    };
+    let last = choices.len().saturating_sub(1);
+    let current = nearest_choice(choices, value);
+    let painter = ui.painter();
+    painter.rect(
+        Rect::from_min_max(
+            Pos2::new(geom.left - 3.0, geom.rail_y - 2.5),
+            Pos2::new(geom.right + 3.0, geom.rail_y + 2.5),
+        ),
+        2.5,
+        roles().ink,
+        Stroke::new(1.0_f32, roles().well_edge),
+        egui::StrokeKind::Outside,
+    );
+    paint_stepped_ticks(painter, choices, current, geom, mark);
+    if !geom.labels {
+        painter.text(
+            Pos2::new(rect.right(), rect.center().y),
+            egui::Align2::RIGHT_CENTER,
+            format!("{value:.0}"),
+            FontId::proportional(13.0),
+            mark,
+        );
+    }
+    let cap_x = egui::lerp(geom.left..=geom.right, current as f32 / last.max(1) as f32);
+    let cap = Pos2::new(cap_x, geom.rail_y);
+    paint_stepped_cap(painter, cap, geom.radius);
+    paint_stepped_ring(ui, response, rect, cap, geom.radius, mark);
+    (current, last)
+}
+
+fn stepped_hint(name: &str, choices: &[f64], reset: Option<f64>) -> String {
+    let joined = choices
+        .iter()
+        .map(|choice| format!("{choice:.0}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    match reset {
+        Some(reset) => format!(
+            "{name}: {joined}. Drag, click a notch, or use the arrow keys. Double-click to reset \
+             to {reset:.0}."
+        ),
+        None => format!("{name}: {joined}. Drag, click a notch, or use the arrow keys."),
+    }
+}
+
 /// A stepped slider over fixed choices, after the original products' speed
 /// slider. Notches sit at even spacing whatever their values. With `labels`, each notch is
 /// named below the rail; otherwise the value reads at the right end.
@@ -70,192 +330,51 @@ pub(crate) fn stepped_slider(
         Sense::click_and_drag(),
     );
     let before = *value;
-    let nearest = |target: f64| {
-        (0..choices.len())
-            .min_by(|a, b| {
-                (choices[*a] - target)
-                    .abs()
-                    .total_cmp(&(choices[*b] - target).abs())
-            })
-            .unwrap_or(0)
-    };
-    let last = choices.len().saturating_sub(1);
     let radius = 7.0;
     let readout = if labels { 0.0 } else { 24.0 };
-    let left = rect.left() + radius + 1.0;
-    let right = rect.right() - readout - radius - 1.0;
-    let rail_y = if labels {
-        rect.top() + radius + 3.0
-    } else {
-        rect.center().y
+    let geom = SteppedGeom {
+        left: rect.left() + radius + 1.0,
+        right: rect.right() - readout - radius - 1.0,
+        rail_y: if labels {
+            rect.top() + radius + 3.0
+        } else {
+            rect.center().y
+        },
+        radius,
+        labels,
     };
-    let x_of = |index: usize| egui::lerp(left..=right, index as f32 / last.max(1) as f32);
     if response.enabled() && !choices.is_empty() {
-        let mut index = nearest(*value);
-        if response.has_focus() {
-            keep_transport_key(ui.ctx(), response.id);
-            ui.memory_mut(|memory| {
-                memory.set_focus_lock_filter(
-                    response.id,
-                    egui::EventFilter {
-                        horizontal_arrows: true,
-                        vertical_arrows: true,
-                        ..Default::default()
-                    },
-                )
-            });
-        }
-        let held = primary_down_on(ui, &response);
-        if held || super::primary_clicked(ui, &response) {
-            response.request_focus();
-            let pointer = if held {
-                super::drag_position(ui, &response)
-            } else {
-                response.interact_pointer_pos()
-            };
-            if let Some(pointer) = pointer {
-                let fraction = ((pointer.x - left) / (right - left).max(1.0)).clamp(0.0, 1.0);
-                index = (fraction * last as f32).round() as usize;
-            }
-        }
-        let mut direction = wheel(ui, &response) as i32;
-        if response.has_focus() {
-            ui.input_mut(|input| {
-                let modifiers = input.modifiers;
-                for key in [egui::Key::ArrowUp, egui::Key::ArrowRight] {
-                    if input.consume_key(modifiers, key) {
-                        direction += 1;
-                    }
-                }
-                for key in [egui::Key::ArrowDown, egui::Key::ArrowLeft] {
-                    if input.consume_key(modifiers, key) {
-                        direction -= 1;
-                    }
-                }
-                if input.consume_key(modifiers, egui::Key::Home) {
-                    index = 0;
-                }
-                if input.consume_key(modifiers, egui::Key::End) {
-                    index = last;
-                }
-            });
-        }
-        ui.input(|input| {
-            use egui::accesskit::{Action, ActionData};
-            for request in input.accesskit_action_requests(response.id, Action::SetValue) {
-                if let Some(ActionData::NumericValue(draft)) = request.data
-                    && draft.is_finite()
-                {
-                    index = nearest(draft);
-                }
-            }
-            direction += input.num_accesskit_action_requests(response.id, Action::Increment) as i32
-                - input.num_accesskit_action_requests(response.id, Action::Decrement) as i32;
-        });
-        if direction != 0 && response.has_focus() {
-            // Arrow keys step the slider; they must not also move focus.
-            ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
-        }
-        index = (index as i32 + direction).clamp(0, last as i32) as usize;
-        if index != nearest(before) {
-            *value = choices[index];
-        }
-        if let Some(reset) = reset
-            && response.double_clicked()
-        {
-            *value = choices[nearest(reset)];
-        }
+        stepped_interact(ui, &response, value, choices, geom.left, geom.right, reset);
     }
     if before != *value {
         response.mark_changed();
     }
-
-    // Sliders sit on dark panels; a caller marks a light surface by turning
-    // `dark_mode` off, and the scale then uses ink, as dials do.
-    let mark = if ui.visuals().dark_mode {
-        roles().legend
-    } else {
-        roles().ink
-    };
-    let painter = ui.painter();
-    // The rail is a dark slot with a well edge, so it reads on dark panels.
-    painter.rect(
-        Rect::from_min_max(
-            Pos2::new(left - 3.0, rail_y - 2.5),
-            Pos2::new(right + 3.0, rail_y + 2.5),
-        ),
-        2.5,
-        roles().ink,
-        Stroke::new(1.0_f32, roles().well_edge),
-        egui::StrokeKind::Outside,
-    );
-    let current = nearest(*value);
-    for (index, choice) in choices.iter().enumerate() {
-        let x = x_of(index);
-        painter.line_segment(
-            [Pos2::new(x, rail_y - 6.0), Pos2::new(x, rail_y + 6.0)],
-            Stroke::new(1.0_f32, mark.gamma_multiply(0.7)),
-        );
-        if labels {
-            painter.text(
-                Pos2::new(x, rail_y + radius + 4.0),
-                egui::Align2::CENTER_TOP,
-                format!("{choice:.0}"),
-                FontId::proportional(11.0),
-                if index == current {
-                    mark
-                } else {
-                    mark.gamma_multiply(0.6)
-                },
-            );
-        }
-    }
-    if !labels {
-        painter.text(
-            Pos2::new(rect.right(), rect.center().y),
-            egui::Align2::RIGHT_CENTER,
-            format!("{value:.0}"),
-            FontId::proportional(13.0),
-            mark,
-        );
-    }
-    let cap = Pos2::new(x_of(current), rail_y);
-    painter.circle_filled(cap, radius, roles().cap);
-    painter.circle_stroke(cap, radius, Stroke::new(1.5_f32, roles().ink));
-    if !response.enabled() {
-        painter.rect_filled(rect, 2.0, Color32::from_black_alpha(100));
-    } else if response.has_focus() {
-        painter.circle_stroke(cap, radius + 2.0, Stroke::new(2.0_f32, focus_color(ui)));
-    } else if response.hovered() {
-        painter.circle_stroke(cap, radius + 1.0, Stroke::new(1.0_f32, mark));
-    }
+    let (current, last) = paint_stepped_body(ui, &response, rect, *value, choices, &geom);
     response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), *value, name));
-    ui.ctx().accesskit_node_builder(response.id, |builder| {
-        use egui::accesskit::Action;
-        if let (Some(low), Some(high)) = (choices.first(), choices.last()) {
-            builder.set_min_numeric_value(*low);
-            builder.set_max_numeric_value(*high);
-        }
-        if response.enabled() {
-            builder.add_action(Action::SetValue);
-            if current < last {
-                builder.add_action(Action::Increment);
-            }
-            if current > 0 {
-                builder.add_action(Action::Decrement);
-            }
-        }
-    });
-    let choices = choices
-        .iter()
-        .map(|choice| format!("{choice:.0}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    response.hover_hint(match reset {
-        Some(reset) => format!(
-            "{name}: {choices}. Drag, click a notch, or use the arrow keys. Double-click to reset \
-             to {reset:.0}."
-        ),
-        None => format!("{name}: {choices}. Drag, click a notch, or use the arrow keys."),
-    })
+    stepped_accesskit_node(ui, &response, choices, current, last);
+    response.hover_hint(stepped_hint(name, choices, reset))
+}
+
+fn paint_stepped_cap(painter: &egui::Painter, cap: Pos2, radius: f32) {
+    if roles().material == Material::Metal {
+        let block = Rect::from_center_size(cap, Vec2::new(11.0, radius * 2.0 + 1.0));
+        painter.rect_filled(block, 2.0, roles().ink);
+        theme::gradient(
+            painter,
+            block.shrink(1.5),
+            1.0,
+            Color32::from_rgb(230, 234, 228),
+            Color32::from_rgb(152, 160, 154),
+        );
+        painter.line_segment(
+            [
+                Pos2::new(block.center().x, block.top() + 2.0),
+                Pos2::new(block.center().x, block.bottom() - 2.0),
+            ],
+            Stroke::new(2.0_f32, roles().ink),
+        );
+    } else {
+        painter.circle_filled(cap, radius, roles().cap);
+        painter.circle_stroke(cap, radius, Stroke::new(1.5_f32, roles().ink));
+    }
 }

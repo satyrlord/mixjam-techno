@@ -4,10 +4,7 @@
 use super::HoverHints;
 use super::theme::{self, Material, roles};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, Vec2};
-use std::{ops::RangeInclusive, sync::Arc};
-#[macro_use]
-#[path = "controls/textures.rs"]
-mod textures;
+use std::ops::RangeInclusive;
 #[path = "controls/buttons.rs"]
 mod buttons;
 #[path = "controls/clip_fields.rs"]
@@ -33,8 +30,9 @@ pub(super) use clip_fields::{
 pub(super) use knobs::{RotarySpec, rotary, wheel};
 pub(super) use readouts::{disclosure, number, progress, radio, status_text, value_style};
 pub(super) use sliders::{slider, stepped_slider};
-pub(super) use surfaces::{inset, panel, rail_panel, rail_separator, section, well};
-use textures::*;
+pub(super) use surfaces::{
+    inset, metal_rack_cabinet, panel, rail_panel, rail_separator, section, well,
+};
 
 /// Record the focused dial or fader. These controls use only arrows, Home,
 /// and End, so the workspace keeps its transport key while one has focus.
@@ -44,6 +42,21 @@ pub(super) fn keep_transport_key(ctx: &egui::Context, id: egui::Id) {
 
 pub(super) fn arrow_key_focus(ctx: &egui::Context) -> Option<egui::Id> {
     ctx.data(|data| data.get_temp(egui::Id::new("arrow-key-focus")))
+}
+
+/// Lock horizontal and vertical arrow keys to the focused slider or rotary control.
+pub(super) fn lock_arrows(ui: &egui::Ui, id: egui::Id) {
+    keep_transport_key(ui.ctx(), id);
+    ui.memory_mut(|memory| {
+        memory.set_focus_lock_filter(
+            id,
+            egui::EventFilter {
+                horizontal_arrows: true,
+                vertical_arrows: true,
+                ..Default::default()
+            },
+        )
+    });
 }
 
 const POINTER_BUTTONS: [egui::PointerButton; 5] = [

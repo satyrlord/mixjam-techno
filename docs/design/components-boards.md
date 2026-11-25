@@ -136,12 +136,18 @@ those units. A card shows its main dials, power switch, live gain-reduction
 readout (including 3-band L/M/H bars on Multiband), and Edit. The signal-order
 strip scrolls to a card on click and opens its editor on double-click. The
 floating Mastering deep edit window uses the shared shell and gives each pedal
-access to its full set of controls. Two curves show the current settings: the
-saturation transfer curve and the 20 Hz to 20 kHz EQ magnitude curve. Live
-scopes show the playback: GR history, 3-band GR, and a rotated M/S stereo
-vectorscope with phase correlation. Studio cards use graphite, Aero uses molded
-plastic, and Vintage uses dark anodized metal. All three use the same layout and
-controls.
+access to its full set of controls. Its dial grid uses compact dials, and the
+Tape speed dial there has the same compact face as its neighbours. Two curves
+show the current settings: the saturation transfer curve and the 20 Hz to
+20 kHz EQ magnitude curve. Live scopes show the playback: GR history, 3-band
+GR, and a rotated M/S stereo vectorscope with phase correlation.
+
+Each pedal paints its own procedural hardware motif and scoped knob caps (see
+[Colors](colors.md#mastering-board-and-fx-rack)): graphic grids, stepped
+frames, wood cheeks, tube vents, brushed aluminum curves, recessed rack decks,
+radial sunbursts, atmospheric gradients, tape decks, phase bezels, and 3-band
+wells. Studio paints them as matte color blocks, Aero as molded plastic, and
+Vintage as 3D brushed metal. All three themes use the same layout and controls.
 
 ## FX returns board and Deep Edit
 
@@ -166,16 +172,18 @@ the row scrolls horizontally. From top to bottom, each card has these rows:
    8.5-point letters: L and R peaks from -48 to 0 dBFS, with breaks at -24 and
    -12 dB, and D for the ducker's gain reduction. The D lane shows only while
    the bus's duck amount is above zero. A silent lane still shows its track.
-   The right
-   end shows the limiter's gain reduction, or a dot that lights while the tail
-   rings.
+   The right end shows the limiter's gain reduction, or a dot that lights while
+   the tail rings.
 
-The board toolbar also provides Clear all FX tails. The enamel of each effect
-is:
+The board toolbar also provides Clear all FX tails. Each effect paints its own
+procedural motif and scoped knob caps (see
+[Colors](colors.md#mastering-board-and-fx-rack)):
 
-- Echoform Delay: blue.
-- Aetherform Reverb: violet.
-- Emberform Drive: ember.
+- Echoform Delay: dual rounded delay sub-bays with a center bridge, on navy
+  and cyan.
+- Aetherform Reverb: a cosmic nebula starfield on indigo and violet.
+- Emberform Drive: a stepped drive rail on crimson and amber.
+- Empty slot: a beveled, recessed empty bay.
 
 An inactive or empty unit dims its enclosure. FX Deep Edit groups the
 effect's controls and shows the Emberform Drive transfer curve, the
@@ -188,7 +196,7 @@ left and right delay times in both Free and Sync modes.
 
 ## Shared shell and controls
 
-All tool windows and utility dialogs use the same Folded Metal shell.
+All tool windows and utility dialogs use the same shared hardware shell.
 `src/ui/dialog.rs` owns the layout, position, resize, and open or collapsed
 state of the shell. `src/ui/controls.rs` and `src/ui/controls/` own the shared
 header controls, action buttons, rotary dials, sliders, switches, and value
@@ -219,7 +227,7 @@ numeric actions. Parameter definitions keep logarithmic mapping and discrete
 choices. Display rounding never changes a draft.
 
 Tempo choices use the stepped tempo slider: one notch per supported tempo at
-even spacing, and a silver cap. The slider snaps to the nearest notch on
+even spacing, and a metal cap. The slider snaps to the nearest notch on
 press, drag, wheel, arrow keys, Home/End, and accessible numeric actions.
 Arrow keys keep focus. The compact form, in the top bar and Step synth, reads
 the value at its right end. The form in Time Stretcher labels every notch.

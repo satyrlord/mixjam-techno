@@ -3,8 +3,8 @@
 use super::*;
 
 /// A tool chassis in the current theme: a flat software panel with its
-/// palette's accent along the top on Studio, molded plastic on Aero, and the
-/// Folded Metal artwork on Vintage.
+/// palette's accent along the top on Studio, molded plastic on Aero, and an
+/// olive-sage modular hardware panel in code on Vintage.
 pub(crate) fn panel(ui: &egui::Ui, rect: Rect) {
     let palette = Palette::of(ui);
     let p = ui.painter();
@@ -36,87 +36,96 @@ pub(crate) fn panel(ui: &egui::Ui, rect: Rect) {
     }
 }
 
-/// Material slices use one image pixel per physical pixel. Edge tiles are
-/// repeated and clipped; all boundaries fade into the solid chassis. Native
-/// rounded geometry owns the smooth outer silhouette and uninterrupted bevel.
+fn corner_screw(painter: &egui::Painter, center: Pos2) {
+    painter.circle_filled(center, 2.3, roles().well_edge);
+    painter.circle_stroke(center, 2.3, Stroke::new(0.8_f32, roles().ink));
+    painter.line_segment(
+        [center - Vec2::new(1.4, 1.0), center + Vec2::new(1.4, 1.0)],
+        Stroke::new(0.9_f32, roles().ink),
+    );
+}
+
+fn paint_metal_brushed_lines(painter: &egui::Painter, rect: Rect, legend: Color32) {
+    let inner = rect.shrink(3.0);
+    if inner.width() < 24.0 || inner.height() < 16.0 {
+        return;
+    }
+    for share in [0.16_f32, 0.34, 0.56, 0.78] {
+        let y = (inner.top() + inner.height() * share).round();
+        painter.line_segment(
+            [Pos2::new(inner.left(), y), Pos2::new(inner.right(), y)],
+            Stroke::new(
+                0.7_f32,
+                Color32::from_rgba_unmultiplied(legend.r(), legend.g(), legend.b(), 10),
+            ),
+        );
+    }
+}
+
+/// Procedural anodized modular plate with rack seam, machined bevel, and corner screws.
 fn metal_panel(ui: &egui::Ui, rect: Rect, palette: Palette) {
     let p = ui.painter();
-    p.rect_filled(rect, 8.0, roles().ink);
-    p.rect_filled(rect.shrink(1.5), 7.0, palette.body());
-    let art = artwork(ui.ctx(), palette);
-    paint_grain(ui, &art.grain, rect);
-    let ppp = ui.ctx().pixels_per_point();
-    let corner = art.material[0].size_vec2() / ppp;
-    let edge_x = art.material[4].size_vec2() / ppp;
-    let edge_y = art.material[6].size_vec2() / ppp;
-    for (index, y) in [(4, rect.top()), (5, rect.bottom() - edge_x.y)] {
-        let mut x = rect.left() + corner.x;
-        let clip = Rect::from_min_max(
-            Pos2::new(x, rect.top()),
-            Pos2::new((rect.right() - corner.x).max(x), rect.bottom()),
-        );
-        while x < rect.right() - corner.x {
-            fixed_image(ui, &art.material[index], Pos2::new(x, y), clip);
-            x += edge_x.x;
-        }
-    }
-    for (index, x) in [(6, rect.left()), (7, rect.right() - edge_y.x)] {
-        let mut y = rect.top() + corner.y;
-        let clip = Rect::from_min_max(
-            Pos2::new(rect.left(), y),
-            Pos2::new(rect.right(), (rect.bottom() - corner.y).max(y)),
-        );
-        while y < rect.bottom() - corner.y {
-            fixed_image(ui, &art.material[index], Pos2::new(x, y), clip);
-            y += edge_y.y;
-        }
-    }
-    // Alpha fades make overlap continuous, even in a short collapsed bar.
-    // Half-window clipping would expose a hard line through the material.
-    for (index, right, bottom) in [
-        (0, false, false),
-        (1, true, false),
-        (2, false, true),
-        (3, true, true),
-    ] {
-        let min = Pos2::new(
-            if right {
-                rect.right() - corner.x
-            } else {
-                rect.left()
-            },
-            if bottom {
-                rect.bottom() - corner.y
-            } else {
-                rect.top()
-            },
-        );
-        fixed_image(ui, &art.material[index], min, rect.shrink(4.0));
-    }
-    // These continuous antialiased paths never depend on source crop shape,
-    // raster tile boundaries or the amount of available window space.
+    let body = palette.body();
+    p.rect_filled(rect, 7.0, roles().ink);
+    theme::gradient(
+        p,
+        rect.shrink(2.0),
+        5.5,
+        body.lerp_to_gamma(Color32::WHITE, 0.06),
+        body.lerp_to_gamma(Color32::BLACK, 0.08),
+    );
+    paint_metal_brushed_lines(p, rect, roles().legend);
     p.rect_stroke(
-        rect.shrink(0.75),
-        8.0,
+        rect.shrink(1.0),
+        6.5,
         Stroke::new(1.5_f32, roles().ink),
         egui::StrokeKind::Inside,
     );
     p.rect_stroke(
         rect.shrink(2.0),
-        6.5,
-        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(roles().legend, 0.24)),
+        5.5,
+        Stroke::new(1.0_f32, body.lerp_to_gamma(roles().legend, 0.24)),
         egui::StrokeKind::Inside,
     );
-    p.rect_stroke(
-        rect.shrink(3.0),
+    p.line_segment(
+        [
+            rect.left_top() + Vec2::new(10.0, 2.5),
+            rect.right_top() + Vec2::new(-10.0, 2.5),
+        ],
+        Stroke::new(1.0_f32, Color32::from_white_alpha(58)),
+    );
+    if rect.height() >= 64.0 && rect.width() >= 96.0 {
+        for offset in [
+            Vec2::new(7.5, 7.5),
+            Vec2::new(rect.width() - 7.5, 7.5),
+            Vec2::new(7.5, rect.height() - 7.5),
+            Vec2::new(rect.width() - 7.5, rect.height() - 7.5),
+        ] {
+            corner_screw(p, rect.min + offset);
+        }
+    }
+}
+
+/// Paint a stark jet-black modular rack cabinet chassis for dark hardware containers on Vintage.
+pub(crate) fn metal_rack_cabinet(painter: &egui::Painter, rect: Rect) {
+    painter.rect_filled(rect, 7.0, roles().ink);
+    theme::gradient(
+        painter,
+        rect.shrink(1.5),
         5.5,
-        Stroke::new(1.0_f32, palette.body().gamma_multiply(0.72)),
-        egui::StrokeKind::Inside,
+        Color32::from_rgb(21, 25, 22),
+        Color32::from_rgb(13, 15, 14),
+    );
+    painter.line_segment(
+        [
+            rect.left_top() + Vec2::new(8.0, 2.0),
+            rect.right_top() + Vec2::new(-8.0, 2.0),
+        ],
+        Stroke::new(1.0_f32, Color32::from_white_alpha(28)),
     );
 }
 
-/// A narrow chassis uses the same grain and side folds as tool windows, without
-/// overlapping their wide corner patches across the control column.
+/// A narrow chassis uses the same procedural modular anodizing without overlapping screws.
 pub(crate) fn rail_panel(ui: &egui::Ui, rect: Rect) {
     let palette = Palette::of(ui);
     let p = ui.painter();
@@ -129,43 +138,32 @@ pub(crate) fn rail_panel(ui: &egui::Ui, rect: Rect) {
                 Stroke::new(1.0_f32, roles().ink),
                 egui::StrokeKind::Inside,
             );
-            return;
         }
-        Material::Plastic => {
-            theme::plastic(p, rect, 10.0, palette.body());
-            return;
+        Material::Plastic => theme::plastic(p, rect, 10.0, palette.body()),
+        Material::Metal => {
+            let body = palette.body();
+            p.rect_filled(rect, 5.0, roles().ink);
+            theme::gradient(
+                p,
+                rect.shrink(1.0),
+                4.0,
+                body.lerp_to_gamma(Color32::WHITE, 0.04),
+                body.lerp_to_gamma(Color32::BLACK, 0.06),
+            );
+            p.rect_stroke(
+                rect,
+                5.0,
+                Stroke::new(1.0_f32, roles().ink),
+                egui::StrokeKind::Inside,
+            );
+            p.rect_stroke(
+                rect.shrink(1.0),
+                4.0,
+                Stroke::new(1.0_f32, body.lerp_to_gamma(roles().legend, 0.20)),
+                egui::StrokeKind::Inside,
+            );
         }
-        Material::Metal => {}
     }
-    p.rect_filled(rect, 5.0, palette.body());
-    let art = artwork(ui.ctx(), palette);
-    paint_grain(ui, &art.grain, rect);
-    let ppp = ui.ctx().pixels_per_point();
-    for (index, right) in [(6, false), (7, true)] {
-        let size = art.material[index].size_vec2() / ppp;
-        let x = if right {
-            rect.right() - size.x
-        } else {
-            rect.left()
-        };
-        let mut y = rect.top();
-        while y < rect.bottom() {
-            fixed_image(ui, &art.material[index], Pos2::new(x, y), rect.shrink(3.0));
-            y += size.y;
-        }
-    }
-    p.rect_stroke(
-        rect,
-        5.0,
-        Stroke::new(1.0_f32, roles().ink),
-        egui::StrokeKind::Inside,
-    );
-    p.rect_stroke(
-        rect.shrink(1.0),
-        4.0,
-        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(roles().legend, 0.20)),
-        egui::StrokeKind::Inside,
-    );
 }
 
 pub(crate) fn rail_separator(ui: &mut egui::Ui) {

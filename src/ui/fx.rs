@@ -125,17 +125,53 @@ const BOARD_INSET: f32 = 2.0;
 /// Lower panel preferred height showing the full 4-card macro rack cleanly.
 pub(super) const MODULE_HEIGHT: f32 = ROW_HEIGHT + 2.0 * BOARD_INSET + 64.0;
 
-pub(super) const DELAY_ENAMEL: [u8; 3] = [112, 192, 214];
-pub(super) const REVERB_ENAMEL: [u8; 3] = [184, 168, 234];
-pub(super) const DRIVE_ENAMEL: [u8; 3] = [234, 164, 120];
-pub(super) const EMPTY_ENAMEL: [u8; 3] = [196, 194, 186];
-
-pub(super) fn enamel(module: &Module) -> [u8; 3] {
+pub(super) fn fx_motif(module: &Module) -> (super::master::MotifSpec, Color32) {
+    use super::master::{MotifSpec, MotifStyle};
     match module {
-        Module::Empty => EMPTY_ENAMEL,
-        Module::EchoformDelay(_) => DELAY_ENAMEL,
-        Module::AetherformReverb(_) => REVERB_ENAMEL,
-        Module::EmberformDrive(_) => DRIVE_ENAMEL,
+        Module::EchoformDelay(_) => (
+            MotifSpec {
+                base: [16, 26, 44],
+                secondary: [12, 56, 78],
+                trim: [128, 226, 246],
+                light_face: false,
+                style: MotifStyle::DualSubBays,
+                knob: theme::KnobStyle::Anodized([56, 172, 216]),
+            },
+            Color32::from_rgb(96, 214, 242),
+        ),
+        Module::AetherformReverb(_) => (
+            MotifSpec {
+                base: [20, 30, 82],
+                secondary: [42, 28, 96],
+                trim: [186, 176, 252],
+                light_face: false,
+                style: MotifStyle::CosmicNebula,
+                knob: theme::KnobStyle::BrushedChrome([20, 44, 92]),
+            },
+            Color32::from_rgb(184, 168, 250),
+        ),
+        Module::EmberformDrive(_) => (
+            MotifSpec {
+                base: [96, 26, 20],
+                secondary: [72, 20, 16],
+                trim: [250, 184, 112],
+                light_face: false,
+                style: MotifStyle::DriveRail,
+                knob: theme::KnobStyle::Anodized([216, 110, 44]),
+            },
+            Color32::from_rgb(248, 156, 86),
+        ),
+        Module::Empty => (
+            MotifSpec {
+                base: [15, 17, 19],
+                secondary: [36, 40, 44],
+                trim: [108, 116, 122],
+                light_face: false,
+                style: MotifStyle::EmptyBay,
+                knob: theme::KnobStyle::Default,
+            },
+            Color32::from_rgb(136, 144, 148),
+        ),
     }
 }
 
@@ -227,16 +263,37 @@ pub(super) fn show(
 
 #[cfg(test)]
 mod tests {
-    use super::super::master::enamel_of;
+    use super::super::master::tests::worst_zone_contrast;
     use super::*;
 
     #[test]
     fn ink_stays_legible_on_every_unit_lit_or_off() {
-        for colour in [DELAY_ENAMEL, REVERB_ENAMEL, DRIVE_ENAMEL, EMPTY_ENAMEL] {
-            for on in [true, false] {
-                let ratio = controls::contrast(enamel_of(colour, on), roles().ink);
-                assert!(ratio >= 5.0, "{colour:?} ({on}) gives {ratio:.2}:1");
+        let modules = [
+            Module::Empty,
+            Module::EchoformDelay(Default::default()),
+            Module::AetherformReverb(Default::default()),
+            Module::EmberformDrive(Default::default()),
+        ];
+        for theme_kind in theme::Theme::ALL {
+            theme::paint_as(theme_kind);
+            for module in &modules {
+                let (motif, _) = fx_motif(module);
+                for on in [true, false] {
+                    let ([zone_a, zone_b], _) = motif.zones(on);
+                    for (idx, zone) in [zone_a, zone_b]
+                        .into_iter()
+                        .chain(motif.extra_band_zones(on))
+                        .enumerate()
+                    {
+                        let ratio = worst_zone_contrast(zone, roles().legend, motif.light_face, on);
+                        assert!(
+                            ratio >= 5.0,
+                            "{theme_kind:?} FX zone {idx} (on={on}) gives {ratio:.2}:1"
+                        );
+                    }
+                }
             }
         }
+        theme::paint_as(theme::Theme::Studio);
     }
 }

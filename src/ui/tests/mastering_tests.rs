@@ -57,7 +57,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         assert!(
             window.contains_rect(Rect::from_min_size(
                 first.min,
-                Vec2::new(first.width(), 176.0)
+                Vec2::new(first.width(), 228.0)
             )),
             "The pedals must fit."
         );
@@ -119,7 +119,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 format!("Drag {name}")
             };
             let grip = effects_control_rect(output, &header);
-            Rect::from_min_size(grip.min, Vec2::new(grip.width() + 68.0, 176.0))
+            Rect::from_min_size(grip.min, Vec2::new(grip.width() + 68.0, 228.0))
         };
         let input = effects_control_rect(&output, "Trim");
         let outlet = effects_control_rect(&output, "Clear OVER");
@@ -1128,6 +1128,34 @@ fn mastering_deep_edit_opens_edits_eq_and_saturation_with_undo() {
         app.session.project().master.tape.drive,
         MasterChain::default().tape.drive
     );
+}
+
+#[test]
+fn mastering_deep_edit_tape_speed_dial_matches_its_compact_neighbours() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    click_named(&ctx, &mut app, "Edit Booster EQ");
+    click_named(&ctx, &mut app, "Deep edit select Tape");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.master_deep_edit, Some(PedalKind::Tape));
+    let speed = effects_control_rect(&output, "Deep edit Tape speed value");
+    let drive = effects_control_rect(&output, "Deep edit Tape drive value");
+    assert_eq!(speed.width(), drive.width());
+    // The label under each dial in the grid has the same letter size.
+    let label_height = |label: &str, column: Rect| {
+        screen(&output)
+            .texts()
+            .find_map(|text| {
+                let bounds = text.rect();
+                (text.label() == label && (bounds.center().x - column.center().x).abs() < 1.0)
+                    .then_some(bounds.height())
+            })
+            .unwrap_or_else(|| panic!("Missing Deep Edit label: {label}"))
+    };
+    assert_eq!(label_height("Speed", speed), label_height("Drive", drive));
 }
 
 #[test]

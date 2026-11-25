@@ -2,7 +2,7 @@
 
 ## Options
 
-Options uses the Utility Folded Metal shell. A vertical selector with Audio,
+Options uses the Utility hardware shell. A vertical selector with Audio,
 Workspace, and Files is beside a body that scrolls. Until the user resizes the
 window, it keeps the height of the tallest page shown since it opened, up to the
 height of the screen. So the footer does not move between pages. A longer page
@@ -133,13 +133,11 @@ is a project change that the user can undo. Dismissal does not confirm. Esc
 hides the window without an edit, and Sample conflicts in the status bar opens
 it again.
 
-Prepared material is in `assets/folded-metal/<palette>/100/`. Shared controls
-are in `assets/folded-metal/controls/100/`. `tools/assets/render-folded-metal.py`
-prepares both. The shared material geometry supports the Utility, Marine,
-Granite, Red, Olive, and Indigo palettes. Fixed raster details fade to a
-matching solid base. No window depends on a complete skin of fixed size. Check
-the open and collapsed states, both resize directions, long content, focus,
-and all button states.
+Vintage panels, bays, buttons, and fluted dials paint procedurally in code via
+`src/ui/controls/` and `src/ui/theme.rs`, sharing geometry across Utility,
+Marine, Granite, Red, Olive, and Indigo variants. Content reflows or scrolls
+when resized without scaling controls. Check open and collapsed states, both
+resize directions, long content, focus, and all button states.
 
 ## Empty states and feedback
 

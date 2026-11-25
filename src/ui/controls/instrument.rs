@@ -1,6 +1,6 @@
 //! 3-theme code-painted instrument kit shared by the FX rack and Deep Edit.
 //! Branches strictly on `Material` (`Flat`, `Plastic`, `Metal`) via `theme::roles()`.
-use super::{HoverHints, Material, roles, toggle_at};
+use super::{HoverHints, Material, roles, theme, toggle_at};
 use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Stroke, Vec2,
 };
@@ -15,6 +15,79 @@ pub(in super::super) use scopes::*;
 #[path = "instrument_tests.rs"]
 mod tests;
 
+fn paint_metal_bay_accents(painter: &egui::Painter, rect: Rect) {
+    let r = roles();
+    painter.rect_stroke(
+        rect.shrink(1.5),
+        5.0,
+        Stroke::new(1.0_f32, Color32::from_rgb(108, 122, 110)),
+        egui::StrokeKind::Inside,
+    );
+    painter.line_segment(
+        [
+            Pos2::new(rect.left() + 6.0, rect.top() + 2.0),
+            Pos2::new(rect.right() - 6.0, rect.top() + 2.0),
+        ],
+        Stroke::new(1.0_f32, Color32::from_white_alpha(54)),
+    );
+    for corner in [
+        rect.left_top() + Vec2::new(6.0, 6.0),
+        rect.right_top() + Vec2::new(-6.0, 6.0),
+    ] {
+        painter.circle_filled(corner, 2.0, r.well_edge);
+        painter.circle_stroke(corner, 2.0, Stroke::new(0.7_f32, r.ink));
+        painter.line_segment(
+            [corner - Vec2::new(1.1, 0.8), corner + Vec2::new(1.1, 0.8)],
+            Stroke::new(0.8_f32, r.ink),
+        );
+    }
+    if rect.height() >= 84.0 {
+        for corner in [
+            rect.left_bottom() + Vec2::new(6.0, -6.0),
+            rect.right_bottom() + Vec2::new(-6.0, -6.0),
+        ] {
+            painter.circle_filled(corner, 2.0, r.well_edge);
+            painter.line_segment(
+                [corner - Vec2::new(1.1, 0.8), corner + Vec2::new(1.1, 0.8)],
+                Stroke::new(0.8_f32, r.ink),
+            );
+        }
+    }
+    let led = Pos2::new(rect.left() + 14.0, rect.top() + 11.5);
+    painter.circle_filled(led, 3.0, r.ink);
+    painter.circle_filled(led, 2.1, Color32::from_rgb(226, 58, 42));
+    painter.circle_filled(
+        led - Vec2::splat(0.7),
+        0.7,
+        Color32::from_rgb(255, 198, 178),
+    );
+}
+
+fn paint_bay_rule(painter: &egui::Painter, rect: Rect, accent: Color32, is_metal: bool) {
+    let rule_y = rect.top() + 19.0;
+    let rule_color = if is_metal {
+        Color32::from_rgb(236, 136, 48)
+    } else {
+        accent.gamma_multiply(0.55)
+    };
+    painter.line_segment(
+        [
+            Pos2::new(rect.left() + 10.0, rule_y),
+            Pos2::new(rect.right() - 10.0, rule_y),
+        ],
+        Stroke::new(1.1_f32, rule_color),
+    );
+    if is_metal {
+        // Modular silk-screen bracket end-ticks.
+        for x in [rect.left() + 10.0, rect.right() - 10.0] {
+            painter.line_segment(
+                [Pos2::new(x, rule_y), Pos2::new(x, rule_y + 3.5)],
+                Stroke::new(1.1_f32, rule_color),
+            );
+        }
+    }
+}
+
 /// Draw a recessed chassis bay with material-aware framing and title legend.
 pub(in super::super) fn bay(
     ui: &egui::Ui,
@@ -25,58 +98,91 @@ pub(in super::super) fn bay(
 ) {
     let r = roles();
     let painter = ui.painter();
-    let radius = match r.material {
-        Material::Flat => CornerRadius::same(4),
-        Material::Plastic => CornerRadius::same(8),
-        Material::Metal => CornerRadius::same(5),
-    };
-    let fill = match r.material {
-        Material::Flat => Color32::from_rgba_unmultiplied(r.ink.r(), r.ink.g(), r.ink.b(), 18),
-        Material::Plastic => {
-            Color32::from_rgba_unmultiplied(r.face.r(), r.face.g(), r.face.b(), 30)
+    let is_metal = r.material == Material::Metal;
+    let flat_bay = match r.material {
+        Material::Metal => {
+            painter.rect_filled(rect, 6.0, r.ink);
+            theme::gradient(
+                painter,
+                rect.shrink(1.5),
+                5.0,
+                Color32::from_rgb(86, 98, 88),
+                Color32::from_rgb(68, 79, 70),
+            );
+            paint_metal_bay_accents(painter, rect);
+            None
         }
-        Material::Metal => Color32::from_rgba_unmultiplied(r.ink.r(), r.ink.g(), r.ink.b(), 22),
+        Material::Flat => Some((
+            CornerRadius::same(4),
+            Color32::from_rgba_unmultiplied(r.ink.r(), r.ink.g(), r.ink.b(), 18),
+        )),
+        Material::Plastic => Some((
+            CornerRadius::same(8),
+            Color32::from_rgba_unmultiplied(r.face.r(), r.face.g(), r.face.b(), 30),
+        )),
     };
-    painter.rect_filled(rect, radius, fill);
-    painter.rect_stroke(
-        rect,
-        radius,
-        Stroke::new(1.0_f32, r.bay_edge.gamma_multiply(0.75)),
-        egui::StrokeKind::Inside,
-    );
-    if r.material == Material::Metal {
-        // Corner chassis screws / bevel highlight on vintage metal bays.
-        let top_highlight = [
-            Pos2::new(rect.left() + 5.0, rect.top() + 1.0),
-            Pos2::new(rect.right() - 5.0, rect.top() + 1.0),
-        ];
-        painter.line_segment(
-            top_highlight,
-            Stroke::new(1.0_f32, Color32::from_white_alpha(48)),
+    if let Some((radius, fill)) = flat_bay {
+        painter.rect_filled(rect, radius, fill);
+        painter.rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0_f32, r.bay_edge.gamma_multiply(0.75)),
+            egui::StrokeKind::Inside,
         );
-        for corner in [
-            rect.left_top() + Vec2::new(7.0, 7.0),
-            rect.right_top() + Vec2::new(-7.0, 7.0),
-        ] {
-            painter.circle_filled(corner, 2.0, r.well_edge);
-        }
     }
     let text_color = if ink_on_light { r.ink } else { r.legend };
+    let title_x = if is_metal {
+        rect.left() + 21.5
+    } else {
+        rect.left() + 14.0
+    };
     painter.text(
-        Pos2::new(rect.left() + 12.0, rect.top() + 10.0),
+        Pos2::new(title_x, rect.top() + 11.0),
         Align2::LEFT_CENTER,
         title,
         FontId::proportional(10.5),
         text_color,
     );
-    let rule_y = rect.top() + 18.0;
+    paint_bay_rule(painter, rect, accent, is_metal);
+}
+
+fn paint_metal_slide_switch(painter: &egui::Painter, switch_rect: Rect, value: bool) {
+    let r = roles();
+    // Modular recessed slide-switch bezel with machined actuator tab.
+    let slot = Rect::from_center_size(switch_rect.center(), Vec2::new(26.0, 14.0));
+    painter.rect_filled(slot, 2.0, r.ink);
+    painter.rect_stroke(
+        slot,
+        2.0,
+        Stroke::new(1.0_f32, r.well_edge.gamma_multiply(0.75)),
+        egui::StrokeKind::Inside,
+    );
+    let tab_x = if value {
+        slot.right() - 7.5
+    } else {
+        slot.left() + 7.5
+    };
+    let tab = Rect::from_center_size(Pos2::new(tab_x, slot.center().y), Vec2::new(12.0, 11.0));
+    let tab_fill = if value {
+        Color32::from_rgb(218, 224, 218)
+    } else {
+        Color32::from_rgb(136, 142, 136)
+    };
+    painter.rect_filled(tab, 1.5, tab_fill);
     painter.line_segment(
         [
-            Pos2::new(rect.left() + 10.0, rule_y),
-            Pos2::new(rect.right() - 10.0, rule_y),
+            Pos2::new(tab.center().x, tab.top() + 2.0),
+            Pos2::new(tab.center().x, tab.bottom() - 2.0),
         ],
-        Stroke::new(1.0_f32, accent.gamma_multiply(0.55)),
+        Stroke::new(1.6_f32, r.ink),
     );
+    let lamp_x = if value {
+        slot.left() + 5.0
+    } else {
+        slot.right() - 5.0
+    };
+    let lamp_color = if value { r.lamp_on } else { r.lamp_off };
+    painter.circle_filled(Pos2::new(lamp_x, slot.center().y), 2.3, lamp_color);
 }
 
 /// Toggle switch styled cleanly for chassis hardware across all three themes.
@@ -100,16 +206,7 @@ pub(in super::super) fn bat_toggle(
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *value, name)
     });
     if r.material == Material::Metal {
-        // Chrome bat-handle pin indicator centered inside the metal toggle throat.
-        let tip_x = if *value {
-            switch_rect.right() - 7.0
-        } else {
-            switch_rect.left() + 7.0
-        };
-        let pin = Pos2::new(tip_x, switch_rect.center().y);
-        ui.painter().circle_filled(pin, 4.0, r.cap);
-        ui.painter()
-            .circle_stroke(pin, 4.0, Stroke::new(1.0_f32, r.ink));
+        paint_metal_slide_switch(ui.painter(), switch_rect, *value);
     }
     if !label.is_empty() {
         let color = if ink_on_light { r.ink } else { r.legend };

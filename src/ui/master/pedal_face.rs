@@ -19,24 +19,33 @@ pub(super) fn pedal(
 ) -> PedalCardOutcome {
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y);
     let on = chain.is_on(kind);
-    let ink = master_face_ink();
+    let ink = master_face_ink(kind);
     master_enclosure(ui, rect, kind, on);
     card_header(ui, rect, kind, ink, on);
     for y in [HEADER + 1.0, FOOTER_TOP - 1.0] {
         ui.painter().line_segment(
-            [at(8.0, y), at(rect.width() - 8.0, y)],
+            [at(10.0, y), at(rect.width() - 10.0, y)],
             Stroke::new(1.0_f32, ink.gamma_multiply(0.28)),
         );
     }
 
     let mut open_deep_edit = card_edit_button(ui, rect, kind);
-    let has_meter = card_meter(ui, at(rect.width() / 2.0, 39.0), kind, on, metering, ink);
+    let has_meter = card_meter(
+        ui,
+        at(rect.width() / 2.0, HEADER + 15.0),
+        kind,
+        on,
+        metering,
+        ink,
+    );
     ui.scope(|ui| {
-        ui.visuals_mut().dark_mode = master_face_dark_mode();
+        ui.visuals_mut().dark_mode = master_face_dark_mode(kind);
         if kind == PedalKind::BoosterEq {
             open_deep_edit |= booster_eq_preview(ui, rect, chain, on);
         } else {
-            card_hero_dials(ui, rect, chain, kind, on, has_meter);
+            theme::with_knob_style(master_motif(kind).knob, || {
+                card_hero_dials(ui, rect, chain, kind, on, has_meter);
+            });
         }
     });
     let moved_to = card_footer(ui, rect, chain, kind, index, on);
@@ -54,14 +63,14 @@ fn card_header(ui: &egui::Ui, rect: Rect, kind: PedalKind, ink: Color32, on: boo
     );
     if booster {
         ui.painter().text(
-            rect.min + Vec2::new(PEDAL_PADDING, 8.0),
+            rect.min + Vec2::new(PEDAL_PADDING, 11.0),
             Align2::LEFT_CENTER,
             "Booster",
             FontId::proportional(8.5),
             ink,
         );
     }
-    let room = (rect.width() - 80.0).max(32.0);
+    let room = (rect.width() - 88.0).max(32.0);
     let size = [13.0, 12.0, 11.0, 10.0]
         .into_iter()
         .find(|s| {
@@ -73,19 +82,19 @@ fn card_header(ui: &egui::Ui, rect: Rect, kind: PedalKind, ink: Color32, on: boo
         })
         .unwrap_or(9.5);
     ui.painter().text(
-        rect.min + Vec2::new(PEDAL_PADDING, if booster { 20.0 } else { 15.0 }),
+        rect.min + Vec2::new(PEDAL_PADDING, if booster { 24.5 } else { 18.5 }),
         Align2::LEFT_CENTER,
         label,
         FontId::proportional(size),
         ink,
     );
-    lamp(ui, rect.min + Vec2::new(rect.width() - 14.0, 15.0), on);
+    lamp(ui, rect.min + Vec2::new(rect.width() - 16.0, 18.5), on);
 }
 
 fn card_edit_button(ui: &mut egui::Ui, rect: Rect, kind: PedalKind) -> bool {
     let btn = Rect::from_min_size(
-        rect.min + Vec2::new(rect.width() - 63.0, 6.0),
-        Vec2::new(38.0, 18.0),
+        rect.min + Vec2::new(rect.width() - 66.0, 8.5),
+        Vec2::new(38.0, 20.0),
     );
     let label = format!("Edit {}", name(kind));
     let resp = controls::button_at(ui, btn, &label, "", controls::ButtonRole::Secondary, true);
@@ -124,7 +133,7 @@ fn card_meter(
         } else {
             [0.0; 3]
         };
-        multiband_reduction_strip(ui, center, bands, ink);
+        multiband_reduction_strip(ui, center, bands);
         true
     } else {
         false
@@ -142,35 +151,34 @@ fn card_reduction(kind: PedalKind, on: bool, metering: &Metering) -> f32 {
 }
 
 /// Paint the 15/30 ips tape-speed dial on both lower cards and Mastering Deep Edit.
+/// A `compact_well` width gives it the compact face of the Deep Edit grid.
 pub(super) fn tape_speed_dial(
     ui: &mut egui::Ui,
     positions: [Pos2; 3],
     chain: &mut MasterChain,
     access_name: &str,
     on: bool,
+    compact_well: Option<f32>,
 ) {
     let mut speed = f64::from(chain.tape.speed);
-    compact_dial(
-        ui,
-        positions,
-        &mut speed,
-        Dial {
-            name: access_name,
-            label: "Speed",
-            hint: "15 or 30 inches per second: moves the low-end bump and the treble roll-off.",
-            range: KnobRange {
-                low: 15.0,
-                high: 30.0,
-                default: 30.0,
-                step: 15.0,
-                logarithmic: false,
-            },
-            format: Format::Speed,
-            choices: &[15.0, 30.0],
+    let spec = Dial {
+        name: access_name,
+        label: "Speed",
+        hint: "15 or 30 inches per second: moves the low-end bump and the treble roll-off.",
+        range: KnobRange {
+            low: 15.0,
+            high: 30.0,
+            default: 30.0,
+            step: 15.0,
+            logarithmic: false,
         },
-        on,
-        COMPACT_WELL,
-    );
+        format: Format::Speed,
+        choices: &[15.0, 30.0],
+    };
+    match compact_well {
+        Some(well) => compact_dial(ui, positions, &mut speed, spec, on, well),
+        None => dial(ui, positions, &mut speed, spec, on),
+    }
     chain.tape.speed = if speed < 22.5 { 15 } else { 30 };
 }
 
@@ -185,9 +193,9 @@ fn card_hero_dials(
     let knobs = hero_knobs(kind);
     let count = card_dial_count(kind).max(1);
     let left = (rect.width() - count as f32 * CELL) / 2.0;
-    let rotary_y = if has_lamps { 71.0 } else { 62.0 };
-    let well_y = if has_lamps { 107.0 } else { 100.0 };
-    let label_y = if has_lamps { 129.0 } else { 125.0 };
+    let rotary_y = if has_lamps { 102.0 } else { 94.0 };
+    let well_y = if has_lamps { 144.0 } else { 136.0 };
+    let label_y = if has_lamps { 168.0 } else { 160.0 };
     let cell = |slot: usize| {
         let x = left + (slot as f32 + 0.5) * CELL;
         [
@@ -200,7 +208,7 @@ fn card_hero_dials(
         let (label, name, hint, format) = face(*knob);
         let before = decimal(knob.get(chain));
         let mut value = before;
-        compact_dial(
+        dial(
             ui,
             cell(slot),
             &mut value,
@@ -213,21 +221,20 @@ fn card_hero_dials(
                 choices: &[],
             },
             on,
-            COMPACT_WELL,
         );
         if value != before {
             knob.set(chain, value as f32);
         }
     }
     if kind == PedalKind::Tape {
-        tape_speed_dial(ui, cell(1), chain, "Tape speed", on);
+        tape_speed_dial(ui, cell(1), chain, "Tape speed", on, None);
     }
 }
 
 fn booster_eq_preview(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, on: bool) -> bool {
     let box_rect = Rect::from_min_max(
-        rect.min + Vec2::new(10.0, 36.0),
-        rect.min + Vec2::new(rect.width() - 10.0, 122.0),
+        rect.min + Vec2::new(14.0, HEADER + 10.0),
+        rect.min + Vec2::new(rect.width() - 14.0, FOOTER_TOP - 28.0),
     );
     controls::well(ui, box_rect);
     let accent = if on {
@@ -260,11 +267,11 @@ fn booster_eq_preview(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, on: bo
     ui.painter()
         .add(egui::Shape::line(points, Stroke::new(2.0_f32, accent)));
     ui.painter().text(
-        rect.min + Vec2::new(rect.width() / 2.0, 133.0),
+        rect.min + Vec2::new(rect.width() / 2.0, FOOTER_TOP - 14.0),
         Align2::CENTER_CENTER,
         "10-band graphic EQ",
-        FontId::proportional(9.5),
-        master_face_ink().gamma_multiply(0.85),
+        FontId::proportional(10.5),
+        master_face_ink(PedalKind::BoosterEq).gamma_multiply(0.85),
     );
     let hit = ui.interact(box_rect, ui.id().with("booster-eq-preview"), Sense::click());
     reveal(name_control(hit, "Booster EQ curve"))
@@ -313,13 +320,13 @@ fn move_button(
             .map(|_| index + 1)
     };
     let x = if left {
-        rect.left() + 6.0
+        rect.left() + 12.0
     } else {
-        rect.right() - 32.0
+        rect.right() - 40.0
     };
     let button = Rect::from_min_size(
-        Pos2::new(x, rect.top() + FOOTER_TOP + 5.0),
-        Vec2::new(26.0, 22.0),
+        Pos2::new(x, rect.top() + FOOTER_TOP + 4.0),
+        Vec2::new(28.0, 24.0),
     );
     let step = if left { "left" } else { "right" };
     let label = format!("Move {} {step}", name(kind));
@@ -387,7 +394,7 @@ fn pedal_power(ui: &mut egui::Ui, rect: Rect, chain: &mut MasterChain, kind: Ped
         ui,
         Rect::from_center_size(
             Pos2::new(rect.center().x, rect.top() + FOOTER_TOP + 16.0),
-            Vec2::new(28.0, 20.0),
+            Vec2::new(30.0, 22.0),
         ),
         name(kind),
         "",
@@ -461,8 +468,8 @@ fn reduction_meter(
 }
 
 /// Compact 3-band `L / M / H` gain reduction bars on the Multiband card.
-fn multiband_reduction_strip(ui: &egui::Ui, center: Pos2, bands: [f32; 3], ink: Color32) {
-    let strip = Rect::from_center_size(center, Vec2::new(136.0, 14.0));
+fn multiband_reduction_strip(ui: &egui::Ui, center: Pos2, bands: [f32; 3]) {
+    let strip = Rect::from_center_size(center, Vec2::new(164.0, 14.0));
     controls::well(ui, strip);
     let slot_w = (strip.width() - 8.0) / 3.0;
     let warn = roles().lamp_warn;
@@ -474,7 +481,7 @@ fn multiband_reduction_strip(ui: &egui::Ui, center: Pos2, bands: [f32; 3], ink: 
             Align2::CENTER_CENTER,
             letter,
             FontId::proportional(8.5),
-            ink,
+            roles().legend,
         );
         let track = Rect::from_center_size(
             Pos2::new(x0 + 11.0 + (slot_w - 13.0) * 0.5, center.y),

@@ -31,17 +31,18 @@ same for every material.
 
 | Theme | Material | Workspace | Tools and boards | Accent |
 | --- | --- | --- | --- | --- |
-| Studio | Flat matte paint | Graphite `#15171a` / `#1c1f23` | Neutral panels with a tool tint, and the tool accent along the top edge | Lime `#bee860` |
-| Aero | Y2K molded plastic, softer gloss | Cobalt `#144084` and navy `#0b2450` | Colored plastic per tool: cobalt, teal, slate, red, green, indigo | Lime `#96ec5a` |
-| Vintage | Worn painted metal | Warm dark `#181715` / `#1f1e1b` | The Folded Metal artwork, enamel pedals, and ivory Mixer strips | Amber `#f2aa3e` |
+| Studio | Flat matte paint | Graphite `#15171a` / `#1c1f23` | Matte panels, tool accent stripe, and bespoke pedalboard motifs | Lime `#bee860` |
+| Aero | Y2K molded plastic, softer gloss | Cobalt `#144084` and navy `#0b2450` | Molded tool plastic and multi-tone stompbox shells | Lime `#96ec5a` |
+| Vintage | Modular anodized metal | Stark rack `#0b0d0c` / `#141815` | Brushed olive-sage plates, bespoke hardware stompboxes, and ivory Mixer | Orange `#f89e3e` |
 
 **Studio.** Flat fills with hairline edges, and no cast shadow on menus or
 tooltips. Radii are half the shared values, up to 4 points. Dials are flat.
 They have a dark face, a pointer, and a 270-degree value arc in the tool accent
 (ink on light surfaces) in place of tick marks. Faders have a flat 24 by
 16-point cap.
-Pedals and FX units are flat modules. Each enamel moves 35% toward a matte
-light gray and keeps a hairline ink edge. Clips are tight tabs.
+Pedals and FX units use matte per-unit color motifs and scoped knob caps with
+crisp ink edges.
+Clips are tight tabs.
 
 **Aero.** Every raised surface is molded plastic:
 
@@ -54,18 +55,21 @@ use a high-gloss finish. Sound rows use a darker cobalt than other raised
 surfaces, because they have small text under a category tint. The test
 `text_on_painted_surfaces_keeps_its_contrast` checks text against the lightest
 and darkest points that each material paints. Radii are 1.6 times the shared
-values, up to 14 points. Knobs are colored molded caps in the tool accent,
-with tick marks. Faders have a 24 by 24-point molded cap. Inset bays are
-luminous navy displays. Clips are rounded bubbles, with a maximum radius of
-8 points, so that their names clear the curve. Unlit plastic stays 12% lighter
-than unlit enamel, so that ink keeps 5:1 at the foot.
+values, up to 14 points. Knobs are colored molded caps (accent by default, or
+per-pedal cap styles), with tick marks. Faders have a 24 by 24-point molded cap.
+Inset bays are luminous navy displays. Clips are rounded bubbles, with a maximum
+radius of 8 points, so that their names clear the curve. Unlit plastic stays 12%
+lighter than unlit enamel, so that ink keeps 5:1 at the foot.
 
-**Vintage.** Vintage uses the Folded Metal artwork for the chassis, knobs, and
-primary buttons. It uses the ivory and graphite Mixer artwork. The enamel
-pedals have brushed grain, sheen, and seeded scratches. Wear stays on chassis
-folds and pedal faces. Dense working areas (the arrangement, the Sounds panel,
-and value wells) get no added wear. The position readout is an amber display
-window. Indicators are warm amber.
+**Vintage.** Vintage pairs stark dark rack cabinets (`#0b0d0c`) with raised
+brushed olive-sage anodized modular plates, corner slotted screws, crimson
+module status LEDs, burnt-orange silk-screen routing traces and bracket rules,
+machined silver-top slider blocks, and dark phenolic fluted skirts with spun
+aluminum or scoped anodized/chrome caps. Pedals layer bespoke hardware artwork
+under a unified 3D bevel, grain, sheen, and scratch finish pass. Dense working
+areas (the arrangement, the Sounds panel, and value wells) stay clean. Legacy
+Mixer strips keep the ivory artwork until Mix view retirement. The position
+readout and VU face use warm cream; indicators use modular orange-amber.
 
 **Category colors** for sounds and **section colors** are the same in every
 theme. States keep their cues that are not color (outlines, bars, names, and
@@ -94,12 +98,10 @@ The Channel Strip, FX rack, Mastering board modules, and Deep Edit share the
 instrument painters in `src/ui/controls/instrument.rs` and
 `instrument_scopes.rs`. The painters use `Material` to select the surface
 details. Studio has flat frames, Aero uses translucent molded plastic frames
-and a blue scope, and Vintage uses dark anodized metal faceplates, faceted
-lamps, and a green scope.
+and a blue scope, and Vintage uses olive-sage anodized modular plates,
+slide-handle switches, and a phosphor green scope.
 
-**Code-only rendering.** Studio and Aero load no material bitmaps. All of
-their surfaces, dials, caps, bevels, and highlights are bounded painter
-geometry. The painters draw them each frame, with no texture creation and no
-continuous repaint. A theme change builds the style and fonts again one time.
-Do not generate images or bitmap skins for a theme. The approved PNG brand,
-rail, and Vintage artwork stays.
+**Code-only rendering.** All three themes render chassis, bays, buttons, and
+dials in bounded painter geometry without runtime texture loads for hardware
+skins. A theme change builds the style and fonts once. Only the PNG brand,
+rail icons, and legacy Vintage Mixer artwork stay on disk.

@@ -1,4 +1,4 @@
-use super::super::super::{fx, master, theme};
+use super::super::super::{fx, theme};
 use super::super::contrast;
 use super::roles;
 use mixjam_techno::application::options::Theme;
@@ -55,18 +55,23 @@ fn instrument_palette_meets_contrast_targets_across_all_three_themes() {
             danger_btn >= 4.5,
             "{theme_kind:?} danger button contrast {danger_btn:.2}:1 < 4.5:1"
         );
-        for enamel in [
-            fx::DELAY_ENAMEL,
-            fx::REVERB_ENAMEL,
-            fx::DRIVE_ENAMEL,
-            fx::EMPTY_ENAMEL,
-        ] {
+        let modules = [
+            mixjam_techno::application::fx::Module::Empty,
+            mixjam_techno::application::fx::Module::EchoformDelay(Default::default()),
+            mixjam_techno::application::fx::Module::AetherformReverb(Default::default()),
+            mixjam_techno::application::fx::Module::EmberformDrive(Default::default()),
+        ];
+        for module in &modules {
+            let (motif, _) = fx::fx_motif(module);
             for on in [true, false] {
-                let ratio = contrast(master::enamel_of(enamel, on), r.ink);
-                assert!(
-                    ratio >= 5.0,
-                    "{theme_kind:?} enamel {enamel:?} (on={on}) contrast {ratio:.2}:1 < 5.0:1"
-                );
+                let ([zone_a, zone_b], _) = motif.zones(on);
+                for zone in [zone_a, zone_b] {
+                    let ratio = contrast(zone, r.legend);
+                    assert!(
+                        ratio >= 5.0,
+                        "{theme_kind:?} fx motif (on={on}) contrast {ratio:.2}:1 < 5.0:1"
+                    );
+                }
             }
         }
     }

@@ -202,6 +202,9 @@ fn show_strip(
         Pos2::new(cmp_rect.right() + GAP, row2_y),
         Vec2::new(252.0, ROW2_BAY_H),
     );
+    if theme::roles().material == theme::Material::Metal {
+        paint_modular_routing_traces(ui.painter(), eq_bay_rect, drv_rect, cmp_rect, duk_rect);
+    }
 
     let track_num = track + 1;
     flags.merge(bays::drive_bay(ui, drv_rect, track_num, &mut draft));
@@ -216,6 +219,27 @@ fn show_strip(
         WindowEvent::Action(Action::Turn(draft))
     } else {
         WindowEvent::Action(Action::None)
+    }
+}
+
+fn paint_modular_routing_traces(
+    painter: &egui::Painter,
+    eq_bay: Rect,
+    drv: Rect,
+    cmp: Rect,
+    duk: Rect,
+) {
+    let trace = Stroke::new(1.2_f32, Color32::from_rgb(218, 118, 44));
+    let drop_y = eq_bay.bottom() + 4.0;
+    let eq_out = Pos2::new(eq_bay.center().x, eq_bay.bottom());
+    painter.line_segment([eq_out, Pos2::new(eq_out.x, drop_y)], trace);
+    let left_bus = Pos2::new(drv.center().x, drop_y);
+    let right_bus = Pos2::new(duk.center().x, drop_y);
+    painter.line_segment([left_bus, right_bus], trace);
+    for target in [drv, cmp, duk] {
+        let tx = target.center().x;
+        painter.line_segment([Pos2::new(tx, drop_y), Pos2::new(tx, target.top())], trace);
+        painter.circle_filled(Pos2::new(tx, drop_y), 1.8, trace.color);
     }
 }
 

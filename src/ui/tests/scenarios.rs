@@ -3,9 +3,8 @@
 
 use super::*;
 
-/// Vintage paints the prepared Folded Metal artwork at one texel per
-/// physical pixel. Studio and Aero paint their chassis in code and load
-/// none of it.
+/// All three themes paint their tool and board chassis procedurally in code
+/// and allocate zero legacy Folded Metal bitmap textures.
 pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutput, palette: &str) {
     let body = match palette {
         "Marine" => controls::Palette::Marine,
@@ -18,156 +17,29 @@ pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutpu
     }
     .body();
     let large = |rect: Rect| rect.width() > 300.0 && rect.height() > 100.0;
-    match roles().material {
-        theme::Material::Metal => {}
-        material => {
-            assert!(
-                !ctx.tex_manager()
-                    .read()
-                    .allocated()
-                    .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
-                "{} paints its chassis in code.",
-                options::labels::theme(theme::current())
-            );
-            assert!(
-                output.shapes.iter().any(|shape| match &shape.shape {
-                    egui::Shape::Rect(rect) => {
-                        material == theme::Material::Flat && rect.fill == body && large(rect.rect)
-                    }
-                    egui::Shape::Mesh(mesh) => {
-                        material == theme::Material::Plastic
-                            && mesh.texture_id == egui::TextureId::default()
-                            && large(mesh.calc_bounds())
-                    }
-                    _ => false,
-                }),
-                "The {palette} chassis must paint its {} body.",
-                options::labels::theme(theme::current())
-            );
-            return;
-        }
-    }
-    let textures: Vec<_> = ctx
-        .tex_manager()
-        .read()
-        .allocated()
-        .filter(|(_, meta)| meta.name.starts_with(&format!("folded-metal-{palette}-")))
-        .map(|(id, meta)| (*id, meta.size, meta.name.clone()))
-        .collect();
-    let dimensions = [
-        (112, 64),
-        (112, 64),
-        (112, 64),
-        (112, 64),
-        (192, 12),
-        (192, 12),
-        (12, 96),
-        (12, 96),
-        (36, 36),
-        (48, 24),
-        (256, 256),
-    ];
-    for (index, (width, height)) in dimensions.into_iter().enumerate() {
-        let part = if index < 8 {
-            format!("part-{index}")
-        } else if index == 8 {
-            "knob".into()
-        } else if index == 9 {
-            "primary".into()
-        } else {
-            "grain".into()
-        };
-        let name = format!("folded-metal-{palette}-{part}");
-        let expected = [width, height];
-        assert!(
-            textures
-                .iter()
-                .any(|(_, size, key)| *key == name && *size == expected),
-            "{name} must load its prepared dimensions {expected:?}."
-        );
-    }
-    let grain = textures
-        .iter()
-        .find(|(_, _, name)| name == &format!("folded-metal-{palette}-grain"))
-        .unwrap()
-        .0;
     assert!(
-        output
-            .shapes
-            .iter()
-            .any(|shape| matches!(&shape.shape,egui::Shape::Mesh(mesh) if mesh.texture_id==grain)),
-        "The chassis must paint its prepared grain tile."
+        !ctx.tex_manager()
+            .read()
+            .allocated()
+            .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
+        "{} paints its chassis in code without legacy Folded Metal textures.",
+        options::labels::theme(theme::current())
     );
+    let material = roles().material;
     assert!(
-        output.shapes.iter().any(|shape| matches!(
-            &shape.shape,
-            egui::Shape::Rect(rect) if rect.fill == body
-                && rect.rect.width() > 300.0
-                && rect.rect.height() > 100.0
-        )),
-        "The {palette} chassis must retain its assigned body color."
-    );
-    fn check(
-        shape: &egui::Shape,
-        textures: &[(egui::TextureId, [usize; 2], String)],
-        parts: &mut [bool; 8],
-    ) {
-        match shape {
-            egui::Shape::Vec(shapes) => {
-                for shape in shapes {
-                    check(shape, textures, parts);
-                }
+        output.shapes.iter().any(|shape| match &shape.shape {
+            egui::Shape::Rect(rect) => {
+                material == theme::Material::Flat && rect.fill == body && large(rect.rect)
             }
             egui::Shape::Mesh(mesh) => {
-                let Some((_, size, name)) =
-                    textures.iter().find(|(id, _, _)| *id == mesh.texture_id)
-                else {
-                    return;
-                };
-                if let Some(part) = name
-                    .split("-part-")
-                    .nth(1)
-                    .and_then(|part| part.split('-').next())
-                    .and_then(|part| part.parse::<usize>().ok())
-                {
-                    parts[part] = true;
-                }
-                for vertex in &mesh.vertices {
-                    for edge in [vertex.pos.x, vertex.pos.y] {
-                        assert!(
-                            (edge - edge.round()).abs() < 0.001,
-                            "Folded Metal raster vertices align to physical pixels."
-                        );
-                    }
-                }
-                for triangle in mesh.indices.as_chunks::<3>().0 {
-                    for edge in 0..3 {
-                        let a = mesh.vertices[triangle[edge] as usize];
-                        let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                        let dest = (b.pos - a.pos).abs();
-                        let source =
-                            (b.uv - a.uv).abs() * Vec2::new(size[0] as f32, size[1] as f32);
-                        assert!(
-                            (dest.x - source.x).abs() < 0.001,
-                            "Do not stretch material or control raster width."
-                        );
-                        assert!(
-                            (dest.y - source.y).abs() < 0.001,
-                            "Do not stretch material or control raster height."
-                        );
-                    }
-                }
+                matches!(material, theme::Material::Plastic | theme::Material::Metal)
+                    && mesh.texture_id == egui::TextureId::default()
+                    && large(mesh.calc_bounds())
             }
-            _ => {}
-        }
-    }
-    let mut parts = [false; 8];
-    for shape in &output.shapes {
-        check(&shape.shape, &textures, &mut parts);
-    }
-    assert!(
-        parts.into_iter().all(|painted| painted),
-        "Paint every corner and edge of the Folded Metal chassis."
+            _ => false,
+        }),
+        "The {palette} chassis must paint its {} body.",
+        options::labels::theme(theme::current())
     );
 }
 

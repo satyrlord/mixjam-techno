@@ -76,7 +76,7 @@ pub(super) fn choice_named(response: &Response, name: &str, selected: &str) {
         .accesskit_node_builder(response.id, |node| node.set_value(selected));
 }
 
-/// The shared Folded Metal switch, laid out in the form's flow.
+/// The shared hardware switch, laid out in the form's flow.
 pub(super) fn switch(ui: &mut egui::Ui, name: &str, value: &mut bool) -> Response {
     let label = ui.painter().layout_no_wrap(
         name.into(),

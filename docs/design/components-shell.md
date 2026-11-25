@@ -36,9 +36,9 @@ available. The text never overlaps the fill.
 
 ## Tool rail
 
-The rail at the left uses the utility Folded Metal finish. It has dark neutral
-paint, subtle monochromatic grain, and smooth folded edges. The workspace accent
-of the theme marks active tools and focus: lime in Studio and Aero, amber in
+The rail at the left uses the Utility hardware chassis finish. In Vintage it
+paints an olive-sage anodized panel with machined bevels. The workspace accent
+marks active tools and focus: lime in Studio and Aero, modular orange in
 Vintage.
 
 The rail has two widths:

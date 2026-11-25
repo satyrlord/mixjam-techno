@@ -1,9 +1,9 @@
 //! The three application themes. A theme is one set of roles that the shared
 //! renderers read, the material that they paint, and the theme's type faces.
-//! Studio paints flat matte surfaces, Aero molded plastic, and Vintage painted
-//! metal. Layout, control positions, behavior, and features never depend on
-//! the theme. Surfaces are painted in code; Vintage alone reuses the approved
-//! Folded Metal and ivory mixer artwork that it was drawn from.
+//! Studio paints flat matte surfaces, Aero molded plastic, and Vintage anodized
+//! modular metal plates in a dark rack cabinet. Layout, control positions,
+//! behavior, and features never depend on the theme. Surfaces are painted in
+//! code; Vintage keeps only the legacy Mixer artwork until Mixer retirement.
 use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Stroke, Vec2};
 pub(super) use mixjam_techno::application::options::Theme;
 use std::cell::Cell;
@@ -14,7 +14,7 @@ pub(super) enum Material {
     Flat,
     /// Molded plastic: soft vertical shading, restrained rims, round shapes.
     Plastic,
-    /// Painted metal: the Folded Metal artwork, bevels, and enamel.
+    /// Painted metal: procedural brushed plates, bevels, screws, and motifs.
     Metal,
 }
 
@@ -248,44 +248,44 @@ static AERO: Roles = Roles {
 static VINTAGE: Roles = Roles {
     material: Material::Metal,
     rail_keys: true,
-    canvas: rgb(24, 23, 21),
-    panel: rgb(31, 30, 27),
-    raised: rgb(45, 43, 39),
-    hover: rgb(58, 55, 49),
-    tile: rgb(45, 43, 39),
-    tile_hover: rgb(58, 55, 49),
-    line: rgb(76, 72, 64),
-    text: rgb(242, 233, 210),
-    muted: rgb(184, 174, 152),
-    accent: rgb(242, 170, 62),
-    coral: rgb(250, 132, 108),
-    warning: rgb(240, 202, 132),
-    selection: rgb(92, 68, 32),
-    drag_label: rgb(250, 222, 150),
-    row_alternate: rgb(27, 26, 24),
-    bar_line: rgb(40, 38, 34),
-    on_light: rgb(26, 24, 20),
+    canvas: rgb(11, 13, 12),
+    panel: rgb(20, 24, 21),
+    raised: rgb(42, 49, 44),
+    hover: rgb(56, 65, 58),
+    tile: rgb(36, 43, 38),
+    tile_hover: rgb(48, 57, 50),
+    line: rgb(78, 90, 80),
+    text: rgb(244, 240, 228),
+    muted: rgb(208, 214, 202),
+    accent: rgb(248, 158, 62),
+    coral: rgb(250, 134, 110),
+    warning: rgb(246, 200, 118),
+    selection: rgb(98, 62, 26),
+    drag_label: rgb(248, 218, 142),
+    row_alternate: rgb(16, 19, 17),
+    bar_line: rgb(32, 38, 34),
+    on_light: rgb(12, 14, 13),
     sections: SECTIONS,
-    ink: rgb(18, 20, 18),
-    legend: rgb(249, 242, 220),
-    face: rgb(35, 38, 36),
-    help: rgb(190, 185, 166),
-    primary: rgb(212, 205, 182),
-    disabled_face: rgb(61, 64, 60),
-    disabled_text: rgb(201, 203, 192),
-    cap: rgb(190, 190, 185),
-    danger: rgb(131, 54, 39),
-    bay_edge: rgb(70, 72, 64),
-    well_edge: rgb(131, 134, 126),
-    widget_edge: rgb(93, 91, 82),
-    widget_hover: rgb(58, 59, 55),
+    ink: rgb(12, 14, 13),
+    legend: rgb(248, 244, 232),
+    face: rgb(24, 28, 26),
+    help: rgb(200, 206, 194),
+    primary: rgb(218, 222, 214),
+    disabled_face: rgb(46, 53, 48),
+    disabled_text: rgb(198, 204, 194),
+    cap: rgb(224, 228, 222),
+    danger: rgb(138, 48, 36),
+    bay_edge: rgb(96, 108, 98),
+    well_edge: rgb(134, 146, 136),
+    widget_edge: rgb(104, 116, 106),
+    widget_hover: rgb(58, 67, 62),
     tools: [
-        (rgb(60, 65, 64), rgb(231, 147, 49)),
-        (rgb(32, 83, 91), rgb(85, 174, 183)),
-        (rgb(52, 57, 60), rgb(173, 186, 189)),
-        (rgb(154, 45, 39), rgb(235, 116, 104)),
-        (rgb(60, 68, 40), rgb(157, 178, 94)),
-        (rgb(46, 54, 96), rgb(150, 166, 236)),
+        (rgb(68, 79, 70), rgb(248, 158, 62)),
+        (rgb(38, 62, 66), rgb(104, 206, 214)),
+        (rgb(64, 72, 68), rgb(216, 224, 214)),
+        (rgb(146, 44, 38), rgb(236, 120, 106)),
+        (rgb(80, 94, 82), rgb(246, 154, 58)),
+        (rgb(26, 30, 28), rgb(246, 154, 58)),
     ],
     strip: rgb(201, 194, 175),
     return_strip: rgb(29, 33, 34),
@@ -298,23 +298,51 @@ static VINTAGE: Roles = Roles {
     strip_well: rgb(176, 168, 147),
     strip_fill: rgb(44, 46, 42),
     strip_focus: rgb(28, 29, 26),
-    lamp_on: rgb(242, 170, 62),
-    lamp_warn: rgb(246, 178, 64),
-    lamp_peak: rgb(232, 72, 56),
-    lamp_good: rgb(110, 196, 112),
-    lamp_off: rgb(44, 48, 42),
-    meter_face: rgb(240, 228, 190),
-    grid_line: rgb(120, 128, 108),
-    cell_edge: rgb(108, 116, 98),
-    cell_hover: rgb(62, 68, 53),
-    cell_alternate: rgb(29, 33, 28),
-    tool_edge: rgb(100, 105, 101),
+    lamp_on: rgb(246, 128, 52),
+    lamp_warn: rgb(246, 182, 64),
+    lamp_peak: rgb(236, 68, 52),
+    lamp_good: rgb(106, 204, 116),
+    lamp_off: rgb(38, 44, 41),
+    meter_face: rgb(244, 236, 208),
+    grid_line: rgb(106, 118, 110),
+    cell_edge: rgb(94, 106, 98),
+    cell_hover: rgb(58, 68, 62),
+    cell_alternate: rgb(28, 33, 29),
+    tool_edge: rgb(108, 120, 110),
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum KnobStyle {
+    Default,
+    Anodized([u8; 3]),
+    DarkPhenolic([u8; 3]),
+    BrushedChrome([u8; 3]),
+}
 
 thread_local! {
     /// The theme that this thread paints. The UI paints on one thread; each
     /// test thread starts in Studio, the default.
     static CURRENT: Cell<Theme> = const { Cell::new(Theme::Studio) };
+    static KNOB_STYLE: Cell<KnobStyle> = const { Cell::new(KnobStyle::Default) };
+}
+
+struct KnobStyleGuard(KnobStyle);
+
+impl Drop for KnobStyleGuard {
+    fn drop(&mut self) {
+        KNOB_STYLE.with(|cell| cell.set(self.0));
+    }
+}
+
+/// Temporarily override rotary knob hardware cap styling for a pedal or unit scope.
+pub(super) fn with_knob_style<R>(style: KnobStyle, f: impl FnOnce() -> R) -> R {
+    let previous = KNOB_STYLE.with(|cell| cell.replace(style));
+    let _guard = KnobStyleGuard(previous);
+    f()
+}
+
+fn current_knob_style() -> KnobStyle {
+    KNOB_STYLE.with(Cell::get)
 }
 
 pub(super) fn current() -> Theme {
@@ -699,6 +727,120 @@ pub(super) fn arc(
     painter.add(egui::Shape::line(points, stroke));
 }
 
+fn contrast_pointer(fill: Color32, roles: &Roles) -> Color32 {
+    let luma =
+        0.299 * f32::from(fill.r()) + 0.587 * f32::from(fill.g()) + 0.114 * f32::from(fill.b());
+    if luma > 128.0 {
+        roles.ink
+    } else {
+        roles.legend
+    }
+}
+
+struct DialGeom {
+    center: Pos2,
+    radius: f32,
+    start: f32,
+    end: f32,
+    pointer: Vec2,
+    accent: Color32,
+    on_light: bool,
+}
+
+fn flat_dial(painter: &egui::Painter, g: &DialGeom, roles: &Roles) {
+    let mark = if g.on_light { roles.ink } else { roles.legend };
+    let value = if g.on_light { roles.ink } else { g.accent };
+    arc(
+        painter,
+        g.center,
+        g.radius - 2.0,
+        g.start,
+        g.start + 270.0,
+        Stroke::new(3.0_f32, mark.gamma_multiply(0.22)),
+    );
+    if g.end > g.start {
+        arc(
+            painter,
+            g.center,
+            g.radius - 2.0,
+            g.start,
+            g.end,
+            Stroke::new(3.0_f32, value),
+        );
+    }
+    let (cap_fill, ptr_color) = match current_knob_style() {
+        KnobStyle::Default => (roles.face, roles.legend),
+        KnobStyle::Anodized(c) => {
+            let tint = rgb(c[0], c[1], c[2]).lerp_to_gamma(roles.face, 0.32);
+            (tint, contrast_pointer(tint, roles))
+        }
+        KnobStyle::DarkPhenolic(p) => (rgb(22, 24, 28), rgb(p[0], p[1], p[2])),
+        KnobStyle::BrushedChrome(p) => (rgb(198, 204, 210), rgb(p[0], p[1], p[2])),
+    };
+    painter.circle_filled(g.center, g.radius * 0.62, cap_fill);
+    painter.circle_stroke(
+        g.center,
+        g.radius * 0.62,
+        Stroke::new(1.0_f32, roles.bay_edge),
+    );
+    painter.line_segment(
+        [
+            g.center + g.pointer * g.radius * 0.12,
+            g.center + g.pointer * g.radius * 0.56,
+        ],
+        Stroke::new(2.0_f32, ptr_color),
+    );
+}
+
+fn plastic_dial(
+    painter: &egui::Painter,
+    center: Pos2,
+    radius: f32,
+    pointer: Vec2,
+    accent: Color32,
+    roles: &Roles,
+) {
+    let (dome, ptr_color) = match current_knob_style() {
+        KnobStyle::Default => (accent, roles.ink),
+        KnobStyle::Anodized(c) => {
+            let tint = rgb(c[0], c[1], c[2]);
+            (tint, contrast_pointer(tint, roles))
+        }
+        KnobStyle::DarkPhenolic(p) => (rgb(28, 30, 34), rgb(p[0], p[1], p[2])),
+        KnobStyle::BrushedChrome(p) => (rgb(208, 214, 220), rgb(p[0], p[1], p[2])),
+    };
+    painter.circle_filled(
+        center + Vec2::new(0.0, 1.5),
+        radius,
+        Color32::from_black_alpha(70),
+    );
+    painter.circle_filled(center, radius, roles.ink);
+    let cap = radius - 2.5;
+    for step in 0..6 {
+        let share = step as f32 / 5.0;
+        painter.circle_filled(
+            center - Vec2::new(0.0, cap * 0.18 * share),
+            cap * (1.0 - 0.45 * share),
+            dome.lerp_to_gamma(Color32::BLACK, 0.28)
+                .lerp_to_gamma(Color32::WHITE, 0.32 * share),
+        );
+    }
+    painter.circle_stroke(
+        center,
+        cap,
+        Stroke::new(1.0_f32, dome.lerp_to_gamma(Color32::BLACK, 0.5)),
+    );
+    painter.circle_filled(
+        center + Vec2::new(-cap * 0.3, -cap * 0.38),
+        cap * 0.22,
+        Color32::from_white_alpha(70),
+    );
+    painter.line_segment(
+        [center + pointer * cap * 0.25, center + pointer * cap * 0.88],
+        Stroke::new(2.5_f32, ptr_color),
+    );
+}
+
 /// A rotary face drawn in code. `fraction` turns the pointer through 270
 /// degrees from lower left; `accent` marks the value on Studio and colors the
 /// cap on Aero. `on_light` marks a light surface under the control.
@@ -715,77 +857,172 @@ pub(super) fn dial(
     let end = start + 270.0 * fraction.clamp(0.0, 1.0);
     let pointer = Vec2::angled(end.to_radians());
     match roles.material {
-        Material::Flat => {
-            let mark = if on_light { roles.ink } else { roles.legend };
-            let value = if on_light { roles.ink } else { accent };
-            arc(
-                painter,
+        Material::Flat => flat_dial(
+            painter,
+            &DialGeom {
                 center,
-                radius - 2.0,
-                start,
-                start + 270.0,
-                Stroke::new(3.0_f32, mark.gamma_multiply(0.22)),
-            );
-            if end > start {
-                arc(
-                    painter,
-                    center,
-                    radius - 2.0,
-                    start,
-                    end,
-                    Stroke::new(3.0_f32, value),
-                );
-            }
-            painter.circle_filled(center, radius * 0.62, roles.face);
-            painter.circle_stroke(center, radius * 0.62, Stroke::new(1.0_f32, roles.bay_edge));
-            painter.line_segment(
-                [
-                    center + pointer * radius * 0.12,
-                    center + pointer * radius * 0.56,
-                ],
-                Stroke::new(2.0_f32, roles.legend),
-            );
-        }
-        Material::Plastic | Material::Metal => {
-            // A molded skirt, a colored cap shaded toward the light, and a
-            // soft highlight. Metal uses its bitmap knob instead; this face
-            // stands in when a caller asks for a code dial there.
-            painter.circle_filled(
-                center + Vec2::new(0.0, 1.5),
                 radius,
-                Color32::from_black_alpha(70),
-            );
-            painter.circle_filled(center, radius, roles.ink);
-            let cap = radius - 2.5;
-            for step in 0..6 {
-                let share = step as f32 / 5.0;
-                painter.circle_filled(
-                    center - Vec2::new(0.0, cap * 0.18 * share),
-                    cap * (1.0 - 0.45 * share),
-                    accent
-                        .lerp_to_gamma(Color32::BLACK, 0.28)
-                        .lerp_to_gamma(Color32::WHITE, 0.32 * share),
-                );
-            }
-            painter.circle_stroke(
-                center,
-                cap,
-                Stroke::new(1.0_f32, accent.lerp_to_gamma(Color32::BLACK, 0.5)),
-            );
-            painter.circle_filled(
-                center + Vec2::new(-cap * 0.3, -cap * 0.38),
-                cap * 0.22,
-                Color32::from_white_alpha(70),
-            );
-            painter.line_segment(
-                [center + pointer * cap * 0.25, center + pointer * cap * 0.88],
-                Stroke::new(2.5_f32, roles.ink),
-            );
-        }
+                start,
+                end,
+                pointer,
+                accent,
+                on_light,
+            },
+            roles,
+        ),
+        Material::Plastic => plastic_dial(painter, center, radius, pointer, accent, roles),
+        Material::Metal => metal_dial(painter, center, radius, pointer, accent, roles),
     }
 }
 
-/// A fader cap in code. Vintage paints its bitmap cap instead.
+fn metal_dial_skirt(
+    painter: &egui::Painter,
+    center: Pos2,
+    radius: f32,
+    pointer: Vec2,
+    skirt_mark: Color32,
+    roles: &Roles,
+) {
+    painter.circle_filled(
+        center + Vec2::new(0.0, 1.8),
+        radius,
+        Color32::from_black_alpha(110),
+    );
+    painter.circle_filled(center, radius, rgb(18, 20, 19));
+    for step in 0..12 {
+        let dir = Vec2::angled((step as f32 * 30.0).to_radians());
+        painter.line_segment(
+            [center + dir * (radius - 2.6), center + dir * (radius - 0.5)],
+            Stroke::new(1.3_f32, rgb(66, 72, 68)),
+        );
+    }
+    painter.circle_stroke(center, radius - 0.4, Stroke::new(1.0_f32, roles.ink));
+    painter.circle_stroke(
+        center,
+        radius - 3.2,
+        Stroke::new(0.9_f32, rgb(98, 106, 100)),
+    );
+    painter.line_segment(
+        [
+            center + pointer * (radius * 0.68 + 0.5),
+            center + pointer * (radius - 0.6),
+        ],
+        Stroke::new(2.0_f32, skirt_mark),
+    );
+}
+
+struct CapColors {
+    lo: Color32,
+    hi: Color32,
+    ptr: Color32,
+    skirt_mark: Color32,
+}
+
+fn metal_dial_cap(
+    painter: &egui::Painter,
+    center: Pos2,
+    cap: f32,
+    pointer: Vec2,
+    colors: &CapColors,
+    roles: &Roles,
+) {
+    let cap_steps = 5;
+    for step in 0..cap_steps {
+        let share = step as f32 / (cap_steps - 1) as f32;
+        painter.circle_filled(
+            center - Vec2::new(cap * 0.06 * share, cap * 0.14 * share),
+            cap * (1.0 - 0.34 * share),
+            colors.lo.lerp_to_gamma(colors.hi, share),
+        );
+    }
+    painter.circle_stroke(center, cap, Stroke::new(1.1_f32, roles.ink));
+    painter.circle_filled(
+        center + Vec2::new(-cap * 0.28, -cap * 0.32),
+        cap * 0.18,
+        Color32::from_white_alpha(48),
+    );
+    painter.line_segment(
+        [center + pointer * cap * 0.14, center + pointer * cap * 0.92],
+        Stroke::new(2.3_f32, colors.ptr),
+    );
+}
+
+/// Procedural fluted dark phenolic skirt + machined metal inner cap dial for Vintage.
+fn metal_dial(
+    painter: &egui::Painter,
+    center: Pos2,
+    radius: f32,
+    pointer: Vec2,
+    accent: Color32,
+    roles: &Roles,
+) {
+    let cap = radius * 0.68;
+    let colors = match current_knob_style() {
+        KnobStyle::Default => CapColors {
+            lo: rgb(154, 162, 156),
+            hi: rgb(240, 244, 240),
+            ptr: roles.ink,
+            skirt_mark: accent,
+        },
+        KnobStyle::Anodized(c) => {
+            let base = rgb(c[0], c[1], c[2]);
+            CapColors {
+                lo: base.lerp_to_gamma(Color32::BLACK, 0.26),
+                hi: base.lerp_to_gamma(Color32::WHITE, 0.34),
+                ptr: contrast_pointer(base, roles),
+                skirt_mark: base.lerp_to_gamma(Color32::WHITE, 0.45),
+            }
+        }
+        KnobStyle::DarkPhenolic(p) => {
+            let mark = rgb(p[0], p[1], p[2]);
+            CapColors {
+                lo: rgb(22, 24, 26),
+                hi: rgb(56, 62, 66),
+                ptr: mark,
+                skirt_mark: mark,
+            }
+        }
+        KnobStyle::BrushedChrome(p) => CapColors {
+            lo: rgb(166, 174, 180),
+            hi: rgb(246, 248, 250),
+            ptr: rgb(p[0], p[1], p[2]),
+            skirt_mark: rgb(212, 218, 224),
+        },
+    };
+    metal_dial_skirt(painter, center, radius, pointer, colors.skirt_mark, roles);
+    metal_dial_cap(painter, center, cap, pointer, &colors, roles);
+}
+
+fn paint_metal_fader_cap(painter: &egui::Painter, rect: Rect, roles: &Roles) {
+    painter.rect_filled(
+        rect.translate(Vec2::new(0.0, 2.0)),
+        2.0,
+        Color32::from_black_alpha(110),
+    );
+    painter.rect_filled(rect, 2.5, roles.ink);
+    gradient(
+        painter,
+        rect.shrink(1.5),
+        1.5,
+        rgb(232, 236, 232),
+        rgb(144, 152, 146),
+    );
+    painter.rect_stroke(
+        rect,
+        2.5,
+        Stroke::new(1.0_f32, roles.ink),
+        egui::StrokeKind::Inside,
+    );
+    painter.line_segment(
+        [
+            rect.left_center() + Vec2::new(3.0, 0.0),
+            rect.right_center() - Vec2::new(3.0, 0.0),
+        ],
+        Stroke::new(2.2_f32, roles.ink),
+    );
+}
+
+/// A fader cap in code. Vintage draws a machined metal slider block.
 pub(super) fn fader_cap(painter: &egui::Painter, center: Pos2, size: Vec2) {
     let roles = roles();
     let rect = Rect::from_center_size(center, size);
@@ -801,7 +1038,7 @@ pub(super) fn fader_cap(painter: &egui::Painter, center: Pos2, size: Vec2) {
                 Stroke::new(2.0_f32, roles.ink),
             );
         }
-        Material::Plastic | Material::Metal => {
+        Material::Plastic => {
             painter.rect_filled(
                 rect.translate(Vec2::new(0.0, 2.0)),
                 6.0,
@@ -816,6 +1053,7 @@ pub(super) fn fader_cap(painter: &egui::Painter, center: Pos2, size: Vec2) {
                 Stroke::new(2.0_f32, roles.ink),
             );
         }
+        Material::Metal => paint_metal_fader_cap(painter, rect, roles),
     }
 }
 

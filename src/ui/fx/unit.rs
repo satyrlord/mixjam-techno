@@ -1,10 +1,9 @@
 //! Layer 1 compact FX bus card and shared selector/switch helpers for Layer 2.
 use super::super::mixer::{Look, bus_solo, bus_switches};
 use super::faces::{Slot, dial_slot, macro_slots};
-use super::master::COMPACT_WELL;
-use super::master::{enamel_of, enclosure_of};
+use super::master::{COMPACT_WELL, paint_motif_enclosure};
 use super::*;
-use super::{DIALS_Y, FOOTER_H, FOOTER_Y, MAX_CELL, PADDING, SELECT_Y, enamel};
+use super::{DIALS_Y, FOOTER_H, FOOTER_Y, MAX_CELL, PADDING, SELECT_Y};
 use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::{
     Aetherform, DelayParam, Division, Echoform, Emberform, FxBus, Module, TimeMode,
@@ -222,7 +221,7 @@ fn card_header(
         Align2::LEFT_CENTER,
         bus_name,
         FontId::proportional(11.5),
-        roles().ink,
+        roles().legend,
     );
     let right = rect.width() - PADDING;
     // The key face sits 2 points inside the button and keeps 6 points
@@ -283,16 +282,11 @@ pub(super) fn unit(
 ) -> CardAction {
     let bus_name = format!("FX {}", index + 1);
     let sounding = bus.powered && !bus.module.is_empty();
-    enclosure_of(
-        ui,
-        rect,
-        enamel_of(enamel(&bus.module), sounding),
-        sounding,
-        index as u64 + 21,
-    );
+    let (motif, _) = super::fx_motif(&bus.module);
+    paint_motif_enclosure(ui, rect, motif, sounding, index as u64 + 21);
     let mut action = CardAction::None;
     ui.scope(|ui| {
-        ui.visuals_mut().dark_mode = false;
+        ui.visuals_mut().dark_mode = true;
         action = card_header(ui, rect, &bus_name, bus, solo);
 
         // The effect's short name needs less room than a preset's name.
@@ -314,23 +308,7 @@ pub(super) fn unit(
         // The dials share the card's width in equal columns, up to MAX_CELL
         // each; a value window, 2 points inside its well, leaves 4 points
         // between its neighbours.
-        let slots = macro_slots(&bus.module);
-        let cell = (inner_w / slots.len() as f32).min(MAX_CELL);
-        let well = (cell - 2.0).min(COMPACT_WELL);
-        let left = (rect.width() - slots.len() as f32 * cell) / 2.0;
-        for (i, slot) in slots.iter().enumerate() {
-            let x = left + (i as f32 + 0.5) * cell;
-            let y = DIALS_Y + 20.0;
-            let positions = [at(rect, x, y), at(rect, x, y + 36.0), at(rect, x, y + 58.0)];
-            if let (Slot::Delay(DelayParam::TimeL), Module::EchoformDelay(delay)) =
-                (slot, &mut bus.module)
-                && delay.mode == TimeMode::Sync
-            {
-                synced_time_macro(ui, positions, well, &bus_name, delay);
-            } else {
-                dial_slot(ui, positions, &bus_name, bus, slot, Some(well));
-            }
-        }
+        paint_macro_dials(ui, rect, inner_w, &bus_name, bus, motif.knob);
 
         let clear_w = 76.0;
         let meter_w = if bus.module.is_empty() {
@@ -368,6 +346,35 @@ pub(super) fn unit(
         }
     });
     action
+}
+
+fn paint_macro_dials(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    inner_w: f32,
+    bus_name: &str,
+    bus: &mut FxBus,
+    knob: theme::KnobStyle,
+) {
+    let slots = macro_slots(&bus.module);
+    let cell = (inner_w / slots.len() as f32).min(MAX_CELL);
+    let well = (cell - 2.0).min(COMPACT_WELL);
+    let left = (rect.width() - slots.len() as f32 * cell) / 2.0;
+    theme::with_knob_style(knob, || {
+        for (i, slot) in slots.iter().enumerate() {
+            let x = left + (i as f32 + 0.5) * cell;
+            let y = DIALS_Y + 20.0;
+            let positions = [at(rect, x, y), at(rect, x, y + 36.0), at(rect, x, y + 58.0)];
+            if let (Slot::Delay(DelayParam::TimeL), Module::EchoformDelay(delay)) =
+                (slot, &mut bus.module)
+                && delay.mode == TimeMode::Sync
+            {
+                synced_time_macro(ui, positions, well, bus_name, delay);
+            } else {
+                dial_slot(ui, positions, bus_name, bus, slot, Some(well));
+            }
+        }
+    });
 }
 
 /// The left time in Sync mode: a dial that steps through the note lengths,
@@ -421,6 +428,6 @@ fn synced_time_macro(
         Align2::CENTER_CENTER,
         if delay.link_times { "Time" } else { "Time L" },
         FontId::proportional(10.0),
-        roles().ink,
+        roles().legend,
     );
 }

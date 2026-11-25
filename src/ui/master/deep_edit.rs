@@ -427,7 +427,7 @@ fn parameter_bays(ui: &mut egui::Ui, rect: Rect, kind: PedalKind, chain: &mut Ma
         }
         if kind == PedalKind::Tape {
             let cx = knob_area.left() + 1.5 * cell_w;
-            draw_deep_tape_speed(ui, cx, knob_area.top(), chain, on);
+            draw_deep_tape_speed(ui, cx, knob_area.top(), cell_w, chain, on);
         }
         if kind == PedalKind::Limiter {
             let style_row =
@@ -519,14 +519,26 @@ fn draw_deep_knob(
             choices: &[],
         },
         on,
-        (cell_w - 8.0).clamp(44.0, COMPACT_WELL + 10.0),
+        deep_well(cell_w),
     );
     if value != before {
         knob.set(chain, value as f32);
     }
 }
 
-fn draw_deep_tape_speed(ui: &mut egui::Ui, cx: f32, top: f32, chain: &mut MasterChain, on: bool) {
+/// The value well of each compact dial in a Deep Edit grid of `cell_w` columns.
+fn deep_well(cell_w: f32) -> f32 {
+    (cell_w - 8.0).clamp(44.0, COMPACT_WELL + 10.0)
+}
+
+fn draw_deep_tape_speed(
+    ui: &mut egui::Ui,
+    cx: f32,
+    top: f32,
+    cell_w: f32,
+    chain: &mut MasterChain,
+    on: bool,
+) {
     tape_speed_dial(
         ui,
         [
@@ -537,6 +549,7 @@ fn draw_deep_tape_speed(ui: &mut egui::Ui, cx: f32, top: f32, chain: &mut Master
         chain,
         "Deep edit Tape speed",
         on,
+        Some(deep_well(cell_w)),
     );
 }
 

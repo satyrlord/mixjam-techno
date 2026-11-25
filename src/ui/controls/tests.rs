@@ -281,114 +281,38 @@ fn rotary_steps_boundaries_fine_and_discrete() {
 }
 
 #[test]
-fn supported_materials_decode_and_fade_to_solid_chassis() {
-    let corner = image::load_from_memory(material!("utility", "corner-tl"))
-        .unwrap()
-        .into_rgba8();
-    assert_eq!(corner.dimensions(), (112, 64));
-    assert!(corner.pixels().any(|pixel| pixel[3] > 0));
-    for x in 0..corner.width() {
-        assert_eq!(corner.get_pixel(x, corner.height() - 1)[3], 0);
-    }
-    for y in 0..corner.height() {
-        assert_eq!(corner.get_pixel(corner.width() - 1, y)[3], 0);
-    }
-    let knob = image::load_from_memory(control!("knob")).unwrap();
-    assert_eq!((knob.width(), knob.height()), (36, 36));
-    let rgba = knob.to_rgba8();
-    assert!(
-        rgba.pixels()
-            .filter(|pixel| pixel[3] > 0 && pixel[3] < 255)
-            .count()
-            > knob.width() as usize,
-        "The native-size dial silhouette must retain antialiased edge coverage."
-    );
-}
-
-#[test]
-fn material_slices_have_no_outer_fringe_or_strip_endpoint_seams() {
-    for palette in [
-        parts!("utility"),
-        parts!("marine"),
-        parts!("granite"),
-        parts!("red"),
-        parts!("olive"),
-        parts!("indigo"),
-    ] {
-        for (part, bytes) in palette.into_iter().enumerate() {
-            let image = image::load_from_memory(bytes).unwrap().into_rgba8();
-            let (width, height) = image.dimensions();
-            assert!(image.pixels().any(|pixel| pixel[3] > 0));
-            for x in 0..width {
-                assert_eq!(image.get_pixel(x, 0)[3], 0);
-                assert_eq!(image.get_pixel(x, height - 1)[3], 0);
-            }
-            for y in 0..height {
-                assert_eq!(image.get_pixel(0, y)[3], 0);
-                assert_eq!(image.get_pixel(width - 1, y)[3], 0);
-            }
-            let margin = 4;
-            for y in 0..height {
-                for x in 0..width {
-                    let side = match part {
-                        0 | 2 | 6 => x < margin,
-                        1 | 3 | 7 => x >= width - margin,
-                        _ => false,
-                    };
-                    let top_bottom = match part {
-                        0 | 1 | 4 => y < margin,
-                        2 | 3 | 5 => y >= height - margin,
-                        _ => false,
-                    };
-                    if side || top_bottom {
-                        assert_eq!(image.get_pixel(x, y)[3], 0);
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[test]
-fn paint_grain_preserves_palette_mean_and_monochrome_gaussian_statistics() {
-    // The grain artwork belongs to Vintage's painted metal.
+fn vintage_metal_chassis_and_dials_paint_in_code() {
     theme::paint_as(theme::Theme::Vintage);
-    for (palette, bytes) in [
-        (Palette::Utility, material!("utility", "paint-grain")),
-        (Palette::Marine, material!("marine", "paint-grain")),
-        (Palette::Granite, material!("granite", "paint-grain")),
-        (Palette::Red, material!("red", "paint-grain")),
-        (Palette::Olive, material!("olive", "paint-grain")),
-        (Palette::Indigo, material!("indigo", "paint-grain")),
-    ] {
-        let base = palette.body();
-        let image = image::load_from_memory(bytes).unwrap().into_rgba8();
-        let size = 256;
-        assert_eq!(image.dimensions(), (size, size));
-        let mut sum = 0.0_f64;
-        let mut squares = 0.0_f64;
-        let mut fourth = 0.0_f64;
-        for pixel in image.pixels() {
-            let delta = i16::from(pixel[0]) - i16::from(base.r());
-            assert_eq!(delta, i16::from(pixel[1]) - i16::from(base.g()));
-            assert_eq!(delta, i16::from(pixel[2]) - i16::from(base.b()));
-            assert_eq!(pixel[3], 255);
-            assert!(delta.abs() <= 8, "Rare grain tails must remain subtle.");
-            let delta = f64::from(delta);
-            sum += delta;
-            squares += delta * delta;
-            fourth += delta.powi(4);
-        }
-        let count = f64::from(size * size);
-        assert_eq!(sum, 0.0, "Grain must not shift a palette's mean color.");
-        let variance = squares / count;
-        assert!(variance.is_finite() && (1.2..=1.8).contains(&variance.sqrt()));
-        let kurtosis = (fourth / count) / (variance * variance);
-        assert!(
-            (2.7..=3.3).contains(&kurtosis),
-            "Grain must retain a Gaussian distribution, rather than two-level dithering."
-        );
-    }
+    let ctx = egui::Context::default();
+    let mut value = 1.0;
+    let output = ctx.run(egui::RawInput::default(), |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let (bounds, _) = ui.allocate_exact_size(Vec2::new(240.0, 140.0), Sense::hover());
+            apply_palette(ui, Palette::Utility);
+            panel(ui, bounds);
+            rotary(
+                ui,
+                Rect::from_center_size(bounds.center(), Vec2::splat(44.0)),
+                &mut value,
+                spec(),
+            );
+        });
+    });
+    assert!(
+        !ctx.tex_manager()
+            .read()
+            .allocated()
+            .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
+        "Vintage chassis and knobs must paint in code with zero legacy bitmap textures."
+    );
+    assert!(
+        output.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Mesh(mesh) if mesh.texture_id == egui::TextureId::default()
+        )),
+        "Vintage modular panel must emit procedural shaded mesh geometry."
+    );
+    theme::paint_as(theme::Theme::Studio);
 }
 
 #[test]

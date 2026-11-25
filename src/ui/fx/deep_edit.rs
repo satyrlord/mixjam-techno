@@ -3,7 +3,7 @@
 use super::super::*;
 use super::faces::{Slot, dial_slot};
 use super::unit::{bus_switch, choice, left_division, module_and_preset_combos, note_division};
-use super::{DEEP_EDIT_TITLE, enamel};
+use super::{DEEP_EDIT_TITLE, fx_motif};
 use mixjam_techno::application::FxBusMeterReading;
 use mixjam_techno::application::fx::{
     Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, FxBus, Module,
@@ -17,8 +17,7 @@ const CELL_W: f32 = 58.0;
 const ROW_H: f32 = 88.0;
 
 fn bay_accent(module: &Module) -> Color32 {
-    let [r, g, b] = enamel(module);
-    Color32::from_rgb(r, g, b)
+    fx_motif(module).1
 }
 
 fn draw_dial_grid_with(

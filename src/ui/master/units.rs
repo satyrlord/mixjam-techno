@@ -16,7 +16,7 @@ pub(super) fn input_unit(
     let x = rect.center().x - 6.0;
     trim_dial(
         ui,
-        [109.0, 141.0, 161.0].map(|y| Pos2::new(x, rect.top() + y)),
+        [140.0, 180.0, 204.0].map(|y| Pos2::new(x, rect.top() + y)),
         chain,
         "Trim",
     );
@@ -42,8 +42,8 @@ fn input_meter(ui: &egui::Ui, rect: Rect, metering: &Metering, lamps: &mut Lamps
         f32::NEG_INFINITY
     };
     let meter = Rect::from_min_size(
-        rect.min + Vec2::new(10.0, 24.0),
-        Vec2::new(rect.width() - 20.0, 44.0),
+        rect.min + Vec2::new(10.0, 32.0),
+        Vec2::new(rect.width() - 20.0, 56.0),
     );
     let needle = display_needle(
         ui.ctx(),
@@ -53,7 +53,7 @@ fn input_meter(ui: &egui::Ui, rect: Rect, metering: &Metering, lamps: &mut Lamps
     );
     vu_meter(ui, meter, needle);
     let lit = [0, 1].map(|side| live && now - lamps.peaks[side] < 0.4);
-    let peak_y = meter.bottom() + 9.0;
+    let peak_y = meter.bottom() + 11.0;
     input_peaks(ui, Pos2::new(meter.center().x, peak_y), lit);
     let level = ui.interact(
         meter.union(Rect::from_center_size(
@@ -145,7 +145,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
     let reading = &metering.reading;
     let live = metering.playing && reading.run > 0;
     let over = Rect::from_center_size(
-        rect.right_top() + Vec2::new(-32.0, 14.0),
+        rect.right_top() + Vec2::new(-32.0, 16.0),
         Vec2::new(54.0, 22.0),
     );
     over_control(ui, over, "Clear OVER", reading, lamps, roles().legend);
@@ -154,13 +154,13 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
     let left = rect.left() + 26.0;
     let right = rect.right() - 10.0;
     let bar_bounds = Rect::from_min_max(
-        Pos2::new(left, rect.top() + 114.0),
-        Pos2::new(right, rect.top() + 124.0),
+        Pos2::new(left, rect.top() + 144.0),
+        Pos2::new(right, rect.top() + 156.0),
     );
     loudness_bar(ui, bar_bounds, reading, live);
     let peak_bounds = Rect::from_min_max(
-        Pos2::new(left, rect.top() + 144.0),
-        Pos2::new(right, rect.top() + 153.0),
+        Pos2::new(left, rect.top() + 184.0),
+        Pos2::new(right, rect.top() + 195.0),
     );
     peak_bar(ui, peak_bounds, reading, live, true);
 
@@ -173,7 +173,7 @@ pub(super) fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, la
 fn unit_face(ui: &egui::Ui, rect: Rect, title: &str) {
     controls::inset(ui, rect);
     ui.painter().text(
-        Pos2::new(rect.left() + 10.0, rect.top() + 14.0),
+        Pos2::new(rect.left() + 10.0, rect.top() + 16.0),
         Align2::LEFT_CENTER,
         title,
         FontId::proportional(13.5),
@@ -263,9 +263,9 @@ fn output_readouts(ui: &egui::Ui, rect: Rect, reading: &MeterReading, live: bool
         ("Integ", "Integrated", reading.integrated, "LUFS"),
         ("Peak", "True peak", reading.true_peak_max, "dBTP"),
     ];
-    let compact_well = Vec2::new(50.0, 17.0);
+    let compact_well = Vec2::new(56.0, 19.0);
     for (index, (short_label, _, value, _)) in rows.iter().enumerate() {
-        let y = rect.top() + 36.0 + index as f32 * 20.0;
+        let y = rect.top() + 42.0 + index as f32 * 24.0;
         ui.painter().text(
             Pos2::new(rect.left() + 26.0, y),
             Align2::LEFT_CENTER,
@@ -273,7 +273,7 @@ fn output_readouts(ui: &egui::Ui, rect: Rect, reading: &MeterReading, live: bool
             FontId::proportional(11.0),
             roles().legend,
         );
-        let well = Rect::from_center_size(Pos2::new(rect.right() - 33.0, y), compact_well);
+        let well = Rect::from_center_size(Pos2::new(rect.right() - 36.0, y), compact_well);
         controls::well(ui, well);
         let hot = index == 3 && *value > OVER_DBTP;
         ui.painter().text(
@@ -297,8 +297,8 @@ fn output_readouts(ui: &egui::Ui, rect: Rect, reading: &MeterReading, live: bool
         .join(", ");
     let readings = ui.interact(
         Rect::from_min_max(
-            Pos2::new(rect.left() + 24.0, rect.top() + 26.0),
-            Pos2::new(rect.right() - 6.0, rect.top() + 106.0),
+            Pos2::new(rect.left() + 24.0, rect.top() + 30.0),
+            Pos2::new(rect.right() - 6.0, rect.top() + 126.0),
         ),
         ui.id().with("output-loudness"),
         Sense::hover(),
@@ -517,6 +517,9 @@ pub(super) fn vu_position(vu: f32) -> f32 {
 
 /// An ivory VU face with its scale, red zone, and needle.
 fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
+    if theme::roles().material == theme::Material::Metal {
+        ui.painter().rect_filled(face.expand(2.5), 5.0, roles().ink);
+    }
     let painter = ui.painter().with_clip_rect(face.intersect(ui.clip_rect()));
     painter.rect_filled(face, 4.0, roles().meter_face);
     let pivot = Pos2::new(face.center().x, face.bottom() + 16.0);

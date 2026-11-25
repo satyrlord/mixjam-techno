@@ -119,7 +119,11 @@ pub(super) fn show(
     );
     dialog::hardware_style(&mut board, controls::Palette::Olive);
     board.set_clip_rect(area.intersect(ui.clip_rect()));
-    controls::panel(&board, area);
+    if theme::roles().material == theme::Material::Metal {
+        controls::metal_rack_cabinet(board.painter(), area);
+    } else {
+        controls::panel(&board, area);
+    }
     ctx.accesskit_node_builder(board.unique_id(), |node| {
         node.set_role(egui::accesskit::Role::TabPanel);
         node.set_label("Step synth");
@@ -136,7 +140,11 @@ pub(super) fn show(
         Pos2::new(settings_rect.right() + 8.0, inner.top()),
         inner.max,
     );
-    controls::inset(&board, settings_rect);
+    if theme::roles().material == theme::Material::Metal {
+        controls::panel(&board, settings_rect);
+    } else {
+        controls::inset(&board, settings_rect);
+    }
     controls::inset(&board, grid_rect);
     let action = settings(
         &mut board,

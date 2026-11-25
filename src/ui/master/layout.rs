@@ -3,22 +3,22 @@
 use super::*;
 
 pub(super) const MARGIN: f32 = 8.0;
-pub(super) const INPUT_WIDTH: f32 = 128.0;
-pub(super) const OUTPUT_WIDTH: f32 = 172.0;
-pub(super) const CABLE: f32 = 18.0;
-pub(super) const PEDAL_TOP: f32 = 6.0;
-pub(super) const PEDAL_HEIGHT: f32 = 176.0;
-pub(super) const HEADER: f32 = 28.0;
-pub(super) const FOOTER_TOP: f32 = 144.0;
+pub(super) const INPUT_WIDTH: f32 = 136.0;
+pub(super) const OUTPUT_WIDTH: f32 = 180.0;
+pub(super) const CABLE: f32 = 22.0;
+pub(super) const PEDAL_TOP: f32 = 8.0;
+pub(super) const PEDAL_HEIGHT: f32 = 228.0;
+pub(super) const HEADER: f32 = 36.0;
+pub(super) const FOOTER_TOP: f32 = 190.0;
 /// The height of the cables and sockets, through the middle of the pedals.
-pub(super) const SIGNAL_Y: f32 = PEDAL_TOP + 88.0;
+pub(super) const SIGNAL_Y: f32 = PEDAL_TOP + PEDAL_HEIGHT / 2.0;
 /// One knob with its value well and label.
-pub(super) const CELL: f32 = 52.0;
-pub(super) const PEDAL_PADDING: f32 = 10.0;
+pub(super) const CELL: f32 = 64.0;
+pub(super) const PEDAL_PADDING: f32 = 14.0;
 /// Room under the pedals for their shadows and the row's scroll bar.
-pub(super) const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 10.0;
+pub(super) const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 12.0;
 /// One row of chips under the pedals and their shadows.
-pub(super) const STRIP_HEIGHT: f32 = 28.0;
+pub(super) const STRIP_HEIGHT: f32 = 30.0;
 pub(super) const BOARD_HEIGHT: f32 = ROW_HEIGHT + STRIP_HEIGHT;
 pub(super) const WELL: Vec2 = Vec2::new(56.0, 20.0);
 
@@ -135,10 +135,10 @@ pub(super) fn reduction_lamps(kind: PedalKind) -> Option<[f32; 6]> {
 
 pub(super) fn pedal_width(kind: PedalKind) -> f32 {
     if kind == PedalKind::BoosterEq {
-        return 144.0;
+        return 184.0;
     }
     let cols = card_dial_count(kind).max(1);
-    (cols as f32 * CELL + 2.0 * PEDAL_PADDING).max(144.0)
+    (cols as f32 * CELL + 2.0 * PEDAL_PADDING).max(184.0)
 }
 
 /// Each pedal's left edge along the row, after its cable, and the end of

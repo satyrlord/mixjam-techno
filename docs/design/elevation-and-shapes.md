@@ -2,19 +2,16 @@
 
 ## Elevation & Depth
 
-Flat color layers and thin borders separate the graphite work area. Folded
-Metal windows add folded painted-metal edges, dark inset control bays,
-recessed values, fine grain, and sparse hairline scratches. Use no decorative
-screws or fasteners. The folded lip, texture, and light wear give the hardware
-character. Do not add heavy damage, oversized bevels, or ornamental hardware.
-Mixer keeps its prepared material and faders.
+Flat color layers and thin borders separate the Studio work area. Vintage adds
+olive-sage anodized rack panels with dark recessed seams, machined top bevels,
+dark inset bays, slotted corner rack screws on chassis frames, and dark-skirted
+silver-cap rotary dials. Avoid heavy surface damage or oversized bevels. Mixer
+keeps its prepared material and faders until retirement.
 
-The Mastering pedals stand off the Indigo board on a soft drop shadow down and
-to the right. They have a 6-point bevel and 4-point side walls. The light
-falls from the upper left (see
-[Mastering board](colors.md#mastering-board)). The FX units use the same
-raised enclosures on their Marine board. Floating windows share one window
-shadow.
+The Mastering pedals stand off the Indigo rack on a soft drop shadow down and
+to the right. On Vintage they add a 6-point bevel, 4-point side walls, brushed
+metal grain, sheen, and subtle scratches. The FX units share the same raised
+motif enclosures on the Marine bay. Floating windows share one window shadow.
 
 The shared control rendering supplies the hover, keyboard focus, pressed,
 selected, and disabled states. Keep state changes immediate and visible.
@@ -42,14 +39,12 @@ its rows. When no step is available, Undo and Redo dim and disable. An engaged
 Loop keeps a one-point Accent outline. Window edges, title bars, and the bar
 ruler are pointer surfaces and get no Tab stop.
 
-Folded Metal windows share rounded chassis edges and the same control
-geometry. The chassis panel corners are 8 points on Vintage painted metal,
-6 points on the Studio flat panel, and 14 points on Aero molded plastic.
-Native windows and popups use a 10-point base radius, and menus a 6-point base
-radius. `Roles::corner` gives each its shape in the theme.
+Chassis windows share rounded edges and the same control geometry. Panel
+corners are 8 points on Vintage anodized metal, 6 points on the Studio flat
+panel, and 14 points on Aero molded plastic. Native windows and popups use a
+10-point base radius, and menus a 6-point base radius. `Roles::corner` gives
+each its shape in the theme.
 
-Paint the perimeter and bevel as continuous antialiased native geometry. Fade
-the raster material before the outer outline and at strip ends, so that the
-joints stay smooth. Prepare knob edges at 8x resolution. Then reduce them one
-time, with premultiplied-alpha Lanczos filtering, to the prepared size. Live
-text and header symbols stay independent of the material artwork.
+All panels, bevels, and rotary dials render in bounded native geometry without
+chassis bitmap tiles, keeping edges smooth at any resize size. Live text and
+header symbols scale cleanly inside their bounds.

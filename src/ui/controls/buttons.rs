@@ -100,6 +100,63 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     focus(ui, response);
 }
 
+fn paint_raised_key_face(
+    painter: &egui::Painter,
+    rect: Rect,
+    face: Rect,
+    base: Color32,
+    role: ButtonRole,
+    material: Material,
+) {
+    match material {
+        Material::Flat => {
+            painter.rect_filled(face, 3.0, base);
+            let edge = if matches!(role, ButtonRole::Secondary | ButtonRole::Tertiary) {
+                roles().widget_edge
+            } else {
+                base.lerp_to_gamma(roles().ink, 0.35)
+            };
+            painter.rect_stroke(
+                face,
+                3.0,
+                Stroke::new(1.0_f32, edge),
+                egui::StrokeKind::Inside,
+            );
+        }
+        Material::Plastic => {
+            painter.rect_filled(
+                rect.translate(Vec2::new(0.0, 1.0)),
+                9.0,
+                Color32::from_black_alpha(60),
+            );
+            theme::plastic(painter, face, 8.0, base);
+        }
+        Material::Metal => {
+            painter.rect_filled(rect, 5.0, roles().ink);
+            theme::gradient(
+                painter,
+                face,
+                3.0,
+                base.lerp_to_gamma(Color32::WHITE, 0.05),
+                base.lerp_to_gamma(Color32::BLACK, 0.06),
+            );
+            painter.rect_stroke(
+                face,
+                3.0,
+                Stroke::new(1.0_f32, roles().widget_edge.gamma_multiply(0.7)),
+                egui::StrokeKind::Inside,
+            );
+            painter.line_segment(
+                [
+                    face.left_top() + Vec2::new(3.0, 1.0),
+                    face.right_top() + Vec2::new(-3.0, 1.0),
+                ],
+                Stroke::new(1.0_f32, Color32::from_white_alpha(55)),
+            );
+        }
+    }
+}
+
 /// Paint the key face for `role` in the theme's material when `raised`, and
 /// return the face rectangle, where a label sits.
 fn key_face(ui: &egui::Ui, response: &Response, role: ButtonRole, raised: bool) -> Rect {
@@ -119,68 +176,12 @@ fn key_face(ui: &egui::Ui, response: &Response, role: ButtonRole, raised: bool) 
     } else {
         base
     };
-    let painter = ui.painter();
-    let material = roles().material;
     // Every theme's key face, and so its label, sits in the same place.
     let face = rect
         .shrink(2.0)
         .translate(Vec2::new(0.0, if down { 1.0 } else { -1.0 }));
     if raised {
-        match material {
-            Material::Flat => {
-                painter.rect_filled(face, 3.0, base);
-                painter.rect_stroke(
-                    face,
-                    3.0,
-                    Stroke::new(
-                        1.0_f32,
-                        if matches!(role, ButtonRole::Secondary | ButtonRole::Tertiary) {
-                            roles().widget_edge
-                        } else {
-                            base.lerp_to_gamma(roles().ink, 0.35)
-                        },
-                    ),
-                    egui::StrokeKind::Inside,
-                );
-            }
-            Material::Plastic => {
-                painter.rect_filled(
-                    rect.translate(Vec2::new(0.0, 1.0)),
-                    9.0,
-                    Color32::from_black_alpha(60),
-                );
-                theme::plastic(painter, face, 8.0, base);
-            }
-            Material::Metal => {
-                painter.rect_filled(rect, 5.0, roles().ink);
-                painter.rect_filled(face, 3.0, base);
-            }
-        }
-    }
-    if material == Material::Metal && matches!(role, ButtonRole::Primary) && response.enabled() {
-        let art = artwork(ui.ctx(), Palette::of(ui));
-        let size = art.primary.size_vec2() / ui.ctx().pixels_per_point();
-        let mut y = face.top();
-        while y < face.bottom() {
-            let mut x = face.left();
-            while x < face.right() {
-                fixed_image(ui, &art.primary, Pos2::new(x, y), face.shrink(2.0));
-                x += size.x;
-            }
-            y += size.y;
-        }
-        if down {
-            painter.rect_filled(face.shrink(2.0), 2.0, Color32::from_black_alpha(25));
-        }
-    }
-    if raised && material == Material::Metal {
-        painter.line_segment(
-            [
-                face.left_top() + Vec2::new(3.0, 1.0),
-                face.right_top() + Vec2::new(-3.0, 1.0),
-            ],
-            Stroke::new(1.0_f32, Color32::from_white_alpha(55)),
-        );
+        paint_raised_key_face(ui.painter(), rect, face, base, role, roles().material);
     }
     face
 }

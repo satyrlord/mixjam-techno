@@ -19,6 +19,8 @@ mod dials;
 mod enclosure;
 #[path = "master/layout.rs"]
 mod layout;
+#[path = "master/motifs.rs"]
+mod motifs;
 #[path = "master/parts.rs"]
 mod parts;
 #[path = "master/pedal_face.rs"]
@@ -30,10 +32,11 @@ pub(super) use board::{bypass_switch, preset_selector, show, status};
 pub(super) use deep_edit::{DEEP_EDIT_TITLE, show_deep_edit};
 use dials::*;
 pub(super) use dials::{COMPACT_WELL, Dial, Format, compact_dial, decimal, dial};
+pub(super) use enclosure::paint_motif_enclosure;
 use enclosure::*;
-pub(super) use enclosure::{enamel_of, enclosure_of};
 pub(super) use layout::MODULE_HEIGHT;
 use layout::*;
+pub(super) use motifs::{MotifSpec, MotifStyle};
 pub(super) use parts::lamp;
 use parts::*;
 use pedal_face::*;
@@ -69,4 +72,4 @@ pub(super) fn display_needle(ctx: &egui::Context, id: egui::Id, target: f32, red
 
 #[cfg(test)]
 #[path = "master/tests.rs"]
-mod tests;
+pub(super) mod tests;

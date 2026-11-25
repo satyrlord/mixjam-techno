@@ -304,7 +304,7 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
     assert!(
         board.contains_rect(Rect::from_min_size(
             grip.min,
-            Vec2::new(grip.width(), 176.0)
+            Vec2::new(grip.width(), 228.0)
         )),
         "The whole Limiter must come into view: {grip:?} in {board:?}."
     );
@@ -351,7 +351,7 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
     assert!(
         board.contains_rect(Rect::from_min_size(
             grip.min,
-            Vec2::new(grip.width(), 176.0)
+            Vec2::new(grip.width(), 228.0)
         )),
         "Enter on a chip must bring the whole pedal into view: {grip:?} in {board:?}."
     );

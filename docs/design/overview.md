@@ -15,16 +15,15 @@ The application has three complete themes that the owner selected: Studio
 arrangement, Sounds panel, Mixer, boards, tools, menus, tooltips,
 confirmations, and feedback. See [Themes](themes.md#themes). The rest
 of this document describes the shared layout and behavior, which no theme
-changes. Where it names Folded Metal, ivory strips, or enamel finishes, it
-describes Vintage, which keeps the prepared artwork. Studio and Aero paint the
-same surfaces in code with their own materials.
+changes. Legacy ivory strips remain only in the older Mixer board until
+retirement; all panels, chassis, buttons, dials, and colorful pedals render
+procedurally across all three themes.
 
-In Vintage, every in-app window and modal uses Folded Metal. It has subtly aged
-folded painted metal, dark inset control bays, cream text, polished silver
-knobs, and pale metal primary buttons. Fine grain, minor scratches, and
-restrained edge wear suggest a well-kept synth from the early 2000s. Studio
-paints the same shells as flat software panels, and Aero paints them as molded
-plastic.
+In Vintage, every window and board sits on black rack rails with olive-sage
+anodized modular plates, slotted corner screws, cream silk-screen legends,
+fluted dark-skirted silver-cap rotary dials, and orange-amber indicators.
+Studio paints flat matte software panels with vivid modular stompbox colors,
+and Aero paints molded plastic shells.
 
 Every theme keeps the tool palette identities, in its own shades:
 

@@ -203,58 +203,25 @@ fn check_rail_state(names: bool, size: Vec2) {
             "{label} must scroll into view ({state}): {rect:?}."
         );
     }
-    // Studio and Aero paint the rail in code; Vintage crops its artwork.
+    // All themes paint the rail procedurally in code.
+    assert!(
+        !ctx.tex_manager()
+            .read()
+            .allocated()
+            .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
+        "The rail must paint in code without legacy Folded Metal textures."
+    );
     if roles().material == theme::Material::Metal {
-        for (part, expected) in [
-            ("grain", [256, 256]),
-            ("part-6", [12, 96]),
-            ("part-7", [12, 96]),
-        ] {
-            let name = format!("folded-metal-Utility-{part}");
-            let (texture, pixels) = ctx
-                .tex_manager()
-                .read()
-                .allocated()
-                .find(|(_, meta)| meta.name == name)
-                .map(|(id, meta)| (*id, meta.size))
-                .expect("The rail must load its shared material finish.");
-            assert_eq!(
-                pixels, expected,
-                "The rail must load the prepared material."
-            );
-            let mut painted = false;
-            for shape in &output.shapes {
-                let egui::Shape::Mesh(mesh) = &shape.shape else {
-                    continue;
-                };
-                if mesh.texture_id != texture {
-                    continue;
+        assert!(
+            output.shapes.iter().any(|shape| match &shape.shape {
+                egui::Shape::Mesh(mesh) if mesh.texture_id == egui::TextureId::default() => {
+                    let bounds = mesh.calc_bounds();
+                    bounds.width() > 50.0 && bounds.height() > 300.0
                 }
-                painted = true;
-                for vertex in &mesh.vertices {
-                    for coordinate in [vertex.pos.x, vertex.pos.y] {
-                        assert!(
-                            (coordinate - coordinate.round()).abs() < 0.001,
-                            "Rail material must align to physical pixels."
-                        );
-                    }
-                }
-                for triangle in mesh.indices.as_chunks::<3>().0 {
-                    for edge in 0..3 {
-                        let a = mesh.vertices[triangle[edge] as usize];
-                        let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                        let destination = (b.pos - a.pos).abs();
-                        let source =
-                            (b.uv - a.uv).abs() * Vec2::new(pixels[0] as f32, pixels[1] as f32);
-                        assert!(
-                            (destination - source).abs().max_elem() < 0.001,
-                            "The narrow rail must crop its material without stretching texels."
-                        );
-                    }
-                }
-            }
-            assert!(painted, "The rail must paint its {part} material.");
-        }
+                _ => false,
+            }),
+            "The Vintage rail must paint its procedural modular gradient."
+        );
     }
 }
 

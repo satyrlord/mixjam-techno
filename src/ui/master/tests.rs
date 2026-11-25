@@ -1,42 +1,54 @@
 use super::*;
 
+pub(in super::super) fn worst_zone_contrast(
+    fill: Color32,
+    ink: Color32,
+    light_face: bool,
+    on: bool,
+) -> f32 {
+    let worst_bg = match roles().material {
+        theme::Material::Metal => {
+            if light_face && on {
+                lit(fill, -(GRAIN_DIP + SHEEN_DIP))
+            } else if !light_face && on {
+                lit(fill, 0.22)
+            } else {
+                fill
+            }
+        }
+        theme::Material::Plastic => {
+            if light_face {
+                fill.lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE)
+            } else {
+                let top = fill.lerp_to_gamma(Color32::WHITE, theme::PLASTIC_LIGHT);
+                top.blend(Color32::from_white_alpha(theme::PLASTIC_GLOSS))
+            }
+        }
+        theme::Material::Flat => fill,
+    };
+    controls::contrast(worst_bg, ink)
+}
+
 #[test]
 fn ink_stays_legible_on_every_enamel_lit_or_off() {
     for theme in theme::Theme::ALL {
         theme::paint_as(theme);
         for kind in PedalKind::ALL {
+            let motif = master_motif(kind);
+            let light_face = motif.light_face;
+            let ink = master_face_ink(kind);
             for on in [true, false] {
-                // Legacy enamel contrast (kept for shared parts).
-                let darkest_enamel = match roles().material {
-                    theme::Material::Metal if on => lit(enamel(kind, on), -(GRAIN_DIP + SHEEN_DIP)),
-                    theme::Material::Plastic => {
-                        enamel(kind, on).lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE)
-                    }
-                    _ => enamel(kind, on),
-                };
-                let ratio_enamel = controls::contrast(darkest_enamel, roles().ink);
-                assert!(
-                    ratio_enamel >= 5.0,
-                    "{} {} enamel ({on}) gives {ratio_enamel:.2}:1",
-                    options::labels::theme(theme),
-                    name(kind)
-                );
-                // 3-theme Mastering faceplate contrast (Studio flat dark, Aero molded, Vintage anodized).
-                let darkest_face = match roles().material {
-                    theme::Material::Metal if on => {
-                        lit(master_face_color(kind, on), -(GRAIN_DIP + SHEEN_DIP))
-                    }
-                    theme::Material::Plastic => master_face_color(kind, on)
-                        .lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE),
-                    _ => master_face_color(kind, on),
-                };
-                let ratio_face = controls::contrast(darkest_face, master_face_ink());
-                assert!(
-                    ratio_face >= 5.0,
-                    "{} {} master faceplate ({on}) gives {ratio_face:.2}:1",
-                    options::labels::theme(theme),
-                    name(kind)
-                );
+                let ([zone_a, zone_b], _) = motif.zones(on);
+                let extra = motif.extra_band_zones(on);
+                for (zone_idx, zone) in [zone_a, zone_b].into_iter().chain(extra).enumerate() {
+                    let ratio = worst_zone_contrast(zone, ink, light_face, on);
+                    assert!(
+                        ratio >= 5.0,
+                        "{} {} zone {zone_idx} (on={on}) gives {ratio:.2}:1",
+                        options::labels::theme(theme),
+                        name(kind)
+                    );
+                }
             }
         }
     }
