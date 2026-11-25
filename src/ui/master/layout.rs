@@ -20,7 +20,7 @@ pub(super) const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 12.0;
 /// One row of chips under the pedals and their shadows.
 pub(super) const STRIP_HEIGHT: f32 = 30.0;
 pub(super) const BOARD_HEIGHT: f32 = ROW_HEIGHT + STRIP_HEIGHT;
-pub(super) const WELL: Vec2 = Vec2::new(56.0, 20.0);
+pub(crate) const WELL: Vec2 = Vec2::new(56.0, 20.0);
 
 pub(super) fn name(kind: PedalKind) -> &'static str {
     match kind {

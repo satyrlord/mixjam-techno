@@ -215,9 +215,9 @@ fn card_header(
     solo: bool,
 ) -> CardAction {
     let mut action = CardAction::None;
-    let switch = |x: f32, width: f32| Rect::from_min_size(at(rect, x, 6.0), Vec2::new(width, 22.0));
+    let switch = |x: f32, width: f32| Rect::from_min_size(at(rect, x, 8.0), Vec2::new(width, 22.0));
     let name = ui.painter().text(
-        at(rect, PADDING, 17.0),
+        at(rect, PADDING, 19.0),
         Align2::LEFT_CENTER,
         bus_name,
         FontId::proportional(11.5),
@@ -235,7 +235,7 @@ fn card_header(
         })
         .ceil()
         + 16.0;
-    let input = switch(name.right() - rect.left() + 8.0, 28.0);
+    let input = switch(name.right() - rect.left() + 6.0, 28.0);
     let limiter = switch(right - edit_w - 4.0 - 32.0, 32.0);
     bus_switches(ui, [input, limiter], Look::Quiet, bus_name, bus);
     let mut solo_val = solo;
@@ -268,6 +268,13 @@ fn card_header(
     {
         action = CardAction::OpenDeepEdit;
     }
+    ui.painter().line_segment(
+        [
+            at(rect, 10.0, super::HEADER + 1.0),
+            at(rect, rect.width() - 10.0, super::HEADER + 1.0),
+        ],
+        Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.26)),
+    );
     action
 }
 
@@ -291,7 +298,7 @@ pub(super) fn unit(
 
         // The effect's short name needs less room than a preset's name.
         let inner_w = rect.width() - 2.0 * PADDING;
-        let effect_w = ((inner_w - 6.0) * 0.38).round();
+        let effect_w = ((inner_w - 6.0) * 0.34).round().clamp(62.0, 108.0);
         let preset_w = inner_w - 6.0 - effect_w;
         module_and_preset_combos(
             ui,
@@ -305,12 +312,9 @@ pub(super) fn unit(
             true,
         );
 
-        // The dials share the card's width in equal columns, up to MAX_CELL
-        // each; a value window, 2 points inside its well, leaves 4 points
-        // between its neighbours.
-        paint_macro_dials(ui, rect, inner_w, &bus_name, bus, motif.knob);
+        paint_macro_dials(ui, rect, &bus_name, bus, motif.knob);
 
-        let clear_w = 76.0;
+        let clear_w = 74.0;
         let meter_w = if bus.module.is_empty() {
             inner_w
         } else {
@@ -351,27 +355,33 @@ pub(super) fn unit(
 fn paint_macro_dials(
     ui: &mut egui::Ui,
     rect: Rect,
-    inner_w: f32,
     bus_name: &str,
     bus: &mut FxBus,
     knob: theme::KnobStyle,
 ) {
     let slots = macro_slots(&bus.module);
-    let cell = (inner_w / slots.len() as f32).min(MAX_CELL);
-    let well = (cell - 2.0).min(COMPACT_WELL);
+    let dial_span = rect.width() - 16.0;
+    let cell = (dial_span / slots.len() as f32).min(MAX_CELL);
+    let full = cell >= 62.0;
+    let well = if full {
+        super::master::WELL.x
+    } else {
+        (cell - 2.0).min(COMPACT_WELL)
+    };
+    let compact = (!full).then_some(well);
     let left = (rect.width() - slots.len() as f32 * cell) / 2.0;
     theme::with_knob_style(knob, || {
         for (i, slot) in slots.iter().enumerate() {
             let x = left + (i as f32 + 0.5) * cell;
-            let y = DIALS_Y + 20.0;
-            let positions = [at(rect, x, y), at(rect, x, y + 36.0), at(rect, x, y + 58.0)];
+            let y = DIALS_Y + 26.0;
+            let positions = [at(rect, x, y), at(rect, x, y + 40.0), at(rect, x, y + 61.0)];
             if let (Slot::Delay(DelayParam::TimeL), Module::EchoformDelay(delay)) =
                 (slot, &mut bus.module)
                 && delay.mode == TimeMode::Sync
             {
-                synced_time_macro(ui, positions, well, bus_name, delay);
+                synced_time_macro(ui, positions, well, full, bus_name, delay);
             } else {
-                dial_slot(ui, positions, bus_name, bus, slot, Some(well));
+                dial_slot(ui, positions, bus_name, bus, slot, compact);
             }
         }
     });
@@ -383,6 +393,7 @@ fn synced_time_macro(
     ui: &mut egui::Ui,
     positions: [Pos2; 3],
     well: f32,
+    full: bool,
     bus: &str,
     delay: &mut Echoform,
 ) {
@@ -427,7 +438,7 @@ fn synced_time_macro(
         label,
         Align2::CENTER_CENTER,
         if delay.link_times { "Time" } else { "Time L" },
-        FontId::proportional(10.0),
+        FontId::proportional(if full { 11.5 } else { 10.0 }),
         roles().legend,
     );
 }

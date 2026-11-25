@@ -14,45 +14,35 @@ The UI draws each at exactly one image pixel per display pixel. It does not
 resize these images at run time. The 96-pixel canonical PNGs are authoring
 inputs.
 
-## Origin
-
-The artwork is an adaptation of the RaveFold `TrackerIcon` component at commit
-`5965621be6ac2ea5330db9fb231755860617a285`. The hash of that component is
-`f7e2791cb0c9641a654d219be24619d01070983b7732eb4a424a89644d65ba9b`.
-The manifest holds the hashes of the earlier authoring sources as a record.
-They are not asset inputs. The following table records the adaptation.
-See the [donor provenance](../donors/ravefold/README.md) for its notices and
-license status. This adaptation does not assign a new license to donor work.
+## Drawing rules
 
 The icons follow one drawing rule. Draw each on a 24-unit grid at 16 times the
 size and reduce it once. Use a 2-unit stroke with round caps and joins. Center
-the straight strokes on pixel boundaries of the 20-pixel display size. Icons
-marked as a donor form follow the shape of that donor path. The other icons are
-new in its family.
+the straight strokes on pixel boundaries of the 20-pixel display size.
 
-| Asset | Source or adaptation |
+| Asset | Form |
 | --- | --- |
-| `save` | Donor `save` form |
-| `export` | Donor `export` form |
-| `mixer` | Donor `mixer` form |
-| `erase` | Donor `erase` form |
-| `delete` | Donor `trash` form |
-| `effects` | New "fx" lettering |
-| `undo` | Donor `undo` form |
-| `redo` | Donor `redo` form |
-| `save-as` | Donor `save` outline, opened at lower right for a new pencil |
-| `import` | Donor `export` tray with its arrow reversed |
-| `open` | New open folder |
-| `options` | New eight-tooth gear with shallow teeth |
-| `new` | New document with a plus |
-| `step-synth` | New piano roll: a key ladder and three notes stepping up |
-| `edit` | New waveform between two brackets, the sample's edges |
-| `stretch` | New outward arrows between two sample boundaries |
-| `record` | New microphone on its stand |
-| `help` | New ringed question mark |
-| `master` | New level gauge for Mastering |
-| `album-review` | New record with its tonearm, for Album Review |
-| `fx-returns` | New square-cornered loop that leaves a baseline and returns into it, the return to the mix |
+| `save` | Floppy disk |
+| `export` | Open tray with an upward arrow |
+| `mixer` | Three vertical sliders |
+| `erase` | Tilted eraser over a baseline |
+| `delete` | Trash can with a lid |
+| `effects` | "fx" lettering |
+| `undo` | Counterclockwise loop arrow pointing left |
+| `redo` | Clockwise loop arrow pointing right |
+| `save-as` | Floppy disk opened at lower right with a pencil |
+| `import` | Open tray with a downward arrow |
+| `open` | Open folder |
+| `options` | Eight-tooth gear with shallow teeth |
+| `new` | Document with a plus |
+| `step-synth` | Piano roll: a key ladder and three notes stepping up |
+| `edit` | Waveform between two brackets, the sample's edges |
+| `stretch` | Outward arrows between two sample boundaries |
+| `record` | Microphone on its stand |
+| `help` | Ringed question mark |
+| `master` | Level gauge for Mastering |
+| `album-review` | Record with its tonearm, for Album Review |
+| `fx-returns` | Square-cornered loop that leaves a baseline and returns into it, the return to the mix |
 
 ## Update and check
 

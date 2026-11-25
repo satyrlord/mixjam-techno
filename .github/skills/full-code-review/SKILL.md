@@ -32,10 +32,9 @@ Start with a read-only review. Repair findings only when the user asks for fixes
    Completion criterion: Each check that applies has the status pass, fail,
    blocked, or not run.
 
-Treat donor material as dated evidence. Use original product artifacts and
-measured behavior to assess parity claims. If skills are in scope, read them
-once in `.github/skills`. The folders `.agents/skills`, `.claude/skills`, and
-`.codex/skills` link to it.
+Use original product artifacts and measured behavior to assess parity claims.
+If skills are in scope, read them once in `.github/skills`. The folders
+`.agents/skills`, `.claude/skills`, and `.codex/skills` link to it.
 
 ## 2. Review each affected boundary
 
@@ -48,7 +47,7 @@ once in `.github/skills`. The folders `.agents/skills`, `.claude/skills`, and
    - render timing, channel routing, recording, device lifetime, and background
      work
    - native input, focus, accessibility, layout, and bundled assets
-   - original-product parity claims and preservation boundaries
+   - original-product parity claims
    - focused tests, both Cargo feature sets, release artifact, visual, and audio
      evidence
 

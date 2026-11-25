@@ -523,8 +523,8 @@ fn paint_tri_band_wells(p: &egui::Painter, ctx: &MotifContext) {
 fn paint_empty_bay(p: &egui::Painter, ctx: &MotifContext) {
     let inner = ctx.inner;
     let bay = Rect::from_min_max(
-        Pos2::new(inner.left() + 2.0, ctx.rect.top() + 34.0),
-        inner.max - Vec2::splat(2.0),
+        Pos2::new(inner.left() + 2.0, ctx.rect.top() + 38.0),
+        Pos2::new(inner.right() - 2.0, ctx.rect.bottom() - 10.0),
     );
     let cavity = bay.shrink(8.0);
     let top_wall = vec![
@@ -596,8 +596,8 @@ fn paint_empty_bay(p: &egui::Painter, ctx: &MotifContext) {
 
 fn fx_deck(ctx: &MotifContext, margin_x: f32) -> Rect {
     Rect::from_min_max(
-        Pos2::new(ctx.inner.left() + margin_x, ctx.rect.top() + 65.0),
-        Pos2::new(ctx.inner.right() - margin_x, ctx.rect.bottom() - 42.0),
+        Pos2::new(ctx.inner.left() + margin_x, ctx.rect.top() + 72.0),
+        Pos2::new(ctx.inner.right() - margin_x, ctx.rect.bottom() - 48.0),
     )
 }
 
@@ -681,7 +681,7 @@ fn paint_drive_rail(p: &egui::Painter, ctx: &MotifContext) {
         Stroke::new(1.1_f32, ctx.trim.gamma_multiply(0.6)),
         egui::StrokeKind::Inside,
     );
-    let pip_y = frame.top() + 3.0;
+    let pip_y = frame.top() + 5.0;
     let cx = ctx.rect.center().x;
     for (i, rgb_pip) in [[236, 94, 52], [244, 148, 56], [248, 194, 78], [244, 98, 92]]
         .into_iter()

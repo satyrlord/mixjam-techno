@@ -6,7 +6,6 @@ These repository skills follow the current owner decisions. If they exist,
 record those decisions. The skills also work without them.
 [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) describes the native application
 boundary. Use the current repository files to verify commands and behavior.
-Historical donor instructions do not apply to this workspace.
 
 Each skill's `description` owns its trigger. The action column copies the
 first sentence of that description. If you change a description, change its row.

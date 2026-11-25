@@ -260,3 +260,18 @@ pub(crate) fn well(ui: &egui::Ui, rect: Rect) {
         egui::StrokeKind::Inside,
     );
 }
+
+pub(crate) fn status_well(ui: &egui::Ui, rect: Rect, error: bool) {
+    well(ui, rect);
+    let edge = if error {
+        roles().coral
+    } else {
+        roles().well_edge.lerp_to_gamma(roles().legend, 0.2)
+    };
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        Stroke::new(1.0_f32, edge),
+        egui::StrokeKind::Inside,
+    );
+}

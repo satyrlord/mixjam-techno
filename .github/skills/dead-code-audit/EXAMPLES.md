@@ -19,11 +19,11 @@ it.
 The normal save path can skip a migration. The migration stays live while the
 import contract supports its older project version.
 
-## Preservation
+## Approved research
 
-The contract keeps snapshots, manifests, and Git bundles, also when the
-application does not load them. The absence of a Rust reference does not make
-them dead. The same rule applies to approved research that does not ship.
+The contract keeps approved research and original product evidence, also when
+the application does not load them. The absence of a Rust reference does not
+make them dead.
 
 ## Runtime data
 

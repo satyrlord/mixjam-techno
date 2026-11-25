@@ -1,4 +1,4 @@
-//! Layer 2 floating FX Deep Edit window (`760x480 pt`) with full parameter bays,
+//! Layer 2 floating FX Deep Edit window (`824x572 pt`) with full parameter bays,
 //! live drive transfer scope, and telemetry meters.
 use super::super::*;
 use super::faces::{Slot, dial_slot};
@@ -10,49 +10,85 @@ use mixjam_techno::application::fx::{
     ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel, TimeMode,
 };
 
-const WINDOW_W: f32 = 760.0;
-const WINDOW_H: f32 = 480.0;
+const WINDOW_W: f32 = 824.0;
+const WINDOW_H: f32 = 572.0;
+const WORKSPACE_W: f32 = 780.0;
+const WORKSPACE_H: f32 = 456.0;
+const LEFT_BAY_W: f32 = 500.0;
+const BAY_GAP: f32 = 10.0;
 const PREFIX: &str = "Deep edit";
-const CELL_W: f32 = 58.0;
-const ROW_H: f32 = 88.0;
 
-fn bay_accent(module: &Module) -> Color32 {
-    fx_motif(module).1
-}
-
-fn draw_dial_grid_with(
-    ui: &mut egui::Ui,
-    rect: Rect,
+#[derive(Clone, Copy)]
+struct DialGrid {
     cols: usize,
     cell_w: f32,
-    compact: bool,
-    bus: &mut FxBus,
-    slots: &[Slot],
-) {
-    let cols = cols.max(1);
-    for (i, slot) in slots.iter().enumerate() {
-        let col = i % cols;
-        let row = i / cols;
-        let x = rect.left() + 14.0 + (col as f32 + 0.5) * cell_w;
-        let y = rect.top() + 44.0 + row as f32 * ROW_H;
-        let positions = [
-            Pos2::new(x, y),
-            Pos2::new(x, y + 34.0),
-            Pos2::new(x, y + 54.0),
-        ];
-        dial_slot(
-            ui,
-            positions,
-            PREFIX,
-            bus,
-            slot,
-            compact.then_some(super::master::COMPACT_WELL),
-        );
+    start_y: f32,
+    well_offset: f32,
+    label_offset: f32,
+    row_h: f32,
+}
+
+impl DialGrid {
+    const fn row(cols: usize, cell_w: f32, start_y: f32) -> Self {
+        Self {
+            cols,
+            cell_w,
+            start_y,
+            well_offset: 38.0,
+            label_offset: 58.0,
+            row_h: 92.0,
+        }
+    }
+
+    const fn two_row(cols: usize, cell_w: f32, start_y: f32, row_h: f32) -> Self {
+        Self {
+            cols,
+            cell_w,
+            start_y,
+            well_offset: 36.0,
+            label_offset: 55.0,
+            row_h,
+        }
     }
 }
 
-fn draw_dial_grid(ui: &mut egui::Ui, rect: Rect, cols: usize, bus: &mut FxBus, slots: &[Slot]) {
-    draw_dial_grid_with(ui, rect, cols, CELL_W, false, bus, slots);
+fn draw_dial_grid(ui: &mut egui::Ui, rect: Rect, grid: DialGrid, bus: &mut FxBus, slots: &[Slot]) {
+    for (i, slot) in slots.iter().enumerate() {
+        let (offset, row) = grid_cell(i, slots.len(), grid.cols);
+        let x = rect.center().x + offset * grid.cell_w;
+        let y = rect.top() + grid.start_y + row as f32 * grid.row_h;
+        let positions = [
+            Pos2::new(x, y),
+            Pos2::new(x, y + grid.well_offset),
+            Pos2::new(x, y + grid.label_offset),
+        ];
+        dial_slot(ui, positions, PREFIX, bus, slot, None);
+    }
+}
+
+/// The column offset of dial `index` from the bay's center, in cells, and its
+/// row. Each row centers on its own dial count, so a short last row stays
+/// centered under the full rows.
+fn grid_cell(index: usize, count: usize, cols: usize) -> (f32, usize) {
+    let cols = cols.max(1);
+    let row = index / cols;
+    let in_row = (count - row * cols).min(cols);
+    let col = index % cols;
+    (col as f32 + 0.5 - in_row as f32 / 2.0, row)
+}
+
+fn bays(area: Rect, top_h: f32) -> [Rect; 4] {
+    let right_w = (area.width() - LEFT_BAY_W - BAY_GAP).max(220.0);
+    let bot_h = area.height() - top_h - BAY_GAP;
+    let bay = |x: f32, y: f32, w: f32, h: f32| {
+        Rect::from_min_size(area.min + Vec2::new(x, y), Vec2::new(w, h))
+    };
+    [
+        bay(0.0, 0.0, LEFT_BAY_W, top_h),
+        bay(LEFT_BAY_W + BAY_GAP, 0.0, right_w, top_h),
+        bay(0.0, top_h + BAY_GAP, LEFT_BAY_W, bot_h),
+        bay(LEFT_BAY_W + BAY_GAP, top_h + BAY_GAP, right_w, bot_h),
+    ]
 }
 
 fn bus_tabs(
@@ -77,7 +113,7 @@ fn bus_tabs(
         ui.separator();
         let m = meters[*bus_index];
         let meter_rect = ui
-            .allocate_exact_size(Vec2::new(138.0, 24.0), Sense::hover())
+            .allocate_exact_size(Vec2::new(148.0, 24.0), Sense::hover())
             .0;
         controls::instrument::meter_bar(
             ui,
@@ -96,21 +132,20 @@ fn bus_tabs(
 
 fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool) {
     let mut clear_tail = false;
-    ui.add_space(4.0);
     let top_rect = ui
-        .allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::hover())
+        .allocate_exact_size(Vec2::new(WORKSPACE_W, 28.0), Sense::hover())
         .0;
     module_and_preset_combos(
         ui,
-        Rect::from_min_size(top_rect.min, Vec2::new(174.0, 24.0)),
-        Rect::from_min_size(top_rect.min + Vec2::new(182.0, 0.0), Vec2::new(126.0, 24.0)),
+        Rect::from_min_size(top_rect.min + Vec2::new(0.0, 2.0), Vec2::new(174.0, 24.0)),
+        Rect::from_min_size(top_rect.min + Vec2::new(182.0, 2.0), Vec2::new(144.0, 24.0)),
         PREFIX,
         bus,
         false,
     );
     bus_switch(
         ui,
-        top_rect.min + Vec2::new(320.0, 3.0),
+        top_rect.min + Vec2::new(340.0, 4.0),
         &format!("{PREFIX} power"),
         "Power",
         &mut bus.powered,
@@ -121,7 +156,7 @@ fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool
         .add_enabled_ui(bus.is_active(), |ui| {
             bus_switch(
                 ui,
-                top_rect.min + Vec2::new(395.0, 3.0),
+                top_rect.min + Vec2::new(416.0, 4.0),
                 &format!("{PREFIX} solo"),
                 "Solo",
                 &mut solo,
@@ -133,7 +168,7 @@ fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool
         .changed();
     bus_switch(
         ui,
-        top_rect.min + Vec2::new(462.0, 3.0),
+        top_rect.min + Vec2::new(484.0, 4.0),
         &format!("{PREFIX} limiter"),
         "Limiter",
         &mut bus.limiter,
@@ -148,15 +183,17 @@ fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool
     } {
         bus_switch(
             ui,
-            top_rect.min + Vec2::new(542.0, 3.0),
+            top_rect.min + Vec2::new(564.0, 4.0),
             &format!("{PREFIX} bypass"),
             "Bypass",
             bypass,
             "Silence processed wet return while state keeps running.",
             false,
         );
-        let clear_rect =
-            Rect::from_min_size(top_rect.min + Vec2::new(628.0, 2.0), Vec2::new(82.0, 24.0));
+        let clear_rect = Rect::from_min_size(
+            Pos2::new(top_rect.right() - 84.0, top_rect.top() + 2.0),
+            Vec2::new(84.0, 24.0),
+        );
         let clear_name = format!("{PREFIX} clear tail");
         let resp = controls::button_at(
             ui,
@@ -174,21 +211,7 @@ fn header_bar(ui: &mut egui::Ui, bus: &mut FxBus, mut solo: bool) -> (bool, bool
 }
 
 fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color32) {
-    let left_w = 468.0;
-    let top_h = 186.0;
-    let drive_bay = Rect::from_min_size(area.min, Vec2::new(left_w, top_h));
-    let scope_bay = Rect::from_min_size(
-        area.min + Vec2::new(left_w + 10.0, 0.0),
-        Vec2::new((area.width() - left_w - 10.0).max(220.0), top_h),
-    );
-    let tone_bay = Rect::from_min_size(
-        area.min + Vec2::new(0.0, top_h + 10.0),
-        Vec2::new(left_w, 134.0),
-    );
-    let duck_bay = Rect::from_min_size(
-        area.min + Vec2::new(left_w + 10.0, top_h + 10.0),
-        Vec2::new(scope_bay.width(), 134.0),
-    );
+    let [drive_bay, scope_bay, tone_bay, duck_bay] = bays(area, 228.0);
 
     controls::instrument::bay(ui, drive_bay, "Drive & Curve", accent, false);
     if let Module::EmberformDrive(drive) = &mut bus.module {
@@ -198,8 +221,8 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
         choice(
             ui,
             Rect::from_min_size(
-                drive_bay.min + Vec2::new(12.0, 28.0),
-                Vec2::new(126.0, 24.0),
+                drive_bay.min + Vec2::new(14.0, 28.0),
+                Vec2::new(136.0, 24.0),
             ),
             &format!("{PREFIX} drive type"),
             &mut drive.shape,
@@ -208,7 +231,7 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
         );
         bus_switch(
             ui,
-            drive_bay.min + Vec2::new(150.0, 28.0),
+            drive_bay.min + Vec2::new(164.0, 29.0),
             &format!("{PREFIX} level match"),
             "Level match",
             &mut drive.level_match,
@@ -216,11 +239,10 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
             false,
         );
     }
-    let drive_top = Rect::from_min_max(drive_bay.min + Vec2::new(0.0, 32.0), drive_bay.max);
     draw_dial_grid(
         ui,
-        drive_top,
-        4,
+        drive_bay,
+        DialGrid::row(4, 112.0, 108.0),
         bus,
         &[
             Slot::Drive(DistortionParam::Drive),
@@ -234,7 +256,7 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     draw_dial_grid(
         ui,
         tone_bay,
-        5,
+        DialGrid::row(5, 94.0, 92.0),
         bus,
         &[
             Slot::Drive(DistortionParam::LowCut),
@@ -249,7 +271,7 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     draw_dial_grid(
         ui,
         duck_bay,
-        4,
+        DialGrid::two_row(2, 116.0, 50.0, 90.0),
         bus,
         &[
             Slot::Drive(DistortionParam::DuckKey),
@@ -260,30 +282,15 @@ fn drive_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color
     );
 }
 
-/// The four bays of a workspace: two side by side on top, two below.
-fn quad_bays(area: Rect) -> [Rect; 4] {
-    let (left_w, top_h, bot_h) = (468.0, 178.0, 146.0);
-    let right_w = (area.width() - left_w - 10.0).max(220.0);
-    let bay = |x: f32, y: f32, w: f32, h: f32| {
-        Rect::from_min_size(area.min + Vec2::new(x, y), Vec2::new(w, h))
-    };
-    [
-        bay(0.0, 0.0, left_w, top_h),
-        bay(left_w + 10.0, 0.0, right_w, top_h),
-        bay(0.0, top_h + 10.0, left_w, bot_h),
-        bay(left_w + 10.0, top_h + 10.0, right_w, bot_h),
-    ]
-}
-
 fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, accent: Color32) {
-    let [time_bay, scope_bay, tone_bay, duck_bay] = quad_bays(area);
+    let [time_bay, scope_bay, tone_bay, duck_bay] = bays(area, 216.0);
 
     controls::instrument::bay(ui, time_bay, "Time & Feedback", accent, false);
     if let Module::EchoformDelay(delay) = &mut bus.module {
         let mut sync = delay.mode == TimeMode::Sync;
         bus_switch(
             ui,
-            time_bay.min + Vec2::new(12.0, 26.0),
+            time_bay.min + Vec2::new(12.0, 28.0),
             &format!("{PREFIX} sync"),
             "Sync",
             &mut sync,
@@ -294,7 +301,7 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
         let link_before = delay.link_times;
         bus_switch(
             ui,
-            time_bay.min + Vec2::new(82.0, 26.0),
+            time_bay.min + Vec2::new(80.0, 28.0),
             &format!("{PREFIX} link times"),
             "Link L/R",
             &mut delay.link_times,
@@ -307,7 +314,7 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
         }
         bus_switch(
             ui,
-            time_bay.min + Vec2::new(168.0, 26.0),
+            time_bay.min + Vec2::new(164.0, 28.0),
             &format!("{PREFIX} ping-pong"),
             "Ping-pong",
             &mut delay.ping_pong,
@@ -316,7 +323,7 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
         );
         choice(
             ui,
-            Rect::from_min_size(time_bay.min + Vec2::new(266.0, 26.0), Vec2::new(82.0, 22.0)),
+            Rect::from_min_size(time_bay.min + Vec2::new(260.0, 28.0), Vec2::new(84.0, 22.0)),
             &format!("{PREFIX} delay character"),
             &mut delay.character,
             &[
@@ -329,7 +336,7 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
         ui.add_enabled_ui(sync, |ui| {
             left_division(
                 ui,
-                Rect::from_min_size(time_bay.min + Vec2::new(12.0, 54.0), Vec2::new(66.0, 22.0)),
+                Rect::from_min_size(time_bay.min + Vec2::new(354.0, 28.0), Vec2::new(64.0, 22.0)),
                 PREFIX,
                 delay,
             );
@@ -337,8 +344,8 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
                 note_division(
                     ui,
                     Rect::from_min_size(
-                        time_bay.min + Vec2::new(86.0, 54.0),
-                        Vec2::new(66.0, 22.0),
+                        time_bay.min + Vec2::new(424.0, 28.0),
+                        Vec2::new(64.0, 22.0),
                     ),
                     &format!("{PREFIX} right division"),
                     &mut delay.division_r,
@@ -346,11 +353,10 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
             });
         });
     }
-    let time_grid = Rect::from_min_max(time_bay.min + Vec2::new(0.0, 62.0), time_bay.max);
     draw_dial_grid(
         ui,
-        time_grid,
-        4,
+        time_bay,
+        DialGrid::row(4, 112.0, 108.0),
         bus,
         &[
             Slot::Delay(DelayParam::TimeL),
@@ -361,12 +367,10 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
     );
 
     controls::instrument::bay(ui, duck_bay, "Post-Limiter Ducker", accent, false);
-    draw_dial_grid_with(
+    draw_dial_grid(
         ui,
         duck_bay,
-        4,
-        55.0,
-        true,
+        DialGrid::two_row(2, 116.0, 50.0, 92.0),
         bus,
         &[
             Slot::Delay(DelayParam::DuckKey),
@@ -377,12 +381,10 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
     );
 
     controls::instrument::bay(ui, tone_bay, "Tone, Smear & Mod", accent, false);
-    draw_dial_grid_with(
+    draw_dial_grid(
         ui,
         tone_bay,
-        9,
-        49.0,
-        true,
+        DialGrid::two_row(5, 94.0, 50.0, 92.0),
         bus,
         &[
             Slot::Delay(DelayParam::LowCut),
@@ -412,17 +414,14 @@ fn delay_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64, acc
 }
 
 fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Color32) {
-    let [space_bay, scope_bay, tone_bay, duck_bay] = quad_bays(area);
+    let [space_bay, scope_bay, tone_bay, duck_bay] = bays(area, 236.0);
 
     controls::instrument::bay(ui, space_bay, "Space, Damping & Shimmer", accent, false);
     reverb_switches(ui, space_bay, bus);
-    let space_grid = Rect::from_min_max(space_bay.min + Vec2::new(0.0, 32.0), space_bay.max);
-    draw_dial_grid_with(
+    draw_dial_grid(
         ui,
-        space_grid,
-        9,
-        49.0,
-        true,
+        space_bay,
+        DialGrid::two_row(5, 94.0, 76.0, 86.0),
         bus,
         &[
             Slot::Reverb(ReverbParam::PreDelay),
@@ -438,12 +437,10 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
     );
 
     controls::instrument::bay(ui, tone_bay, "Tone, Modulation & Output", accent, false);
-    draw_dial_grid_with(
+    draw_dial_grid(
         ui,
         tone_bay,
-        8,
-        55.0,
-        true,
+        DialGrid::two_row(4, 114.0, 48.0, 88.0),
         bus,
         &[
             Slot::Reverb(ReverbParam::LowCut),
@@ -458,12 +455,10 @@ fn reverb_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, accent: Colo
     );
 
     controls::instrument::bay(ui, duck_bay, "Post-Limiter Ducker", accent, false);
-    draw_dial_grid_with(
+    draw_dial_grid(
         ui,
         duck_bay,
-        4,
-        55.0,
-        true,
+        DialGrid::two_row(2, 116.0, 48.0, 88.0),
         bus,
         &[
             Slot::Reverb(ReverbParam::DuckKey),
@@ -514,7 +509,7 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
     };
     choice(
         ui,
-        at(10.0, 88.0),
+        at(12.0, 96.0),
         &format!("{PREFIX} space"),
         &mut reverb.space_model,
         &SpaceModel::ALL.map(|m| (m, m.label())),
@@ -522,7 +517,7 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
     );
     choice(
         ui,
-        at(104.0, 82.0),
+        at(116.0, 88.0),
         &format!("{PREFIX} reverb character"),
         &mut reverb.character,
         &[
@@ -534,7 +529,7 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
     );
     bus_switch(
         ui,
-        space_bay.min + Vec2::new(194.0, 26.0),
+        space_bay.min + Vec2::new(214.0, 26.0),
         &format!("{PREFIX} early reflections"),
         "Early",
         &mut reverb.early_reflections_enabled,
@@ -543,7 +538,7 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
     );
     bus_switch(
         ui,
-        space_bay.min + Vec2::new(270.0, 26.0),
+        space_bay.min + Vec2::new(294.0, 26.0),
         &format!("{PREFIX} shimmer"),
         "Shimmer",
         &mut reverb.shimmer_enabled,
@@ -558,7 +553,7 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
     ui.add_enabled_ui(reverb.shimmer_enabled, |ui| {
         choice(
             ui,
-            at(360.0, 64.0),
+            at(394.0, 74.0),
             &format!("{PREFIX} shimmer interval"),
             &mut reverb.shimmer_interval_semitones,
             &labels,
@@ -568,8 +563,8 @@ fn reverb_switches(ui: &mut egui::Ui, space_bay: Rect, bus: &mut FxBus) {
 }
 fn draw_module_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f64) {
     let ui = &mut ui.new_child(egui::UiBuilder::new().id_salt("fx-bays").max_rect(area));
-    let accent = bay_accent(&bus.module);
-    match bus.module {
+    let (motif, accent) = fx_motif(&bus.module);
+    theme::with_knob_style(motif.knob, || match bus.module {
         Module::Empty => {
             controls::instrument::bay(ui, area, "Empty Bus", accent, false);
             ui.painter().text(
@@ -584,7 +579,7 @@ fn draw_module_workspace(ui: &mut egui::Ui, area: Rect, bus: &mut FxBus, bpm: f6
         Module::EmberformDrive(_) => drive_workspace(ui, area, bus, accent),
         Module::EchoformDelay(_) => delay_workspace(ui, area, bus, bpm, accent),
         Module::AetherformReverb(_) => reverb_workspace(ui, area, bus, accent),
-    }
+    });
 }
 
 impl MixJamApp {
@@ -619,9 +614,8 @@ impl MixJamApp {
                     let (cleared, toggled) = header_bar(ui, bus, solos[bus_index]);
                     clear_tail = cleared;
                     solo_toggled = toggled;
-                    ui.add_space(6.0);
                     let area = ui
-                        .allocate_exact_size(Vec2::new(724.0, 340.0), Sense::hover())
+                        .allocate_exact_size(Vec2::new(WORKSPACE_W, WORKSPACE_H), Sense::hover())
                         .0;
                     draw_module_workspace(ui, area, bus, bpm);
                 });
@@ -638,5 +632,37 @@ impl MixJamApp {
             let result = self.session.edit(EditCommand::SetEffects(draft));
             self.apply(result);
         }
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::grid_cell;
+
+    #[test]
+    fn a_short_last_row_centers_under_the_full_row() {
+        let offsets: Vec<_> = (0..9).map(|i| grid_cell(i, 9, 5)).collect();
+        assert_eq!(
+            offsets,
+            [
+                (-2.0, 0),
+                (-1.0, 0),
+                (0.0, 0),
+                (1.0, 0),
+                (2.0, 0),
+                (-1.5, 1),
+                (-0.5, 1),
+                (0.5, 1),
+                (1.5, 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn full_rows_and_single_rows_center_on_the_bay() {
+        let offsets: Vec<_> = (0..4).map(|i| grid_cell(i, 4, 2)).collect();
+        assert_eq!(offsets, [(-0.5, 0), (0.5, 0), (-0.5, 1), (0.5, 1)]);
+        let offsets: Vec<_> = (0..3).map(|i| grid_cell(i, 3, 4)).collect();
+        assert_eq!(offsets, [(-1.0, 0), (0.0, 0), (1.0, 0)]);
     }
 }

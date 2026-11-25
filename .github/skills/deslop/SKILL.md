@@ -17,7 +17,7 @@ documentation, data, configuration, and tests.
 
 1. List every tracked and untracked file in the scope that is not generated.
    Completion criterion: Each file has a family and a representative sibling.
-2. List generated, vendored, binary, preserved-original, and excluded paths
+2. List generated, vendored, binary, and excluded paths
    separately.
    Completion criterion: Every excluded path has a reason.
 3. Read each scoped file and its sibling completely.
@@ -58,8 +58,7 @@ Do not use syntax, file size, test count, coverage, or tone alone as proof.
    failure.
 
 If the question is reachability, use `dead-code-audit`. Do not remove generated
-output, preserved originals, Git bundles, vendored code, lockfiles, or binary
-assets without an explicit request.
+output, vendored code, lockfiles, or binary assets without an explicit request.
 
 ## 5. Re-read and report
 

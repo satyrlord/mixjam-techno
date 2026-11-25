@@ -108,16 +108,16 @@ const MARGIN: f32 = 6.0;
 const GAP: f32 = 8.0;
 const UNIT_TOP: f32 = 8.0;
 const CARD_MIN_WIDTH: f32 = 198.0;
-const UNIT_HEIGHT: f32 = 200.0;
-const HEADER: f32 = 34.0;
+const UNIT_HEIGHT: f32 = 228.0;
+const HEADER: f32 = 36.0;
 /// The widest a dial's column grows on a wide card, so the dials stay a
 /// group and do not drift to the card's edges.
-const MAX_CELL: f32 = 72.0;
-const PADDING: f32 = 8.0;
-const SELECT_Y: f32 = HEADER + 4.0;
-const DIALS_Y: f32 = SELECT_Y + 32.0;
-/// The meter row, 8 points under the dial labels.
-const FOOTER_Y: f32 = 162.0;
+const MAX_CELL: f32 = 76.0;
+const PADDING: f32 = 12.0;
+const SELECT_Y: f32 = HEADER + 6.0;
+const DIALS_Y: f32 = 82.0;
+/// The meter row, clear of bottom corner screws and dial captions.
+const FOOTER_Y: f32 = 186.0;
 /// The meter row's height: room for three lettered lanes.
 const FOOTER_H: f32 = 26.0;
 const ROW_HEIGHT: f32 = UNIT_TOP + UNIT_HEIGHT + 16.0;

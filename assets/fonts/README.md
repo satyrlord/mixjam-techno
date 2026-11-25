@@ -81,6 +81,4 @@ installed system fonts.
 Git preserves license files byte for byte through `.gitattributes`. Keep their
 upstream line endings: the offline check compares the exact license bytes.
 
-Keep every license with the application. The original Space Grotesk donor
-assets and preservation records are in `assets/donors/ravefold/`. The
-application does not load or ship them as native font assets.
+Keep every license with the application.

@@ -35,8 +35,7 @@ does not change the user PATH. `tools/runtime/cargo.ps1` runs that toolchain.
 
 The repository holds the public files. The gitignored `local-data/` folder holds
 the necessary private project data and tools. The gitignored `tmp/` folder holds
-temporary files. Preserved project snapshots and bundles are in
-`local-data/legacy/`. If `local-data/research/PRODUCT.md` and
+temporary files. If `local-data/research/PRODUCT.md` and
 `local-data/research/COMPATIBILITY.md` exist, they are the product and
 compatibility authorities. A clone works without them.
 

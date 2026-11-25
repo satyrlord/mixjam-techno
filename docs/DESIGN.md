@@ -181,7 +181,7 @@ components:
     textColor: "{colors.modular-cream}"
     rounded: "{rounded.pedal-metal}"
     width: "198px"
-    height: "200px"
+    height: "228px"
   mixer-strip:
     backgroundColor: "{colors.mixer-metal}"
     textColor: "{colors.mixer-ink}"
@@ -219,8 +219,7 @@ tiles stay on disk.
   chrome isolated inside the central theme registry and shared control painters.
 - Six fixed tool palette identities (Utility, Marine, Granite, Red, Olive,
   Indigo) plus bespoke per-unit Mastering and FX enclosures.
-- RaveFold supplies artistic reference only; product scope and compatibility
-  specifications govern application behavior.
+- Product scope and compatibility specifications govern application behavior.
 
 ## Colors
 
@@ -341,7 +340,7 @@ Inspector (28pt strips when folded), and the Arrangement canvas (`60pt`
 overview, toolbar, `26pt` ruler, `250pt` lane headers).
 
 Lower boards claim preferred minimum heights (`Mixer` 400pt, `Mastering` 346pt,
-`FX returns` 292pt, `Step synth` 580pt), clamping down to 370pt (`300pt` in Mix
+`FX returns` 320pt, `Step synth` 580pt), clamping down to 370pt (`300pt` in Mix
 view to preserve the 70pt Master/returns footer) so track lanes keep at least
 150pt of height. Floating windows open to content-fit sizes (`300x160` minimum),
 collapse in place to their 44pt header bar, and use solid scrollbars when
@@ -389,7 +388,7 @@ reserve accent outlines strictly for keyboard focus.
 Every Mastering pedal and FX return unit enforces an uninterrupted nameplate
 band above its deck rule: decorative motif frames, sunbursts, bezels, stripes,
 and phase waves stay bounded inside `HEADER + 4.0 .. FOOTER_TOP - 4.0`
-(Mastering) and `y = +65 .. -42` (FX) so strokes never strike through header
+(Mastering) and `y = +72 .. -48` (FX) so strokes never strike through header
 titles or corner screws.
 
 ## Components
@@ -421,14 +420,19 @@ bar and a cream viewport outline around scrolled cards.
   reorder buttons bracketing a `30x22` center bat toggle. Clicking `Edit` or
   double-clicking opens `Mastering deep edit` with response curves and stereo
   vectorscope.
-- **FX Returns Rack**: Four `200pt`-tall cards (`198pt+` wide) side-by-side on
+- **FX Returns Rack**: Four `228pt`-tall cards (`198pt+` wide) side-by-side on
   the Marine bay exposing `In`, `S`, `Lim`, `Edit`, effect/preset pickers, up to
-  4 macro dials, return meters, and `Clear tail` above `y = +65 .. -42` motif
-  decks.
+  4 full-size macro dials (`56x20` wells when wide, compact at minimum width),
+  return meters, and `Clear tail` above `y = +72 .. -48` motif decks, paired
+  with the `824x572` `FX Deep Edit` window with two-row breathing bays and
+  module-scoped knob caps.
 - **Floating Windows & Channel Strip**: One resizable, collapsible shared
-  hardware shell wraps Time Stretcher (`Marine`), Sample Editor (`Granite`),
-  Effect Studio (`Red`), Help windows, blocking confirmations, and `Track N EQ`
-  (`736x500` shared instrument scope and dial window).
+  hardware shell wraps Time Stretcher (`Marine`, `Original BPM` & `Target BPM`
+  modular bays with live ratio readout), Sample Editor (`Granite`, `Trim Range`
+  visual bar & `Pitch & Speed` bay), Effect Studio (`Red`, four accented modular
+  bays with `bat_toggle` switches and module-scoped knobs), Help windows,
+  blocking confirmations, and `Track N EQ` (`736x500` shared instrument scope
+  and dial window).
 
 ### Inputs / Fields
 
@@ -496,7 +500,7 @@ These pages hold the per-panel chapters and state matrices.
 - **Do** keep track numbers stable, expose explicit accessible names on every
   widget, and verify changed layouts at `960x720` (`100%` display scaling).
 - **Do** bound all pedal and FX motif borders below the header divider
-  (`HEADER + 4pt` / `y = 65`) without a redundant top edge stripe.
+  (`HEADER + 4pt` / `y = 72`) without a redundant top edge stripe.
 - **Do** preserve the owner-accepted compact exceptions: Mixer
   `Unity`/`Center`/rails below 24pt, Step synth `14pt` cells on a `16pt` row
   pitch, icon-only collapsible rail mode (names in tooltips), a dual category

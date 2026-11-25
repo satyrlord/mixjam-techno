@@ -21,7 +21,6 @@
 /.claude/worktrees/
 /examples/
 /tools/assets/inspect_assets.py
-/tools/migration/
 /tools/runtime/*
 !/tools/runtime/cargo.ps1
 !/tools/runtime/install-rust.ps1
@@ -33,10 +32,6 @@
 # Samples and evidence
 /evidence/
 /samples/
-
-# Private research crate
-/crates/*
-!/crates/legacy-format/
 
 # Generated audio and Python cache
 *.wav

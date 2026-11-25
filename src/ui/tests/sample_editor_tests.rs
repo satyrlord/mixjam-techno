@@ -577,3 +577,44 @@ fn sample_editor_resets_its_range_when_a_conflict_replaces_the_same_source_id() 
     assert_eq!((app.sample_edit.start, app.sample_edit.end), (0, 2000));
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn sample_editor_pitch_scale_shows_the_engine_pitch_range() {
+    let ctx = egui::Context::default();
+    configure_style(&ctx);
+    ctx.enable_accesskit();
+    let (mut open, mut start, mut end, mut pitch) = (true, 0, 32, 0.0);
+    let mut output = egui::FullOutput::default();
+    for _ in 0..4 {
+        output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                focused: true,
+                ..Default::default()
+            },
+            |ctx| {
+                sample_editor::show(
+                    ctx,
+                    &mut open,
+                    sample_editor::Source {
+                        name: "Source",
+                        frames: 32,
+                        sample_rate: 1000,
+                        available: true,
+                        missing: false,
+                    },
+                    &mut start,
+                    &mut end,
+                    &mut pitch,
+                );
+            },
+        );
+    }
+    let semitones = mixjam_techno::application::MAX_PITCH_CENTS / 100;
+    for label in [format!("-{semitones}"), format!("+{semitones}")] {
+        assert!(
+            screen(&output).texts().any(|text| text.label() == label),
+            "The pitch scale must show the engine limit {label}."
+        );
+    }
+}

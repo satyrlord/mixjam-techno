@@ -15,7 +15,7 @@ pub(in super::super) use scopes::*;
 #[path = "instrument_tests.rs"]
 mod tests;
 
-fn paint_metal_bay_accents(painter: &egui::Painter, rect: Rect) {
+fn paint_metal_bay_accents(painter: &egui::Painter, rect: Rect, active: bool) {
     let r = roles();
     painter.rect_stroke(
         rect.shrink(1.5),
@@ -55,20 +55,37 @@ fn paint_metal_bay_accents(painter: &egui::Painter, rect: Rect) {
     }
     let led = Pos2::new(rect.left() + 14.0, rect.top() + 11.5);
     painter.circle_filled(led, 3.0, r.ink);
-    painter.circle_filled(led, 2.1, Color32::from_rgb(226, 58, 42));
-    painter.circle_filled(
-        led - Vec2::splat(0.7),
-        0.7,
-        Color32::from_rgb(255, 198, 178),
-    );
+    if active {
+        painter.circle_filled(led, 2.1, Color32::from_rgb(226, 58, 42));
+        painter.circle_filled(
+            led - Vec2::splat(0.7),
+            0.7,
+            Color32::from_rgb(255, 198, 178),
+        );
+    } else {
+        painter.circle_filled(led, 2.1, r.lamp_off);
+    }
 }
 
-fn paint_bay_rule(painter: &egui::Painter, rect: Rect, accent: Color32, is_metal: bool) {
+fn paint_bay_rule(
+    painter: &egui::Painter,
+    rect: Rect,
+    accent: Color32,
+    is_metal: bool,
+    active: bool,
+) {
     let rule_y = rect.top() + 19.0;
     let rule_color = if is_metal {
-        Color32::from_rgb(236, 136, 48)
-    } else {
+        let base = Color32::from_rgb(236, 136, 48);
+        if active {
+            base
+        } else {
+            base.gamma_multiply(0.38)
+        }
+    } else if active {
         accent.gamma_multiply(0.55)
+    } else {
+        accent.gamma_multiply(0.28)
     };
     painter.line_segment(
         [
@@ -96,41 +113,28 @@ pub(in super::super) fn bay(
     accent: Color32,
     ink_on_light: bool,
 ) {
+    bay_with_state(ui, rect, title, accent, ink_on_light, true);
+}
+
+/// Draw a recessed chassis bay with active/dimmed indicator state.
+pub(in super::super) fn bay_with_state(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    accent: Color32,
+    ink_on_light: bool,
+    active: bool,
+) {
     let r = roles();
     let painter = ui.painter();
     let is_metal = r.material == Material::Metal;
-    let flat_bay = match r.material {
-        Material::Metal => {
-            painter.rect_filled(rect, 6.0, r.ink);
-            theme::gradient(
-                painter,
-                rect.shrink(1.5),
-                5.0,
-                Color32::from_rgb(86, 98, 88),
-                Color32::from_rgb(68, 79, 70),
-            );
-            paint_metal_bay_accents(painter, rect);
-            None
-        }
-        Material::Flat => Some((
-            CornerRadius::same(4),
-            Color32::from_rgba_unmultiplied(r.ink.r(), r.ink.g(), r.ink.b(), 18),
-        )),
-        Material::Plastic => Some((
-            CornerRadius::same(8),
-            Color32::from_rgba_unmultiplied(r.face.r(), r.face.g(), r.face.b(), 30),
-        )),
+    paint_bay_shell(painter, rect, active);
+    let base_text = if ink_on_light { r.ink } else { r.legend };
+    let text_color = if active {
+        base_text
+    } else {
+        base_text.gamma_multiply(0.76)
     };
-    if let Some((radius, fill)) = flat_bay {
-        painter.rect_filled(rect, radius, fill);
-        painter.rect_stroke(
-            rect,
-            radius,
-            Stroke::new(1.0_f32, r.bay_edge.gamma_multiply(0.75)),
-            egui::StrokeKind::Inside,
-        );
-    }
-    let text_color = if ink_on_light { r.ink } else { r.legend };
     let title_x = if is_metal {
         rect.left() + 21.5
     } else {
@@ -143,7 +147,40 @@ pub(in super::super) fn bay(
         FontId::proportional(10.5),
         text_color,
     );
-    paint_bay_rule(painter, rect, accent, is_metal);
+    paint_bay_rule(painter, rect, accent, is_metal, active);
+}
+
+fn paint_bay_shell(painter: &egui::Painter, rect: Rect, active: bool) {
+    let r = roles();
+    if r.material == Material::Metal {
+        painter.rect_filled(rect, 6.0, r.ink);
+        let (top, bottom) = if active {
+            (Color32::from_rgb(86, 98, 88), Color32::from_rgb(68, 79, 70))
+        } else {
+            (Color32::from_rgb(64, 72, 66), Color32::from_rgb(52, 60, 54))
+        };
+        theme::gradient(painter, rect.shrink(1.5), 5.0, top, bottom);
+        paint_metal_bay_accents(painter, rect, active);
+        return;
+    }
+    let (radius, fill) = match r.material {
+        Material::Flat => (
+            CornerRadius::same(4),
+            Color32::from_rgba_unmultiplied(r.ink.r(), r.ink.g(), r.ink.b(), 18),
+        ),
+        _ => (
+            CornerRadius::same(8),
+            Color32::from_rgba_unmultiplied(r.face.r(), r.face.g(), r.face.b(), 30),
+        ),
+    };
+    painter.rect_filled(rect, radius, fill);
+    let alpha = if active { 0.75 } else { 0.45 };
+    painter.rect_stroke(
+        rect,
+        radius,
+        Stroke::new(1.0_f32, r.bay_edge.gamma_multiply(alpha)),
+        egui::StrokeKind::Inside,
+    );
 }
 
 fn paint_metal_slide_switch(painter: &egui::Painter, switch_rect: Rect, value: bool) {
@@ -402,12 +439,12 @@ fn meter_readout(reading: FxBusMeterReading) -> String {
     )
 }
 
-pub(super) fn draw_scope_chrome(
+/// Recessed scope box and theme colors (`bg`, `trace`, `grid`, `secondary_trace`).
+pub(in super::super) fn scope_well(
     ui: &egui::Ui,
     rect: Rect,
-    title: &str,
     accent: Color32,
-) -> (Rect, Color32, Color32, Color32) {
+) -> (Color32, Color32, Color32, Color32) {
     let r = roles();
     let painter = ui.painter();
     let (bg, trace, grid) = match r.material {
@@ -439,19 +476,30 @@ pub(super) fn draw_scope_chrome(
         Stroke::new(1.0_f32, r.well_edge),
         egui::StrokeKind::Inside,
     );
+    let right_color = match r.material {
+        Material::Metal => Color32::from_rgb(236, 178, 86),
+        Material::Plastic => Color32::from_rgb(112, 184, 255),
+        Material::Flat => accent.gamma_multiply(0.72),
+    };
+    (bg, trace, grid, right_color)
+}
+
+pub(super) fn draw_scope_chrome(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    accent: Color32,
+) -> (Rect, Color32, Color32, Color32) {
+    let r = roles();
+    let (_, trace, grid, right_color) = scope_well(ui, rect, accent);
     let plot = rect.shrink2(Vec2::new(8.0, 18.0));
-    painter.text(
+    ui.painter().text(
         Pos2::new(rect.left() + 8.0, rect.top() + 9.0),
         Align2::LEFT_CENTER,
         title,
         FontId::proportional(10.0),
         r.legend,
     );
-    let right_color = match r.material {
-        Material::Metal => Color32::from_rgb(236, 178, 86),
-        Material::Plastic => Color32::from_rgb(112, 184, 255),
-        Material::Flat => accent.gamma_multiply(0.72),
-    };
     (plot, trace, grid, right_color)
 }
 
@@ -534,6 +582,16 @@ pub(super) fn hover_access_label(ui: &egui::Ui, rect: Rect, title: &str, value: 
     });
 }
 
+pub(in super::super) fn draw_quarter_grid(painter: &egui::Painter, plot: Rect, grid: Color32) {
+    for frac in [0.25_f32, 0.5, 0.75] {
+        let gx = plot.left() + plot.width() * frac;
+        painter.line_segment(
+            [Pos2::new(gx, plot.top()), Pos2::new(gx, plot.bottom())],
+            Stroke::new(1.0_f32, grid.gamma_multiply(0.65)),
+        );
+    }
+}
+
 /// Plot the magnitudes of `(norm_t, L, R)` taps in separate left and right lanes.
 pub(in super::super) fn delay_scope_frame(
     ui: &egui::Ui,
@@ -563,13 +621,7 @@ pub(in super::super) fn delay_scope_frame(
         ],
         Stroke::new(1.0_f32, grid),
     );
-    for frac in [0.25_f32, 0.5, 0.75] {
-        let gx = plot.left() + plot.width() * frac;
-        painter.line_segment(
-            [Pos2::new(gx, plot.top()), Pos2::new(gx, plot.bottom())],
-            Stroke::new(1.0_f32, grid.gamma_multiply(0.6)),
-        );
-    }
+    draw_quarter_grid(painter, plot, grid);
 
     for &(t, l_amp, r_amp) in taps {
         let x = plot.left() + t.clamp(0.0, 1.0) * (plot.width() - 4.0) + 2.0;

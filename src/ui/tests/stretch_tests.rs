@@ -890,3 +890,64 @@ fn stretch_action_labels_remain_centered_in_every_playback_state() {
         }
     }
 }
+
+#[test]
+fn stretch_listen_click_keeps_the_save_button_in_the_same_frame() {
+    let ctx = egui::Context::default();
+    configure_style(&ctx);
+    ctx.enable_accesskit();
+    let (mut original, mut target, mut open) = (160.0, 120.0, true);
+    let mut run = |events: Vec<egui::Event>| {
+        let mut action = stretch::Action::None;
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                focused: true,
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                action = stretch::show(
+                    ctx,
+                    &mut open,
+                    stretch::Source {
+                        name: "Sound",
+                        id: Some(1),
+                        samples: &[],
+                        catalog_revision: 0,
+                        missing: false,
+                        bpm: 160.0,
+                    },
+                    stretch::Feedback {
+                        processing: false,
+                        listening: false,
+                        saved: false,
+                        audition: None,
+                        message: None,
+                        error: false,
+                    },
+                    &mut original,
+                    &mut target,
+                );
+            },
+        );
+        (output, action)
+    };
+    let mut output = run(vec![]).0;
+    for _ in 0..3 {
+        output = run(vec![]).0;
+    }
+    let listen = screen(&output).node("Listen to stretched sound").id();
+    let (output, action) = run(vec![egui::Event::AccessKitActionRequest(
+        egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target: listen,
+            data: None,
+        },
+    )]);
+    assert!(matches!(action, stretch::Action::Listen));
+    assert!(
+        screen(&output).find_node("Save stretched sound").is_some(),
+        "The Save button must stay on screen in the frame of a Listen click."
+    );
+}

@@ -31,7 +31,7 @@ pub(super) use knobs::{RotarySpec, rotary, wheel};
 pub(super) use readouts::{disclosure, number, progress, radio, status_text, value_style};
 pub(super) use sliders::{slider, stepped_slider};
 pub(super) use surfaces::{
-    inset, metal_rack_cabinet, panel, rail_panel, rail_separator, section, well,
+    inset, metal_rack_cabinet, panel, rail_panel, rail_separator, section, status_well, well,
 };
 
 /// Record the focused dial or fader. These controls use only arrows, Home,

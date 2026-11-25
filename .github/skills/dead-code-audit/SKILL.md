@@ -23,7 +23,7 @@ description: >
    names.
    Completion criterion: You know all configured graph tools and protected paths.
 2. List each executable, library, feature, test, build script, CLI command,
-   runtime catalog, runtime asset, and preservation entry.
+   runtime catalog, and runtime asset.
    Completion criterion: Every configured entry point has an owner.
 3. Run the build and test commands in the
    [Checks](../../../docs/DEVELOPMENT.md#checks) section of `docs/DEVELOPMENT.md`
@@ -47,7 +47,7 @@ commands must prove that they exist.
    - runtime catalogs, `build.rs`, assets that `include_bytes!` embeds, and
      runtime paths
    - test, fixture, optional oracle, build, and documentation paths
-   - preservation snapshots, manifests, Git bundles, and approved research
+   - approved research and original product evidence
 
    Completion criterion: Each path in the list has a result for each candidate.
 2. If a dynamic path can cause a false positive, read [EXAMPLES.md](EXAMPLES.md),

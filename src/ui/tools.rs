@@ -5,6 +5,16 @@
 //! importing and recording, and the Time Stretcher's background renders.
 use super::*;
 
+pub(super) fn rect_in(bounds: Rect, x: f32, y: f32, w: f32, h: f32) -> Rect {
+    Rect::from_min_size(bounds.min + Vec2::new(x, y), Vec2::new(w, h))
+}
+
+pub(super) fn tool_panel(ui: &mut egui::Ui, size: Vec2) -> (Rect, egui::Ui) {
+    let (bounds, _) = ui.allocate_exact_size(size, Sense::hover());
+    let panel = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
+    (bounds, panel)
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum StretchPurpose {
     Listen,

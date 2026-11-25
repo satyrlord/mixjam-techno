@@ -43,7 +43,7 @@ Do not ask a question that available evidence can answer.
 
 Examine the product and delivery risks that affect the decision: ownership,
 persistence, audio, accessibility, native layout, original-product parity, and
-verification. Donor plans are not a feature authority.
+verification.
 
 If you need a concrete question sequence, read [EXAMPLES.md](EXAMPLES.md).
 

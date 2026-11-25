@@ -41,9 +41,8 @@ graphite workspace and the graphite and ivory Mixer strips. Studio and Aero
 paint the workspace and strips in their own materials. Native operating-system
 windows and file pickers keep their OS presentation.
 
-RaveFold supplies artistic references only. It does not control product
-behavior. If `local-data/research/PRODUCT.md` and
-`local-data/research/COMPATIBILITY.md` exist, they control it.
+If `local-data/research/PRODUCT.md` and `local-data/research/COMPATIBILITY.md`
+exist, they control product behavior.
 
 **Key Characteristics:**
 

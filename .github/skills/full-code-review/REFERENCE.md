@@ -22,5 +22,5 @@ requirements.
   deterministic files. Keep listening and device results separate.
 - If a UI change affects native focus, accessible names, or compact layouts,
   check them in the built application.
-- Keep original binaries, catalogs, media, snapshots, manifests, and Git
-  bundles intact. Use them as evidence for parity, not as donor feature plans.
+- Keep original product binaries, catalogs, and media intact. Use them as
+  evidence for parity.

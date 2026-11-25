@@ -25,5 +25,4 @@ To install the renderer in a new checkout, run:
 python -m pip install --target local-data/icon-renderer Pillow==12.3.0
 ```
 
-See `assets/donors/ravefold/README.md` for source provenance and notices.
 The PNG is the only input to the ICO helper.
