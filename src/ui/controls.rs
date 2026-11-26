@@ -21,7 +21,7 @@ mod sliders;
 mod surfaces;
 pub(super) use buttons::{
     button, button_at, focus_color, header_button, icon_button_surface, print_color, rail_surface,
-    toggle_at,
+    set_timed_cue, timed_cue_text, toggle_at,
 };
 pub(super) use clip_fields::{
     FadeEdge, FadeHandleSpec, NumberField, curve_field, curve_menu, fade_handle, gain_field,

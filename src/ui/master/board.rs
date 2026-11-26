@@ -88,7 +88,8 @@ pub(crate) fn preset_selector(
         })
     })
     .response;
-    name_control(response, label).hover_hint(
+    form::choice_named(&response, label, current);
+    response.hover_hint(
         "Load a factory board. A preset sets every pedal and the pedal order, and turns \
          the Booster pedals off. Trim stays as you set it for the mix. Undo restores \
          the board before it.",

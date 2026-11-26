@@ -6,6 +6,7 @@ Mixer sends feed. The returns go into the mix before the master pedalboard.
 To set a bus:
 
 1. Choose Echoform Delay, Aetherform Reverb, or Emberform Drive for the bus.
+   An empty bus shows a key for each effect.
 2. Load a preset.
 3. Set the main controls on the card. Select **Edit** to open the other
    controls, the scope, and the return meters.
@@ -13,8 +14,8 @@ To set a bus:
 The bus controls:
 
 - **Sync** sets the delay in note lengths at the song tempo.
-- **Power** off stops new input and lets the tail continue. **Clear tail**
-  fades it out over 12 ms.
+- **Input** off (**Active** in FX deep edit) stops new input and lets the
+  tail continue. **Clear tail** fades it out over 12 ms.
 - **Solo** monitors only the selected returns during playback. Export uses
   the full mix.
 - An export lets the tails continue after the end of the song.
@@ -28,9 +29,9 @@ The bus controls:
 - In Echoform Delay, **Link L/R** makes the left control set both channels in
   Free and Sync modes. **Tap & Decay** previews the stereo repeat pattern.
   Left repeats appear above the center line. Right repeats appear below it.
-  **Character** selects **Digital**, **Analog** with saturation, or **Tape**
-  with wow and flutter. **Smear** spreads the repeats, and **Resonance** shapes
-  the repeat filters.
+  The **Mode** keys select the character: **Digital**, **Analog** with
+  saturation, or **Tape** with wow and flutter. **Smear** spreads the repeats,
+  and **Resonance** shapes the repeat filters.
 - In Aetherform Reverb, **Bass** and **Treble** change how long the
   low and high frequencies ring relative to the main decay time. **Decay &
   Space** shows the pre-delay and the three decay curves. It plots the left

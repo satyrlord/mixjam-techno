@@ -136,7 +136,9 @@ those units. A card shows its main dials, power switch, live gain-reduction
 readout (including 3-band L/M/H bars on Multiband), and Edit. The signal-order
 strip scrolls to a card on click and opens its editor on double-click. The
 floating Mastering deep edit window uses the shared shell and gives each pedal
-access to its full set of controls. Its dial grid uses compact dials, and the
+access to its full set of controls. Both Deep Edit windows take the size of
+their controls: they have no resize handles and no scroll bars, and on a small
+screen they extend past its edge. Its dial grid uses compact dials, and the
 Tape speed dial there has the same compact face as its neighbours. Two curves
 show the current settings: the saturation transfer curve and the 20 Hz to
 20 kHz EQ magnitude curve. Live scopes show the playback: GR history, 3-band
@@ -151,7 +153,7 @@ Vintage as 3D brushed metal. All three themes use the same layout and controls.
 
 ## FX returns board and Deep Edit
 
-Four compact cards, each 200 points high, fit side by side on a Marine board in
+Four compact cards, each 228 points high, fit side by side on a Marine board in
 a 960-point window. At the lower panel's default height the cards fit the
 board's height, with no vertical scroll bar. If other panels reduce the room,
 the row scrolls horizontally. From top to bottom, each card has these rows:
@@ -160,9 +162,9 @@ the row scrolls horizontally. From top to bottom, each card has these rows:
    In, S, and Lim are the quiet bus switches of the Mix view, with the same
    labels, lamps, and struck-off state. Edit opens the bus in the floating FX
    Deep Edit window. Its width follows its label, so the full word shows.
-2. The effect and preset selectors, at about 38% and 62% of the width. The
+2. The effect and preset selectors, at about 34% and 66% of the width. The
    effect shows its short name, such as Delay.
-3. Up to four main dials in equal columns, at most 72 points each. Each value
+3. Up to four main dials in equal columns, at most 76 points each. Each value
    window keeps 4 points from its neighbours. When a value does not fit its
    window, the window writes kilohertz as "k", such as "7.80k", and then drops
    the space before the unit, such as "12.0dB". In Sync mode, the delay's time
@@ -183,9 +185,13 @@ procedural motif and scoped knob caps (see
   and cyan.
 - Aetherform Reverb: a cosmic nebula starfield on indigo and violet.
 - Emberform Drive: a stepped drive rail on crimson and amber.
-- Empty slot: a beveled, recessed empty bay.
+- Empty slot: a beveled, recessed empty bay that holds one key for each
+  effect, each with the lamp colour of its pedal. An empty bus shows no
+  dials or meter, and its Input, Limiter, and Edit are off.
 
-An inactive or empty unit dims its enclosure. FX Deep Edit groups the
+An inactive or empty unit dims its enclosure. A choice of four options or
+fewer is a strip of keys, with the chosen key lit in the pedal's accent; a
+longer list is a menu. FX deep edit groups the
 effect's controls and shows the Emberform Drive transfer curve, the
 Echoform Delay stereo repeat preview, or the Aetherform Reverb Decay & Space
 scope. That scope shows the pre-delay and the bass, middle, and treble decay

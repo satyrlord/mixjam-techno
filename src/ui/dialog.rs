@@ -182,6 +182,10 @@ struct Shell<'a> {
     /// Follow the height of the content until the user resizes the window.
     fit: bool,
     scroll: bool,
+    /// The window takes the size of its content on every frame. It has no
+    /// resize handles and no scroll bars, and it can extend past the
+    /// viewport: only its header must stay in reach.
+    fixed: bool,
     focus_controls: Option<fn(&Response)>,
     /// The window opens beside this rectangle, not at the centre.
     anchor: Option<Rect>,
@@ -193,6 +197,12 @@ struct ShellResponse {
 
 fn constrain(mut g: Geometry, viewport: Rect, collapsed: bool, min: Vec2) -> Geometry {
     g.size = g.size.max(min).min(viewport.size());
+    place(g, viewport, collapsed)
+}
+
+/// Keep the window's top-left corner in `viewport`, and all of the window
+/// when it fits.
+fn place(mut g: Geometry, viewport: Rect, collapsed: bool) -> Geometry {
     let visible = Vec2::new(g.size.x, if collapsed { HEADER } else { g.size.y });
     g.position.x = g.position.x.clamp(
         viewport.left(),
@@ -205,30 +215,111 @@ fn constrain(mut g: Geometry, viewport: Rect, collapsed: bool, min: Vec2) -> Geo
     g
 }
 
+/// One shell window on this frame: its spec, its memory id, and whether it
+/// is collapsed.
+struct Frame<'s, 'a> {
+    ctx: &'s egui::Context,
+    spec: &'s Shell<'a>,
+    id: egui::Id,
+    collapsed: bool,
+}
+
+impl Frame<'_, '_> {
+    fn key(&self, name: &str) -> egui::Id {
+        self.id.with(name)
+    }
+}
+
+/// The layer of a shell window, and what it knew when the frame started.
+struct ShellState {
+    blocking: bool,
+    layer: egui::LayerId,
+    popup_open: bool,
+    guarded: bool,
+}
+
 fn show_shell<R>(
     ctx: &egui::Context,
     spec: Shell<'_>,
     contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> ShellResponse {
-    let id = egui::Id::new(spec.identity);
-    let gid = id.with("hardware-geometry");
-    let collapsed = is_collapsed(ctx, spec.identity);
-    // A window that follows its content can be shorter than MIN_SIZE: its
-    // floor is the height that its content last needed.
-    let fitted_id = id.with("hardware-fitted");
+    let frame = Frame {
+        ctx,
+        spec: &spec,
+        id: egui::Id::new(spec.identity),
+        collapsed: is_collapsed(ctx, spec.identity),
+    };
+    let mut min = shell_min(&frame);
+    let mut geometry = shell_geometry(&frame, min);
+    let state = shell_state(&frame);
+    let mut backdrop_clicked = false;
+    let mut buttons = ShellResponse {
+        help: false,
+        close: false,
+    };
+    egui::Area::new(frame.id)
+        .kind(egui::UiKind::Window)
+        .order(state.layer.order)
+        .fixed_pos(geometry.position)
+        .movable(false)
+        .sense(Sense::CLICK | Sense::DRAG)
+        .fade_in(false)
+        .show(ctx, |ui| {
+            hardware_style(ui, spec.palette);
+            backdrop_clicked = state.blocking && backdrop(ui);
+            let bounds = shell_frame(ui, &frame, geometry.size);
+            let header = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), HEADER));
+            buttons = shell_header(ui, &frame, header, &mut geometry);
+            if !frame.collapsed {
+                shell_body(ui, &frame, bounds, (&mut geometry, &mut min), contents);
+            }
+        });
+    if shell_dismissed(&frame, &state, backdrop_clicked) {
+        buttons.close = true;
+    }
+    if buttons.close {
+        expand(ctx, spec.identity);
+    }
+    store_shell(&frame, geometry, min);
+    buttons
+}
+
+/// The smallest size of the window on this frame. A window that follows its
+/// content can be shorter than MIN_SIZE: its floor is the height that its
+/// content last needed.
+fn shell_min(frame: &Frame) -> Vec2 {
     let mut min = MIN_SIZE;
-    if spec.anchor.is_some() {
+    if frame.spec.anchor.is_some() {
         // Help can use a short scrolling page above a tool in a compact
         // viewport. Keep the header, body margins, and 44 points of text.
         min.y = HEADER + 80.0;
     }
-    if spec.fit
-        && let Some(fitted) = ctx.data(|d| d.get_temp::<f32>(fitted_id))
+    if frame.spec.fit
+        && let Some(fitted) = frame
+            .ctx
+            .data(|d| d.get_temp::<f32>(frame.key("hardware-fitted")))
     {
         min.y = fitted.min(MIN_SIZE.y);
     }
-    let mut geometry = ctx
-        .data(|d| d.get_temp::<Geometry>(gid))
+    min
+}
+
+/// Keep `g` in reach: a fixed window keeps the size of its content, another
+/// window also fits its size to the viewport.
+fn settle(frame: &Frame, g: Geometry, min: Vec2) -> Geometry {
+    if frame.spec.fixed {
+        place(g, frame.spec.viewport, frame.collapsed)
+    } else {
+        constrain(g, frame.spec.viewport, frame.collapsed, min)
+    }
+}
+
+/// The stored geometry of the window, or where a new window opens.
+fn shell_geometry(frame: &Frame, min: Vec2) -> Geometry {
+    let spec = frame.spec;
+    let mut geometry = frame
+        .ctx
+        .data(|d| d.get_temp::<Geometry>(frame.key("hardware-geometry")))
         .unwrap_or_else(|| {
             let size = spec.size.max(min).min(spec.viewport.size());
             match spec.anchor {
@@ -239,269 +330,378 @@ fn show_shell<R>(
                 },
             }
         });
-    geometry = constrain(geometry, spec.viewport, collapsed, min);
-    let blocking = spec.blocking && !collapsed;
-    let order = if spec.blocking {
+    if spec.fixed {
+        geometry.size = frame
+            .ctx
+            .data(|d| d.get_temp::<Vec2>(frame.key("hardware-measured")))
+            .unwrap_or(spec.size);
+    }
+    settle(frame, geometry, min)
+}
+
+/// The window's layer, raised above the others while it blocks them.
+fn shell_state(frame: &Frame) -> ShellState {
+    let ctx = frame.ctx;
+    let blocking = frame.spec.blocking && !frame.collapsed;
+    let order = if frame.spec.blocking {
         egui::Order::Foreground
     } else {
         egui::Order::Middle
     };
-    let layer = egui::LayerId::new(order, id);
-    let mut backdrop_clicked = false;
+    let layer = egui::LayerId::new(order, frame.id);
     if blocking {
         ctx.memory_mut(|m| m.set_modal_layer(layer));
         ctx.move_to_top(layer);
     }
-    let mut close = false;
-    let mut help = false;
-    let popup_open = egui::Popup::is_any_open(ctx);
-    let guarded = ctx
-        .data(|d| d.get_temp::<bool>(id.with("hardware-escape-guard")))
-        .unwrap_or(false);
-    egui::Area::new(id)
-        .kind(egui::UiKind::Window)
-        .order(order)
-        .fixed_pos(geometry.position)
-        .movable(false)
-        .sense(Sense::CLICK | Sense::DRAG)
-        .fade_in(false)
-        .show(ctx, |ui| {
-            hardware_style(ui, spec.palette);
-            if blocking {
-                let rect = ctx.content_rect();
-                let mut backdrop = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("backdrop")
-                        .sense(Sense::CLICK | Sense::DRAG)
-                        .max_rect(rect),
-                );
-                backdrop.set_min_size(rect.size());
-                backdrop
-                    .painter()
-                    .rect_filled(rect, 0.0, Color32::from_black_alpha(85));
-                backdrop_clicked = backdrop.response().clicked();
-            }
-            let display_title = title_text(spec.title);
-            name_dialog(
-                ui,
-                if spec.blocking {
-                    spec.identity
-                } else {
-                    &display_title
-                },
-            );
-            let visible = Vec2::new(
-                geometry.size.x,
-                if collapsed { HEADER } else { geometry.size.y },
-            );
-            let (bounds, _) = ui.allocate_exact_size(visible, Sense::CLICK | Sense::DRAG);
-            ctx.accesskit_node_builder(ui.unique_id(), |node| {
-                node.set_bounds(egui::accesskit::Rect {
-                    x0: bounds.left().into(),
-                    y0: bounds.top().into(),
-                    x1: bounds.right().into(),
-                    y1: bounds.bottom().into(),
-                })
-            });
-            ui.set_clip_rect(spec.viewport);
-            ui.painter().add(
-                egui::epaint::Shadow {
-                    offset: [0, 5],
-                    blur: 12,
-                    spread: 0,
-                    color: Color32::from_black_alpha(85),
-                }
-                .as_shape(bounds, egui::CornerRadius::same(roles().corner(9.0) as u8)),
-            );
-            controls::panel(ui, bounds);
-            let header = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), HEADER));
-            let drag_rect = Rect::from_min_max(
-                header.min + Vec2::new(44.0, 2.0),
-                header.max - Vec2::new(84.0, 3.0),
-            );
-            let drag = ui.interact(drag_rect, id.with("title-drag"), Sense::DRAG);
-            if drag.dragged() && !drag.drag_started() {
-                geometry.position += ctx.input(|i| i.pointer.delta());
-            }
-            let left = Rect::from_center_size(
-                Pos2::new(header.left() + 24.0, header.center().y),
-                Vec2::splat(28.0),
-            );
-            let label = format!(
-                "{} {}",
-                if collapsed { "Expand" } else { "Collapse" },
-                spec.identity
-            );
-            let collapse = controls::header_button(
-                ui,
-                left,
-                "collapse",
-                &label,
-                if collapsed {
-                    controls::HeaderIcon::Expand
-                } else {
-                    controls::HeaderIcon::Collapse
-                },
-            );
-            if let Some(focus) = spec.focus_controls {
-                focus(&collapse);
-            }
-            if collapse.clicked() {
-                set_collapsed(ctx, spec.identity, !collapsed);
-            }
-            let title_rect = Rect::from_min_max(
-                header.min + Vec2::new(48.0, 0.0),
-                header.max - Vec2::new(88.0, 0.0),
-            );
-            let mut title = egui::text::LayoutJob::simple_singleline(
-                display_title,
-                FontId::new(18.0, theme::heading_family()),
-                roles().legend,
-            );
-            title.sections[0].format.line_height = Some(18.0 * theme::HEADING_LINE);
-            let galley = ui.painter().layout_job(title);
-            ui.painter().with_clip_rect(title_rect).galley(
-                Pos2::new(
-                    (header.center().x - galley.size().x / 2.0).max(title_rect.left()),
-                    header.center().y - galley.size().y / 2.0,
-                ),
-                galley,
-                roles().legend,
-            );
-            if spec.help {
-                let rect = Rect::from_center_size(
-                    Pos2::new(header.right() - 61.0, header.center().y),
-                    Vec2::splat(28.0),
-                );
-                help = controls::header_button(
-                    ui,
-                    rect,
-                    "help",
-                    &format!("{} help", spec.identity),
-                    controls::HeaderIcon::Help,
-                )
-                .clicked();
-            }
-            if spec.close {
-                let rect = Rect::from_center_size(
-                    Pos2::new(header.right() - 24.0, header.center().y),
-                    Vec2::splat(28.0),
-                );
-                let close_button = controls::header_button(
-                    ui,
-                    rect,
-                    "close",
-                    &format!("Close {}", spec.identity),
-                    controls::HeaderIcon::Close,
-                );
-                if let Some(focus) = spec.focus_controls {
-                    focus(&close_button);
-                }
-                close = close_button.clicked();
-            }
-            if !collapsed {
-                ui.painter().line_segment(
-                    [
-                        Pos2::new(bounds.left() + 10.0, header.bottom()),
-                        Pos2::new(bounds.right() - 10.0, header.bottom()),
-                    ],
-                    Stroke::new(1.0_f32, Color32::from_black_alpha(150)),
-                );
-                let body = Rect::from_min_max(
-                    bounds.min + Vec2::new(12.0, HEADER + 12.0),
-                    bounds.max - Vec2::splat(12.0),
-                );
-                if spec.inset_body {
-                    controls::inset(ui, body.expand(4.0));
-                }
-                // Text in a bay keeps clear of its edge.
-                let body = body.shrink(if spec.inset_body { 6.0 } else { 0.0 });
-                let mut content = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("hardware-content")
-                        .max_rect(body),
-                );
-                content.set_clip_rect(body.intersect(spec.viewport));
-                // Solid bars show whenever the body overflows; floating bars
-                // stay hidden until hovered. The handle takes the cream text
-                // colour, because its default fill is the bay's own face. The
-                // content keeps its own style.
-                let inherited = content.spacing().scroll;
-                content.spacing_mut().scroll = egui::style::ScrollStyle {
-                    foreground_color: true,
-                    ..egui::style::ScrollStyle::solid()
-                };
-                let scrolled = egui::ScrollArea::new([spec.scroll; 2])
-                    .id_salt("hardware-scroll")
-                    .auto_shrink([false, false])
-                    .min_scrolled_height(0.0)
-                    .show(&mut content, |ui| {
-                        ui.spacing_mut().scroll = inherited;
-                        contents(ui)
-                    });
-                view::name_scroll_area(&content, "hardware-scroll", spec.title);
-                let resized_id = id.with("hardware-resized");
-                if spec.fit && !ctx.data(|d| d.get_temp::<bool>(resized_id).unwrap_or(false)) {
-                    // A short dialog has no empty bay below its last control.
-                    let chrome = bounds.height() - body.height();
-                    let horizontal_bar = if scrolled.content_size.x > scrolled.inner_rect.width() {
-                        content.spacing().scroll.allocated_width()
-                    } else {
-                        0.0
-                    };
-                    let fitted = (scrolled.content_size.y + chrome + horizontal_bar)
-                        .min(spec.viewport.height());
-                    geometry.size.y = fitted;
-                    min.y = fitted.min(MIN_SIZE.y);
-                    ctx.data_mut(|d| d.insert_temp(fitted_id, fitted));
-                }
-                let before = geometry.size;
-                resize_handles(ui, bounds, &mut geometry, min);
-                if geometry.size != before {
-                    ctx.data_mut(|d| d.insert_temp(resized_id, true));
-                }
-            }
+    ShellState {
+        blocking,
+        layer,
+        popup_open: egui::Popup::is_any_open(ctx),
+        guarded: ctx
+            .data(|d| d.get_temp::<bool>(frame.key("hardware-escape-guard")))
+            .unwrap_or(false),
+    }
+}
+
+/// Dim everything behind a blocking window. Returns whether the user clicked
+/// the dimmed area.
+fn backdrop(ui: &mut egui::Ui) -> bool {
+    let rect = ui.ctx().content_rect();
+    let mut backdrop = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("backdrop")
+            .sense(Sense::CLICK | Sense::DRAG)
+            .max_rect(rect),
+    );
+    backdrop.set_min_size(rect.size());
+    backdrop
+        .painter()
+        .rect_filled(rect, 0.0, Color32::from_black_alpha(85));
+    backdrop.response().clicked()
+}
+
+/// Name the window, take its space, and paint its shadow and panel. Returns
+/// the window's bounds.
+fn shell_frame(ui: &mut egui::Ui, frame: &Frame, size: Vec2) -> Rect {
+    let spec = frame.spec;
+    let display_title = title_text(spec.title);
+    name_dialog(
+        ui,
+        if spec.blocking {
+            spec.identity
+        } else {
+            &display_title
+        },
+    );
+    let visible = Vec2::new(size.x, if frame.collapsed { HEADER } else { size.y });
+    let (bounds, _) = ui.allocate_exact_size(visible, Sense::CLICK | Sense::DRAG);
+    frame.ctx.accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_bounds(egui::accesskit::Rect {
+            x0: bounds.left().into(),
+            y0: bounds.top().into(),
+            x1: bounds.right().into(),
+            y1: bounds.bottom().into(),
+        })
+    });
+    ui.set_clip_rect(spec.viewport);
+    ui.painter().add(
+        egui::epaint::Shadow {
+            offset: [0, 5],
+            blur: 12,
+            spread: 0,
+            color: Color32::from_black_alpha(85),
+        }
+        .as_shape(bounds, egui::CornerRadius::same(roles().corner(9.0) as u8)),
+    );
+    controls::panel(ui, bounds);
+    bounds
+}
+
+/// A header key's square, `from_right` points from the header's right edge
+/// to its centre.
+fn header_key(header: Rect, from_right: f32) -> Rect {
+    Rect::from_center_size(
+        Pos2::new(header.right() - from_right, header.center().y),
+        Vec2::splat(28.0),
+    )
+}
+
+/// The title bar: drag, collapse, the title, and the help and close keys.
+fn shell_header(
+    ui: &mut egui::Ui,
+    frame: &Frame,
+    header: Rect,
+    geometry: &mut Geometry,
+) -> ShellResponse {
+    drag_title(ui, frame, header, geometry);
+    collapse_key(ui, frame, header);
+    paint_title(ui, frame.spec.title, header);
+    ShellResponse {
+        help: frame.spec.help && help_key(ui, frame.spec.identity, header),
+        close: frame.spec.close && close_key(ui, frame, header),
+    }
+}
+
+fn drag_title(ui: &mut egui::Ui, frame: &Frame, header: Rect, geometry: &mut Geometry) {
+    let drag_rect = Rect::from_min_max(
+        header.min + Vec2::new(44.0, 2.0),
+        header.max - Vec2::new(84.0, 3.0),
+    );
+    let drag = ui.interact(drag_rect, frame.key("title-drag"), Sense::DRAG);
+    if drag.dragged() && !drag.drag_started() {
+        geometry.position += frame.ctx.input(|i| i.pointer.delta());
+    }
+}
+
+fn collapse_key(ui: &mut egui::Ui, frame: &Frame, header: Rect) {
+    let left = Rect::from_center_size(
+        Pos2::new(header.left() + 24.0, header.center().y),
+        Vec2::splat(28.0),
+    );
+    let (verb, icon) = if frame.collapsed {
+        ("Expand", controls::HeaderIcon::Expand)
+    } else {
+        ("Collapse", controls::HeaderIcon::Collapse)
+    };
+    let label = format!("{verb} {}", frame.spec.identity);
+    let collapse = controls::header_button(ui, left, "collapse", &label, icon);
+    if let Some(focus) = frame.spec.focus_controls {
+        focus(&collapse);
+    }
+    if collapse.clicked() {
+        set_collapsed(frame.ctx, frame.spec.identity, !frame.collapsed);
+    }
+}
+
+fn paint_title(ui: &mut egui::Ui, title: &str, header: Rect) {
+    let title_rect = Rect::from_min_max(
+        header.min + Vec2::new(48.0, 0.0),
+        header.max - Vec2::new(88.0, 0.0),
+    );
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        title_text(title),
+        FontId::new(18.0, theme::heading_family()),
+        roles().legend,
+    );
+    job.sections[0].format.line_height = Some(18.0 * theme::HEADING_LINE);
+    let galley = ui.painter().layout_job(job);
+    ui.painter().with_clip_rect(title_rect).galley(
+        Pos2::new(
+            (header.center().x - galley.size().x / 2.0).max(title_rect.left()),
+            header.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        roles().legend,
+    );
+}
+
+fn help_key(ui: &mut egui::Ui, identity: &str, header: Rect) -> bool {
+    controls::header_button(
+        ui,
+        header_key(header, 61.0),
+        "help",
+        &format!("{identity} help"),
+        controls::HeaderIcon::Help,
+    )
+    .clicked()
+}
+
+fn close_key(ui: &mut egui::Ui, frame: &Frame, header: Rect) -> bool {
+    let close_button = controls::header_button(
+        ui,
+        header_key(header, 24.0),
+        "close",
+        &format!("Close {}", frame.spec.identity),
+        controls::HeaderIcon::Close,
+    );
+    if let Some(focus) = frame.spec.focus_controls {
+        focus(&close_button);
+    }
+    close_button.clicked()
+}
+
+/// The body under the header: the content, then the fitted height and the
+/// resize handles. `sizes` holds the window's geometry and its smallest size.
+fn shell_body<R>(
+    ui: &mut egui::Ui,
+    frame: &Frame,
+    bounds: Rect,
+    sizes: (&mut Geometry, &mut Vec2),
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) {
+    let (geometry, min) = sizes;
+    let spec = frame.spec;
+    let header_bottom = bounds.top() + HEADER;
+    ui.painter().line_segment(
+        [
+            Pos2::new(bounds.left() + 10.0, header_bottom),
+            Pos2::new(bounds.right() - 10.0, header_bottom),
+        ],
+        Stroke::new(1.0_f32, Color32::from_black_alpha(150)),
+    );
+    let body = Rect::from_min_max(
+        bounds.min + Vec2::new(12.0, HEADER + 12.0),
+        bounds.max - Vec2::splat(12.0),
+    );
+    if spec.inset_body {
+        controls::inset(ui, body.expand(4.0));
+    }
+    // Text in a bay keeps clear of its edge.
+    let body = body.shrink(if spec.inset_body { 6.0 } else { 0.0 });
+    let mut content = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("hardware-content")
+            .max_rect(body),
+    );
+    content.set_clip_rect(body.intersect(spec.viewport));
+    let chrome = bounds.size() - body.size();
+    if spec.fixed {
+        fixed_body(frame, &mut content, chrome, geometry, contents);
+        return;
+    }
+    let scrolled = scrolled_body(&mut content, spec, contents);
+    let resized_id = frame.key("hardware-resized");
+    let resized = frame
+        .ctx
+        .data(|d| d.get_temp::<bool>(resized_id).unwrap_or(false));
+    if spec.fit && !resized {
+        fit_height(frame, &content, &scrolled, chrome.y, (geometry, min));
+    }
+    let before = geometry.size;
+    resize_handles(ui, bounds, geometry, *min);
+    if geometry.size != before {
+        frame.ctx.data_mut(|d| d.insert_temp(resized_id, true));
+    }
+}
+
+/// Draw the content of a fixed window, which takes the size of what its
+/// content drew.
+fn fixed_body<R>(
+    frame: &Frame,
+    content: &mut egui::Ui,
+    chrome: Vec2,
+    geometry: &mut Geometry,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) {
+    contents(content);
+    let measured = (content.min_rect().size() + chrome).round();
+    if measured != geometry.size {
+        geometry.size = measured;
+        *geometry = place(*geometry, frame.spec.viewport, frame.collapsed);
+        frame
+            .ctx
+            .data_mut(|d| d.insert_temp(frame.key("hardware-measured"), measured));
+        frame.ctx.request_repaint();
+    }
+}
+
+/// Draw the content in a scroll area. Solid bars show whenever the body
+/// overflows; floating bars stay hidden until hovered. The handle takes the
+/// cream text colour, because its default fill is the bay's own face. The
+/// content keeps its own style.
+fn scrolled_body<R>(
+    content: &mut egui::Ui,
+    spec: &Shell,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::scroll_area::ScrollAreaOutput<R> {
+    let inherited = content.spacing().scroll;
+    content.spacing_mut().scroll = egui::style::ScrollStyle {
+        foreground_color: true,
+        ..egui::style::ScrollStyle::solid()
+    };
+    let scrolled = egui::ScrollArea::new([spec.scroll; 2])
+        .id_salt("hardware-scroll")
+        .auto_shrink([false, false])
+        .min_scrolled_height(0.0)
+        .show(content, |ui| {
+            ui.spacing_mut().scroll = inherited;
+            contents(ui)
         });
-    let top = ctx.memory(|m| {
+    view::name_scroll_area(content, "hardware-scroll", spec.title);
+    scrolled
+}
+
+/// A short dialog has no empty bay below its last control.
+fn fit_height<R>(
+    frame: &Frame,
+    content: &egui::Ui,
+    scrolled: &egui::scroll_area::ScrollAreaOutput<R>,
+    chrome: f32,
+    sizes: (&mut Geometry, &mut Vec2),
+) {
+    let (geometry, min) = sizes;
+    let horizontal_bar = if scrolled.content_size.x > scrolled.inner_rect.width() {
+        content.spacing().scroll.allocated_width()
+    } else {
+        0.0
+    };
+    let fitted =
+        (scrolled.content_size.y + chrome + horizontal_bar).min(frame.spec.viewport.height());
+    geometry.size.y = fitted;
+    min.y = fitted.min(MIN_SIZE.y);
+    frame
+        .ctx
+        .data_mut(|d| d.insert_temp(frame.key("hardware-fitted"), fitted));
+}
+
+/// Whether the window is the top one of its kind.
+fn shell_on_top(ctx: &egui::Context, layer: egui::LayerId, blocking: bool) -> bool {
+    ctx.memory(|m| {
         if blocking {
             m.top_modal_layer() == Some(layer)
         } else {
             m.top_modal_layer().is_none()
                 && m.layer_ids()
-                    .filter(|other| other.order == order && m.areas().is_visible(other))
+                    .filter(|other| other.order == layer.order && m.areas().is_visible(other))
                     .last()
                     == Some(layer)
         }
-    });
+    })
+}
+
+/// A popup that closed on this frame gives up the focus it held.
+fn release_popup_focus(ctx: &egui::Context, popup_open: bool) {
     if popup_open
         && !egui::Popup::is_any_open(ctx)
         && let Some(focused) = ctx.memory(|m| m.focused())
     {
         ctx.memory_mut(|m| m.surrender_focus(focused));
     }
-    if spec.close
-        && !collapsed
+}
+
+/// Whether Escape closes the window: it must be the top window, and no popup
+/// or text field may hold the key.
+fn escape_pressed(frame: &Frame, state: &ShellState, top: bool) -> bool {
+    let spec = frame.spec;
+    spec.close
+        && !frame.collapsed
         && top
-        && !popup_open
-        && (spec.blocking || !guarded)
-        && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-    {
-        close = true;
-    }
-    if blocking && backdrop_clicked && !popup_open {
-        close = true;
-    }
-    if close {
-        expand(ctx, spec.identity);
-    }
+        && !state.popup_open
+        && (spec.blocking || !state.guarded)
+        && frame
+            .ctx
+            .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+}
+
+/// Whether Escape or a click on the backdrop closes the window.
+fn shell_dismissed(frame: &Frame, state: &ShellState, backdrop_clicked: bool) -> bool {
+    let top = shell_on_top(frame.ctx, state.layer, state.blocking);
+    release_popup_focus(frame.ctx, state.popup_open);
+    let escaped = escape_pressed(frame, state, top);
+    escaped || (state.blocking && backdrop_clicked && !state.popup_open)
+}
+
+/// Keep the window's geometry, and whether a text field held the keyboard.
+fn store_shell(frame: &Frame, geometry: Geometry, min: Vec2) {
+    let ctx = frame.ctx;
     let wants_keyboard = ctx
         .memory(|m| m.focused())
         .is_some_and(|id| egui::TextEdit::load_state(ctx, id).is_some());
+    let stored = settle(frame, geometry, min);
     ctx.data_mut(|d| {
-        d.insert_temp(gid, constrain(geometry, spec.viewport, collapsed, min));
-        d.insert_temp(id.with("hardware-escape-guard"), wants_keyboard);
+        d.insert_temp(frame.key("hardware-geometry"), stored);
+        d.insert_temp(frame.key("hardware-escape-guard"), wants_keyboard);
     });
-    ShellResponse { help, close }
 }
 
 fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry, min: Vec2) {
@@ -574,11 +774,13 @@ fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry, min: Vec2) {
 pub(super) struct Window<'a> {
     title: &'a str,
     open: Option<&'a mut bool>,
+    help: Option<&'a mut bool>,
     size: Vec2,
     max_height: f32,
     viewport: Option<Rect>,
     scroll: bool,
     fit: bool,
+    fixed: bool,
     focus_controls: Option<fn(&Response)>,
     palette: controls::Palette,
     anchor: Option<Rect>,
@@ -587,17 +789,24 @@ pub(super) fn window(title: &str) -> Window<'_> {
     Window {
         title,
         open: None,
+        help: None,
         size: Vec2::new(460.0, 280.0),
         max_height: f32::INFINITY,
         viewport: None,
         scroll: true,
         fit: false,
+        fixed: false,
         focus_controls: None,
         palette: controls::Palette::Utility,
         anchor: None,
     }
 }
 impl<'a> Window<'a> {
+    /// Show `?` in the header and set `requested` when the user clicks it.
+    pub(super) fn help(mut self, requested: &'a mut bool) -> Self {
+        self.help = Some(requested);
+        self
+    }
     /// The chassis palette: a tool's own, for its Help.
     pub(super) fn palette(mut self, palette: controls::Palette) -> Self {
         self.palette = palette;
@@ -620,6 +829,12 @@ impl<'a> Window<'a> {
     /// Follow the height of the content until the user resizes the window.
     pub(super) fn fit(mut self, enabled: bool) -> Self {
         self.fit = enabled;
+        self
+    }
+    /// Take the size of the content on every frame, with no resize handles
+    /// and no scroll bars. The window can extend past the screen.
+    pub(super) fn fixed(mut self) -> Self {
+        self.fixed = true;
         self
     }
     pub(super) fn open(mut self, open: &'a mut bool) -> Self {
@@ -655,18 +870,24 @@ impl<'a> Window<'a> {
                 viewport: self
                     .viewport
                     .unwrap_or_else(|| ctx.content_rect().shrink(8.0)),
-                help: false,
+                help: self.help.is_some(),
                 close: self.open.is_some(),
                 blocking: false,
                 palette: self.palette,
                 inset_body: true,
                 fit: self.fit || self.title == "Recorded take",
                 scroll: self.scroll,
+                fixed: self.fixed,
                 focus_controls: self.focus_controls,
                 anchor: self.anchor,
             },
             contents,
         );
+        if result.help
+            && let Some(requested) = self.help
+        {
+            *requested = true;
+        }
         if result.close
             && let Some(open) = self.open
         {
@@ -703,6 +924,7 @@ pub(super) fn tool<R>(
             inset_body: false,
             fit: false,
             scroll: true,
+            fixed: false,
             focus_controls: None,
             anchor: None,
         },
@@ -747,6 +969,7 @@ pub(super) fn modal<R>(
             inset_body: true,
             fit: true,
             scroll: true,
+            fixed: false,
             focus_controls: None,
             anchor: None,
         },

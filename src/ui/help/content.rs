@@ -230,7 +230,7 @@ pub(super) const MIX_VIEW: &[Block] = &[
     Facts(&[
         "Under the last row, Master holds Bypass, the master level, and Export tracks….",
         "The returns row holds the four FX buses: the effect, the return level, Input, Limiter, and Edit, which shows the bus on the FX returns board.",
-        "A bus with the Empty effect returns silence, so its controls are dimmed.",
+        "A bus with the Empty effect returns silence, so its controls are dimmed. On the FX returns board, an empty bus shows a key for each effect.",
     ]),
 ];
 
@@ -362,6 +362,13 @@ pub(super) const MASTERING: &[Block] = &[
     Heading("Knobs"),
     KNOBS,
     Facts(&["Changes apply while the song plays, and Undo restores them."]),
+    Heading("Mastering deep edit"),
+    Facts(&[
+        "Mastering deep edit shows one pedal's full controls, its live scope, and Master telemetry. Reset in the header restores the selected pedal to defaults.",
+        "EQs and saturations plot frequency or transfer curves; Bus compressor and Limiter plot gain reduction history; Multiband plots 3-band gain reduction; Stereo imaging plots an M/S vectorscope and correlation meter with Mono below.",
+        "Bus compressor adds SC HPF (sidechain high-pass) and Mix (parallel blend). Limiter adds Transparent, Punchy, and Modern styles.",
+        "To change Master playback oversampling (4x or Off for Soft clip, Tube, Maximizer, and Tape), press Ctrl+, for Options and open Audio.",
+    ]),
 ];
 
 pub(super) const FX_RETURNS: &[Block] = &[
@@ -371,11 +378,11 @@ pub(super) const FX_RETURNS: &[Block] = &[
     Steps(&[
         "Choose Echoform Delay, Aetherform Reverb, or Emberform Drive for the bus.",
         "Load a preset.",
-        "Set the main controls on the card. Select Edit to open all controls and meters in FX Deep Edit. Use FX 1 through FX 4 to change buses.",
+        "Set the main controls on the card. Select Edit to open all controls and meters in FX deep edit. Use FX 1 through FX 4 to change buses.",
     ]),
     Facts(&[
         "Sync sets the delay in note lengths at the song tempo. Link L/R lets the left control set both sides in Free and Sync modes.",
-        "Power off stops new input and lets the tail ring on. Clear tail fades that bus over 12 ms. Clear all FX tails fades all the buses.",
+        "Turning Input off (Active in FX deep edit) stops new input and lets the tail ring on. Clear tail fades that bus over 12 ms. Clear all FX tails fades all the buses.",
         "Each effect's ducker lowers its repeats or tail while its input plays. Set Key to a track number, such as the kick's, to follow that track instead. A preset keeps the Key.",
         "Solo monitors only the selected returns during playback. Export uses the full mix.",
         "The limiter keeps each return below -1 dBFS during playback and below -1 dBTP in exports.",
@@ -386,6 +393,20 @@ pub(super) const FX_RETURNS: &[Block] = &[
         "Emberform Drive adds saturation beside the clean dry sound. Export compensates for the processing delay.",
         "Type sets the curve. Drive pushes the input into it. Level match compensates for the change in level. Asym adds even harmonics.",
         "Low cut and High cut set the band that it distorts, so a bass can keep a clean sub.",
+    ]),
+    Heading("Echoform Delay"),
+    Facts(&[
+        "Time L and Time R set delay times in ms or synced note lengths. Digital, Analog, and Tape shape feedback tone, while Ping-pong alternates echoes across stereo channels.",
+        "Feedback, Low cut, High cut, Res, Smear, Drive, Rate, Depth, Width, Output, and Return tune the repeats alongside the Tap & Decay scope.",
+    ]),
+    Heading("Aetherform Reverb"),
+    Facts(&[
+        "Space (Room, Hall, Plate, Chamber) picks the room topology, and Tone (Natural, Vintage, Bloom) voices the tail. Early toggles initial reflections and Shimmer adds pitch-shifted feedback (+7, +12, +19, or +24).",
+        "Pre-delay, Decay, Bass, Treble, Size, Late, Diffusion, and Density shape the Decay & Space curves alongside Tone, Modulation, Output, and Return.",
+    ]),
+    Heading("FX deep edit controls"),
+    Facts(&[
+        "FX deep edit uses one Active switch for each bus along with Solo, Limiter, Clear tail, and Reset. On compact windows, Post-Limiter Ducker folds to its summary bar until you click it.",
     ]),
 ];
 

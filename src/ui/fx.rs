@@ -11,7 +11,7 @@ mod faces;
 mod unit;
 use unit::{CardAction, unit};
 
-pub(super) const DEEP_EDIT_TITLE: &str = "FX Deep Edit";
+pub(super) const DEEP_EDIT_TITLE: &str = "FX deep edit";
 
 /// One display reading for both FX views. Reduced mode holds the reading and
 /// keeps peaks and gain reduction observed between updates.
@@ -291,6 +291,70 @@ mod tests {
                             "{theme_kind:?} FX zone {idx} (on={on}) gives {ratio:.2}:1"
                         );
                     }
+                }
+            }
+        }
+        theme::paint_as(theme::Theme::Studio);
+    }
+
+    #[test]
+    fn deep_edit_ink_and_scopes_stay_legible_on_every_unit() {
+        let modules = [
+            Module::Empty,
+            Module::EchoformDelay(Default::default()),
+            Module::AetherformReverb(Default::default()),
+            Module::EmberformDrive(Default::default()),
+        ];
+        for theme_kind in theme::Theme::ALL {
+            theme::paint_as(theme_kind);
+            let r = roles();
+            let (scope_bg, tint_target, tint_mix) = match r.material {
+                theme::Material::Metal => (
+                    Color32::from_rgb(12, 18, 15),
+                    Color32::from_rgb(236, 248, 232),
+                    0.14_f32,
+                ),
+                theme::Material::Plastic => (
+                    Color32::from_rgb(8, 22, 48),
+                    Color32::from_rgb(230, 248, 255),
+                    0.16,
+                ),
+                theme::Material::Flat => (r.strip_slot, Color32::WHITE, 0.0),
+            };
+            for module in &modules {
+                let (motif, _) = fx_motif(module);
+                let ink = motif.face_ink();
+                for active in [true, false] {
+                    let ([zone_a, zone_b], _) = motif.deep_zones(active);
+                    for (idx, zone) in [zone_a, zone_b]
+                        .into_iter()
+                        .chain(motif.deep_extra_band_zones(active))
+                        .enumerate()
+                    {
+                        let ratio = worst_zone_contrast(zone, ink, motif.light_face, active);
+                        assert!(
+                            ratio >= 5.0,
+                            "{theme_kind:?} Deep Edit FX zone {idx} (active={active}) gives {ratio:.2}:1"
+                        );
+                    }
+                }
+                if !module.is_empty() {
+                    let accent = motif.scope_accent();
+                    let trace = if tint_mix > 0.0 {
+                        accent.lerp_to_gamma(tint_target, tint_mix)
+                    } else {
+                        accent
+                    };
+                    let bg = match r.material {
+                        theme::Material::Metal => scope_bg.lerp_to_gamma(accent, 0.05),
+                        theme::Material::Plastic => scope_bg.lerp_to_gamma(accent, 0.07),
+                        theme::Material::Flat => scope_bg,
+                    };
+                    let ratio = controls::contrast(bg, trace);
+                    assert!(
+                        ratio >= 5.0,
+                        "{theme_kind:?} Deep Edit FX scope trace gives {ratio:.2}:1"
+                    );
                 }
             }
         }

@@ -618,8 +618,8 @@ mod tests {
         state.steps[0] = Step::note(0);
         state.steps[1] = Step::tie();
         state.steps[2] = Step::note(12);
-        for step in 3..8 {
-            state.steps[step] = Step::tie();
+        for step in &mut state.steps[3..8] {
+            *step = Step::tie();
         }
         let output = render(&source, &state).unwrap();
         // The tie keeps reading: frame 200 is 0.2, not a restart.

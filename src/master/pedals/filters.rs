@@ -25,7 +25,8 @@ fn lift_eq_coefficients(low: f64, air: f64) -> [Coefficients; 2] {
     ]
 }
 
-/// Sample the steady-state magnitude response (in dB) of `TrimEq` or `LiftEq`
+/// Sample the steady-state magnitude response (in dB) of `BoosterEq`, `TrimEq`,
+/// or `LiftEq`
 /// across logarithmically spaced frequencies from 20 Hz to 20 kHz.
 pub fn sample_master_eq_curve(
     chain: &settings::MasterChain,
@@ -34,6 +35,15 @@ pub fn sample_master_eq_curve(
 ) {
     let n = out_db.len();
     if n == 0 {
+        return;
+    }
+    let denom = (n - 1).max(1) as f64;
+    let hz_at = |i: usize| 20.0 * 1000.0_f64.powf(i as f64 / denom);
+    if kind == settings::PedalKind::BoosterEq {
+        for (i, slot) in out_db.iter_mut().enumerate() {
+            let db = crate::master::booster::eq_response_db(&chain.booster_eq.bands, hz_at(i));
+            *slot = db as f32;
+        }
         return;
     }
     let trim;
@@ -56,9 +66,8 @@ pub fn sample_master_eq_curve(
             return;
         }
     };
-    let denom = (n - 1).max(1) as f64;
     for (i, slot) in out_db.iter_mut().enumerate() {
-        let hz = 20.0 * 1000.0_f64.powf(i as f64 / denom);
+        let hz = hz_at(i);
         let mag = sections
             .iter()
             .fold(1.0_f64, |acc, section| acc * section.magnitude(hz));

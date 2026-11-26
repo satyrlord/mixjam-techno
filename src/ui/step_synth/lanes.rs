@@ -319,7 +319,14 @@ fn paint_lane(
     editor: &Editor,
 ) {
     let length = usize::from(state.length);
-    for step in columns.first..columns.end() {
+    let shown = state
+        .steps
+        .iter()
+        .copied()
+        .enumerate()
+        .take(columns.end())
+        .skip(columns.first);
+    for (step, note) in shown {
         let cell = columns
             .span(step, step + 1, row.top(), row.bottom())
             .shrink2(Vec2::new(2.0, 2.0));
@@ -330,7 +337,6 @@ fn paint_lane(
                 controls::Palette::Olive.accent().gamma_multiply(0.3),
             );
         }
-        let note = state.steps[step];
         let is_note = pattern::is_note(&note);
         let alpha = if step >= length { 0.45 } else { 1.0 };
         if lane.is_flag() {

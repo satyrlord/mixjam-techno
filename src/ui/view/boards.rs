@@ -718,7 +718,8 @@ impl MixJamApp {
         if let Some(chain) =
             master::preset_selector(ui, &self.session.project().master, "Mastering preset")
         {
-            let result = self.session.edit(EditCommand::SetMaster(chain));
+            // A preset is a whole choice, so it never joins a knob turn.
+            let result = self.session.edit_discrete(EditCommand::SetMaster(chain));
             self.apply(result);
         }
         let mut chain = self.session.project().master;
@@ -853,20 +854,26 @@ impl MixJamApp {
         };
         let mut open = true;
         let chain = self.session.project().master;
-        let live_os_4x = self.session.options().master_playback_oversampling
-            == mixjam_techno::application::options::Oversampling::FourX;
         let metering = self.master_metering(ctx);
-        if let Some(updated) = master::show_deep_edit(
+        let outcome = master::show_deep_edit(
             ctx,
             &mut open,
             &mut active,
             &chain,
             &metering,
-            live_os_4x,
             self.boards.master_view_generation,
-        ) {
-            let result = self.session.edit(EditCommand::SetMaster(updated));
+        );
+        if let Some(updated) = outcome.chain {
+            let cmd = EditCommand::SetMaster(updated);
+            let result = if outcome.discrete {
+                self.session.edit_discrete(cmd)
+            } else {
+                self.session.edit(cmd)
+            };
             self.apply(result);
+        }
+        if outcome.help {
+            self.help.open_tool(help::Topic::Mastering);
         }
         self.master_deep_edit = open.then_some(active);
     }

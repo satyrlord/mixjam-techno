@@ -7,7 +7,7 @@ fn band_range_db(band: usize) -> f64 {
     if band == 0 || band == 9 { 12.0 } else { 18.0 }
 }
 
-fn band_db(band: usize, value: f64) -> f64 {
+pub(super) fn band_db(band: usize, value: f64) -> f64 {
     let range = band_range_db(band);
     value / f64::from(EQ_BAND_MAX) * 2.0 * range - range
 }
@@ -148,6 +148,9 @@ pub(crate) struct Dial<'a> {
     pub choices: &'a [f64],
 }
 
+/// A knob's printed label, accessible name, description, and value format.
+type Lettering = (&'static str, &'static str, &'static str, Format);
+
 /// The printed label, accessible name, description, and value format of a knob.
 pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
     let (label, name, hint, format) = match knob {
@@ -160,16 +163,153 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
                 Format::Band(band),
             );
         }
+        Knob::Trim
+        | Knob::BoosterDrive
+        | Knob::BoosterSpeed
+        | Knob::BoosterGain
+        | Knob::BoosterSpread
+        | Knob::BoosterKey => booster_face(knob),
+        Knob::SoftClipAmount
+        | Knob::SoftClipCeiling
+        | Knob::TubeDrive
+        | Knob::TubeMix
+        | Knob::TapeDrive => saturation_face(knob),
+        Knob::TrimEqHighPass
+        | Knob::TrimEqMud
+        | Knob::TrimEqHarsh
+        | Knob::LiftLow
+        | Knob::LiftAir => eq_face(knob),
+        Knob::MaximizerBoost
+        | Knob::MultibandLow
+        | Knob::MultibandMid
+        | Knob::MultibandHigh
+        | Knob::MultibandKey => loudness_face(knob),
+        Knob::ImagingWidth
+        | Knob::ImagingMonoBelow
+        | Knob::LimiterGain
+        | Knob::LimiterCeiling
+        | Knob::LimiterKey => output_face(knob),
+        Knob::CompressorThreshold
+        | Knob::CompressorRatio
+        | Knob::CompressorMix
+        | Knob::CompressorMakeup => compressor_level_face(knob),
+        Knob::CompressorAttack
+        | Knob::CompressorRelease
+        | Knob::CompressorScHpf
+        | Knob::CompressorKey => compressor_timing_face(knob),
+    };
+    (label.into(), name.into(), hint, format)
+}
+
+/// The lettering of the bus compressor level knobs.
+fn compressor_level_face(knob: Knob) -> Lettering {
+    match knob {
+        Knob::CompressorThreshold => (
+            "Threshold",
+            "Bus compressor threshold",
+            "Compression starts above this level.",
+            Format::db(false),
+        ),
+        Knob::CompressorRatio => (
+            "Ratio",
+            "Bus compressor ratio",
+            "How strongly the level above the threshold comes down.",
+            Format::tenths(":1"),
+        ),
+        Knob::CompressorMix => (
+            "Mix",
+            "Bus compressor mix",
+            "Parallel blend between dry signal and compressed mix.",
+            Format::whole("%"),
+        ),
+        Knob::CompressorMakeup => (
+            "Makeup",
+            "Bus compressor makeup",
+            "Output gain after compression.",
+            Format::db(true),
+        ),
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the bus compressor timing and key knobs.
+fn compressor_timing_face(knob: Knob) -> Lettering {
+    match knob {
+        Knob::CompressorAttack => (
+            "Attack",
+            "Bus compressor attack",
+            "How fast compression starts.",
+            Format::tenths("ms"),
+        ),
+        Knob::CompressorRelease => (
+            "Release",
+            "Bus compressor release",
+            "How fast compression lets go.",
+            Format::whole("ms"),
+        ),
+        Knob::CompressorScHpf => (
+            "SC HPF",
+            "Bus compressor sidechain high-pass",
+            "Filters sub bass out of the detector sidechain so the kick does not pump the highs.",
+            Format::whole("Hz"),
+        ),
+        Knob::CompressorKey => (
+            "Key",
+            "Bus compressor key",
+            "The track the compressor listens to, as it sounds after its fader: the mix ducks \
+             while that track sounds. Own listens to the mix.",
+            Format::Key,
+        ),
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the trim and the Booster knobs.
+fn booster_face(knob: Knob) -> Lettering {
+    match knob {
         Knob::Trim => (
             "Trim",
             "Trim",
             "Gain into the board. The meter reads 0 VU at -18 dBFS, where the mastering pedals work best.",
             Format::db(true),
         ),
-        Knob::BoosterDrive => ("Drive", "Booster compressor drive", "", Format::Plain),
-        Knob::BoosterSpeed => ("Speed", "Booster compressor speed", "", Format::Plain),
-        Knob::BoosterGain => ("Gain", "Booster compressor gain", "", Format::Plain),
-        Knob::BoosterSpread => ("Width", "Booster width", "", Format::Plain),
+        Knob::BoosterDrive => (
+            "Drive",
+            "Booster compressor drive",
+            "Input drive into the Booster compressor saturation and compression stage.",
+            Format::Plain,
+        ),
+        Knob::BoosterSpeed => (
+            "Speed",
+            "Booster compressor speed",
+            "Recovery speed of the Booster compressor envelope.",
+            Format::Plain,
+        ),
+        Knob::BoosterGain => (
+            "Gain",
+            "Booster compressor gain",
+            "Output make-up gain after Booster compression.",
+            Format::Plain,
+        ),
+        Knob::BoosterSpread => (
+            "Width",
+            "Booster width",
+            "Stereo width expansion applied by the Booster wide unit.",
+            Format::Plain,
+        ),
+        Knob::BoosterKey => (
+            "Key",
+            "Booster compressor key",
+            "The track the compression follows, as it sounds after its fader. Own follows the mix.",
+            Format::Key,
+        ),
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the soft clip, tube, and tape knobs.
+fn saturation_face(knob: Knob) -> Lettering {
+    match knob {
         Knob::SoftClipAmount => (
             "Amount",
             "Soft clip amount",
@@ -194,6 +334,19 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "The saturated share of the output.",
             Format::whole("%"),
         ),
+        Knob::TapeDrive => (
+            "Drive",
+            "Tape drive",
+            "How hard the mix hits the tape: saturation, a low-end bump, and a softer top.",
+            Format::tenths(""),
+        ),
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the Trim EQ and Lift EQ knobs.
+fn eq_face(knob: Knob) -> Lettering {
+    match knob {
         Knob::TrimEqHighPass => (
             "High-pass",
             "Trim EQ high-pass",
@@ -212,54 +365,6 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "A narrow cut at 3.5 kHz.",
             Format::db(false),
         ),
-        Knob::CompressorThreshold => (
-            "Threshold",
-            "Bus compressor threshold",
-            "Compression starts above this level.",
-            Format::db(false),
-        ),
-        Knob::CompressorRatio => (
-            "Ratio",
-            "Bus compressor ratio",
-            "How strongly the level above the threshold comes down.",
-            Format::tenths(":1"),
-        ),
-        Knob::CompressorAttack => (
-            "Attack",
-            "Bus compressor attack",
-            "How fast compression starts.",
-            Format::tenths("ms"),
-        ),
-        Knob::CompressorRelease => (
-            "Release",
-            "Bus compressor release",
-            "How fast compression lets go.",
-            Format::whole("ms"),
-        ),
-        Knob::CompressorScHpf => (
-            "SC HPF",
-            "Bus compressor sidechain high-pass",
-            "Filters sub bass out of the detector sidechain so the kick does not pump the highs.",
-            Format::whole("Hz"),
-        ),
-        Knob::CompressorMix => (
-            "Mix",
-            "Bus compressor mix",
-            "Parallel blend between dry signal and compressed mix.",
-            Format::whole("%"),
-        ),
-        Knob::CompressorMakeup => (
-            "Makeup",
-            "Bus compressor makeup",
-            "Output gain after compression.",
-            Format::db(true),
-        ),
-        Knob::MaximizerBoost => (
-            "Boost",
-            "Maximizer boost",
-            "Louder, with peaks held below -1 dBFS. Each percent adds a quarter decibel.",
-            Format::whole("%"),
-        ),
         Knob::LiftLow => (
             "Low 90",
             "Lift EQ low",
@@ -272,23 +377,18 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "A wide shelf of air at 12 kHz.",
             Format::db(true),
         ),
-        Knob::TapeDrive => (
-            "Drive",
-            "Tape drive",
-            "How hard the mix hits the tape: saturation, a low-end bump, and a softer top.",
-            Format::tenths(""),
-        ),
-        Knob::ImagingWidth => (
-            "Width",
-            "Stereo imaging width",
-            "The side signal: below 100% narrows the image, above widens it.",
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the maximizer and multiband knobs.
+fn loudness_face(knob: Knob) -> Lettering {
+    match knob {
+        Knob::MaximizerBoost => (
+            "Boost",
+            "Maximizer boost",
+            "Louder, with peaks held below -1 dBFS. Each percent adds a quarter decibel.",
             Format::whole("%"),
-        ),
-        Knob::ImagingMonoBelow => (
-            "Mono below",
-            "Stereo imaging mono below",
-            "The image is mono below this frequency.",
-            Format::whole("Hz"),
         ),
         Knob::MultibandLow => (
             "Low",
@@ -308,6 +408,32 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "Above 3 kHz: holds the peaks and lifts the sound under them.",
             Format::whole("%"),
         ),
+        Knob::MultibandKey => (
+            "Key",
+            "Multiband key",
+            "A track whose bands each band also holds under its ceiling, so the mix gives way \
+             band by band while that track sounds. Own: the mix alone.",
+            Format::Key,
+        ),
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
+}
+
+/// The lettering of the stereo imaging and limiter knobs.
+fn output_face(knob: Knob) -> Lettering {
+    match knob {
+        Knob::ImagingWidth => (
+            "Width",
+            "Stereo imaging width",
+            "The side signal: below 100% narrows the image, above widens it.",
+            Format::whole("%"),
+        ),
+        Knob::ImagingMonoBelow => (
+            "Mono below",
+            "Stereo imaging mono below",
+            "The image is mono below this frequency.",
+            Format::whole("Hz"),
+        ),
         Knob::LimiterGain => (
             "Gain",
             "Limiter gain",
@@ -320,26 +446,6 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "The highest true peak out, in dBTP.",
             Format::db(false),
         ),
-        Knob::BoosterKey => (
-            "Key",
-            "Booster compressor key",
-            "The track the compression follows, as it sounds after its fader. Own follows the mix.",
-            Format::Key,
-        ),
-        Knob::CompressorKey => (
-            "Key",
-            "Bus compressor key",
-            "The track the compressor listens to, as it sounds after its fader: the mix ducks \
-             while that track sounds. Own listens to the mix.",
-            Format::Key,
-        ),
-        Knob::MultibandKey => (
-            "Key",
-            "Multiband key",
-            "A track whose bands each band also holds under its ceiling, so the mix gives way \
-             band by band while that track sounds. Own: the mix alone.",
-            Format::Key,
-        ),
         Knob::LimiterKey => (
             "Key",
             "Limiter key",
@@ -347,8 +453,8 @@ pub(super) fn face(knob: Knob) -> (String, String, &'static str, Format) {
              track peaks. Own: the mix alone.",
             Format::Key,
         ),
-    };
-    (label.into(), name.into(), hint, format)
+        _ => unreachable!("{knob:?} is not in this group"),
+    }
 }
 
 /// A setting as the decimal it was written as: `0.1_f32` is 0.1, not the
@@ -418,16 +524,22 @@ fn draw_dial(
 ) {
     let [center, well, label] = positions;
     let range = spec.range;
+    let base_label = if ui.visuals().dark_mode {
+        roles().legend
+    } else {
+        roles().ink
+    };
+    let label_color = if enabled {
+        base_label
+    } else {
+        base_label.gamma_multiply(if ui.visuals().dark_mode { 0.66 } else { 0.58 })
+    };
     ui.painter().text(
         label,
         Align2::CENTER_CENTER,
         spec.label,
         FontId::proportional(label_size),
-        if ui.visuals().dark_mode {
-            roles().legend
-        } else {
-            roles().ink
-        },
+        label_color,
     );
     controls::well(ui, Rect::from_center_size(well, well_size));
     let (low, high) = (decimal(range.low), decimal(range.high));
@@ -485,7 +597,7 @@ fn dial_rotary(ui: &mut egui::Ui, center: Pos2, value: &mut f64, spec: &Dial<'_>
         || ui.input(|input| {
             input.num_accesskit_action_requests(response.id, egui::accesskit::Action::SetValue) > 0
         });
-    reveal(response).hover_hint(hint);
+    reveal(response).hover_hint(hint).disabled_hint(hint);
     if spec.choices.is_empty() && *value != before {
         *value = on_grid(*value, (!absolute).then_some(before), &range);
     }
@@ -497,12 +609,18 @@ fn value_window(ui: &mut egui::Ui, well: Rect, value: &mut f64, spec: &Dial<'_>,
     let range = spec.range;
     let (low, high) = (decimal(range.low), decimal(range.high));
     controls::value_style(ui);
-    if well.width() < WELL.x {
-        ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
+    if !ui.is_enabled() {
+        ui.style_mut().visuals.override_text_color = Some(roles().legend.gamma_multiply(0.62));
     }
     let typed = *value;
     let format = spec.format;
-    let level = shortening(ui, well, &format.show(typed));
+    let formatted = format.show(typed);
+    if well.width() < WELL.x {
+        ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
+    } else if shortening(ui, well, &formatted) > 0 {
+        ui.style_mut().override_font_id = Some(FontId::proportional(11.5));
+    }
+    let level = shortening(ui, well, &formatted);
     let show = move |value: f64| shorten(&format.show(value), level);
     // Leaving the window parses the text it shows. Unchanged text is no
     // edit, so a saved value between the shown digits stays.
@@ -522,7 +640,9 @@ fn value_window(ui: &mut egui::Ui, well: Rect, value: &mut f64, spec: &Dial<'_>,
         Rect::from_center_size(well.center(), well.size() + Vec2::new(-2.0, 4.0)),
         entry,
     );
-    reveal(name_control(response, &format!("{} value", spec.name))).hover_hint(hint);
+    reveal(name_control(response, &format!("{} value", spec.name)))
+        .hover_hint(hint)
+        .disabled_hint(hint);
     if *value != typed {
         *value = typed_onto_dial(*value, spec);
     }

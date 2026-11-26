@@ -418,14 +418,19 @@ bar and a cream viewport outline around scrolled cards.
   lamp), inline `GR` LEDs or `164pt` 3-band strip, full `64pt` dial columns
   (`56x20` wells, `13pt` readout, `11.5pt` label), and `28x24` left/right
   reorder buttons bracketing a `30x22` center bat toggle. Clicking `Edit` or
-  double-clicking opens `Mastering deep edit` with response curves and stereo
-  vectorscope.
+  double-clicking opens `Mastering deep edit` inside the neutral rack shell with
+  unit-skinned parameter bays (light-faced plates, motif art, knob caps,
+  editable dimmed off/chain-bypassed faces, `Reset`, amber `Bypass all`,
+  unit-accented scopes with `Booster EQ` response and `?` help) beside neutral
+  `Master telemetry`.
 - **FX Returns Rack**: Four `228pt`-tall cards (`198pt+` wide) side-by-side on
   the Marine bay exposing `In`, `S`, `Lim`, `Edit`, effect/preset pickers, up to
   4 full-size macro dials (`56x20` wells when wide, compact at minimum width),
   return meters, and `Clear tail` above `y = +72 .. -48` motif decks, paired
-  with the `824x572` `FX Deep Edit` window with two-row breathing bays and
-  module-scoped knob caps.
+  with the `816x544` / `816x624` `FX deep edit` window featuring color-coded
+  `FX 1`–`FX 4` tabs, a single `Active` switch, pinned `Output`/`Return` dials,
+  a collapsible `Post-Limiter Ducker`, module-scoped knob caps and scopes,
+  `Reset`, and contextual `?` help.
 - **Floating Windows & Channel Strip**: One resizable, collapsible shared
   hardware shell wraps Time Stretcher (`Marine`, `Original BPM` & `Target BPM`
   modular bays with live ratio readout), Sample Editor (`Granite`, `Trim Range`

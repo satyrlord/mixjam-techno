@@ -299,8 +299,8 @@ fn the_soften_corner_glides_with_a_character_change() {
     let corner = 8000.0 * (1.0 - 0.25 * core.analog.value() - 0.45 * core.tape.value());
     let mut expected = OnePole::default();
     expected.tune(corner);
-    for side in 0..2 {
-        let mut soften = core.soften[side];
+    for (side, soften) in core.soften.iter().enumerate() {
+        let mut soften = *soften;
         soften.clear();
         assert_eq!(soften.low(1.0), expected.low(1.0), "side {side}");
         expected.clear();

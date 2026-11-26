@@ -70,6 +70,11 @@ impl Module {
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
+    /// Whether the effect rings on after its input stops, so Clear tail
+    /// has something to cut: Delay and Reverb do, Drive and Empty do not.
+    pub fn has_tail(&self) -> bool {
+        matches!(self, Self::EchoformDelay(_) | Self::AetherformReverb(_))
+    }
     /// The ducker's key: 0 is the bus's own input, 1 to 64 a track.
     pub fn duck_key(&self) -> u8 {
         match self {

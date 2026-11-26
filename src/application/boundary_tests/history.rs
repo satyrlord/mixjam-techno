@@ -183,6 +183,31 @@ fn fx_switches_and_different_knobs_end_continuous_history_steps() {
 }
 
 #[test]
+fn a_synced_delay_division_drag_is_one_undo_step() {
+    use crate::fx::{Division, Echoform, Module};
+    let mut project = Project::default();
+    project.fx.buses[0].module = Module::EchoformDelay(Echoform {
+        link_times: true,
+        ..Echoform::default()
+    });
+    let initial = project.clone();
+    let mut session = Session::headless(Arc::new(Library::empty()), project).unwrap();
+    session.gesture_gap = std::time::Duration::MAX;
+    for division in Division::ALL {
+        let mut buses = session.project().fx;
+        if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+            delay.division_l = division;
+            delay.division_r = division;
+        }
+        session.edit(EditCommand::SetEffects(buses)).unwrap();
+    }
+    assert_ne!(session.project().fx, initial.fx);
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project(), &initial);
+    assert!(!session.has_history_step(false));
+}
+
+#[test]
 fn long_send_and_fx_drags_preserve_prior_history() {
     use crate::fx::{Aetherform, Echoform, Module};
     let mut project = Project::default();

@@ -81,8 +81,8 @@ fn instrument_palette_meets_contrast_targets_across_all_three_themes() {
 #[test]
 fn instrument_controls_render_telemetry_scope_and_all_materials() {
     use super::{
-        bay, delay_scope_frame, eq_response_scope, gr_history_scope, meter_bar, multiband_gr_scope,
-        reverb_scope_frame, scope_frame, stereo_vectorscope,
+        ScopeState, bay, delay_scope_frame_state, eq_response_scope, gr_history_scope, meter_bar,
+        multiband_gr_scope_state, reverb_scope_frame_state, scope_frame, stereo_vectorscope,
     };
     use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
     use mixjam_techno::application::FxBusMeterReading;
@@ -191,21 +191,21 @@ fn instrument_controls_render_telemetry_scope_and_all_materials() {
                         &[],
                         accent,
                     );
-                    delay_scope_frame(
+                    delay_scope_frame_state(
                         ui,
                         delay_rect,
                         "Tap & Decay",
                         &[(0.15, 1.0, -0.25)],
                         true,
-                        accent,
+                        ScopeState::active(accent),
                     );
-                    reverb_scope_frame(
+                    reverb_scope_frame_state(
                         ui,
                         reverb_rect,
                         "Decay & Space",
                         "HALL · BLOOM +12",
                         &profile,
-                        accent,
+                        ScopeState::active(accent),
                     );
                     gr_history_scope(
                         ui,
@@ -216,13 +216,13 @@ fn instrument_controls_render_telemetry_scope_and_all_materials() {
                         1.7,
                         accent,
                     );
-                    multiband_gr_scope(
+                    multiband_gr_scope_state(
                         ui,
                         Rect::from_min_size(Pos2::new(280.0, 480.0), Vec2::new(240.0, 90.0)),
                         "Multiband 3-band GR",
                         [2.1, 1.4, 0.9],
                         12.0,
-                        accent,
+                        ScopeState::active(accent),
                     );
                     eq_response_scope(
                         ui,

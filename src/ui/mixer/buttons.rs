@@ -249,6 +249,11 @@ fn lamp_face(ui: &mut egui::Ui, rect: Rect, key: &str, short: &str, on: bool) ->
     if on {
         ui.painter().circle_filled(lamp, 2.0, roles().lamp_on);
         text(ui, label_at, short, 10.0, roles().muted);
+    } else if !ui.is_enabled() {
+        let dim = roles().muted.gamma_multiply(0.55);
+        ui.painter()
+            .circle_stroke(lamp, 2.0, Stroke::new(1.0_f32, dim));
+        text(ui, label_at, short, 10.0, dim);
     } else {
         ui.painter()
             .circle_stroke(lamp, 2.0, Stroke::new(1.0_f32, roles().muted));

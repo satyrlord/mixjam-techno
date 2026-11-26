@@ -71,6 +71,7 @@ impl Topic {
             Topic::StepSynth => Some("Step synth help"),
             Topic::SampleEditor => Some("Sample editor help"),
             Topic::Mastering => Some("Mastering help"),
+            Topic::FxReturns => Some("FX returns help"),
             _ => None,
         }
     }

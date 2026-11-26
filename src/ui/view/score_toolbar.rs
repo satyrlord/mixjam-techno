@@ -180,21 +180,11 @@ impl MixJamApp {
                     .color(roles().muted),
             );
         }
-        let current = match (
-            self.score_tools.automation_lane,
-            self.score_tools.return_lane,
-        ) {
-            (_, Some(bus)) => return_lane_label(bus),
-            (Some(lane), None) => lane.label(),
-            // Without its label beside it, a bare "Off" would not say what
-            // is off.
-            (None, None) if !show_label => "No lane".into(),
-            (None, None) => "Off".into(),
-        };
         let shown = (
             self.score_tools.automation_lane,
             self.score_tools.return_lane,
         );
+        let current = automation_label(shown, show_label);
         let mut choice = shown;
         if self.capture_view_is("automation-menu") {
             // egui keeps a combo box's popup state under its id with "popup",
@@ -211,53 +201,7 @@ impl MixJamApp {
             // The whole grouped list shows without a scroll bar.
             .height(f32::INFINITY);
         let response = tall_menu(&ctx, || {
-            combo.show_ui(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                let mut row = |ui: &mut egui::Ui, lane, name: &str, detail, count| {
-                    if lane_menu_row(ui, choice == lane, name, detail, count).clicked() {
-                        choice = lane;
-                        ui.close();
-                    }
-                };
-                row(ui, (None, None), "Off", Some("edit clips"), None);
-                let tracks = |lane: automation::Lane| {
-                    let count = project
-                        .tracks
-                        .iter()
-                        .filter(|track| !track.automation.lane(lane).is_empty())
-                        .count();
-                    (count > 0).then(|| plural(count, "track"))
-                };
-                lane_menu_heading(ui, "On every track");
-                for lane in TRACK_LANES {
-                    row(ui, (Some(lane), None), &lane.label(), None, tracks(lane));
-                }
-                lane_menu_heading(ui, "Send amount, on every track");
-                for bus in 0..mixjam_techno::application::fx::BUSES {
-                    let lane = automation::Lane::Send(bus);
-                    let module = bus_module_name(&project.fx.buses[bus].module);
-                    row(
-                        ui,
-                        (Some(lane), None),
-                        &lane.label(),
-                        Some(module),
-                        tracks(lane),
-                    );
-                }
-                lane_menu_heading(ui, "Return level, one line across the song");
-                for bus in 0..mixjam_techno::application::fx::BUSES {
-                    let module = bus_module_name(&project.fx.buses[bus].module);
-                    let points = project.return_automation[bus].len();
-                    let count = (points > 0).then(|| plural(points, "point"));
-                    row(
-                        ui,
-                        (None, Some(bus)),
-                        &return_lane_label(bus),
-                        Some(module),
-                        count,
-                    );
-                }
-            })
+            combo.show_ui(ui, |ui| automation_menu(ui, project, &mut choice))
         })
         .response;
         name_control(response, "Automation lane").hover_hint(
@@ -367,6 +311,89 @@ fn toggled(response: Response, label: &str, on: bool) -> Response {
 /// "1 track", "2 tracks".
 fn plural(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+}
+/// The lane menu's shown choice: a track lane, a bus's return lane, or Off.
+fn automation_label(lane: MenuLane, show_label: bool) -> String {
+    match lane {
+        (_, Some(bus)) => return_lane_label(bus),
+        (Some(lane), None) => lane.label(),
+        // Without its label beside it, a bare "Off" would not say what is off.
+        (None, None) if !show_label => "No lane".into(),
+        (None, None) => "Off".into(),
+    }
+}
+
+/// A lane of the lane menu: a track lane, a bus's return lane, or neither.
+type MenuLane = (Option<automation::Lane>, Option<usize>);
+
+/// The grouped rows of the lane menu: Off, the track lanes, the send lanes,
+/// and the return lanes. A click on a row sets `choice`.
+fn automation_menu(ui: &mut egui::Ui, project: &Project, choice: &mut MenuLane) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    lane_row(ui, choice, (None, None), "Off", (Some("edit clips"), None));
+    let tracks = |lane: automation::Lane| {
+        let count = project
+            .tracks
+            .iter()
+            .filter(|track| !track.automation.lane(lane).is_empty())
+            .count();
+        (count > 0).then(|| plural(count, "track"))
+    };
+    lane_menu_heading(ui, "On every track");
+    for lane in TRACK_LANES {
+        lane_row(
+            ui,
+            choice,
+            (Some(lane), None),
+            &lane.label(),
+            (None, tracks(lane)),
+        );
+    }
+    lane_menu_heading(ui, "Send amount, on every track");
+    for (bus, fx_bus) in project.fx.buses.iter().enumerate() {
+        let lane = automation::Lane::Send(bus);
+        let module = bus_module_name(&fx_bus.module);
+        lane_row(
+            ui,
+            choice,
+            (Some(lane), None),
+            &lane.label(),
+            (Some(module), tracks(lane)),
+        );
+    }
+    return_rows(ui, project, choice);
+}
+
+/// The return lane of each FX bus, with the count of its points.
+fn return_rows(ui: &mut egui::Ui, project: &Project, choice: &mut MenuLane) {
+    lane_menu_heading(ui, "Return level, one line across the song");
+    for bus in 0..mixjam_techno::application::fx::BUSES {
+        let module = bus_module_name(&project.fx.buses[bus].module);
+        let points = project.return_automation[bus].len();
+        let count = (points > 0).then(|| plural(points, "point"));
+        lane_row(
+            ui,
+            choice,
+            (None, Some(bus)),
+            &return_lane_label(bus),
+            (Some(module), count),
+        );
+    }
+}
+
+/// One row of the lane menu, with its detail and count. A click chooses
+/// `lane` and closes the menu.
+fn lane_row(
+    ui: &mut egui::Ui,
+    choice: &mut MenuLane,
+    lane: MenuLane,
+    name: &str,
+    (detail, count): (Option<&str>, Option<String>),
+) {
+    if lane_menu_row(ui, *choice == lane, name, detail, count).clicked() {
+        *choice = lane;
+        ui.close();
+    }
 }
 
 /// What an FX bus holds, as the Automation menu names it beside its lanes.

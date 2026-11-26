@@ -56,6 +56,66 @@ fn ink_stays_legible_on_every_enamel_lit_or_off() {
 }
 
 #[test]
+fn deep_edit_ink_and_scopes_stay_legible_on_every_pedal() {
+    for theme in theme::Theme::ALL {
+        theme::paint_as(theme);
+        let r = roles();
+        let (scope_bg, tint_target, tint_mix) = match r.material {
+            theme::Material::Metal => (
+                Color32::from_rgb(12, 18, 15),
+                Color32::from_rgb(236, 248, 232),
+                0.14_f32,
+            ),
+            theme::Material::Plastic => (
+                Color32::from_rgb(8, 22, 48),
+                Color32::from_rgb(230, 248, 255),
+                0.16,
+            ),
+            theme::Material::Flat => (r.strip_slot, Color32::WHITE, 0.0),
+        };
+        for kind in PedalKind::ALL {
+            let motif = master_motif(kind);
+            let ink = motif.face_ink();
+            for active in [true, false] {
+                let ([zone_a, zone_b], _) = motif.deep_zones(active);
+                for (zone_idx, zone) in [zone_a, zone_b]
+                    .into_iter()
+                    .chain(motif.deep_extra_band_zones(active))
+                    .enumerate()
+                {
+                    let ratio = worst_zone_contrast(zone, ink, motif.light_face, active);
+                    assert!(
+                        ratio >= 5.0,
+                        "Deep Edit {} {} zone {zone_idx} (active={active}) gives {ratio:.2}:1",
+                        options::labels::theme(theme),
+                        name(kind)
+                    );
+                }
+            }
+            let accent = motif.scope_accent();
+            let trace = if tint_mix > 0.0 {
+                accent.lerp_to_gamma(tint_target, tint_mix)
+            } else {
+                accent
+            };
+            let bg = match r.material {
+                theme::Material::Metal => scope_bg.lerp_to_gamma(accent, 0.05),
+                theme::Material::Plastic => scope_bg.lerp_to_gamma(accent, 0.07),
+                theme::Material::Flat => scope_bg,
+            };
+            let ratio = controls::contrast(bg, trace);
+            assert!(
+                ratio >= 5.0,
+                "Deep Edit {} {} scope trace gives {ratio:.2}:1",
+                options::labels::theme(theme),
+                name(kind)
+            );
+        }
+    }
+    theme::paint_as(theme::Theme::Studio);
+}
+
+#[test]
 fn the_metal_finish_is_brushed_along_the_rows_and_keeps_within_its_dip() {
     let [width, height] = GRAIN;
     let amounts: Vec<f32> = grain_image()

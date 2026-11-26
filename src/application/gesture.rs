@@ -37,6 +37,8 @@ pub(super) enum TrackControl {
 pub(super) enum FxControl {
     Return,
     Delay(crate::fx::DelayParam),
+    /// A synced note length, on either side or both when linked.
+    DelayDivision,
     Reverb(crate::fx::ReverbParam),
     Drive(crate::fx::DistortionParam),
 }
@@ -262,6 +264,12 @@ impl Gesture {
         }
         match (old.module, new.module) {
             (Module::EchoformDelay(old), Module::EchoformDelay(new)) => {
+                let mut divisions = old;
+                divisions.division_l = new.division_l;
+                divisions.division_r = new.division_r;
+                if old != new && divisions == new {
+                    return Some(Self::Fx(index, FxControl::DelayDivision));
+                }
                 DelayParam::ALL.into_iter().find_map(|param| {
                     let mut candidate = old;
                     param.set(&mut candidate, param.get(&new));

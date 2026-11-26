@@ -59,7 +59,7 @@ pub(super) fn short_name(kind: PedalKind) -> &'static str {
         PedalKind::BoosterWide => "Wide",
         PedalKind::SoftClip => "Clip",
         PedalKind::Tube => "Tube",
-        PedalKind::TrimEq => "Trim",
+        PedalKind::TrimEq => "TrimEQ",
         PedalKind::BusCompressor => "Bus",
         PedalKind::Maximizer => "Max",
         PedalKind::LiftEq => "Lift",

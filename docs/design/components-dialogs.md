@@ -104,8 +104,8 @@ visible guidance stay available when it is off.
 
 These windows use the same shell and controls as the musical tools:
 
-- Help, Time Stretcher help, Effect Studio help, Mastering help, Step synth
-  help, and Sample editor help,
+- Help, Time Stretcher help, Effect Studio help, Mastering help, FX returns
+  help, Step synth help, and Sample editor help,
 - Options, Album Review, Import details, and Recorded take,
 - Save your changes?, Discard changes?, Sample conflicts, Choose path, and
   Import sound.

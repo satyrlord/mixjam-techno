@@ -265,6 +265,28 @@ const fn in_unit(unit: &'static str, decimals: usize) -> Format {
 /// The lettering of the delay's dial for `param`.
 pub(super) fn delay_face(param: DelayParam) -> Face {
     match param {
+        DelayParam::TimeL
+        | DelayParam::TimeR
+        | DelayParam::Feedback
+        | DelayParam::Width
+        | DelayParam::LowCut
+        | DelayParam::HighCut
+        | DelayParam::Output => delay_time_face(param),
+        DelayParam::FilterResonance
+        | DelayParam::Smear
+        | DelayParam::ModRate
+        | DelayParam::ModDepth
+        | DelayParam::Drive => delay_colour_face(param),
+        DelayParam::DuckThreshold
+        | DelayParam::DuckAmount
+        | DelayParam::DuckRelease
+        | DelayParam::DuckKey => delay_duck_face(param),
+    }
+}
+
+/// The lettering of the delay's time, feedback, filter, and output dials.
+fn delay_time_face(param: DelayParam) -> Face {
+    match param {
         DelayParam::TimeL => Face {
             label: "Time L",
             name: "left time",
@@ -301,10 +323,35 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             hint: "Each repeat loses more above this.",
             format: Format::Hertz,
         },
+        DelayParam::Output => Face {
+            label: "Output",
+            name: "output",
+            hint: "Output level trim after the delay and its filters.",
+            format: Format::db(true),
+        },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the delay's resonance, smear, modulation, and drive dials.
+fn delay_colour_face(param: DelayParam) -> Face {
+    match param {
+        DelayParam::FilterResonance => Face {
+            label: "Res",
+            name: "filter resonance",
+            hint: "Resonance around the delay filter cutoff.",
+            format: Format::whole("%"),
+        },
+        DelayParam::Smear => Face {
+            label: "Smear",
+            name: "smear",
+            hint: "Diffuses each repeat into a softer bloom.",
+            format: Format::whole("%"),
+        },
         DelayParam::ModRate => Face {
             label: "Rate",
             name: "modulation rate",
-            hint: "",
+            hint: "How fast the delay modulation LFO sweeps the delay time.",
             format: in_unit("Hz", 2),
         },
         DelayParam::ModDepth => Face {
@@ -319,17 +366,18 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             hint: "Saturates the sound entering the delay.",
             format: Format::whole("%"),
         },
-        DelayParam::FilterResonance => Face {
-            label: "Res",
-            name: "filter resonance",
-            hint: "Resonance around the delay filter cutoff.",
-            format: Format::whole("%"),
-        },
-        DelayParam::Smear => Face {
-            label: "Smear",
-            name: "smear",
-            hint: "Diffuses each repeat into a softer bloom.",
-            format: Format::whole("%"),
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the delay's ducker dials.
+fn delay_duck_face(param: DelayParam) -> Face {
+    match param {
+        DelayParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
         },
         DelayParam::DuckAmount => Face {
             label: "Duck",
@@ -349,23 +397,38 @@ pub(super) fn delay_face(param: DelayParam) -> Face {
             hint: "The track that lowers the repeats, as it sounds after its fader. Own: the input.",
             format: Format::Key,
         },
-        DelayParam::DuckThreshold => Face {
-            label: "Thresh",
-            name: "duck threshold",
-            hint: "Input level above which ducking begins.",
-            format: Format::db(true),
-        },
-        DelayParam::Output => Face {
-            label: "Output",
-            name: "output",
-            hint: "",
-            format: Format::db(true),
-        },
+        _ => unreachable!("{param:?} is not in this group"),
     }
 }
 
 /// The lettering of the reverb's dial for `param`.
 pub(super) fn reverb_face(param: ReverbParam) -> Face {
+    match param {
+        ReverbParam::PreDelay
+        | ReverbParam::Decay
+        | ReverbParam::Size
+        | ReverbParam::LateBalance
+        | ReverbParam::Diffusion
+        | ReverbParam::Density => reverb_space_face(param),
+        ReverbParam::BassMult
+        | ReverbParam::TrebleMult
+        | ReverbParam::LowCut
+        | ReverbParam::HighCut
+        | ReverbParam::Width
+        | ReverbParam::Drive => reverb_tone_face(param),
+        ReverbParam::ModRate
+        | ReverbParam::ModDepth
+        | ReverbParam::ShimmerAmount
+        | ReverbParam::Output => reverb_motion_face(param),
+        ReverbParam::DuckThreshold
+        | ReverbParam::DuckAmount
+        | ReverbParam::DuckRelease
+        | ReverbParam::DuckKey => reverb_duck_face(param),
+    }
+}
+
+/// The lettering of the reverb's space dials.
+fn reverb_space_face(param: ReverbParam) -> Face {
     match param {
         ReverbParam::PreDelay => Face {
             label: "Pre-delay",
@@ -385,18 +448,6 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             hint: "The size of the space. It does not change the decay.",
             format: Format::whole("%"),
         },
-        ReverbParam::BassMult => Face {
-            label: "Bass",
-            name: "bass multiplier",
-            hint: "Scales low-frequency decay relative to the main decay time.",
-            format: in_unit("x", 2),
-        },
-        ReverbParam::TrebleMult => Face {
-            label: "Treble",
-            name: "treble multiplier",
-            hint: "Scales high-frequency decay relative to the main decay time.",
-            format: in_unit("x", 2),
-        },
         ReverbParam::LateBalance => Face {
             label: "Late",
             name: "late balance",
@@ -414,6 +465,25 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             name: "density",
             hint: "How many reflections, and how full the tail.",
             format: Format::whole("%"),
+        },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the reverb's damping, tone, and drive dials.
+fn reverb_tone_face(param: ReverbParam) -> Face {
+    match param {
+        ReverbParam::BassMult => Face {
+            label: "Bass",
+            name: "bass multiplier",
+            hint: "Scales low-frequency decay relative to the main decay time.",
+            format: in_unit("x", 2),
+        },
+        ReverbParam::TrebleMult => Face {
+            label: "Treble",
+            name: "treble multiplier",
+            hint: "Scales high-frequency decay relative to the main decay time.",
+            format: in_unit("x", 2),
         },
         ReverbParam::LowCut => Face {
             label: "Low cut",
@@ -439,16 +509,23 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             hint: "Saturates the sound entering the reverb.",
             format: Format::whole("%"),
         },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the reverb's modulation, shimmer, and output dials.
+fn reverb_motion_face(param: ReverbParam) -> Face {
+    match param {
         ReverbParam::ModRate => Face {
             label: "Rate",
             name: "modulation rate",
-            hint: "",
+            hint: "How fast pitch modulation sweeps inside the reverb tank.",
             format: in_unit("Hz", 2),
         },
         ReverbParam::ModDepth => Face {
             label: "Depth",
             name: "modulation depth",
-            hint: "",
+            hint: "How far modulation bends pitch inside the reverb tank to smooth metallic ringing.",
             format: Format::whole("%"),
         },
         ReverbParam::ShimmerAmount => Face {
@@ -456,6 +533,25 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             name: "shimmer amount",
             hint: "How much of the tail returns pitched up. It acts while Shimmer is on.",
             format: Format::whole("%"),
+        },
+        ReverbParam::Output => Face {
+            label: "Output",
+            name: "output",
+            hint: "Output level trim after the reverb and its filters.",
+            format: Format::db(true),
+        },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the reverb's ducker dials.
+fn reverb_duck_face(param: ReverbParam) -> Face {
+    match param {
+        ReverbParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
         },
         ReverbParam::DuckAmount => Face {
             label: "Duck",
@@ -475,23 +571,30 @@ pub(super) fn reverb_face(param: ReverbParam) -> Face {
             hint: "The track that lowers the tail, as it sounds after its fader. Own: the input.",
             format: Format::Key,
         },
-        ReverbParam::DuckThreshold => Face {
-            label: "Thresh",
-            name: "duck threshold",
-            hint: "Input level above which ducking begins.",
-            format: Format::db(true),
-        },
-        ReverbParam::Output => Face {
-            label: "Output",
-            name: "output",
-            hint: "",
-            format: Format::db(true),
-        },
+        _ => unreachable!("{param:?} is not in this group"),
     }
 }
 
 /// The lettering of the drive's dial for `param`.
 pub(super) fn drive_face(param: DistortionParam) -> Face {
+    match param {
+        DistortionParam::Drive
+        | DistortionParam::Asymmetry
+        | DistortionParam::Bits
+        | DistortionParam::CrushRate => drive_curve_face(param),
+        DistortionParam::LowCut
+        | DistortionParam::HighCut
+        | DistortionParam::Width
+        | DistortionParam::Output => drive_tone_face(param),
+        DistortionParam::DuckThreshold
+        | DistortionParam::DuckAmount
+        | DistortionParam::DuckRelease
+        | DistortionParam::DuckKey => drive_duck_face(param),
+    }
+}
+
+/// The lettering of the drive's curve and crusher dials.
+fn drive_curve_face(param: DistortionParam) -> Face {
     match param {
         DistortionParam::Drive => Face {
             label: "Drive",
@@ -504,18 +607,6 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
             name: "asymmetry",
             hint: "Bends one half of the wave more than the other: more even harmonics.",
             format: Format::whole("%"),
-        },
-        DistortionParam::LowCut => Face {
-            label: "Low cut",
-            name: "low cut",
-            hint: "Takes the lows out before the curve, so they stay clean in the dry sound.",
-            format: Format::Hertz,
-        },
-        DistortionParam::HighCut => Face {
-            label: "High cut",
-            name: "high cut",
-            hint: "Softens the fizz above this after the curve.",
-            format: Format::Hertz,
         },
         DistortionParam::Bits => Face {
             label: "Bits",
@@ -530,11 +621,49 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
              type.",
             format: Format::Hertz,
         },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the drive's filter, width, and output dials.
+fn drive_tone_face(param: DistortionParam) -> Face {
+    match param {
+        DistortionParam::LowCut => Face {
+            label: "Low cut",
+            name: "low cut",
+            hint: "Takes the lows out before the curve, so they stay clean in the dry sound.",
+            format: Format::Hertz,
+        },
+        DistortionParam::HighCut => Face {
+            label: "High cut",
+            name: "high cut",
+            hint: "Softens the fizz above this after the curve.",
+            format: Format::Hertz,
+        },
         DistortionParam::Width => Face {
             label: "Width",
             name: "width",
             hint: "0% is mono, 100% unchanged, 200% doubles the sides.",
             format: Format::whole("%"),
+        },
+        DistortionParam::Output => Face {
+            label: "Output",
+            name: "output",
+            hint: "Output level trim after the drive stage.",
+            format: Format::db(true),
+        },
+        _ => unreachable!("{param:?} is not in this group"),
+    }
+}
+
+/// The lettering of the drive's ducker dials.
+fn drive_duck_face(param: DistortionParam) -> Face {
+    match param {
+        DistortionParam::DuckThreshold => Face {
+            label: "Thresh",
+            name: "duck threshold",
+            hint: "Input level above which ducking begins.",
+            format: Format::db(true),
         },
         DistortionParam::DuckAmount => Face {
             label: "Duck",
@@ -554,18 +683,7 @@ pub(super) fn drive_face(param: DistortionParam) -> Face {
             hint: "The track that lowers the distortion, as it sounds after its fader. Own: the input.",
             format: Format::Key,
         },
-        DistortionParam::DuckThreshold => Face {
-            label: "Thresh",
-            name: "duck threshold",
-            hint: "Input level above which ducking begins.",
-            format: Format::db(true),
-        },
-        DistortionParam::Output => Face {
-            label: "Output",
-            name: "output",
-            hint: "",
-            format: Format::db(true),
-        },
+        _ => unreachable!("{param:?} is not in this group"),
     }
 }
 

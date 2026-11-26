@@ -123,7 +123,7 @@ Master available.
 
 `src/ui/fx.rs` owns the FX returns board. `src/ui/fx/` draws four cards with
 effect and preset choices, macro dials, a return level, and switches. The Edit
-button on a card opens FX Deep Edit, which holds the full settings, the scope
+button on a card opens FX deep edit, which holds the full settings, the scope
 for Delay or Drive, and Clear tail. Populated cards also offer Clear tail.
 The board and the editor send settings through the session as edits. Clear
 tail calls the session separately. The Edit button on a Mixer return strip

@@ -410,7 +410,7 @@ fn pedal_power(ui: &mut egui::Ui, rect: Rect, chain: &mut MasterChain, kind: Ped
 /// can walk the whole row. The row takes the scroll for itself, so the
 /// board returns to the top on the next frame, which shows the whole row.
 pub(super) fn reveal(response: Response) -> Response {
-    if response.gained_focus() {
+    if response.gained_focus() && response.layer_id.order == egui::Order::Background {
         response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
         response
             .ctx

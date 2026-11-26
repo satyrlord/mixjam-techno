@@ -414,6 +414,39 @@ pub(super) fn drag(
     pointer(ctx, app, to, false, modifiers);
 }
 
+/// Assert that the fixed window `title` shows each control whose name starts
+/// with `prefix` whole, and has no scroll bars. The board's own buttons that
+/// open a window, "Deep edit FX 1" to 4, are not in it.
+pub(super) fn assert_fixed_window_holds_controls(
+    ctx: &egui::Context,
+    output: &egui::FullOutput,
+    title: &str,
+    prefix: &str,
+) {
+    let window = dialog::window_rect(ctx, title).expect("the window is open");
+    let mut checked = 0;
+    for node in screen(output).nodes() {
+        let (Some(label), Some(bounds)) = (node.node().label(), node.bounds()) else {
+            continue;
+        };
+        let opener = label
+            .strip_prefix("Deep edit FX ")
+            .is_some_and(|bus| bus.parse::<usize>().is_ok());
+        if !label.starts_with(prefix) || opener {
+            continue;
+        }
+        assert!(
+            window.expand(0.5).contains_rect(bounds),
+            "{title}: {label} at {bounds:?} is outside the window {window:?}"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "{title}: no control starts with {prefix}");
+    for bar in ["horizontal", "vertical"] {
+        assert!(!has_control(output, &format!("{title} {bar} scroll bar")));
+    }
+}
+
 /// Whether any accessible node carries this name.
 pub(super) fn has_control(output: &egui::FullOutput, name: &str) -> bool {
     screen(output).find_node(name).is_some()

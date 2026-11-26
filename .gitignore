@@ -1,5 +1,6 @@
 # Tooling
 .impeccable/
+/PRODUCT.md
 /.codex/hooks.json
 /.github/hooks/
 /.vscode/settings.json

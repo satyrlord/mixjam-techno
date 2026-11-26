@@ -209,9 +209,9 @@ pub(super) fn signal_chip(
     paint_signal_chip(ui, chip, kind, on, selected, response.hovered());
     if response.has_focus() {
         ui.painter().rect_stroke(
-            chip.expand(2.0),
-            5.0,
-            Stroke::new(2.0_f32, controls::focus_color(ui)),
+            chip.expand(1.0),
+            4.5,
+            Stroke::new(1.5_f32, controls::focus_color(ui)),
             egui::StrokeKind::Outside,
         );
     }
@@ -233,16 +233,16 @@ fn paint_signal_chip(
     let face = master_face_color(kind, on);
     let ink = master_face_ink(kind);
     let accent = family_accent(kind);
-    let stripe = if on || selected {
+    let stripe = if on {
         accent
     } else {
-        accent.gamma_multiply(0.35)
+        accent.gamma_multiply(0.28)
     };
     ui.painter().rect_filled(chip, 4.0, face);
     ui.painter().rect_filled(
         Rect::from_min_size(
-            chip.min + Vec2::new(2.0, 1.0),
-            Vec2::new(chip.width() - 4.0, 2.0),
+            chip.min + Vec2::new(2.0, 1.5),
+            Vec2::new(chip.width() - 4.0, 2.5),
         ),
         1.0,
         stripe,
@@ -251,18 +251,27 @@ fn paint_signal_chip(
         ui.painter()
             .rect_filled(chip, 4.0, Color32::from_white_alpha(24));
     }
-    let border_w = if selected { 1.8_f32 } else { 1.0_f32 };
-    let border_c = if selected {
-        accent
+    if selected {
+        ui.painter().rect_stroke(
+            chip,
+            4.0,
+            Stroke::new(1.0_f32, roles().ink),
+            egui::StrokeKind::Inside,
+        );
+        ui.painter().rect_stroke(
+            chip,
+            4.5,
+            Stroke::new(2.0_f32, roles().legend),
+            egui::StrokeKind::Outside,
+        );
     } else {
-        roles().ink.gamma_multiply(0.65)
-    };
-    ui.painter().rect_stroke(
-        chip,
-        4.0,
-        Stroke::new(border_w, border_c),
-        egui::StrokeKind::Inside,
-    );
+        ui.painter().rect_stroke(
+            chip,
+            4.0,
+            Stroke::new(1.0_f32, roles().ink.gamma_multiply(0.65)),
+            egui::StrokeKind::Inside,
+        );
+    }
     ui.painter().text(
         chip.center() + Vec2::new(0.0, 1.0),
         Align2::CENTER_CENTER,
@@ -272,13 +281,13 @@ fn paint_signal_chip(
     );
 }
 
-fn draw_metal_screws(painter: &egui::Painter, rect: Rect) {
-    for offset in [
-        Vec2::new(6.0, 6.0),
-        Vec2::new(rect.width() - 6.0, 6.0),
-        Vec2::new(6.0, rect.height() - 6.0),
-        Vec2::new(rect.width() - 6.0, rect.height() - 6.0),
-    ] {
+fn draw_metal_screws(painter: &egui::Painter, rect: Rect, include_bottom: bool) {
+    let mut corners = vec![Vec2::new(6.0, 6.0), Vec2::new(rect.width() - 6.0, 6.0)];
+    if include_bottom {
+        corners.push(Vec2::new(6.0, rect.height() - 6.0));
+        corners.push(Vec2::new(rect.width() - 6.0, rect.height() - 6.0));
+    }
+    for offset in corners {
         let c = rect.min + offset;
         painter.circle_filled(c, 2.2, roles().well_edge);
         painter.circle_stroke(c, 2.2, Stroke::new(0.7_f32, roles().ink));
@@ -364,7 +373,7 @@ fn paint_metal_finish(
         outline,
         Stroke::new(1.5_f32, roles().ink),
     ));
-    draw_metal_screws(painter, rect);
+    draw_metal_screws(painter, rect, true);
 }
 
 /// Shared 3-theme stompbox/rack card renderer for Mastering pedals and FX units.
@@ -426,6 +435,144 @@ pub(crate) fn paint_motif_enclosure(
 /// Draw the 3-theme Mastering card chassis.
 pub(super) fn master_enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
     paint_motif_enclosure(ui, rect, master_motif(kind), on, kind as u64 + 1);
+}
+
+#[derive(Clone, Copy)]
+struct DeepBayArt<'a> {
+    spec: MotifSpec,
+    active: bool,
+    seed: u64,
+    /// The dial cells the motif art follows, or `None` for a plain frame.
+    cells: Option<&'a [Rect]>,
+}
+
+fn paint_deep_metal_bay(
+    ui: &egui::Ui,
+    rect: Rect,
+    zone_a: Color32,
+    trim: Color32,
+    art: DeepBayArt<'_>,
+) {
+    let painter = ui.painter();
+    let plate = rect.shrink(1.5);
+    painter.rect_filled(rect, 6.0, roles().ink);
+    theme::gradient(painter, plate, 5.0, lit(zone_a, 0.04), lit(zone_a, -0.05));
+    if let Some(cells) = art.cells {
+        super::motifs::paint_deep_motif_art(ui, rect, art.spec, art.active, art.seed, cells);
+    }
+    if art.active {
+        let finish = finish(ui.ctx());
+        let pixels = ui.ctx().pixels_per_point();
+        let start = Pos2::new(
+            ((art.seed * 97 % 512) as f32) / GRAIN[0] as f32,
+            ((art.seed * 61 % 256) as f32) / GRAIN[1] as f32,
+        );
+        let span = Pos2::new(
+            start.x + plate.width() * pixels / GRAIN[0] as f32,
+            start.y + plate.height() * pixels / GRAIN[1] as f32,
+        );
+        let mut grain = egui::Mesh::with_texture(finish.grain.id());
+        grain.add_rect_with_uv(plate, Rect::from_min_max(start, span), Color32::WHITE);
+        painter.add(grain);
+    }
+    painter.rect_stroke(
+        plate,
+        5.0,
+        Stroke::new(1.0_f32, trim.gamma_multiply(0.30)),
+        egui::StrokeKind::Inside,
+    );
+    draw_metal_screws(painter, rect, rect.height() >= 84.0);
+    controls::instrument::paint_metal_top_and_led(painter, rect, art.active, art.cells.is_some());
+}
+
+fn paint_deep_bay_shell(
+    ui: &egui::Ui,
+    rect: Rect,
+    zone_a: Color32,
+    trim: Color32,
+    art: DeepBayArt<'_>,
+) {
+    let r = roles();
+    match r.material {
+        theme::Material::Flat => {
+            let p = ui.painter();
+            p.rect_filled(rect, 4.0, zone_a);
+            if let Some(cells) = art.cells {
+                super::motifs::paint_deep_motif_art(
+                    ui, rect, art.spec, art.active, art.seed, cells,
+                );
+            }
+            p.rect_stroke(
+                rect,
+                4.0,
+                Stroke::new(1.2_f32, r.ink),
+                egui::StrokeKind::Inside,
+            );
+            p.rect_stroke(
+                rect.shrink(1.2),
+                3.0,
+                Stroke::new(0.9_f32, trim.gamma_multiply(0.32)),
+                egui::StrokeKind::Inside,
+            );
+        }
+        theme::Material::Plastic => {
+            theme::plastic(ui.painter(), rect, 8.0, zone_a);
+            if let Some(cells) = art.cells {
+                super::motifs::paint_deep_motif_art(
+                    ui, rect, art.spec, art.active, art.seed, cells,
+                );
+            }
+            ui.painter().rect_stroke(
+                rect,
+                8.0,
+                Stroke::new(1.0_f32, zone_a.lerp_to_gamma(Color32::BLACK, 0.42)),
+                egui::StrokeKind::Inside,
+            );
+        }
+        theme::Material::Metal => paint_deep_metal_bay(ui, rect, zone_a, trim, art),
+    }
+}
+
+/// Draw a unit-skinned parameter bay mounted flat inside a Deep Edit rack shell.
+/// With `art`, the bay carries its unit's motif art drawn to those dial cells
+/// (see `motifs::deep_cell`); without it, a plain framed plate.
+pub(crate) fn paint_deep_edit_bay(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    spec: MotifSpec,
+    active: bool,
+    seed: u64,
+    art: Option<&[Rect]>,
+) {
+    let ([zone_a, _], trim) = spec.deep_zones(active);
+    let ink = spec.face_ink();
+    let is_metal = roles().material == theme::Material::Metal;
+    let show_led = art.is_some();
+    let deep_art = DeepBayArt {
+        spec,
+        active,
+        seed,
+        cells: art,
+    };
+    paint_deep_bay_shell(ui, rect, zone_a, trim, deep_art);
+    let title_x = rect.left() + if is_metal && show_led { 24.0 } else { 12.0 };
+    // The motif deck starts right under the title, so a rule there would
+    // stack a second line on the deck's own edge.
+    let rule_color = if show_led {
+        Color32::TRANSPARENT
+    } else {
+        trim.gamma_multiply(if active { 0.65 } else { 0.35 })
+    };
+    controls::instrument::paint_bay_header(
+        ui.painter(),
+        rect,
+        title,
+        title_x,
+        ink,
+        rule_color,
+        is_metal,
+    );
 }
 
 /// The pedal's corner radius, the width of its rounded bevel, and how far its

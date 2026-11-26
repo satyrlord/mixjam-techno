@@ -601,6 +601,44 @@ fn mastering_presets_set_every_pedal_keep_the_trim_and_undo_in_one_step() {
 }
 
 #[test]
+fn a_mastering_preset_after_a_knob_turn_is_its_own_undo_step() {
+    use mixjam_techno::application::presets::PRESETS;
+    let (context, mut app, port) = agent_fixture();
+    app.boards.module = BottomModule::Mastering;
+    let hard = PRESETS
+        .iter()
+        .find(|preset| preset.name == "Hard Techno")
+        .unwrap()
+        .chain;
+    let mut turned = hard;
+    turned.limiter.gain = hard.limiter.gain + 2.0;
+    app.session
+        .edit_discrete(EditCommand::SetMaster(turned))
+        .unwrap();
+    // A knob turn that the preset then takes back: the board differs from
+    // the preset in that one knob only.
+    let mut turned_more = turned;
+    turned_more.limiter.gain = hard.limiter.gain + 3.0;
+    app.session
+        .edit(EditCommand::SetMaster(turned_more))
+        .unwrap();
+    let reply = agent(
+        &context,
+        &mut app,
+        &port,
+        &["set", "target=Mastering preset", "value=Hard Techno"],
+    );
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert_eq!(app.session.project().master, hard);
+    assert!(app.session.history_step(false).unwrap());
+    assert_eq!(
+        app.session.project().master,
+        turned_more,
+        "One undo takes back the preset only, not the knob turn before it."
+    );
+}
+
+#[test]
 fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
     let (ctx, _) = fixture();
     ctx.enable_accesskit();
@@ -640,9 +678,9 @@ fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
                         &mut PedalKind::Limiter,
                         &chain,
                         &metering,
-                        true,
                         generation.get(),
                     )
+                    .chain
                     .is_none()
                 );
             },
@@ -744,7 +782,6 @@ fn imaging_scope_and_telemetry_show_one_correlation_with_imaging_off() {
                     &mut PedalKind::Imaging,
                     &chain,
                     &metering,
-                    true,
                     0,
                 );
             },
@@ -1138,6 +1175,29 @@ fn mastering_deep_edit_tape_speed_dial_matches_its_compact_neighbours() {
     app.boards.module = BottomModule::Mastering;
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     click_named(&ctx, &mut app, "Edit Booster EQ");
+    click_named(&ctx, &mut app, "Deep edit select Limiter");
+    // Off Mastering pedals allow pre-dialing in Deep Edit without switching on.
+    assert!(!app.session.project().master.is_on(PedalKind::Limiter));
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(
+        !accessible_node(&output, "Deep edit Limiter gain")
+            .1
+            .is_disabled()
+    );
+    focus_control(&ctx, &mut app, &output, "Deep edit Limiter gain");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    assert_ne!(
+        app.session.project().master.limiter.gain,
+        MasterChain::default().limiter.gain
+    );
+    assert!(!app.session.project().master.is_on(PedalKind::Limiter));
+    assert!(app.session.history_step(false).unwrap());
+
     click_named(&ctx, &mut app, "Deep edit select Tape");
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.master_deep_edit, Some(PedalKind::Tape));
@@ -1186,7 +1246,7 @@ fn mastering_deep_edit_does_not_carry_a_trim_drag_into_a_new_mix() {
 }
 
 #[test]
-fn mastering_deep_edit_keeps_telemetry_clear_and_scrolls_when_resized() {
+fn mastering_deep_edit_keeps_telemetry_clear_and_does_not_resize() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     ctx.style_mut(|style| style.animation_time = 0.0);
@@ -1207,14 +1267,120 @@ fn mastering_deep_edit_keeps_telemetry_clear_and_scrolls_when_resized() {
         none,
     );
     let output = frame(&ctx, &mut app, vec![], none);
-    assert!(has_control(
-        &output,
-        "Mastering deep edit horizontal scroll bar"
-    ));
-    assert!(has_control(
-        &output,
-        "Mastering deep edit vertical scroll bar"
-    ));
+    let after = dialog::window_rect(&ctx, master::DEEP_EDIT_TITLE).unwrap();
+    assert_eq!(after.size(), window.size());
+    assert_fixed_window_holds_controls(&ctx, &output, master::DEEP_EDIT_TITLE, "Deep edit");
+}
+
+#[test]
+fn mastering_deep_edit_shows_every_pedal_whole() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let output = click_named(&ctx, &mut app, "Edit Booster EQ");
+    let pedals: Vec<String> = screen(&output)
+        .nodes()
+        .filter_map(|node| node.node().label())
+        .filter(|label| label.starts_with("Deep edit select "))
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(pedals.len(), PedalKind::ALL.len());
+    let none = egui::Modifiers::NONE;
+    for pedal in pedals {
+        click_named(&ctx, &mut app, &pedal);
+        frame(&ctx, &mut app, vec![], none);
+        let output = frame(&ctx, &mut app, vec![], none);
+        assert_fixed_window_holds_controls(&ctx, &output, master::DEEP_EDIT_TITLE, "Deep edit");
+    }
+}
+
+#[test]
+fn mastering_help_opens_beside_the_board_after_deep_edit_closes() {
+    let place = |open_deep_edit: bool| {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.boards.module = BottomModule::Mastering;
+        let none = egui::Modifiers::NONE;
+        frame(&ctx, &mut app, vec![], none);
+        if open_deep_edit {
+            click_named(&ctx, &mut app, "Edit Booster EQ");
+            assert!(dialog::window_rect(&ctx, master::DEEP_EDIT_TITLE).is_some());
+            app.master_deep_edit = None;
+            frame(&ctx, &mut app, vec![], none);
+        }
+        app.help.open_tool(help::Topic::Mastering);
+        frame(&ctx, &mut app, vec![], none);
+        frame(&ctx, &mut app, vec![], none);
+        dialog::window_rect(&ctx, "Mastering help").unwrap()
+    };
+    assert_eq!(place(true), place(false));
+}
+
+#[test]
+fn a_silent_deep_edit_bay_names_its_reason_beside_its_title() {
+    // The motif art fills the right of the header: the Tube vents and the
+    // Booster wide blocks. The status must not paint over it.
+    for (kind, bypass, title) in [
+        (PedalKind::Tube, false, "Tube · Pedal off"),
+        (
+            PedalKind::BoosterWide,
+            true,
+            "Booster wide · Chain bypassed",
+        ),
+    ] {
+        let (ctx, mut app) = fixture();
+        app.boards.module = BottomModule::Mastering;
+        let chain = MasterChain {
+            bypass,
+            ..MasterChain::default()
+        };
+        app.session.edit(EditCommand::SetMaster(chain)).unwrap();
+        app.master_deep_edit = Some(kind);
+        let none = egui::Modifiers::NONE;
+        frame(&ctx, &mut app, vec![], none);
+        let output = frame(&ctx, &mut app, vec![], none);
+        let screen = screen(&output);
+        assert!(screen.shows(title), "{title}");
+        for tag in ["Pedal off", "Chain bypassed"] {
+            assert!(!screen.shows(tag), "{tag} paints apart from the title.");
+        }
+    }
+}
+
+#[test]
+fn mastering_deep_edit_chips_keep_focus_across_arrow_steps() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    let output = click_named(&ctx, &mut app, "Edit Booster EQ");
+    // The chip in signal slot `slot`, counted from 0, by its "Slot N of M" value.
+    let chip = |slot: usize| -> String {
+        let value = format!("Slot {} of ", slot + 1);
+        screen(&output)
+            .nodes()
+            .find(|node| {
+                node.node()
+                    .label()
+                    .is_some_and(|label| label.starts_with("Deep edit select "))
+                    && node.node().value().is_some_and(|v| v.starts_with(&value))
+            })
+            .and_then(|node| node.node().label())
+            .map(str::to_owned)
+            .unwrap()
+    };
+    let chips: Vec<String> = (0..3).map(chip).collect();
+    let order = app.session.project().master.order;
+    focus_control(&ctx, &mut app, &output, &chips[0]);
+    let none = egui::Modifiers::NONE;
+    for step in [1, 2] {
+        press(&ctx, &mut app, egui::Key::ArrowRight, none);
+        let output = frame(&ctx, &mut app, vec![], none);
+        assert_eq!(app.master_deep_edit, Some(order[step]));
+        assert_eq!(focused_label(&output), Some(chips[step].as_str()));
+    }
 }
 
 #[test]
@@ -1231,4 +1397,48 @@ fn mastering_strip_double_click_opens_the_chosen_pedal() {
     assert!(app.master_deep_edit.is_none());
     click(&ctx, &mut app, chip, none);
     assert_eq!(app.master_deep_edit, Some(PedalKind::Limiter));
+}
+
+#[test]
+fn mastering_deep_edit_reset_preset_value_and_transfer_scope_work() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
+    app.boards.module = BottomModule::Mastering;
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = click_named(&ctx, &mut app, "Edit Soft clip");
+    accessible_node(&output, "Soft clip transfer curve");
+    assert!(
+        accessible_node(&output, "Deep edit preset")
+            .1
+            .value()
+            .is_some(),
+        "Deep edit preset must expose selected value"
+    );
+
+    click_named(&ctx, &mut app, "Deep edit pedal power");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Deep edit Soft clip amount");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::End, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    let max_amount = app.session.project().master.soft_clip.amount;
+    assert_ne!(max_amount, MasterChain::default().soft_clip.amount);
+
+    click_named(&ctx, &mut app, "Deep edit reset pedal");
+    assert_eq!(
+        app.session.project().master.soft_clip.amount,
+        MasterChain::default().soft_clip.amount
+    );
+    assert!(app.session.project().master.soft_clip.on);
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)],
+        egui::Modifiers::COMMAND,
+    );
+    assert_eq!(app.session.project().master.soft_clip.amount, max_amount);
 }

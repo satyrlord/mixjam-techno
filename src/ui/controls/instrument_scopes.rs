@@ -1,10 +1,36 @@
 //! Master Deep Edit oscilloscope views: GR history, 3-band GR, log-frequency EQ response,
 //! and rotated M/S stereo vectorscope with phase correlation meter.
+use super::ScopeState;
 use super::{
     Align2, Color32, FontId, Material, Pos2, Rect, Stroke, Vec2, draw_glow_trace,
-    draw_horiz_fractions, draw_scope_chrome, egui, high_band_color, hover_access_label,
+    draw_horiz_fractions, draw_scope_chrome, draw_scope_status, egui, hover_access_label,
     reduction_text, roles,
 };
+
+fn draw_reduction_grid(
+    painter: &egui::Painter,
+    plot: Rect,
+    max_db: f32,
+    grid: Color32,
+    legend: Color32,
+) {
+    draw_horiz_fractions(
+        painter,
+        plot,
+        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
+        grid,
+    );
+    for db in [3_u8, 6, 9] {
+        let y = plot.top() + (f32::from(db) / max_db) * plot.height();
+        painter.text(
+            Pos2::new(plot.left() + 2.0, y),
+            Align2::LEFT_BOTTOM,
+            format!("-{db}"),
+            FontId::proportional(8.0),
+            legend.gamma_multiply(0.55),
+        );
+    }
+}
 
 /// Top-down scrolling gain-reduction waveform scope (`0` dB at top to `-max_db`).
 pub(in super::super::super) fn gr_history_scope(
@@ -16,23 +42,66 @@ pub(in super::super::super) fn gr_history_scope(
     current_db: f32,
     accent: Color32,
 ) {
-    let r = roles();
-    let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
-    let painter = ui.painter();
+    gr_history_scope_state(
+        ui,
+        rect,
+        title,
+        history,
+        max_db,
+        current_db,
+        ScopeState::active(accent),
+    );
+}
+
+fn draw_gr_labels(
+    painter: &egui::Painter,
+    rect: Rect,
+    trace: Color32,
+    current_db: f32,
+    state: ScopeState<'_>,
+) -> (String, String) {
     let tag = reduction_text(current_db);
+    let header_tag = match state.status {
+        Some(status) if !state.active => format!("{tag} · {status}"),
+        _ => tag.clone(),
+    };
+    let color = if state.active && current_db >= 0.05 {
+        trace
+    } else {
+        roles()
+            .legend
+            .gamma_multiply(if state.active { 1.0 } else { 0.72 })
+    };
     painter.text(
         Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
         Align2::RIGHT_CENTER,
-        &tag,
+        &header_tag,
         FontId::proportional(9.5),
-        if current_db >= 0.05 { trace } else { r.legend },
+        color,
     );
-    draw_horiz_fractions(
-        painter,
-        plot,
-        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
-        grid,
-    );
+    (tag, header_tag)
+}
+
+/// Top-down scrolling gain-reduction waveform scope with explicit active/status state.
+pub(in super::super::super) fn gr_history_scope_state(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    history: &[f32],
+    max_db: f32,
+    current_db: f32,
+    state: ScopeState<'_>,
+) {
+    let r = roles();
+    let (plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, state.accent);
+    let painter = ui.painter();
+    let (tag, header_tag) = draw_gr_labels(painter, rect, trace, current_db, state);
+    let line_color = if state.active {
+        trace
+    } else {
+        trace.gamma_multiply(0.45)
+    };
+    draw_reduction_grid(painter, plot, max_db, grid, r.legend);
     if history.len() >= 2 {
         let denom = (history.len() - 1) as f32;
         let poly: Vec<Pos2> = history
@@ -46,34 +115,46 @@ pub(in super::super::super) fn gr_history_scope(
                 )
             })
             .collect();
-        draw_glow_trace(painter, poly, trace, r.material != Material::Flat);
+        draw_glow_trace(
+            painter,
+            poly,
+            line_color,
+            state.active && r.material != Material::Flat,
+        );
     }
-    hover_access_label(ui, rect, title, format!("Current reduction {tag}"));
+    let summary = if state.active {
+        format!("Current reduction {tag}")
+    } else {
+        format!("Current reduction {header_tag}")
+    };
+    hover_access_label(ui, rect, title, summary);
 }
 
-/// Top-down 3-band (`Low <200 Hz`, `Mid 200-3k`, `High >3 kHz`) gain-reduction meter scope.
-pub(in super::super::super) fn multiband_gr_scope(
+/// Top-down 3-band (`Low <200 Hz`, `Mid 200-3k`, `High >3 kHz`) gain-reduction meter scope
+/// with explicit active/status state.
+pub(in super::super::super) fn multiband_gr_scope_state(
     ui: &egui::Ui,
     rect: Rect,
     title: &str,
     reductions: [f32; 3],
     max_db: f32,
-    accent: Color32,
+    state: ScopeState<'_>,
 ) {
     let r = roles();
-    let (full_plot, mid_color, grid, low_color) = draw_scope_chrome(ui, rect, title, accent);
+    let (full_plot, mid_color, grid, low_color) = draw_scope_chrome(ui, rect, title, state.accent);
     let plot = Rect::from_min_max(full_plot.min, full_plot.max - Vec2::new(0.0, 14.0));
     let painter = ui.painter();
-    draw_horiz_fractions(
-        painter,
-        plot,
-        &[3.0 / max_db, 6.0 / max_db, 9.0 / max_db],
-        grid,
-    );
+    draw_scope_status(painter, rect, state);
+    draw_reduction_grid(painter, plot, max_db, grid, r.legend);
+    let dim = if state.active { 1.0 } else { 0.45 };
     let band_defs = [
-        ("LOW <200", low_color, reductions[0]),
-        ("MID 200-3k", mid_color, reductions[1]),
-        ("HIGH >3k", high_band_color(r.material), reductions[2]),
+        ("LOW <200", low_color.gamma_multiply(dim), reductions[0]),
+        ("MID 200-3k", mid_color.gamma_multiply(dim), reductions[1]),
+        (
+            "HIGH >3k",
+            Color32::from_rgb(186, 152, 246).gamma_multiply(dim),
+            reductions[2],
+        ),
     ];
     let col_w = plot.width() / 3.0;
     for (idx, (label, color, db)) in band_defs.iter().enumerate() {
@@ -83,7 +164,15 @@ pub(in super::super::super) fn multiband_gr_scope(
             Pos2::new(cx - bar_w * 0.5, plot.top() + 2.0),
             Pos2::new(cx + bar_w * 0.5, plot.bottom() - 2.0),
         );
-        painter.rect_filled(track, 2.0, r.well_edge.gamma_multiply(0.35));
+        // An empty track is a faint outline, so 0 dB reads as no reduction,
+        // not as a full grey bar.
+        painter.rect_filled(track, 2.0, r.well_edge.gamma_multiply(0.10));
+        painter.rect_stroke(
+            track,
+            2.0,
+            Stroke::new(1.0_f32, r.well_edge.gamma_multiply(0.45)),
+            egui::StrokeKind::Inside,
+        );
         let frac = (*db / max_db).clamp(0.0, 1.0);
         if frac > 0.005 {
             let fill = Rect::from_min_max(
@@ -97,7 +186,8 @@ pub(in super::super::super) fn multiband_gr_scope(
             Align2::CENTER_CENTER,
             format!("{label}  {}", reduction_text(*db)),
             FontId::proportional(9.0),
-            r.legend,
+            r.legend
+                .gamma_multiply(if state.active { 1.0 } else { 0.72 }),
         );
     }
     hover_access_label(
@@ -123,8 +213,31 @@ pub(in super::super::super) fn eq_response_scope(
     active: bool,
     accent: Color32,
 ) {
+    eq_response_scope_state(
+        ui,
+        rect,
+        title,
+        curve_db,
+        max_db,
+        ScopeState {
+            active,
+            status: (!active).then_some("OFF"),
+            accent,
+        },
+    );
+}
+
+/// EQ response scope with explicit active/status state.
+pub(in super::super::super) fn eq_response_scope_state(
+    ui: &egui::Ui,
+    rect: Rect,
+    title: &str,
+    curve_db: &[f32],
+    max_db: f32,
+    state: ScopeState<'_>,
+) {
     let r = roles();
-    let (full_plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, accent);
+    let (full_plot, trace, grid, _) = draw_scope_chrome(ui, rect, title, state.accent);
     let plot = Rect::from_min_max(full_plot.min, full_plot.max - Vec2::new(0.0, 13.0));
     let painter = ui.painter();
     draw_horiz_fractions(painter, plot, &[0.25, 0.75], grid);
@@ -166,7 +279,7 @@ pub(in super::super::super) fn eq_response_scope(
                 )
             })
             .collect();
-        let line_color = if active {
+        let line_color = if state.active {
             trace
         } else {
             trace.gamma_multiply(0.45)
@@ -175,29 +288,40 @@ pub(in super::super::super) fn eq_response_scope(
             painter,
             poly,
             line_color,
-            active && r.material != Material::Flat,
+            state.active && r.material != Material::Flat,
         );
     }
+    let summary = paint_eq_summary(painter, rect, curve_db, state);
+    hover_access_label(ui, rect, title, summary);
+}
+
+fn paint_eq_summary(
+    painter: &egui::Painter,
+    rect: Rect,
+    curve_db: &[f32],
+    state: ScopeState,
+) -> String {
     let (lo, hi) = curve_db
         .iter()
         .fold((0.0_f32, 0.0_f32), |(a, b), &v| (a.min(v), b.max(v)));
-    let summary = if active {
-        format!("{lo:+.1} to {hi:+.1} dB")
+    let range_text = format!("{lo:+.1} to {hi:+.1} dB");
+    let summary = match state.status {
+        Some(tag) if !state.active => format!("{range_text} · {tag}"),
+        _ => range_text,
+    };
+    let color = if state.active {
+        roles().legend
     } else {
-        "Bypassed".to_owned()
+        roles().legend.gamma_multiply(0.76)
     };
     painter.text(
         Pos2::new(rect.right() - 8.0, rect.top() + 9.0),
         Align2::RIGHT_CENTER,
         &summary,
         FontId::proportional(9.0),
-        if active {
-            r.legend
-        } else {
-            r.legend.gamma_multiply(0.7)
-        },
+        color,
     );
-    hover_access_label(ui, rect, title, summary);
+    summary
 }
 
 fn draw_lissajous_diamond(

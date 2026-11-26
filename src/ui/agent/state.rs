@@ -88,6 +88,7 @@ impl MixJamApp {
             (self.help.step_synth, "Step synth help"),
             (self.help.sample_edit, "Sample editor help"),
             (self.help.master, "Mastering help"),
+            (self.help.fx_returns, "FX returns help"),
             (self.options.is_some(), "Options"),
             (self.sample_libraries_open(), libraries::TITLE),
             (self.sample_import.details_open, "Import details"),

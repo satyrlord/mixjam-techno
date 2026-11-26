@@ -4,9 +4,11 @@
 use std::path::{Path, PathBuf};
 
 /// How many folders above the executable's own folder are searched. A build
-/// runs from `target/release` or `target/debug/deps`, three folders below the
-/// repository root; an installation keeps the executable in its root.
-const SEARCH_DEPTH: usize = 4;
+/// runs from `target/release` or `target/debug/deps`, and a test binary of
+/// Cargo's build-dir layout from `target/debug/build/<package>/<hash>/out`,
+/// six folders below the repository root; an installation keeps the
+/// executable in its root.
+const SEARCH_DEPTH: usize = 6;
 
 /// The runtime data folder `assets/<name>` of this application, if one exists.
 pub fn find(name: &str) -> Option<PathBuf> {
@@ -50,6 +52,21 @@ mod tests {
             find_from(&root, "album-review"),
             Some(root.join("assets").join("album-review"))
         );
+        let build_dir = [
+            "target",
+            "debug",
+            "build",
+            "mixjam-techno",
+            "0123abcd",
+            "out",
+        ]
+        .iter()
+        .fold(root.clone(), |path, part| path.join(part));
+        std::fs::create_dir_all(&build_dir).unwrap();
+        assert_eq!(
+            find_from(&build_dir, "album-review"),
+            Some(root.join("assets").join("album-review"))
+        );
         // A file of that name is not a folder.
         std::fs::write(root.join("assets").join("catalogs"), b"").unwrap();
         assert_eq!(find_from(&deps, "catalogs"), None);
@@ -60,7 +77,9 @@ mod tests {
     fn the_search_stops_a_few_folders_above_the_executable() {
         let root = fixture("depth");
         std::fs::create_dir_all(root.join("assets").join("album-review")).unwrap();
-        let deep = root.join("a").join("b").join("c").join("d").join("e");
+        let deep = ["a", "b", "c", "d", "e", "f", "g"]
+            .iter()
+            .fold(root.clone(), |path, part| path.join(part));
         std::fs::create_dir_all(&deep).unwrap();
         assert_eq!(find_from(&deep, "album-review"), None);
         assert!(find_from(deep.parent().unwrap(), "album-review").is_some());

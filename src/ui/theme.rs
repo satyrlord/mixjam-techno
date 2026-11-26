@@ -729,8 +729,8 @@ pub(super) fn arc(
 
 fn contrast_pointer(fill: Color32, roles: &Roles) -> Color32 {
     let luma =
-        0.299 * f32::from(fill.r()) + 0.587 * f32::from(fill.g()) + 0.114 * f32::from(fill.b());
-    if luma > 128.0 {
+        0.2126 * f32::from(fill.r()) + 0.7152 * f32::from(fill.g()) + 0.0722 * f32::from(fill.b());
+    if luma > 118.0 {
         roles.ink
     } else {
         roles.legend
@@ -801,10 +801,13 @@ fn plastic_dial(
     roles: &Roles,
 ) {
     let (dome, ptr_color) = match current_knob_style() {
-        KnobStyle::Default => (accent, roles.ink),
+        KnobStyle::Default => (accent.lerp_to_gamma(roles.ink, 0.14), roles.ink),
         KnobStyle::Anodized(c) => {
             let tint = rgb(c[0], c[1], c[2]);
-            (tint, contrast_pointer(tint, roles))
+            let hi = tint
+                .lerp_to_gamma(Color32::BLACK, 0.28)
+                .lerp_to_gamma(Color32::WHITE, 0.32);
+            (tint, contrast_pointer(hi, roles))
         }
         KnobStyle::DarkPhenolic(p) => (rgb(28, 30, 34), rgb(p[0], p[1], p[2])),
         KnobStyle::BrushedChrome(p) => (rgb(208, 214, 220), rgb(p[0], p[1], p[2])),
@@ -966,10 +969,11 @@ fn metal_dial(
         },
         KnobStyle::Anodized(c) => {
             let base = rgb(c[0], c[1], c[2]);
+            let hi = base.lerp_to_gamma(Color32::WHITE, 0.34);
             CapColors {
                 lo: base.lerp_to_gamma(Color32::BLACK, 0.26),
-                hi: base.lerp_to_gamma(Color32::WHITE, 0.34),
-                ptr: contrast_pointer(base, roles),
+                hi,
+                ptr: contrast_pointer(hi, roles),
                 skirt_mark: base.lerp_to_gamma(Color32::WHITE, 0.45),
             }
         }

@@ -227,6 +227,12 @@ const RENAMED: &[(&str, &str)] = &[
     ),
     // The Master strip's summary shows the pedalboard state, not the output.
     ("label\tStereo output", "label\tNo pedals on"),
+    // FX Deep Edit takes sentence case, like Mastering deep edit.
+    ("button\tClose FX Deep Edit", "button\tClose FX deep edit"),
+    (
+        "button\tCollapse FX Deep Edit",
+        "button\tCollapse FX deep edit",
+    ),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {
@@ -455,7 +461,7 @@ fn every_name() -> BTreeSet<String> {
     app.master_deep_edit = None;
 
     app.selection.sample = Some(1);
-    let windows: [fn(&mut MixJamApp) -> &mut bool; 10] = [
+    let windows: [fn(&mut MixJamApp) -> &mut bool; 11] = [
         |app| &mut app.effects.open,
         |app| &mut app.sample_edit.open,
         |app| &mut app.stretch.open,
@@ -466,6 +472,7 @@ fn every_name() -> BTreeSet<String> {
         |app| &mut app.help.sample_edit,
         |app| &mut app.help.stretch,
         |app| &mut app.help.master,
+        |app| &mut app.help.fx_returns,
     ];
     for window in windows {
         *window(&mut app) = true;

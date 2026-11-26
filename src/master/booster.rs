@@ -44,8 +44,7 @@ impl Equalizer {
     }
     pub(super) fn set(&mut self, bands: &[u8; 10]) {
         for (band, value) in bands.iter().enumerate() {
-            // The editor passes the saved value divided by 100.
-            let gain = ((f64::from(*value) / 100.0) as f32).clamp(0.0, 1.0);
+            let gain = band_gain(*value);
             self.gains[band] = gain;
             self.coefficients[band] = eq_coefficients(band, gain).map(|v| v as f32);
         }
@@ -68,6 +67,33 @@ impl Equalizer {
         }
         x0
     }
+}
+
+/// A band's gain from its saved value: the editor passes the value divided
+/// by 100.
+fn band_gain(value: u8) -> f32 {
+    ((f64::from(value) / 100.0) as f32).clamp(0.0, 1.0)
+}
+
+/// The response of the equaliser at `hz`, in dB, for the saved `bands`:
+/// the ten biquads that [`Equalizer`] runs, with its single-precision
+/// coefficients.
+pub(super) fn eq_response_db(bands: &[u8; 10], hz: f64) -> f64 {
+    let w = 2.0 * std::f64::consts::PI * hz / super::dsp::RATE;
+    let part = |c0: f64, c1: f64, c2: f64| {
+        let re = c0 + c1 * w.cos() + c2 * (2.0 * w).cos();
+        let im = -(c1 * w.sin() + c2 * (2.0 * w).sin());
+        re.hypot(im)
+    };
+    bands
+        .iter()
+        .enumerate()
+        .map(|(band, value)| {
+            let [b0, b1, b2, a1, a2] =
+                eq_coefficients(band, band_gain(*value)).map(|v| f64::from(v as f32));
+            20.0 * (part(b0, b1, b2) / part(1.0, a1, a2)).max(1e-6).log10()
+        })
+        .sum()
 }
 
 /// `b0, b1, b2, a1, a2` of the library's band routines. Bands 0 and 9 are
@@ -358,6 +384,36 @@ mod tests {
     use super::*;
     use crate::master::{Board, FADE, MasterChain, MasterControl, MasterProcessor, PedalKind};
     use sha2::{Digest, Sha256};
+
+    #[test]
+    fn the_plotted_eq_response_is_the_response_the_equaliser_plays() {
+        let mut chain = MasterChain::default();
+        chain.booster_eq.bands = [90, 50, 50, 50, 100, 50, 50, 50, 20, 100];
+        let mut equalizer = Equalizer::new();
+        equalizer.set(&chain.booster_eq.bands);
+        let mut curve = [0.0_f32; 65];
+        crate::master::sample_master_eq_curve(&chain, PedalKind::BoosterEq, &mut curve);
+        for i in (4..64).step_by(6) {
+            let hz = 20.0 * 1000.0_f64.powf(i as f64 / 64.0);
+            equalizer.clear();
+            let rate = super::super::dsp::RATE;
+            let (mut input, mut output) = (0.0_f64, 0.0_f64);
+            for n in 0..(rate as usize) {
+                let x = (std::f64::consts::TAU * hz * n as f64 / rate).sin() as f32 * 0.25;
+                let y = equalizer.process(0, x);
+                if n >= rate as usize / 2 {
+                    input += f64::from(x).powi(2);
+                    output += f64::from(y).powi(2);
+                }
+            }
+            let measured = 10.0 * (output / input).log10();
+            let plotted = f64::from(curve[i]);
+            assert!(
+                (measured - plotted).abs() < 0.2,
+                "{hz} Hz: played {measured:.2} dB, plotted {plotted:.2} dB"
+            );
+        }
+    }
 
     /// The oracle's test signal: an impulse, a 440 Hz burst, then noise.
     fn oracle_signal() -> Vec<i32> {

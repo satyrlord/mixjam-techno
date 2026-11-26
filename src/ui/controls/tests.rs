@@ -1,6 +1,31 @@
 use super::*;
 
 #[test]
+fn a_timed_cue_asks_for_a_repaint_at_its_expiry() {
+    let ctx = egui::Context::default();
+    let id = egui::Id::new("cue");
+    let _ = ctx.run(egui::RawInput::default(), |ctx| {
+        set_timed_cue(ctx, id, "Ctrl+Z to undo");
+    });
+    // An idle frame one second on: nothing else asks for a repaint, so the
+    // cue must ask for one at its expiry, or it stays on screen.
+    let idle = egui::RawInput {
+        time: Some(1.0),
+        ..Default::default()
+    };
+    let output = ctx.run(idle, |ctx| {
+        assert_eq!(timed_cue_text(ctx, id), Some("Ctrl+Z to undo"));
+    });
+    let delay = output.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+    assert!(delay <= std::time::Duration::from_secs(3), "{delay:?}");
+    let later = egui::RawInput {
+        time: Some(4.0),
+        ..Default::default()
+    };
+    let _ = ctx.run(later, |ctx| assert_eq!(timed_cue_text(ctx, id), None));
+}
+
+#[test]
 fn hovered_destructive_buttons_keep_text_contrast() {
     for theme in theme::Theme::ALL {
         theme::paint_as(theme);

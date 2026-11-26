@@ -12,6 +12,7 @@ pub(super) struct HelpWindows {
     pub(super) step_synth: bool,
     pub(super) sample_edit: bool,
     pub(super) master: bool,
+    pub(super) fx_returns: bool,
     /// The page that the main Help window shows.
     pub(super) topic: help::Topic,
     /// Tool pages opened since the last frame, to place beside their tool.
@@ -25,6 +26,7 @@ impl HelpWindows {
             help::Topic::Stretch => &mut self.stretch,
             help::Topic::Effects => &mut self.effects,
             help::Topic::Mastering => &mut self.master,
+            help::Topic::FxReturns => &mut self.fx_returns,
             help::Topic::StepSynth => &mut self.step_synth,
             help::Topic::SampleEditor => &mut self.sample_edit,
             _ => return,
@@ -74,6 +76,12 @@ impl MixJamApp {
     }
 
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
+        self.save_changes_dialog(ctx);
+        self.help_windows(ctx);
+    }
+
+    /// "Save your changes?" while an action waits on unsaved work.
+    fn save_changes_dialog(&mut self, ctx: &egui::Context) {
         if !dialog::is_collapsed(ctx, "Save your changes?")
             && self.files.path_prompt.is_none()
             && std::mem::take(&mut self.files.resume_save_changes)
@@ -81,36 +89,53 @@ impl MixJamApp {
         {
             self.save_changes(action, ctx);
         }
-        if let Some(action) = self.files.pending_action.clone()
-            && self.files.path_prompt.is_none()
-        {
-            let response = dialog::modal(ctx, "Save your changes?", "Save your changes?", |ui| {
-                ui.label(
-                    if self.session.has_recorded_take() && self.session.unsaved() {
-                        "The song and the recorded take are unsaved."
-                    } else if self.session.has_recorded_take() {
-                        "The recorded take is unsaved."
-                    } else {
-                        "The song has unsaved changes."
-                    },
-                );
-                ui.horizontal(|ui| {
-                    if dialog::primary(ui, "Save changes").clicked() {
-                        self.save_changes(action.clone(), ctx);
-                    }
-                    if dialog::danger(ui, "Discard changes").clicked() {
-                        self.run_action(action.clone(), ctx);
-                    }
-                    if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
-                        self.files.pending_action = None;
-                    }
-                });
-            });
-            if response.should_close() {
-                self.files.pending_action = None;
-                self.files.resume_save_changes = false;
-            }
+        let Some(action) = self.files.pending_action.clone() else {
+            return;
+        };
+        if self.files.path_prompt.is_some() {
+            return;
         }
+        let message = self.unsaved_message();
+        let response = dialog::modal(ctx, "Save your changes?", "Save your changes?", |ui| {
+            ui.label(message);
+            ui.horizontal(|ui| self.save_changes_keys(ui, &action, ctx));
+        });
+        if response.should_close() {
+            self.files.pending_action = None;
+            self.files.resume_save_changes = false;
+        }
+    }
+
+    /// What the unsaved work is.
+    fn unsaved_message(&self) -> &'static str {
+        if self.session.has_recorded_take() && self.session.unsaved() {
+            "The song and the recorded take are unsaved."
+        } else if self.session.has_recorded_take() {
+            "The recorded take is unsaved."
+        } else {
+            "The song has unsaved changes."
+        }
+    }
+
+    fn save_changes_keys(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &PendingAction,
+        ctx: &egui::Context,
+    ) {
+        if dialog::primary(ui, "Save changes").clicked() {
+            self.save_changes(action.clone(), ctx);
+        }
+        if dialog::danger(ui, "Discard changes").clicked() {
+            self.run_action(action.clone(), ctx);
+        }
+        if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
+            self.files.pending_action = None;
+        }
+    }
+
+    /// The manual, and the Help window of each tool.
+    fn help_windows(&mut self, ctx: &egui::Context) {
         for topic in std::mem::take(&mut self.help.placing) {
             if let Some(window) = topic.window() {
                 dialog::forget_geometry(ctx, window);
@@ -126,10 +151,15 @@ impl MixJamApp {
             .constrain_to(viewport)
             .scroll(false)
             .show(ctx, |ui| help::manual(ui, topic));
+        let deep_edit_open = [
+            (help::Topic::Mastering, self.master_deep_edit.is_some()),
+            (help::Topic::FxReturns, self.fx_deep_edit.is_some()),
+        ];
         for (topic, open) in [
             (help::Topic::Stretch, &mut self.help.stretch),
             (help::Topic::Effects, &mut self.help.effects),
             (help::Topic::Mastering, &mut self.help.master),
+            (help::Topic::FxReturns, &mut self.help.fx_returns),
             (help::Topic::StepSynth, &mut self.help.step_synth),
             (help::Topic::SampleEditor, &mut self.help.sample_edit),
         ] {
@@ -139,7 +169,11 @@ impl MixJamApp {
             dialog::window(title)
                 .open(open)
                 .palette(palette)
-                .anchor(help::anchor(ctx, topic))
+                .anchor(help::anchor(
+                    ctx,
+                    topic,
+                    deep_edit_open.contains(&(topic, true)),
+                ))
                 .default_width(480.0)
                 .default_height((viewport.height() - 200.0).clamp(360.0, 600.0))
                 .max_height((viewport.height() - 40.0).max(240.0))

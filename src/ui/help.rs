@@ -25,12 +25,23 @@ pub(super) fn note_board_rect(ctx: &egui::Context, rect: Rect) {
     ctx.data_mut(|data| data.insert_temp(egui::Id::new("help-board-rect"), rect));
 }
 
-/// What a page's window opens beside: its tool window, or the lower panel.
-pub(super) fn anchor(ctx: &egui::Context, topic: Topic) -> Option<Rect> {
-    match topic.tool_window() {
-        Some(tool) => dialog::window_rect(ctx, tool),
-        None => ctx.data(|data| data.get_temp::<Rect>(egui::Id::new("help-board-rect"))),
+/// What a page's window opens beside: its tool window, its deep-edit window
+/// while `deep_edit_open`, or the lower panel. A closed deep-edit window keeps
+/// its last place, so that place counts only while the window is open.
+pub(super) fn anchor(ctx: &egui::Context, topic: Topic, deep_edit_open: bool) -> Option<Rect> {
+    if let Some(tool) = topic.tool_window() {
+        return dialog::window_rect(ctx, tool);
     }
+    let board = ctx.data(|data| data.get_temp::<Rect>(egui::Id::new("help-board-rect")));
+    let deep_edit = match topic {
+        Topic::Mastering => Some(master::DEEP_EDIT_TITLE),
+        Topic::FxReturns => Some(fx::DEEP_EDIT_TITLE),
+        _ => None,
+    };
+    deep_edit
+        .filter(|_| deep_edit_open)
+        .and_then(|title| dialog::window_rect(ctx, title))
+        .or(board)
 }
 
 /// The main Help window's body: the page list and the current page.

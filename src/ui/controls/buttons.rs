@@ -312,6 +312,83 @@ pub(crate) fn header_button(
     response.hover_hint(name)
 }
 
+/// How long a confirmation cue shows, in seconds.
+const CUE_SECONDS: f64 = 3.5;
+
+/// Record a transient confirmation cue that expires automatically after 3.5 seconds.
+pub(crate) fn set_timed_cue(ctx: &egui::Context, id: egui::Id, text: &'static str) {
+    let now = ctx.input(|input| input.time);
+    ctx.data_mut(|data| data.insert_temp(id, (text, now)));
+}
+
+/// Return an active confirmation cue stored by `set_timed_cue`, clearing expired ones.
+/// While a cue shows, a repaint is due at its expiry, so an idle window drops it.
+pub(crate) fn timed_cue_text(ctx: &egui::Context, id: egui::Id) -> Option<&'static str> {
+    let now = ctx.input(|input| input.time);
+    let cue = ctx.data(|data| data.get_temp::<(&'static str, f64)>(id))?;
+    let left = CUE_SECONDS - (now - cue.1);
+    if left >= 0.0 {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(left + 0.01));
+        Some(cue.0)
+    } else {
+        ctx.data_mut(|data| data.remove::<(&'static str, f64)>(id));
+        None
+    }
+}
+
+fn toggle_thumb_color(track: Color32, on: bool, enabled: bool) -> Color32 {
+    if !on {
+        return roles().cap.gamma_multiply(if enabled { 0.6 } else { 0.32 });
+    }
+    let luma = 0.2126 * f32::from(track.r())
+        + 0.7152 * f32::from(track.g())
+        + 0.0722 * f32::from(track.b());
+    if luma > 130.0 {
+        roles().ink
+    } else {
+        roles().cap
+    }
+}
+
+fn paint_toggle_visual(ui: &egui::Ui, rect: Rect, label: &str, on: bool, enabled: bool) {
+    let center = Pos2::new(rect.left() + 14.0, rect.center().y);
+    let track_rect = Rect::from_center_size(center, Vec2::new(26.0, 14.0));
+    let active_track = print_color(ui);
+    let track = if !on {
+        roles().ink
+    } else if enabled {
+        active_track
+    } else {
+        active_track.gamma_multiply(0.5)
+    };
+    let thumb = toggle_thumb_color(track, on, enabled);
+    ui.painter().rect_filled(track_rect, 7.0, track);
+    if !enabled && !on {
+        ui.painter().rect_stroke(
+            track_rect,
+            7.0,
+            Stroke::new(1.0_f32, roles().well_edge.gamma_multiply(0.45)),
+            egui::StrokeKind::Inside,
+        );
+    }
+    ui.painter().circle_filled(
+        center + Vec2::new(if on { 6.0 } else { -6.0 }, -0.5),
+        5.5,
+        thumb,
+    );
+    ui.painter().text(
+        Pos2::new(rect.left() + 34.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(13.0),
+        if enabled {
+            roles().legend
+        } else {
+            roles().legend.gamma_multiply(0.6)
+        },
+    );
+}
+
 pub(crate) fn toggle_at(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -319,35 +396,13 @@ pub(crate) fn toggle_at(
     label: &str,
     value: &mut bool,
 ) -> Response {
+    let enabled = ui.is_enabled();
     let mut response = ui.interact(rect, ui.id().with(key), Sense::click());
     if response.clicked() {
         *value = !*value;
         response.mark_changed();
     }
-    let center = Pos2::new(rect.left() + 14.0, rect.center().y);
-    // On, the whole track lights, so the state reads at a glance; off, the
-    // knob rests dim on the dark track.
-    ui.painter().rect_filled(
-        Rect::from_center_size(center, Vec2::new(26.0, 14.0)),
-        7.0,
-        if *value { print_color(ui) } else { roles().ink },
-    );
-    ui.painter().circle_filled(
-        center + Vec2::new(if *value { 6.0 } else { -6.0 }, -0.5),
-        5.5,
-        if *value {
-            roles().cap
-        } else {
-            roles().cap.gamma_multiply(0.6)
-        },
-    );
-    ui.painter().text(
-        Pos2::new(rect.left() + 34.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        FontId::proportional(13.0),
-        roles().legend,
-    );
+    paint_toggle_visual(ui, rect, label, *value, enabled);
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::Checkbox,
