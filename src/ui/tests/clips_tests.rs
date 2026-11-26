@@ -4,32 +4,20 @@ use super::*;
 
 #[test]
 fn clip_menu_previews_the_clip_it_was_opened_on() {
-    let (ctx, mut app) = missing_fixture();
-    let mut project = app.session.project().clone();
-    let other = MissingSample::native(
-        Product::T2,
-        43,
-        "Other pad".into(),
-        132.0,
-        4 * TICKS_PER_BAR,
-        false,
-        "The original audio file is absent.".into(),
+    let (ctx, mut app) = fixture();
+    let first = app.session.library().samples[0].clone();
+    let mut other = first.clone();
+    other.id = 2;
+    other.code = "OTHER".into();
+    other.name = "Other pad".into();
+    let mut editor = Editor::new(Project::default());
+    editor.place(1, 0, 0, TICKS_PER_BAR).unwrap();
+    editor.place(2, 1, TICKS_PER_BAR, TICKS_PER_BAR).unwrap();
+    app.session = Session::headless(
+        Arc::new(Library::fixture(vec![first, other])),
+        editor.into_project(),
     )
     .unwrap();
-    project.clips.push(Clip {
-        id: 2,
-        sample_id: other.id,
-        track: 3,
-        start_tick: TICKS_PER_BAR,
-        length_ticks: 4 * TICKS_PER_BAR,
-        offset_frames: 0,
-        gain: 1.0,
-        fades: Default::default(),
-        pitch_cents: 0,
-        reverse: false,
-    });
-    project.missing_samples.push(other);
-    app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     // Both clips are selected; the first one is the primary clip.

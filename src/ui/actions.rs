@@ -70,7 +70,6 @@ impl MixJamApp {
     pub(super) fn resolve_missing_sample_with(&mut self, sample_id: u32, path: &Path) {
         match self.session.resolve_missing_sample(sample_id, path) {
             Ok(()) => {
-                self.clip_menu.missing_sample = None;
                 self.reconcile_selection();
                 self.sync_notice();
             }

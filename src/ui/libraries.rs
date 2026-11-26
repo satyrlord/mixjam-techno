@@ -1,6 +1,7 @@
 //! The Sample libraries tool window. Its actions use Session at once, so it
 //! has no draft and no Apply: closing it keeps every change.
 use super::*;
+use mixjam_techno::application::WaveScanStatus;
 
 /// The window's title and identity.
 pub(super) const TITLE: &str = "Sample libraries";
@@ -61,6 +62,20 @@ fn describe_path(response: &Response, path: &str) {
             .ctx
             .accesskit_node_builder(response.id, |node| node.set_description(path));
     }
+}
+
+fn provider_picker(ui: &mut egui::Ui, selected: &mut Product) {
+    let products = egui::ComboBox::from_id_salt("library_product")
+        .selected_text(selected.label())
+        // The list is short, so it shows all its rows.
+        .height(f32::INFINITY)
+        .show_ui(ui, |ui| {
+            for product in Product::ALL {
+                ui.selectable_value(selected, product, product.label());
+            }
+        })
+        .response;
+    form::register(&name_control(products, "Provider product"));
 }
 
 impl MixJamApp {
@@ -125,11 +140,30 @@ impl MixJamApp {
         } else {
             "Stop recording before you change the library folders."
         };
+        self.folder_scan_controls(ui, &folders, idle, busy);
+        if let Some(scan) = scan {
+            self.scan_progress(ui, &scan);
+        }
+        let remove = self.library_folders(ui, &folders, idle, busy);
+        self.scan_details(ui);
+        if let Some(index) = remove {
+            self.remove_library_folder(index);
+        }
+        self.optional_providers(ui, idle, busy);
+    }
+
+    fn folder_scan_controls(
+        &mut self,
+        ui: &mut egui::Ui,
+        folders: &[PathBuf],
+        idle: bool,
+        busy: &str,
+    ) {
         ui.horizontal_wrapped(|ui| {
             let room = folders.len() < MAX_LIBRARY_FOLDERS;
             let full = format!(
                 "The browser holds up to {MAX_LIBRARY_FOLDERS} library \
-        folders. Remove one first."
+                 folders. Remove one first."
             );
             if library_button(
                 ui,
@@ -147,7 +181,7 @@ impl MixJamApp {
                     .hover_hint("Read every library folder again.")
                     .clicked()
             {
-                self.scan_library_folders(folders.clone());
+                self.scan_library_folders(folders.to_vec());
             }
         });
         form::help(
@@ -164,36 +198,48 @@ impl MixJamApp {
             )
             .hover_hint(
                 "Recognized product audio keeps its original tempo. Folders \
-        use matching original audio when enough sources agree, then \
-        loop lengths, then this tempo. Unresolved half/double \
-        matches prefer 88–176 BPM unless this tempo selects the \
-        other one.",
+                 use matching original audio when enough sources agree, then \
+                 loop lengths, then this tempo. Unresolved half/double \
+                 matches prefer 88–176 BPM unless this tempo selects the \
+                 other one.",
             );
             form::register(&fallback);
             ui.label("BPM");
         });
         form::help(ui, "Applies to the next Add library folder or Scan again.");
-        if let Some(scan) = &scan {
-            ui.horizontal_wrapped(|ui| {
-                let (text, fraction) = if scan.files_total == 0 {
-                    ("Listing files…".to_string(), None)
-                } else {
-                    (
-                        format!("{} of {} WAVs", scan.files_done, scan.files_total),
-                        Some(scan.files_done as f32 / scan.files_total as f32),
-                    )
-                };
-                let width = (ui.available_width() - 170.0).clamp(80.0, 300.0);
-                controls::progress(ui, &text, fraction, width);
-                if library_button(ui, "Cancel library scan", "Cancel library scan", true, "")
-                    .clicked()
-                {
-                    self.session.cancel_wave_scan();
-                    self.sync_notice();
-                }
-            });
-            ui.small(format!("Scanning {}", scan_subject(&scan.roots)));
-        }
+    }
+
+    fn scan_progress(&mut self, ui: &mut egui::Ui, scan: &WaveScanStatus) {
+        ui.horizontal_wrapped(|ui| {
+            let (text, fraction) = if scan.files_total == 0 {
+                ("Listing files…".to_string(), None)
+            } else {
+                (
+                    format!("{} of {} WAVs", scan.files_done, scan.files_total),
+                    Some(scan.files_done as f32 / scan.files_total as f32),
+                )
+            };
+            let width = (ui.available_width() - 170.0).clamp(80.0, 300.0);
+            controls::progress(ui, &text, fraction, width);
+            if library_button(ui, "Cancel library scan", "Cancel library scan", true, "").clicked()
+            {
+                self.session.cancel_wave_scan();
+                self.sync_notice();
+            }
+        });
+        ui.small(format!(
+            "Scanning {}",
+            display_paths(&scan_subject(&scan.roots))
+        ));
+    }
+
+    fn library_folders(
+        &self,
+        ui: &mut egui::Ui,
+        folders: &[PathBuf],
+        idle: bool,
+        busy: &str,
+    ) -> Option<usize> {
         let library = self.session.library();
         let mut remove = None;
         for (index, folder) in folders.iter().enumerate() {
@@ -228,6 +274,11 @@ impl MixJamApp {
             }
             ui.add_space(4.0);
         }
+        remove
+    }
+
+    fn scan_details(&self, ui: &mut egui::Ui) {
+        let library = self.session.library();
         if !library.folder_tempos().is_empty() {
             form::disclosure(
                 ui,
@@ -252,31 +303,16 @@ impl MixJamApp {
                 },
             );
         }
-        if let Some(index) = remove {
-            self.remove_library_folder(index);
-        }
+    }
+
+    fn optional_providers(&mut self, ui: &mut egui::Ui, idle: bool, busy: &str) {
         form::disclosure(
             ui,
             controls::disclosure("Optional product providers")
                 .default_open(self.capture_view_is("library-providers")),
             |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    let products = egui::ComboBox::from_id_salt("library_product")
-                        .selected_text(self.libraries.product.label())
-                        // The list is short, so it shows all its rows.
-                        .height(f32::INFINITY)
-                        .show_ui(ui, |ui| {
-                            for product in Product::ALL {
-                                ui.selectable_value(
-                                    &mut self.libraries.product,
-                                    product,
-                                    product.label(),
-                                );
-                            }
-                        })
-                        .response;
-                    let products = name_control(products, "Provider product");
-                    form::register(&products);
+                    provider_picker(ui, &mut self.libraries.product);
                     if library_button(ui, "Choose folder", "Choose provider folder", idle, busy)
                         .clicked()
                     {

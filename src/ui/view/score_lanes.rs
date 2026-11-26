@@ -334,23 +334,9 @@ impl MixJamApp {
     /// there or at the selected clip.
     fn clip_context_menu(&mut self, response: &Response, rect: Rect) {
         if response.secondary_clicked() {
-            let pointer = response.interact_pointer_pos();
-            let under = pointer.and_then(|pos| self.clip_at(pos, rect));
-            let hit = under.map(|clip| clip.id);
-            let missing = under
-                .and_then(|clip| self.session.missing_sample(clip.sample_id))
-                .map(|missing| missing.id);
-            self.clip_menu.clip = hit;
-            if let Some(pos) = pointer {
-                self.clip_menu.anchor = pos;
-            }
-            if let Some(id) = hit.filter(|id| !self.selection.clips.contains(id)) {
-                self.select_clip(id, false);
-                self.selection.place_on_click = false;
-            }
-            self.clip_menu.missing_sample = missing;
+            self.pick_clip_context_menu(response, rect);
         }
-        if self.clip_menu.clip.is_some() || self.clip_menu.missing_sample.is_some() {
+        if let Some(id) = self.clip_menu.clip {
             // A context menu that Shift+F10 can also open at the
             // selected clip. Clicks inside it edit the clip's values.
             let open = if response.secondary_clicked() {
@@ -364,31 +350,59 @@ impl MixJamApp {
                 .open_memory(open)
                 .at_position(self.clip_menu.anchor)
                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                .show(|ui| {
-                    if let Some(sample_id) = self.clip_menu.missing_sample
-                        && ui.button("Resolve manually").clicked()
-                    {
-                        ui.close();
-                        self.resolve_missing_sample(sample_id);
-                    }
-                    if let Some(id) = self.clip_menu.clip {
-                        if ui.button("Preview").clicked() {
-                            ui.close();
-                            // The menu's clip need not be the primary one.
-                            self.preview_clip(id);
-                        }
-                        if ui.button("Duplicate (Ctrl+D)").clicked() {
-                            ui.close();
-                            self.duplicate_selection();
-                        }
-                        if ui.button("Delete (Delete)").clicked() {
-                            ui.close();
-                            self.delete_selection();
-                        }
-                        self.clip_properties(ui, id, "Clip");
-                    }
-                });
+                .show(|ui| self.clip_menu_items(ui, id));
         }
+    }
+
+    fn pick_clip_context_menu(&mut self, response: &Response, rect: Rect) {
+        let pointer = response.interact_pointer_pos();
+        let hit = pointer
+            .and_then(|pos| self.clip_at(pos, rect))
+            .map(|clip| clip.id);
+        self.clip_menu.clip = hit;
+        if let Some(pos) = pointer {
+            self.clip_menu.anchor = pos;
+        }
+        if let Some(id) = hit.filter(|id| !self.selection.clips.contains(id)) {
+            self.select_clip(id, false);
+            self.selection.place_on_click = false;
+        }
+    }
+
+    fn clip_menu_items(&mut self, ui: &mut egui::Ui, id: u64) {
+        let Some(clip) = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .find(|clip| clip.id == id)
+        else {
+            ui.close();
+            return;
+        };
+        let sample_id = clip.sample_id;
+        let missing = self.session.missing_sample(sample_id).is_some();
+        if missing && ui.button("Resolve manually").clicked() {
+            ui.close();
+            self.resolve_missing_sample(sample_id);
+        }
+        let preview = ui
+            .add_enabled(!missing, egui::Button::new("Preview"))
+            .disabled_hint("Missing audio cannot be previewed.");
+        if preview.clicked() {
+            ui.close();
+            // The menu's clip need not be the primary one.
+            self.preview(sample_id);
+        }
+        if ui.button("Duplicate (Ctrl+D)").clicked() {
+            ui.close();
+            self.duplicate_selection();
+        }
+        if ui.button("Delete (Delete)").clicked() {
+            ui.close();
+            self.delete_selection();
+        }
+        self.clip_properties(ui, id, "Clip");
     }
 
     /// A drag that starts on a clip moves or copies the selection; one that

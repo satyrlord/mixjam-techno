@@ -33,7 +33,8 @@ To find and hear sounds, use the [Sounds panel](interface.md#sounds-panel).
   does nothing.
 - To delete the selected clips, press Delete. Use Undo and Redo to move back and
   forward through your edits.
-- To trim a clip, drag its left or right edge.
+- To trim a clip, drag its left or right edge. Edges snap to whole bars.
+  Hold Ctrl for sixteenth-note steps.
 - To set the fades, drag the handles at the top corners of the clip.
 - To set the gain, drag the small handle in the middle of the clip up or down.
   Each step is 1 dB. For 0.1 dB steps, hold Ctrl.
@@ -57,6 +58,9 @@ clip and press Shift+F10. The menu sets these values:
 The fade out ends where the sound of the clip ends. This can be before the end
 of the clip, so a phrase that stops suddenly can fade away. Pitch does not
 change the length or the timing of the clip.
+
+If the clip's audio is missing, Preview is disabled. Select **Resolve
+manually** in the clip menu to choose its audio file.
 
 Reverse plays a clip backwards: for example, for reversed cymbals, swells,
 and risers. The clip plays the same part of its sound: from the trim start, for

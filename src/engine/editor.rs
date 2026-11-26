@@ -23,6 +23,20 @@ impl Editor {
     pub fn project(&self) -> &Project {
         &self.project
     }
+    /// A restored history step uses the current WAV bytes for each import.
+    pub(crate) fn refresh_restored_rates(
+        &mut self,
+        rate: impl Fn(&ImportedSample) -> Option<u32>,
+    ) -> Result<(), String> {
+        // An old song can lack a saved rate. Its frame offsets keep their values.
+        if let Some(updated) = self
+            .project
+            .with_import_rates(|sample| sample.source_sample_rate.and_then(|_| rate(sample)))?
+        {
+            self.project = updated;
+        }
+        Ok(())
+    }
     pub fn into_project(self) -> Project {
         self.project
     }

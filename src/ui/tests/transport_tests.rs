@@ -170,6 +170,43 @@ fn a_new_section_opens_its_name_for_editing() {
 }
 
 #[test]
+fn adding_a_section_selects_the_default_name_so_typing_replaces_it() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.sections.bookmarks = true;
+    app.add_section(4 * TICKS_PER_BAR);
+    for _ in 0..2 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Text("B".into())],
+        egui::Modifiers::NONE,
+    );
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Text("reak".into())],
+        egui::Modifiers::NONE,
+    );
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        egui::Modifiers::NONE,
+    );
+    assert!(app.sections.rename.is_none());
+    assert_eq!(app.session.project().sections[0].name, "Break");
+}
+
+#[test]
 fn transport_controls_do_not_move_when_position_digits_change() {
     let (ctx, mut app) = fixture();
     let size = Vec2::new(960.0, 720.0);

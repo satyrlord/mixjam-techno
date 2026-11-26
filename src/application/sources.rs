@@ -1,6 +1,8 @@
 //! Audio sources: registering and saving sounds and patterns, processing them, and the Time Stretcher.
 use super::{EffectsState, Pcm, Session, StepSynthState, pattern_beside};
 use crate::audio;
+use crate::engine::{ImportedSample, Project};
+use crate::library::Library;
 use std::{path::Path, sync::mpsc};
 
 /// The source and tempo values captured for one Time Stretcher operation.
@@ -16,6 +18,24 @@ pub(super) struct StretchJob {
     pub(super) receiver: mpsc::Receiver<Result<Pcm, String>>,
 }
 
+struct PreparedSound {
+    library: Library,
+    project: Project,
+    id: u32,
+}
+
+fn store_sound(project: &mut Project, imported: ImportedSample) {
+    if let Some(existing) = project
+        .imported_samples
+        .iter_mut()
+        .find(|s| s.id == imported.id)
+    {
+        *existing = imported;
+    } else {
+        project.imported_samples.push(imported);
+    }
+}
+
 impl Session {
     pub fn register_file(
         &mut self,
@@ -23,24 +43,44 @@ impl Session {
         group: &str,
         source_bpm: f64,
     ) -> Result<u32, String> {
+        let sound = self.prepare_sound(|library| {
+            library.import_wav_with_tempo(path, None, group, source_bpm)
+        })?;
+        self.adopt_sound(sound)
+    }
+
+    fn prepare_sound(
+        &self,
+        import: impl FnOnce(&mut Library) -> Result<ImportedSample, String>,
+    ) -> Result<PreparedSound, String> {
         let mut library = (*self.library).clone();
         library.reserve_missing_samples(&self.project().missing_samples);
-        let imported = library.import_wav_with_tempo(path, None, group, source_bpm)?;
+        let imported = import(&mut library)?;
         let id = imported.id;
-        self.editor.transact(|project| {
-            if let Some(existing) = project
-                .imported_samples
-                .iter_mut()
-                .find(|sample| sample.id == id)
-            {
-                *existing = imported;
-            } else {
-                project.imported_samples.push(imported);
-            }
-        })?;
-        self.set_library(library);
+        let mut project = self
+            .project()
+            .with_import_rates(|alias| {
+                library
+                    .sample_by_id(alias.id)
+                    .filter(|known| known.wav_path.as_ref() == Some(&imported.path))
+                    .map(|known| known.sample_rate)
+            })?
+            .unwrap_or_else(|| self.project().clone());
+        store_sound(&mut project, imported);
+        project.prune_sample_conflicts();
+        project.validate()?;
+        Ok(PreparedSound {
+            library,
+            project,
+            id,
+        })
+    }
+
+    fn adopt_sound(&mut self, sound: PreparedSound) -> Result<u32, String> {
+        self.editor.transact(|current| *current = sound.project)?;
+        self.set_library(sound.library);
         self.changed();
-        Ok(id)
+        Ok(sound.id)
     }
     pub fn save_pcm(
         &mut self,
@@ -50,8 +90,9 @@ impl Session {
         source_bpm: f64,
     ) -> Result<u32, String> {
         Self::validate_pcm_save(pcm, path, group, source_bpm)?;
-        pcm.write_wav(path)?;
-        self.register_file(path, group, source_bpm)
+        self.write_sound(&[path.to_path_buf()], group, source_bpm, |files| {
+            pcm.write_wav_to(&mut files[0])
+        })
     }
     /// Save the sequence and its note pattern in one publication batch.
     pub fn save_sequence(
@@ -64,13 +105,33 @@ impl Session {
         state.validate()?;
         Self::validate_pcm_save(pcm, path, "Step synth", state.bpm)?;
         let pattern = serde_json::to_vec_pretty(state).map_err(|error| error.to_string())?;
-        crate::atomic_file::write_many(&[path.to_path_buf(), pattern_beside(path)], |files| {
-            pcm.write_wav_to(&mut files[0])?;
-            files[1]
-                .write_all(&pattern)
-                .map_err(|error| error.to_string())
+        self.write_sound(
+            &[path.to_path_buf(), pattern_beside(path)],
+            "Step synth",
+            state.bpm,
+            |files| {
+                pcm.write_wav_to(&mut files[0])?;
+                files[1]
+                    .write_all(&pattern)
+                    .map_err(|error| error.to_string())
+            },
+        )
+    }
+
+    fn write_sound(
+        &mut self,
+        paths: &[std::path::PathBuf],
+        group: &str,
+        source_bpm: f64,
+        fill: impl FnOnce(&mut [std::fs::File]) -> Result<(), String>,
+    ) -> Result<u32, String> {
+        let target = crate::atomic_file::destination_path(&paths[0])?;
+        let sound = crate::atomic_file::write_many_checked(paths, fill, |staged| {
+            self.prepare_sound(|library| {
+                library.import_wav_at(&staged[0], &target, None, group, source_bpm)
+            })
         })?;
-        self.register_file(path, "Step synth", state.bpm)
+        self.adopt_sound(sound)
     }
     fn validate_pcm_save(
         pcm: &Pcm,

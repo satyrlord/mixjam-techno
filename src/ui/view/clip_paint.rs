@@ -244,7 +244,7 @@ pub(in super::super) fn fade_handles(
     let tick_width = bar_width / TICKS_PER_BAR as f32;
     let sound_end =
         (rect.left() + sound_ticks(clip, sample, bpm) as f32 * tick_width).min(rect.right());
-    let inset = FADE_HANDLE / 2.0;
+    let inset = fade_handle_side(rect) / 2.0;
     let place = |x: f32| {
         Pos2::new(
             x.clamp(
@@ -260,8 +260,13 @@ pub(in super::super) fn fade_handles(
     ]
 }
 
-/// The side of a fade handle's square.
+/// Maximum side of a fade handle's square.
 pub(in super::super) const FADE_HANDLE: f32 = 9.0;
+
+fn fade_handle_side(rect: Rect) -> f32 {
+    // Leave the middle of the shortest lane's edge clear for trimming.
+    FADE_HANDLE.min(rect.height() * 0.5 - 2.0)
+}
 
 /// The vertical travel of one gain step: one dB, or a tenth with Ctrl.
 pub(super) const GAIN_PIXELS: f32 = 4.0;
@@ -307,7 +312,8 @@ pub(super) fn handle_at(
     {
         return Some(ClipHandle::Gain);
     }
-    if pos.y <= rect.top() + 12.0 {
+    let fade_bottom = rect.top() + fade_handle_side(rect) + 1.5;
+    if pos.y <= fade_bottom {
         let [fade_in, fade_out] = fade_handles(rect, clip, sample, bar_width, bpm);
         let (to_in, to_out) = ((pos.x - fade_in.x).abs(), (pos.x - fade_out.x).abs());
         if to_in.min(to_out) <= 7.0 {
@@ -355,7 +361,7 @@ pub(in super::super) fn draw_fade_handles(
     }
     // A light rim keeps the dark squares visible on fills and fade shading.
     for center in fade_handles(rect, clip, sample, bar_width, bpm) {
-        let square = Rect::from_center_size(center, Vec2::splat(FADE_HANDLE));
+        let square = Rect::from_center_size(center, Vec2::splat(fade_handle_side(rect)));
         painter.rect_filled(square, 1.5, roles().on_light);
         painter.rect_stroke(
             square,

@@ -777,6 +777,22 @@ impl Session {
         if !changed {
             return Ok(false);
         }
+        if self.apply_live_history(redo) {
+            return Ok(true);
+        }
+        if let Err(error) = self.restore_history_sources() {
+            if redo {
+                self.editor.undo();
+            } else {
+                self.editor.redo();
+            }
+            return Err(error);
+        }
+        self.changed();
+        Ok(true)
+    }
+
+    fn apply_live_history(&mut self, redo: bool) -> bool {
         // A step of the master pedalboard or the FX buses alone leaves the
         // mix and playback running. Level history uses the same live path as
         // the original edit: a render replacement would reset filters, FX
@@ -786,54 +802,31 @@ impl Session {
             .replaced_by_step(redo)
             .and_then(|before| live_step(before, self.project()))
         {
-            Some(LivePart::MasterAndFx) => {
-                self.master_changed();
-                return Ok(true);
-            }
-            Some(LivePart::Sections) => {
-                self.sections_changed();
-                return Ok(true);
-            }
-            Some(LivePart::Levels) => {
-                self.levels_changed();
-                return Ok(true);
-            }
-            None => {}
+            Some(LivePart::MasterAndFx) => self.master_changed(),
+            Some(LivePart::Sections) => self.sections_changed(),
+            Some(LivePart::Levels) => self.levels_changed(),
+            None => return false,
         }
+        true
+    }
+
+    fn restore_history_sources(&mut self) -> Result<(), String> {
         // Most steps leave the imported sources as they are. Rebuild the
         // catalog only for a step that adds, removes, or relinks one.
-        let mut library = if self.library.has_imports(&self.project().imported_samples) {
+        let library = if self.library.has_imports(&self.project().imported_samples) {
             None
         } else {
-            Some((*self.library).clone())
+            let mut library = (*self.library).clone();
+            library.apply_imports(&self.project().imported_samples)?;
+            Some(library)
         };
-        let result = match &mut library {
-            Some(library) => library.apply_imports(&self.project().imported_samples),
-            None => Ok(()),
-        }
-        .and_then(|()| {
-            let library = library.as_ref().unwrap_or(&self.library);
-            match self.project().clips.iter().find(|clip| {
-                library.sample_by_id(clip.sample_id).is_none()
-                    && self.project().missing_sample(clip.sample_id).is_none()
-            }) {
-                Some(clip) => Err(format!(
-                    "Cannot restore this edit because sample {} is unavailable. Add its sample \
-                     library and try again.",
-                    clip.sample_id
-                )),
-                None => Ok(()),
-            }
-        });
-        if let Err(error) = result {
-            if redo {
-                self.editor.undo();
-            } else {
-                self.editor.redo();
-            }
-            return Err(error);
-        }
+        self.check_history_clips(library.as_ref().unwrap_or(&self.library))?;
         if let Some(library) = library {
+            self.editor.refresh_restored_rates(|source| {
+                library
+                    .sample_by_id(source.id)
+                    .map(|sample| sample.sample_rate)
+            })?;
             self.set_library(library);
         }
         self.editor.set_libraries(self.library.bindings().to_vec());
@@ -845,7 +838,20 @@ impl Session {
             Arc::make_mut(&mut self.library)
                 .reserve_missing_samples(&self.editor.project().missing_samples);
         }
-        self.changed();
-        Ok(true)
+        Ok(())
+    }
+
+    fn check_history_clips(&self, library: &crate::library::Library) -> Result<(), String> {
+        if let Some(clip) = self.project().clips.iter().find(|clip| {
+            library.sample_by_id(clip.sample_id).is_none()
+                && self.project().missing_sample(clip.sample_id).is_none()
+        }) {
+            return Err(format!(
+                "Cannot restore this edit because sample {} is unavailable. Add its sample \
+                 library and try again.",
+                clip.sample_id
+            ));
+        }
+        Ok(())
     }
 }

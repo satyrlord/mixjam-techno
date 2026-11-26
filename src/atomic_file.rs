@@ -71,39 +71,45 @@ pub(crate) fn write_many(
     paths: &[PathBuf],
     fill: impl FnOnce(&mut [fs::File]) -> Result<(), String>,
 ) -> Result<(), String> {
+    write_many_checked(paths, fill, |_| Ok(()))
+}
+
+/// Inspect the complete staged files before publishing any of them.
+pub(crate) fn write_many_checked<T>(
+    paths: &[PathBuf],
+    fill: impl FnOnce(&mut [fs::File]) -> Result<(), String>,
+    check: impl FnOnce(&[PathBuf]) -> Result<T, String>,
+) -> Result<T, String> {
     check_destinations(paths)?;
     let mut staged = Vec::with_capacity(paths.len());
-    let mut files = Vec::with_capacity(paths.len());
-    let mut result = Ok(());
-    for path in paths {
-        match sibling(path, "tmp") {
-            Ok((stage, file)) => {
-                staged.push(stage);
-                files.push(file);
-            }
-            Err(error) => {
-                result = Err(error);
-                break;
-            }
-        }
-    }
-    let result = result
-        .and_then(|()| fill(&mut files))
-        .and_then(|()| {
-            files
-                .iter()
-                .try_for_each(|file| file.sync_all().map_err(error_text))
-        })
-        .and_then(|()| {
-            drop(files);
-            commit_staged(paths, &staged)
-        });
+    let result = fill_stages(paths, &mut staged, fill).and_then(|()| {
+        let checked = check(&staged)?;
+        commit_staged(paths, &staged)?;
+        Ok(checked)
+    });
     if result.is_err() {
         for stage in &staged {
             let _ = fs::remove_file(stage);
         }
     }
     result
+}
+
+fn fill_stages(
+    paths: &[PathBuf],
+    staged: &mut Vec<PathBuf>,
+    fill: impl FnOnce(&mut [fs::File]) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        let (stage, file) = sibling(path, "tmp")?;
+        staged.push(stage);
+        files.push(file);
+    }
+    fill(&mut files)?;
+    files
+        .iter()
+        .try_for_each(|file| file.sync_all().map_err(error_text))
 }
 
 /// The characters of the destination name kept in a sibling name. A sibling
@@ -141,22 +147,7 @@ pub(crate) fn sibling(path: &Path, extension: &str) -> Result<(PathBuf, fs::File
 fn check_destinations(paths: &[PathBuf]) -> Result<(), String> {
     let mut seen = std::collections::HashSet::new();
     for path in paths {
-        match fs::symlink_metadata(path) {
-            Ok(metadata) if !metadata.is_file() => {
-                return Err(format!("{} is not a regular file.", path.display()));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.to_string()),
-        }
-        let name = path.file_name().ok_or("Select a file name.")?;
-        let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
-        let canonical = match fs::canonicalize(path) {
-            Ok(path) => path,
-            Err(_) => fs::canonicalize(parent.unwrap_or(Path::new(".")))
-                .map_err(error_text)?
-                .join(name),
-        };
+        let canonical = destination_path(path)?;
         #[cfg(windows)]
         let canonical = canonical.to_string_lossy().to_lowercase();
         if !seen.insert(canonical) {
@@ -167,6 +158,20 @@ fn check_destinations(paths: &[PathBuf]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The final path of an existing file or of a new file in an existing folder.
+pub(crate) fn destination_path(path: &Path) -> Result<PathBuf, String> {
+    let name = path.file_name().ok_or("Select a file name.")?;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => return fs::canonicalize(path).map_err(error_text),
+        Ok(_) => return Err(format!("{} is not a regular file.", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    fs::canonicalize(path.with_file_name("."))
+        .map(|parent| parent.join(name))
+        .map_err(error_text)
 }
 
 /// Commit a completed batch. Backups remain recoverable if rollback fails.

@@ -2,6 +2,77 @@
 use super::*;
 
 #[test]
+fn replacing_a_wav_refreshes_its_other_palette_category() {
+    let dir = fixture_dir();
+    let path = dir.join("kick.wav");
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    let old = Pcm {
+        sample_rate: 44_100,
+        channels: 1,
+        samples: vec![0.25; 44_100],
+    };
+    let drum = session.save_pcm(&old, &path, "Drum", 120.0).unwrap();
+    let wave = session.register_file(&path, "Wave", 180.0).unwrap();
+    session.place(drum, 0, 0).unwrap();
+    session.place(wave, 1, 0).unwrap();
+    session
+        .editor
+        .transact(|project| {
+            project.clips[0].offset_frames = 2_000;
+            project.clips[1].offset_frames = 3_000;
+        })
+        .unwrap();
+    let new = Pcm {
+        sample_rate: 22_050,
+        channels: 2,
+        samples: vec![0.25; 176_400],
+    };
+    assert_eq!(session.save_pcm(&new, &path, "Wave", 180.0).unwrap(), wave);
+    assert_ne!(drum, wave);
+    let original = session.library().sample_by_id(drum).unwrap();
+    assert_eq!(
+        (
+            original.sample_rate,
+            original.channels,
+            original.frame_count
+        ),
+        (22_050, 2, 88_200)
+    );
+    assert_eq!((original.source_bpm, original.bars), (120.0, 2));
+    let saved = session
+        .project()
+        .imported_samples
+        .iter()
+        .find(|s| s.id == drum)
+        .unwrap();
+    assert_eq!(saved.source_sample_rate, Some(22_050));
+    assert_eq!(session.project().clips[0].offset_frames, 1_000);
+    assert_eq!(session.project().clips[1].offset_frames, 1_500);
+    for (redo, expected) in [
+        (false, [1_000, 1_500]),
+        (false, [0, 0]),
+        (true, [1_000, 1_500]),
+        (true, [1_000, 1_500]),
+    ] {
+        assert!(session.history_step(redo).unwrap());
+        assert_eq!(session.project().clips[0].offset_frames, expected[0]);
+        assert_eq!(session.project().clips[1].offset_frames, expected[1]);
+        assert!(
+            session
+                .project()
+                .imported_samples
+                .iter()
+                .all(|s| s.source_sample_rate == Some(22_050))
+        );
+    }
+    let song = dir.join("categories.mixjam");
+    session.save(&song).unwrap();
+    session.open(&song).unwrap();
+    assert_eq!(session.project().clips[0].offset_frames, 1_000);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn an_import_error_names_the_selected_file() {
     let dir = fixture_dir();
     let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -298,6 +369,41 @@ fn a_locked_sequence_pattern_rolls_back_the_existing_pair_without_session_change
     assert_eq!(session.project(), &project_before);
     assert_eq!(session.project_change_token(), token);
     assert_eq!(session.catalog_revision(), revision);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn an_unrepresentable_trim_keeps_the_existing_wav_and_pattern() {
+    let dir = fixture_dir();
+    let path = dir.join("lead.wav");
+    let pattern = pattern_beside(&path);
+    let mut pcm = Pcm {
+        sample_rate: 22_050,
+        channels: 1,
+        samples: vec![0.25; 16],
+    };
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    let id = session.save_pcm(&pcm, &path, "Drum", 140.0).unwrap();
+    session.place(id, 0, 0).unwrap();
+    session
+        .editor
+        .transact(|p| p.clips[0].offset_frames = u32::MAX)
+        .unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    std::fs::write(&pattern, b"original pattern").unwrap();
+    let before = session.project().clone();
+    pcm.sample_rate = 44_100;
+    for sequence in [false, true] {
+        let result = if sequence {
+            session.save_sequence(&pcm, &path, &StepSynthState::default())
+        } else {
+            session.save_pcm(&pcm, &path, "Wave", 140.0)
+        };
+        assert!(result.unwrap_err().contains("trim"));
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        assert_eq!(std::fs::read(&pattern).unwrap(), b"original pattern");
+        assert_eq!(session.project(), &before);
+    }
     std::fs::remove_dir_all(dir).unwrap();
 }
 

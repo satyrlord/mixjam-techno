@@ -9,7 +9,6 @@ use mixjam_techno::application::{Fade, MAX_PITCH_CENTS, MAX_TICKS};
 /// The lane context menu: what it was opened on, and where.
 #[derive(Default)]
 pub(in super::super) struct ClipMenu {
-    pub(in super::super) missing_sample: Option<u32>,
     /// The clip that the lane context menu was opened on.
     pub(in super::super) clip: Option<u64>,
     /// Where the lane context menu opens: the pointer, or the clip for a key.
@@ -146,10 +145,6 @@ impl MixJamApp {
             return;
         };
         self.clip_menu.clip = Some(clip.id);
-        self.clip_menu.missing_sample = self
-            .session
-            .missing_sample(clip.sample_id)
-            .map(|missing| missing.id);
         self.clip_menu.anchor = self.clip_rect(clip, rect).left_bottom();
         egui::Popup::open_id(ctx, egui::Popup::default_response_id(response));
     }

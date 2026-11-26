@@ -156,6 +156,41 @@ impl Default for Project {
 }
 
 impl Project {
+    /// Reconcile saved trim positions when a WAV has been measured at a new rate.
+    /// All offsets must fit before the caller adopts the updated project.
+    pub(crate) fn with_import_rates(
+        &self,
+        rate: impl Fn(&super::ImportedSample) -> Option<u32>,
+    ) -> Result<Option<Self>, String> {
+        let mut updated = None;
+        for (index, sample) in self.imported_samples.iter().enumerate() {
+            let Some(rate) = rate(sample).filter(|rate| Some(*rate) != sample.source_sample_rate)
+            else {
+                continue;
+            };
+            let project = updated.get_or_insert_with(|| self.clone());
+            if let Some(old_rate) = sample.source_sample_rate {
+                project.rescale_import_trims(sample.id, old_rate, rate)?;
+            }
+            project.imported_samples[index].source_sample_rate = Some(rate);
+        }
+        Ok(updated)
+    }
+
+    pub(crate) fn rescale_import_trims(
+        &mut self,
+        id: u32,
+        old_rate: u32,
+        rate: u32,
+    ) -> Result<(), String> {
+        for clip in self.clips.iter_mut().filter(|clip| clip.sample_id == id) {
+            clip.offset_frames =
+                super::rescale_trim(clip.offset_frames, false, (old_rate, 1.0), (rate, 1.0))
+                    .ok_or("The restored sample trim exceeds the supported frame range.")?;
+        }
+        Ok(())
+    }
+
     pub fn any_solo(&self) -> bool {
         self.tracks.iter().any(|track| track.solo)
     }

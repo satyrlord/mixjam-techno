@@ -239,8 +239,22 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     text_rect(&output, "Resolve manually");
     accessible_node(&output, "Resolve manually");
+    let (_, preview) = accessible_node(&output, "Preview");
+    assert!(
+        preview.is_disabled(),
+        "Missing clips cannot be previewed from the context menu."
+    );
+    assert_eq!(
+        preview.description(),
+        Some("Missing audio cannot be previewed.")
+    );
+    assert!(
+        !accessible_node(&output, "Duplicate (Ctrl+D)")
+            .1
+            .is_disabled()
+    );
     let id = before.clips[0].sample_id;
-    assert_eq!(app.clip_menu.missing_sample, Some(id));
+    assert_eq!(app.clip_menu.clip, Some(before.clips[0].id));
     assert_eq!(app.session.project(), &before);
 
     let dir = std::env::temp_dir().join(format!("mixjam-ui-resolve-{}", std::process::id()));
@@ -252,7 +266,7 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
     let status = app.status.clone();
     app.finish_path(FileRequest::ResolveMissing(id), None);
     assert_eq!(app.session.project(), &before);
-    assert_eq!(app.clip_menu.missing_sample, Some(id));
+    assert_eq!(app.clip_menu.clip, Some(before.clips[0].id));
     assert_eq!(app.status, status);
     let bad = dir.join("bad.wav");
     std::fs::write(&bad, b"not audio").unwrap();
@@ -271,7 +285,6 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
     assert_eq!(app.session.project(), &before);
     app.resolve_missing_sample_with(id, &chosen);
     assert!(app.session.missing_samples().is_empty());
-    assert_eq!(app.clip_menu.missing_sample, None);
     let resolved = &app.session.project().clips[0];
     assert_eq!(
         (
@@ -282,8 +295,21 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
         ),
         (2, TICKS_PER_BAR, 4 * TICKS_PER_BAR, 0.75)
     );
-    assert!(app.session.history_step(false).unwrap());
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(!accessible_node(&output, "Preview").1.is_disabled());
+    frame(
+        &context,
+        &mut app,
+        vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)],
+        egui::Modifiers::COMMAND,
+    );
     assert_eq!(app.session.project(), &before);
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(
+        accessible_node(&output, "Preview").1.is_disabled(),
+        "Undo restores the missing audio while its clip menu is open."
+    );
+    accessible_node(&output, "Resolve manually");
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -398,4 +424,26 @@ fn missing_sample_details_are_accessible_and_processing_explains_silence() {
         );
     }
     accessible_node(&output, "Import details");
+}
+
+#[test]
+fn present_clip_context_menu_enables_preview_while_missing_disables_it() {
+    let (context, mut app) = fixture();
+    context.enable_accesskit();
+    let clip = app.session.project().clips[0].clone();
+    app.select_clip(clip.id, false);
+    app.clip_menu.by_key = true;
+    frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(!accessible_node(&output, "Preview").1.is_disabled());
+
+    let (context, mut app) = missing_fixture();
+    context.enable_accesskit();
+    let clip = app.session.project().clips[0].clone();
+    app.select_clip(clip.id, false);
+    app.clip_menu.by_key = true;
+    frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(accessible_node(&output, "Preview").1.is_disabled());
+    assert!(!accessible_node(&output, "Resolve manually").1.is_disabled());
 }

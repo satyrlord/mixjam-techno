@@ -340,3 +340,151 @@ fn folders_import_with_their_own_tempo_and_report_it() {
         ]
     );
 }
+
+#[test]
+fn importing_a_library_wav_into_wave_keeps_its_original_category_entry() {
+    let folder = Folder::new();
+    let kick = folder.wave("Drum/kick.wav", 44_100, 44_100);
+    let mut library = Library::open_wav_folder(&folder.0, 140.0).unwrap();
+    let before = library.samples.len();
+    let imported = library
+        .import_wav_with_tempo(&kick, None, "Wave", 140.0)
+        .unwrap();
+    assert_eq!(library.samples.len(), before + 1);
+    assert!(
+        library
+            .samples
+            .iter()
+            .any(|sample| sample.group_name == "Drum" && sample.name == "kick"),
+        "The original Drum folder entry must stay in Drum."
+    );
+    assert_eq!(
+        library.sample_by_id(imported.id).unwrap().group_name,
+        "Wave"
+    );
+    let mut project_library = Library::empty();
+    project_library.apply_imports(&[imported]).unwrap();
+    let restored = project_library.restore_wav_palette(&library).unwrap();
+    assert!(
+        restored.iter().any(|sample| sample.group_name == "Drum"),
+        "Restoring the palette must keep the Drum entry alongside the Wave import."
+    );
+}
+
+#[test]
+fn import_group_case_preserves_the_existing_sample_id() {
+    let folder = Folder::new();
+    let kick = folder.wave("wave/kick.wav", 44_100, 10);
+    let mut library = Library::empty();
+    let scanned = library.import_wav_folder(&folder.0, 140.0).unwrap();
+    let imported = library
+        .import_wav_with_tempo(&kick, None, "Wave", 140.0)
+        .unwrap();
+    assert_eq!(imported.id, scanned[0].id);
+    assert_eq!(library.samples.len(), 1);
+}
+
+#[test]
+fn import_group_case_restores_only_distinct_palette_entries() {
+    let folder = Folder::new();
+    let kick = folder.wave("wave/kick.wav", 44_100, 10);
+    let mut palette = Library::empty();
+    palette.import_wav_folder(&folder.0, 140.0).unwrap();
+    let mut project = Library::empty();
+    project
+        .import_wav_with_tempo(&kick, None, "Wave", 140.0)
+        .unwrap();
+    assert!(project.restore_wav_palette(&palette).unwrap().is_empty());
+    assert_eq!(project.samples.len(), 1);
+}
+
+#[test]
+fn restored_category_uses_current_audio_and_keeps_its_own_tempo() {
+    let folder = Folder::new();
+    let path = folder.wave("Drum/kick.wav", 44_100, 10);
+    let mut palette = Library::empty();
+    palette.import_wav_folder(&folder.0, 120.0).unwrap();
+    folder.wave("Drum/kick.wav", 22_050, 88_200);
+    let mut project = Library::empty();
+    project
+        .import_wav_with_tempo(&path, None, "Wave", 180.0)
+        .unwrap();
+    fs::remove_file(&path).unwrap();
+    let restored = project.restore_wav_palette(&palette).unwrap();
+    assert_eq!(restored[0].source_sample_rate, Some(22_050));
+    let sample = project.sample_by_id(restored[0].id).unwrap();
+    assert_eq!(sample.frame_count, 88_200);
+    assert_eq!(sample.source_bpm, 120.0);
+    assert_eq!(sample.bars, 2);
+}
+
+#[test]
+fn ordinary_import_keeps_product_identities_and_their_decoders_in_the_same_group() {
+    let folder = Folder::new();
+    let kick = folder.wave("kick.wav", 22_050, 22_050);
+    let mut palette = Library::empty();
+    let mut t1 = palette
+        .import_wav_with_tempo(&kick, None, "Wave", 120.0)
+        .unwrap();
+    t1.origin = Some(Product::T1);
+    let mut d4 = t1.clone();
+    d4.id += 1;
+    d4.origin = Some(Product::D4);
+    palette.apply_imports(&[t1.clone(), d4.clone()]).unwrap();
+    let mut project = palette.clone();
+    let ordinary = project
+        .import_wav_with_tempo(&kick, None, "Wave", 140.0)
+        .unwrap();
+    assert_ne!(ordinary.id, t1.id);
+    assert_ne!(ordinary.id, d4.id);
+    let t1_sample = project.sample_by_id(t1.id).unwrap();
+    assert_eq!((t1_sample.channels, t1_sample.sample_rate), (1, 44_100));
+    let ordinary_sample = project.sample_by_id(ordinary.id).unwrap();
+    assert_eq!(
+        (ordinary_sample.channels, ordinary_sample.sample_rate),
+        (2, 22_050)
+    );
+    project.apply_imports(&[ordinary]).unwrap();
+    let restored = project.restore_wav_palette(&palette).unwrap();
+    assert_eq!(restored.len(), 2);
+    assert_eq!(restored[0].origin, t1.origin);
+    assert_eq!(restored[0].source_sample_rate, Some(44_100));
+    assert_eq!(restored[1].origin, d4.origin);
+    assert_eq!(restored[1].source_sample_rate, Some(22_050));
+
+    let replacement = folder.wave("candidate.wav", 11_025, 22_050);
+    project
+        .import_wav_at(&replacement, &kick, None, "Wave", 140.0)
+        .unwrap();
+    let measured = project.sample_by_id(restored[0].id).unwrap();
+    assert_eq!(
+        (
+            measured.sample_rate,
+            measured.channels,
+            measured.frame_count
+        ),
+        (44_100, 1, 88_200)
+    );
+    let measured = project.sample_by_id(restored[1].id).unwrap();
+    assert_eq!(
+        (
+            measured.sample_rate,
+            measured.channels,
+            measured.frame_count
+        ),
+        (11_025, 2, 22_050)
+    );
+
+    let unsupported = folder.wave("unsupported.wav", 48_000, 48_000);
+    let before = project.imported_samples();
+    assert!(
+        project
+            .import_wav_at(&unsupported, &kick, None, "Wave", 140.0)
+            .is_err()
+    );
+    assert_eq!(project.imported_samples(), before);
+    assert_eq!(
+        project.sample_by_id(restored[0].id).unwrap().frame_count,
+        88_200
+    );
+}

@@ -219,7 +219,7 @@ fn restore_imports(
                 if let Some(previous_rate) = resolved.source_sample_rate
                     && previous_rate != ready.sample_rate
                 {
-                    rescale_import_trims(project, resolved.id, previous_rate, ready.sample_rate)?;
+                    project.rescale_import_trims(resolved.id, previous_rate, ready.sample_rate)?;
                 }
                 resolved.source_sample_rate = Some(ready.sample_rate);
                 restoration.checked_imports.insert(resolved.id, ready);
@@ -230,28 +230,6 @@ fn restore_imports(
                 project.missing_samples.push(missing);
             }
         }
-    }
-    Ok(())
-}
-
-/// Move the trims of an import's clips from its saved rate to its current rate.
-fn rescale_import_trims(
-    project: &mut Project,
-    sample_id: u32,
-    previous_rate: u32,
-    rate: u32,
-) -> Result<(), String> {
-    for clip in project
-        .clips
-        .iter_mut()
-        .filter(|clip| clip.sample_id == sample_id)
-    {
-        let offset =
-            (f64::from(clip.offset_frames) * f64::from(rate) / f64::from(previous_rate)).round();
-        if offset > f64::from(u32::MAX) {
-            return Err("The restored sample trim exceeds the supported frame range.".into());
-        }
-        clip.offset_frames = offset as u32;
     }
     Ok(())
 }

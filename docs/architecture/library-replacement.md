@@ -36,6 +36,18 @@ includes changes to the length and channel count at the same path. History
 changes can still use the current metadata again, without a new read of each
 source.
 
+A WAV can appear in several palette categories. Importing it into the same
+category keeps its ID. Category matching ignores ASCII letter case. An import
+with a saved product origin keeps a separate ID from an ordinary WAV import.
+The Techno 1 decoder reads the source as mono audio at 44.1 kHz.
+
+When a WAV is replaced, its entries in other categories keep their names and
+tempos. Entries that use the same decoder share the new audio measurements.
+If the sample rate changes, registration, song opening, Undo, and Redo convert
+saved trim offsets to the new frame rate. When saving a sound, the application
+reads the staged WAV and checks the resulting project before replacing the WAV
+or its pattern. A failed check keeps both files and the current song.
+
 The agent Choose path request for Open also records this edit identity. Assume
 the user edits the song, or makes a recorded take, while that dialog is in its
 collapsed state. Then a confirmation of the old request keeps the current song

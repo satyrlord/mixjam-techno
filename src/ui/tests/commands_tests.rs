@@ -305,6 +305,10 @@ fn every_command_row_says_what_it_does_after_its_name() {
     app.commands = Some(commands::CommandList::new());
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        commands::Command::Edit.description(),
+        "Trim a sound and change its pitch"
+    );
     for command in commands::Command::all() {
         let text = command.description();
         assert!(!text.is_empty(), "{command:?} needs a description");

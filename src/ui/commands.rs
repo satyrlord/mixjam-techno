@@ -85,6 +85,87 @@ pub(super) const PANELS: [Command; 5] = [
     Command::Inspector,
 ];
 
+const DESCRIPTIONS: &[(Command, &str)] = &[
+    (Command::New, "Start an empty song"),
+    (Command::Open, "Open a song file"),
+    (Command::Save, "Save this song"),
+    (Command::SaveAs, "Save the song to a new file"),
+    (Command::Import, "Bring in a WAV file as a sound"),
+    (
+        Command::Export,
+        "Render the song to a stereo WAV through the master board",
+    ),
+    (Command::Erase, "Click clips to delete them; Esc ends"),
+    (Command::Delete, "Delete the selected clips"),
+    (Command::Mixer, "Track strips under the arrangement"),
+    (Command::Mastering, "The pedalboard on the master bus"),
+    (Command::FxReturns, "Four send and return effect buses"),
+    (Command::Effects, "Process a sound into a new one"),
+    (
+        Command::StepSynth,
+        "Write a note pattern and save it as a sound",
+    ),
+    (Command::Edit, "Trim a sound and change its pitch"),
+    (Command::Stretch, "Fit a sound to the tempo"),
+    (Command::AlbumReview, "Listening notes on an album"),
+    (Command::Options, "Audio, theme, workspace and folders"),
+    (Command::Help, "Manual and shortcuts"),
+    (Command::PlayPause, "Play or pause the song"),
+    (
+        Command::StepSynthListen,
+        "Play the Step synth pattern, or stop it",
+    ),
+    (Command::Undo, "Take back the last edit"),
+    (Command::Redo, "Put back the edit you undid"),
+    (
+        Command::Duplicate,
+        "Copy the selected clips to the bars after them",
+    ),
+    (Command::SelectAll, "Select all clips in the song"),
+    (
+        Command::Maximise,
+        "Hide the side and lower panels around the score",
+    ),
+    (Command::MixView, "The score's tracks become mixer strips"),
+    (
+        Command::ToolNames,
+        "Show names under the rail icons, or icons only",
+    ),
+    (
+        Command::Boards,
+        "Show or fold Mixer, Mastering, FX returns and Step synth",
+    ),
+    (Command::Sounds, "The sound list beside the score"),
+    (
+        Command::Overview,
+        "The whole song in one strip above the score",
+    ),
+    (
+        Command::Inspector,
+        "Settings of the song, a track or the selected clips",
+    ),
+    (
+        Command::Lane(None, None),
+        "Hide automation and edit clips again",
+    ),
+];
+
+const LANE_DESCRIPTIONS: &[(Lane, &str)] = &[
+    (Lane::Volume, "Decibels over the fader, on every track"),
+    (Lane::Pan, "Left to right, on every track"),
+    (Lane::Filter, "Low-pass below the middle, high-pass above"),
+    (Lane::Pitch, "Bend the playback speed, like a tape machine"),
+    (
+        Lane::Repeat,
+        "Rolls and ratchets from the track's own sound",
+    ),
+    (Lane::RepeatGate, "How much of each repeat sounds"),
+    (
+        Lane::Compression,
+        "How much of the track's compressor is mixed in",
+    ),
+];
+
 impl Command {
     /// Every command, in the list's order: its groups as the rail shows
     /// them, then the rest.
@@ -198,50 +279,17 @@ impl Command {
 
     /// What the command does, in one line after its name in the list.
     pub(super) fn description(self) -> &'static str {
+        if let Some((_, text)) = DESCRIPTIONS.iter().find(|(command, _)| *command == self) {
+            return text;
+        }
         match self {
-            Self::New => "Start an empty song",
-            Self::Open => "Open a song file",
-            Self::Save => "Save this song",
-            Self::SaveAs => "Save the song to a new file",
-            Self::Import => "Bring in a WAV file as a sound",
-            Self::Export => "Render the song to a stereo WAV through the master board",
-            Self::Erase => "Click clips to delete them; Esc ends",
-            Self::Delete => "Delete the selected clips",
-            Self::Mixer => "Track strips under the arrangement",
-            Self::Mastering => "The pedalboard on the master bus",
-            Self::FxReturns => "Four send and return effect buses",
-            Self::Effects => "Process a sound into a new one",
-            Self::StepSynth => "Write a note pattern and save it as a sound",
-            Self::Edit => "Trim, fade and level a sound",
-            Self::Stretch => "Fit a sound to the tempo",
-            Self::AlbumReview => "Listening notes on an album",
-            Self::Options => "Audio, theme, workspace and folders",
-            Self::Help => "Manual and shortcuts",
-            Self::PlayPause => "Play or pause the song",
-            Self::StepSynthListen => "Play the Step synth pattern, or stop it",
-            Self::Undo => "Take back the last edit",
-            Self::Redo => "Put back the edit you undid",
-            Self::Duplicate => "Copy the selected clips to the bars after them",
-            Self::SelectAll => "Select all clips in the song",
-            Self::Maximise => "Hide the side and lower panels around the score",
-            Self::MixView => "The score's tracks become mixer strips",
-            Self::ToolNames => "Show names under the rail icons, or icons only",
-            Self::Boards => "Show or fold Mixer, Mastering, FX returns and Step synth",
-            Self::Sounds => "The sound list beside the score",
-            Self::Overview => "The whole song in one strip above the score",
-            Self::Inspector => "Settings of the song, a track or the selected clips",
-            Self::Lane(None, None) => "Hide automation and edit clips again",
-            Self::Lane(Some(Lane::Volume), _) => "Decibels over the fader, on every track",
-            Self::Lane(Some(Lane::Pan), _) => "Left to right, on every track",
-            Self::Lane(Some(Lane::Filter), _) => "Low-pass below the middle, high-pass above",
-            Self::Lane(Some(Lane::Pitch), _) => "Bend the playback speed, like a tape machine",
-            Self::Lane(Some(Lane::Repeat), _) => "Rolls and ratchets from the track's own sound",
-            Self::Lane(Some(Lane::RepeatGate), _) => "How much of each repeat sounds",
-            Self::Lane(Some(Lane::Compression), _) => {
-                "How much of the track's compressor is mixed in"
-            }
             Self::Lane(Some(Lane::Send(_)), _) => "How much each track sends to this bus",
             Self::Lane(None, Some(_)) => "The bus's return level, one line across the song",
+            Self::Lane(Some(lane), _) => LANE_DESCRIPTIONS
+                .iter()
+                .find(|(candidate, _)| *candidate == lane)
+                .map_or("", |(_, text)| *text),
+            _ => "",
         }
     }
 

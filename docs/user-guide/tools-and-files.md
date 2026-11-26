@@ -2,7 +2,9 @@
 
 ## Sound tools and recording
 
-- **Import**: use it for WAV files. Type the known source tempo.
+- To add a WAV file to the Wave category, select **Import** and enter its
+  source tempo. If the file belongs to another category, its entry there stays
+  available.
 - **Edit** opens Sample editor. Use it to trim a sound and to change its pitch.
   The range includes the start frame and excludes the end frame. The buttons
   beside a value change it by one frame or 0.1 semitone. Hold Shift for 100

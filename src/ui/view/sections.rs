@@ -188,19 +188,13 @@ impl MixJamApp {
             .order(egui::Order::Foreground)
             .fixed_pos(Pos2::new(x, ruler.top() + 1.0))
             .show(ui.ctx(), |ui| {
-                let response = name_control(
-                    ui.add(
-                        egui::TextEdit::singleline(&mut rename.name)
-                            .char_limit(MAX_SECTION_NAME)
-                            .desired_width(180.0)
-                            .font(FontId::proportional(12.0)),
-                    ),
-                    "Section name",
-                );
-                if !rename.focused {
-                    response.request_focus();
-                    rename.focused = true;
-                }
+                let mut output = egui::TextEdit::singleline(&mut rename.name)
+                    .char_limit(MAX_SECTION_NAME)
+                    .desired_width(180.0)
+                    .font(FontId::proportional(12.0))
+                    .show(ui);
+                let response = name_control(output.response.clone(), "Section name");
+                focus_section_rename(ui.ctx(), &mut output.state, &response, rename);
                 if response.lost_focus() {
                     done = Some(!ui.input(|input| input.key_pressed(egui::Key::Escape)));
                 }
@@ -223,4 +217,34 @@ impl MixJamApp {
             self.apply(result);
         }
     }
+}
+
+fn focus_section_rename(
+    ctx: &egui::Context,
+    state: &mut egui::text_edit::TextEditState,
+    response: &Response,
+    rename: &mut SectionRename,
+) {
+    if !rename.focused {
+        response.request_focus();
+        rename.focused = true;
+        select_all_text(ctx, state, response.id, &rename.name);
+    } else if response.gained_focus() && !response.changed() {
+        select_all_text(ctx, state, response.id, &rename.name);
+    }
+}
+
+fn select_all_text(
+    ctx: &egui::Context,
+    state: &mut egui::text_edit::TextEditState,
+    id: egui::Id,
+    text: &str,
+) {
+    state
+        .cursor
+        .set_char_range(Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(text.chars().count()),
+        )));
+    state.clone().store(ctx, id);
 }

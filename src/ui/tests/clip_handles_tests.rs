@@ -633,3 +633,79 @@ fn a_primary_press_does_not_turn_a_secondary_clip_drag_into_a_handle_edit() {
             && placed.gain == clip.gain
     }));
 }
+
+#[test]
+fn clip_edges_remain_grabbable_at_every_lane_height_and_ctrl_trims_sixteenths() {
+    use mixjam_techno::application::options::LaneHeight;
+    let settings = reserve_settings_folder();
+    for lane_height in LaneHeight::ALL {
+        let (ctx, mut app) = fixture();
+        app.session = app.session.with_settings_root(settings.clone());
+        let mut options = app.session.options().clone();
+        options.lane_height = lane_height;
+        app.session
+            .apply_options(options, app.session.options_revision(), false)
+            .unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let lanes = app.score.rect.unwrap();
+        let clip = app.session.project().clips[0].clone();
+        let rect = app.clip_rect(&clip, lanes);
+        assert_eq!(
+            app.clip_handle_at(Pos2::new(rect.right() - 2.0, rect.center().y), lanes),
+            Some((clip.id, ClipHandle::End)),
+            "Right edge must hit End at {lane_height:?}"
+        );
+        assert_eq!(
+            app.clip_handle_at(Pos2::new(rect.left() + 2.0, rect.center().y), lanes),
+            Some((clip.id, ClipHandle::Start)),
+            "Left edge must hit Start at {lane_height:?}"
+        );
+        assert_eq!(
+            app.clip_handle_at(rect.right_top() + Vec2::new(-4.5, 4.5), lanes),
+            Some((clip.id, ClipHandle::FadeOut)),
+            "Top-right corner must still hit FadeOut at {lane_height:?}"
+        );
+        let hover = rect.right_top() + Vec2::new(-4.5, 4.5);
+        let output = frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(hover)],
+            egui::Modifiers::NONE,
+        );
+        let square = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(mark)
+                    if mark.fill == roles().on_light
+                        && rect.contains_rect(mark.rect)
+                        && mark.rect.width() == mark.rect.height()
+                        && mark.rect.contains(hover) =>
+                {
+                    Some(mark.rect)
+                }
+                _ => None,
+            })
+            .expect("The hovered clip paints its fade handle.");
+        assert_eq!(
+            app.clip_handle_at(square.center_bottom() - Vec2::new(0.0, 0.5), lanes),
+            Some((clip.id, ClipHandle::FadeOut)),
+            "The bottom of the painted fade handle must edit the fade at {lane_height:?}"
+        );
+        let bar = app.score.bar_width;
+        let edge = Pos2::new(rect.right() - 2.0, rect.center().y);
+        drag(
+            &ctx,
+            &mut app,
+            edge,
+            Pos2::new(rect.left() + bar * 7.0 / 16.0, rect.center().y),
+            egui::Modifiers::CTRL,
+        );
+        assert_eq!(
+            app.session.project().clips[0].length_ticks,
+            7 * TICKS_PER_BAR / 16,
+            "Ctrl right-edge drag trims by sixteenths at {lane_height:?}"
+        );
+    }
+    remove_settings(&settings);
+}

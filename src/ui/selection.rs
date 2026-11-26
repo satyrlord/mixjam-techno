@@ -44,7 +44,6 @@ impl MixJamApp {
         self.score.loop_start = None;
         self.cancel_section_edit();
         self.clip_menu.clip = None;
-        self.clip_menu.missing_sample = None;
         self.conflicts.open = false;
         self.conflicts.dismissed = false;
         self.conflicts.error = None;

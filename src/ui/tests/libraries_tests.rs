@@ -515,3 +515,78 @@ fn sample_libraries_opens_beside_options_when_room_and_stays_inside_compact_wind
         remove_settings(&root);
     }
 }
+
+#[test]
+fn scan_labels_format_the_path_and_agent_status_keeps_its_spelling() {
+    let (ctx, mut app, root) = isolated_fixture();
+    let folder = root.join("samples");
+    sound_folder(&folder);
+    let path = std::fs::canonicalize(folder).unwrap();
+    app.open_sample_libraries(&ctx);
+    app.try_scan_library_folders(vec![path.clone()], 140.0)
+        .unwrap();
+    assert_eq!(app.status, format!("Scanning {}…", path.display()));
+    // Draw the window before the next application poll adopts the scan.
+    let render = |app: &mut MixJamApp| {
+        ctx.run(egui::RawInput::default(), |ctx| {
+            app.sample_libraries_window(ctx)
+        })
+    };
+    render(&mut app);
+    let output = render(&mut app);
+    let label = format!("Scanning {}", display_paths(&path.to_string_lossy()));
+    accessible_label(&output, &label);
+    finish_scan(&ctx, &mut app);
+    remove_settings(&root);
+    assert_eq!(
+        actions::scan_subject(&[PathBuf::from("a"), PathBuf::from("b")]),
+        "2 library folders"
+    );
+}
+
+#[test]
+fn register_file_keeps_original_folder_category() {
+    let dir = reserve_settings_folder();
+    let drum_dir = dir.join("Drum");
+    std::fs::create_dir_all(&drum_dir).unwrap();
+    let kick = drum_dir.join("kick.wav");
+    Pcm {
+        sample_rate: 44_100,
+        channels: 1,
+        samples: vec![0.25; 44_100],
+    }
+    .write_wav(&kick)
+    .unwrap();
+    let library = Library::open_wav_folder(&dir, 140.0).unwrap();
+    let project = Project {
+        libraries: library.bindings().to_vec(),
+        imported_samples: library.imported_samples().into(),
+        ..Project::default()
+    };
+    let session = Session::headless(Arc::new(library), project).unwrap();
+    let mut app = MixJamApp::from_session(session, String::new(), false);
+    let id = app.register_file(&kick, "Wave", 140.0).unwrap();
+    assert!(
+        app.session
+            .library()
+            .samples
+            .iter()
+            .any(|sample| sample.group_name == "Drum" && sample.name == "kick"),
+        "Original Drum sample must stay in Drum."
+    );
+    assert_eq!(
+        app.session.library().sample_by_id(id).unwrap().group_name,
+        "Wave"
+    );
+    app.history_step(false);
+    assert!(app.session.library().sample_by_id(id).is_none());
+    assert!(
+        app.session
+            .library()
+            .samples
+            .iter()
+            .any(|sample| sample.group_name == "Drum" && sample.name == "kick"),
+        "Undoing the Wave import must preserve the Drum library sample."
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
