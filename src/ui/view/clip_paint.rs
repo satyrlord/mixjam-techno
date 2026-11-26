@@ -2,7 +2,7 @@
 //! readouts of a handle drag, and the Step synth patterns that a clip draws as
 //! notes instead of a waveform.
 use super::*;
-use mixjam_techno::application::PeakState;
+use mixjam_techno::application::{FadeCurve, PeakState};
 
 /// What the score's clips paint, kept between frames.
 #[derive(Default)]
@@ -185,14 +185,7 @@ pub(in super::super) fn draw_fades(
         if fade.ticks == 0 || to <= from {
             continue;
         }
-        const STEPS: usize = 24;
-        let points: Vec<Pos2> = (0..=STEPS)
-            .map(|step| {
-                let t = step as f32 / STEPS as f32;
-                let gain = fade.curve.gain(if rising { t } else { 1.0 - t });
-                Pos2::new(from + (to - from) * t, rect.bottom() - gain * rect.height())
-            })
-            .collect();
+        let points = fade_outline(rect, from, to, fade.curve, rising);
         let mut mesh = egui::Mesh::default();
         let shade = Color32::from_black_alpha(110);
         for pair in points.windows(2) {
@@ -210,6 +203,18 @@ pub(in super::super) fn draw_fades(
             Stroke::new(1.0_f32, Color32::from_black_alpha(190)),
         ));
     }
+}
+
+fn fade_outline(rect: Rect, from: f32, to: f32, curve: FadeCurve, rising: bool) -> Vec<Pos2> {
+    // A linear fade is one straight edge at every zoom.
+    let steps = if curve == FadeCurve::Linear { 1 } else { 24 };
+    (0..=steps)
+        .map(|step| {
+            let t = step as f32 / steps as f32;
+            let gain = curve.gain(if rising { t } else { 1.0 - t });
+            Pos2::new(from + (to - from) * t, rect.bottom() - gain * rect.height())
+        })
+        .collect()
 }
 
 /// Source frames in one tick at the project's effective source tempo.

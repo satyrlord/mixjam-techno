@@ -5,8 +5,8 @@
 Flat color layers and thin borders separate the Studio work area. Vintage adds
 olive-sage anodized rack panels with dark recessed seams, machined top bevels,
 dark inset bays, slotted corner rack screws on chassis frames, and dark-skirted
-silver-cap rotary dials. Avoid heavy surface damage or oversized bevels. Mixer
-keeps its prepared material and faders until retirement.
+silver-cap rotary dials. Avoid heavy surface damage or oversized bevels. The
+Vintage Mixer uses prepared strip and fader artwork.
 
 The Mastering pedals stand off the Indigo rack on a soft drop shadow down and
 to the right. On Vintage they add a 6-point bevel, 4-point side walls, brushed

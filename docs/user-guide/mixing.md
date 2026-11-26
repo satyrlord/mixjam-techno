@@ -24,36 +24,23 @@ Master stays in view while you scroll through the tracks.
 Gain and pan change smoothly while the song plays. This is also true when you
 undo or redo them.
 
-### Mixer board and Mix view
+### Mixer strips
 
-The mixer shows in two places:
+The Mixer board in the lower panel shows one vertical strip for each track, plus
+Master and the four FX returns. To open it, select **Mixer** in the tool rail,
+or set **Starting module** to Mixer.
 
-- **The Mixer board** in the lower panel shows one strip for each track. To
-  open it, select **Mixer** in the tool rail.
-- **The Mix view** changes each lane header into a mixer row, and the clips
-  stay beside it. To open it, select **Mix** in the score toolbar, or **Mix
-  view** in the command list (**Ctrl+K**).
+A mixer strip holds these items:
 
-A mixer row holds these items:
-
-- The sound names.
+- The track name and sound names.
 - M, S, L, R, and polarity.
 - The fader with its exact dB value and Unity.
 - Pan with Center.
 - The track state, the four sends, and EQ.
 
-Below the lanes, the Master row (with Bypass and Export tracks…) and the four
-FX returns stay in view while the lanes scroll. The rows and the strips have
-the same controls with the same names. Thus the text below applies to both.
-
-The Mix view and the Mixer board do not show at the same time. When you
-select Mix, the lower panel changes to Mastering. When you select Mixer in the
-rail, the score changes back to Arrange.
-
-In a narrow window, not all columns of the Mix view fit. To see the other
-columns, drag the bar under the column captions. You can also hold Shift and
-turn the wheel over the rows. A control that you reach with Tab scrolls into
-view. If **Starting module** is Mixer, the score starts in the Mix view.
+Master and its Bypass button stay in view while the track strips scroll.
+Scroll past the last track to reach the four FX returns. The arrangement lane
+headers also let you adjust Mute, Solo, and pan for each track.
 
 ### Gain, pan, and polarity
 
@@ -76,8 +63,8 @@ view. If **Starting module** is Mixer, the score starts in the Mix view.
 - **S** solos the track. While a track has Solo on, only the tracks with Solo on
   play. A muted track stays silent.
 
-The M, S, L, and R controls in the lane headers and in the Mixer show the same
-state. These controls do not change the pan.
+The M and S controls in the lane headers and in the Mixer show the same state.
+These controls do not change the pan.
 
 ### Sends and FX returns
 
@@ -106,8 +93,7 @@ as **Bypass all** on Mastering. Its lamp lights while the board is bypassed.
 To export each track to its own WAV file, for a mix in a different
 application:
 
-1. Select **Export tracks…** in the Mixer toolbar or in the Master row of the
-   Mix view.
+1. Select **Export tracks…** in the Mixer toolbar.
 2. Select a folder.
 
 The application writes one file for each track that plays. It also writes one

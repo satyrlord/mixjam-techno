@@ -3,9 +3,8 @@
 use super::*;
 
 /// How a mixer control is drawn: on a strip at its artwork's scale, with
-/// faces and lit labels; or quiet in a Mix view row, where a control at its
-/// usual state recedes. The name, keys, state, and hint are the same in
-/// both, so a test or the agent channel finds the control either way.
+/// faces and lit labels; or quiet for FX bus mini-switches, where an off
+/// switch rests dark.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Look {
     Strip(f32),
@@ -28,9 +27,7 @@ impl Look {
 /// A small knob for a send amount from 0 to 1: drag, the wheel or arrow keys
 /// (Shift for fine steps), Home and End, or a double-click back to 0. An
 /// `automated` knob is ringed: an automation lane sets its amount while the
-/// song plays. A quiet knob at 0, not automated, and not hovered or focused
-/// rests as a thin ring with its pointer, so only the sends in use show a
-/// head.
+/// song plays.
 pub(crate) fn send_knob(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -53,99 +50,39 @@ pub(crate) fn send_knob(
     *value += controls::wheel(ui, &response) * if fine { 0.01 } else { 0.05 };
     if response.has_focus() {
         // Space still plays and stops while the knob has focus.
-        controls::keep_transport_key(ui.ctx(), response.id);
-        ui.memory_mut(|memory| {
-            memory.set_focus_lock_filter(
-                response.id,
-                egui::EventFilter {
-                    horizontal_arrows: true,
-                    vertical_arrows: true,
-                    ..Default::default()
-                },
-            )
-        });
-        let step = if fine { 0.01 } else { 0.05 };
-        ui.input_mut(|input| {
-            let modifiers = input.modifiers;
-            if input.consume_key(modifiers, egui::Key::ArrowUp)
-                || input.consume_key(modifiers, egui::Key::ArrowRight)
-            {
-                *value += step;
-            }
-            if input.consume_key(modifiers, egui::Key::ArrowDown)
-                || input.consume_key(modifiers, egui::Key::ArrowLeft)
-            {
-                *value -= step;
-            }
-            if input.consume_key(modifiers, egui::Key::Home) {
-                *value = 0.0;
-            }
-            if input.consume_key(modifiers, egui::Key::End) {
-                *value = 1.0;
-            }
-        });
+        controls::range_knob_keys(
+            ui,
+            response.id,
+            0.0..=1.0,
+            if fine { 0.01 } else { 0.05 },
+            value,
+        );
     }
-    ui.input(|input| {
-        use egui::accesskit::{Action, ActionData};
-        for request in input.accesskit_action_requests(response.id, Action::SetValue) {
-            if let Some(ActionData::NumericValue(draft)) = request.data
-                && draft.is_finite()
-            {
-                *value = draft as f32;
-            }
-        }
-        let turns = input.num_accesskit_action_requests(response.id, Action::Increment) as f32
-            - input.num_accesskit_action_requests(response.id, Action::Decrement) as f32;
-        *value += turns * 0.05;
-    });
+    controls::apply_numeric_accesskit(ui, &response, value, 0.0..=1.0);
     // Keep saved precision and small fine-drag movements. Rounding belongs
     // only to the displayed percentage.
     *value = (*value).clamp(0.0, 1.0);
     let center = rect.center();
     let radius = rect.width() / 2.0;
-    let idle = look.quiet()
-        && *value == 0.0
-        && !automated
-        && !response.hovered()
-        && !response.has_focus()
-        && !response.dragged();
-    if idle {
-        let ink = roles().strip_text.gamma_multiply(0.45);
-        ui.painter()
-            .circle_stroke(center, radius - 1.0, Stroke::new(1.0 * scale, ink));
-        let pointer = Vec2::angled((-225.0_f32).to_radians());
-        ui.painter().line_segment(
-            [
-                center + pointer * (radius * 0.35),
-                center + pointer * (radius - 3.0 * scale),
-            ],
-            Stroke::new(1.0 * scale, ink),
-        );
-    } else {
-        send_knob_face(ui, &response, center, radius, scale, *value, automated);
-    }
+    send_knob_face(ui, &response, center, radius, scale, *value, automated);
     focus_ring(ui, &response, rect, scale);
-    response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), f64::from(*value), name));
-    ui.ctx().accesskit_node_builder(response.id, |builder| {
-        use egui::accesskit::Action;
-        builder.set_min_numeric_value(0.0);
-        builder.set_max_numeric_value(1.0);
-        builder.set_numeric_value_step(0.01);
-        builder.add_action(Action::SetValue);
-        builder.add_action(Action::Increment);
-        builder.add_action(Action::Decrement);
-    });
+    send_knob_semantics(ui, response, name, *value, automated);
+    before != *value
+}
+
+fn send_knob_semantics(ui: &egui::Ui, response: Response, name: &str, value: f32, automated: bool) {
+    response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), f64::from(value), name));
+    controls::knob_accesskit_range(ui, &response, value, 0.0..=1.0);
+    let auto_note = if automated {
+        "\nAutomated: its automation lane sets it while the song plays."
+    } else {
+        ""
+    };
     response.hover_hint(format!(
         "{name}: {:.0}%. Drag, or use the wheel or arrow keys; Shift for fine steps; \
-         double-click for 0.{}",
-        *value * 100.0,
-        if automated {
-            "\nAutomated: its automation lane sets it while the song plays."
-        } else {
-            ""
-        }
+         double-click for 0.{auto_note}",
+        value * 100.0
     ));
-    before != *value
 }
 
 /// A send knob's head: face, ring, amount arc, pointer, and the automation
@@ -276,11 +213,17 @@ fn toggle(response: Response, key: &str, on: &mut bool, hint: &str) -> bool {
     clicked
 }
 
-/// A bus's quiet Solo, "{name} solo", drawn as a track's quiet Solo: its
-/// letter, with its face Accent while on. Returns whether it changed.
+/// A bus's quiet Solo, "{name} solo": its letter, with its face Accent while
+/// on. Returns whether it changed.
 pub(crate) fn bus_solo(ui: &mut egui::Ui, rect: Rect, name: &str, on: &mut bool) -> bool {
     let key = format!("{name} solo");
-    let response = quiet_switch(ui, rect, &key, TrackSwitch::Solo, *on);
+    let (fill, letter) = if *on {
+        (Some(roles().accent), roles().ink)
+    } else {
+        (None, roles().muted)
+    };
+    let response = face(ui, rect, &key, 1.0, fill);
+    text(ui, rect.center(), TrackSwitch::Solo.letter(), 11.0, letter);
     toggle(
         response,
         &key,
@@ -354,12 +297,13 @@ pub(crate) fn bypass_button(ui: &mut egui::Ui, rect: Rect, scale: f32, bypass: &
 
 /// "Reset {name} gain to unity". Returns whether it was pressed.
 pub(crate) fn unity_button(ui: &mut egui::Ui, rect: Rect, look: Look, name: &str) -> bool {
-    reset(
+    button(
         ui,
         rect,
-        look,
         "Unity",
         &format!("Reset {name} gain to unity"),
+        look.scale(),
+        false,
     )
     .hover_hint("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
     .clicked()
@@ -367,43 +311,20 @@ pub(crate) fn unity_button(ui: &mut egui::Ui, rect: Rect, look: Look, name: &str
 
 /// "Center {name} pan". Returns whether it was pressed.
 pub(crate) fn center_button(ui: &mut egui::Ui, rect: Rect, look: Look, name: &str) -> bool {
-    reset(ui, rect, look, "Center", &format!("Center {name} pan"))
-        .hover_hint("Reset pan to center. Output routing stays unchanged.")
-        .clicked()
+    button(
+        ui,
+        rect,
+        "Center",
+        &format!("Center {name} pan"),
+        look.scale(),
+        false,
+    )
+    .hover_hint("Reset pan to center. Output routing stays unchanged.")
+    .clicked()
 }
 
-/// A reset: a faced button on a strip, `reset_button` when quiet.
-fn reset(ui: &mut egui::Ui, rect: Rect, look: Look, label: &str, name: &str) -> Response {
-    match look {
-        Look::Strip(scale) => button(ui, rect, label, name, scale, false),
-        Look::Quiet => reset_button(ui, rect, label, name),
-    }
-}
-
-/// A reset with no face and no label at rest. The dB value and the pan state
-/// already say when a value is away from its default, so the label and a
-/// face show only on hover or focus. The reset keeps its Tab stop and name.
-fn reset_button(ui: &mut egui::Ui, rect: Rect, label: &str, name: &str) -> Response {
-    let response = ui.interact(rect, ui.id().with(name), Sense::click());
-    let active = response.hovered() || response.has_focus();
-    if active {
-        ui.painter().rect_filled(rect, 2.0, roles().strip_face);
-    }
-    if active {
-        text(ui, rect.center(), label, 10.0, roles().legend);
-    }
-    focus_ring(ui, &response, rect, 1.0);
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
-    });
-    response
-}
-
-/// A track's pan in `rect`: "{name} pan". On a strip, the rail is a dark
-/// slot and the idle handle keeps a cap-coloured edge on it. Quiet, the slot
-/// is the strip's rail well, like the Mix view's fader, and the handle keeps
-/// a ring of strip ink at rest and in use, so it shows on Vintage's cream
-/// well. Returns whether it changed.
+/// A track's pan in `rect`: "{name} pan". The rail is a dark slot and the idle
+/// handle keeps a cap-coloured edge on it. Returns whether it changed.
 pub(crate) fn pan_slider(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -414,10 +335,7 @@ pub(crate) fn pan_slider(
 ) -> bool {
     let scale = look.scale();
     let roles = roles();
-    let (slot, ring, active_ring) = match look {
-        Look::Strip(_) => (roles.strip_slot, roles.cap, roles.strip_slot),
-        Look::Quiet => (roles.strip_well, roles.strip_text, roles.strip_text),
-    };
+    let (slot, ring, active_ring) = (roles.strip_slot, roles.cap, roles.strip_slot);
     let mut changed = false;
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
         ui.spacing_mut().slider_width = rect.width();
@@ -445,24 +363,12 @@ pub(crate) fn pan_slider(
     changed
 }
 
-/// "{name} EQ", lit while `on`: opens the channel EQ window. With `outline`
-/// and off, it is a Strip edge outline with strip ink on the row's own
-/// surface, for a silent Mix view row. Returns whether it was pressed.
-pub(crate) fn eq_button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    look: Look,
-    name: &str,
-    on: bool,
-    outline: bool,
-) -> bool {
+/// "{name} EQ", lit while `on`: opens the channel EQ window. Returns whether it
+/// was pressed.
+pub(crate) fn eq_button(ui: &mut egui::Ui, rect: Rect, look: Look, name: &str, on: bool) -> bool {
     let scale = look.scale();
     let eq_name = format!("{name} EQ");
-    let response = if outline && !on {
-        outline_button(ui, rect, "EQ", &eq_name, scale)
-    } else {
-        button(ui, rect, "EQ", &eq_name, scale, on)
-    };
+    let response = button(ui, rect, "EQ", &eq_name, scale, on);
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, response.enabled(), on, &eq_name)
     });
@@ -478,8 +384,7 @@ pub(crate) fn eq_button(
 }
 
 /// "{name} polarity invert": a slashed circle on a face that lights while
-/// inverted. Quiet, the glyph at rest is thinner and Muted, like the quiet
-/// M, S, L, and R. Returns whether it changed.
+/// inverted. Returns whether it changed.
 pub(crate) fn polarity_button(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -487,21 +392,15 @@ pub(crate) fn polarity_button(
     name: &str,
     inverted: &mut bool,
 ) -> bool {
+    let scale = look.scale();
     let key = format!("{name} polarity invert");
-    let (response, rest, width) = match look {
-        Look::Strip(scale) => (
-            button(ui, rect, "", &key, scale, *inverted),
-            roles().legend,
-            1.5,
-        ),
-        Look::Quiet => (
-            face(ui, rect, &key, 1.0, inverted.then(|| roles().strip_lit)),
-            roles().muted,
-            1.0,
-        ),
+    let response = button(ui, rect, "", &key, scale, *inverted);
+    let color = if *inverted {
+        roles().ink
+    } else {
+        roles().legend
     };
-    let color = if *inverted { roles().ink } else { rest };
-    polarity_glyph(ui, rect, look.scale(), width, color);
+    polarity_glyph(ui, rect, scale, 1.5, color);
     polarity_response(ui, response, name, inverted)
 }
 
@@ -580,31 +479,6 @@ fn button(
     response
 }
 
-/// A strip button without a face: a Strip edge outline, strip ink on hover
-/// or the lit edge with focus, and its label in strip ink.
-fn outline_button(ui: &mut egui::Ui, rect: Rect, label: &str, name: &str, scale: f32) -> Response {
-    let response = ui.interact(rect, ui.id().with(name), Sense::click());
-    let edge = if response.has_focus() {
-        roles().strip_lit
-    } else if response.hovered() {
-        roles().strip_text
-    } else {
-        roles().strip_edge
-    };
-    ui.painter().rect_stroke(
-        rect,
-        2.0,
-        Stroke::new(1.0 * scale, edge),
-        egui::StrokeKind::Inside,
-    );
-    focus_ring(ui, &response, rect, scale);
-    text(ui, rect.center(), label, 10.0 * scale, roles().strip_text);
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
-    });
-    response
-}
-
 /// A strip button's face, named `name`: `lit` fills it, else it rests dark
 /// and lifts on hover.
 fn face(ui: &mut egui::Ui, rect: Rect, name: &str, scale: f32, lit: Option<Color32>) -> Response {
@@ -645,11 +519,8 @@ pub(super) fn focus_ring(ui: &egui::Ui, response: &Response, rect: Rect, scale: 
     }
 }
 
-/// "{name} {switch}": Mute, Solo, or an output. On a strip, a lamp bar over
-/// the letter lights while on. Quiet, each rests as a letter; Mute and Solo
-/// fill their faces when on, and an output that is off strikes its letter,
-/// so a row shows only what differs from a plain track. Returns whether it
-/// changed.
+/// "{name} {switch}": Mute, Solo, or an output. A lamp bar over the letter
+/// lights while on. Returns whether it changed.
 pub(crate) fn switch_button(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -659,10 +530,7 @@ pub(crate) fn switch_button(
     enabled: &mut bool,
 ) -> bool {
     let label = format!("{name} {}", switch.name());
-    let response = match look {
-        Look::Strip(scale) => strip_switch(ui, rect, scale, &label, switch, *enabled),
-        Look::Quiet => quiet_switch(ui, rect, &label, switch, *enabled),
-    };
+    let response = strip_switch(ui, rect, look.scale(), &label, switch, *enabled);
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::Checkbox,
@@ -710,29 +578,6 @@ fn strip_switch(
         11.0 * scale,
         ink,
     );
-    response
-}
-
-/// A quiet switch face: a letter, with Mute and Solo filled while on. An
-/// output that is off gives no light: its letter is struck, in no colour.
-fn quiet_switch(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    label: &str,
-    switch: TrackSwitch,
-    enabled: bool,
-) -> Response {
-    let (fill, letter) = match switch {
-        TrackSwitch::Mute if enabled => (Some(roles().coral), roles().ink),
-        TrackSwitch::Solo if enabled => (Some(roles().accent), roles().ink),
-        _ => (None, roles().muted),
-    };
-    let response = face(ui, rect, label, 1.0, fill);
-    if matches!(switch, TrackSwitch::Left | TrackSwitch::Right) && !enabled {
-        struck_text(ui, rect.center(), switch.letter(), 11.0, letter);
-    } else {
-        text(ui, rect.center(), switch.letter(), 11.0, letter);
-    }
     response
 }
 

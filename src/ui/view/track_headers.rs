@@ -1,6 +1,6 @@
 //! The lane headers beside the score: the add row, the track number that arms
-//! recording, the lane name that opens the Inspector, the switches, and the
-//! level fader, or a mixer row in the Mix view.
+//! recording, the lane name that opens the Inspector, Mute and Solo squares,
+//! and a small pan knob.
 use super::timeline::{HeaderChanges, ScoreFrame};
 use super::*;
 
@@ -20,69 +20,30 @@ impl MixJamApp {
         );
         if frame.add_track == Some(index) {
             self.add_track_header(ui, rect, index);
-            // A song without tracks has its "No tracks" note instead.
-            if frame.mix && frame.occupied_count > 0 {
-                mix_view::new_track_cue(ui, rect, frame.mix_offset);
-            }
             return;
         }
-        if frame.mix {
-            mixer::row_surface(ui, rect.shrink(1.0), false);
-        } else {
-            ui.painter()
-                .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
-        }
+        ui.painter()
+            .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
         let project = self.session.project();
-        let silenced = !project.tracks[index].sounds(project.any_solo());
+        let track = &project.tracks[index];
+        let silenced = !track.sounds(project.any_solo());
+        let pan_automated = !track.automation.pan.is_empty();
+        let mut pan = track.pan;
         self.lane_number(ui, frame, rect, index, silenced);
-        if frame.mix {
-            let (summary, detail) = headers
-                .summaries
-                .get(index)
-                .map_or(("", ""), |(summary, detail)| (summary, detail));
-            let track = &self.session.project().tracks[index];
-            let category = first_sound
-                .and_then(|id| self.session.library().sample_by_id(id))
-                .map(|sample| group_color(&sample.group_name));
-            let facts = mix_view::RowFacts::of(track, frame.any_solo, category);
-            let before = track.mix();
-            let mut mix = before;
-            let outcome = mix_view::track_row(
-                ui,
-                rect,
-                frame.mix_offset,
-                index,
-                (summary, detail),
-                &facts,
-                &mut mix,
-            );
-            mix_view::edge_fade(ui, rect, rect.shrink(1.0), frame.mix_offset, false);
-            if outcome.changed && mix != before {
-                headers.mix.tracks.push((index, mix));
-            }
-            if outcome.open_eq {
-                headers.mix.eq = Some(index);
-            }
-            // The pending selection wins over the EQ from the last frame.
-            if headers.mix.eq.or(self.eq_track) == Some(index) {
-                self.mix.eq_row = outcome.eq_anchor;
-            }
-            return;
-        }
         self.lane_name_button(ui, frame, rect, index, first_sound, silenced);
-        self.lane_switches(ui, frame, rect, index, &mut headers.route);
-        let (fader_left, fader_right) = lanes::FADER_SPAN;
-        let mut gain = self.session.project().tracks[index].gain;
-        if lanes::lane_fader(
+        self.lane_switches(ui, frame, rect, index, &mut headers.routes);
+        let knob = (frame.row_height - 4.0).clamp(16.0, 22.0);
+        if lanes::lane_pan_knob(
             ui,
-            Rect::from_x_y_ranges(
-                rect.left() + fader_left..=rect.left() + fader_right,
-                rect.y_range().shrink(1.0),
+            Rect::from_center_size(
+                Pos2::new(rect.left() + lanes::PAN_X, rect.center().y),
+                Vec2::splat(knob),
             ),
-            &format!("Arrangement track {}", index + 1),
-            &mut gain,
+            &format!("Arrangement track {} pan", index + 1),
+            &mut pan,
+            pan_automated,
         ) {
-            headers.gain = Some((index, gain));
+            headers.pans.push((index, pan));
         }
     }
 
@@ -121,21 +82,14 @@ impl MixJamApp {
         silenced: bool,
     ) {
         let row_height = frame.row_height;
-        let (ink, quiet) = if frame.mix {
-            (roles().strip_text, roles().strip_text.gamma_multiply(0.55))
-        } else {
-            (roles().text, roles().muted)
-        };
-        // From the left: the track number, the lane's name,
-        // M, S, L, R, and the level fader.
+        let (ink, quiet) = (roles().text, roles().muted);
+        // From the left: the track number, the lane's name, M, S, and pan.
         let number = Pos2::new(rect.left() + lanes::NUMBER_X, rect.center().y);
-        if !frame.mix {
-            ui.painter().rect_filled(
-                Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
-                0.0,
-                roles().panel,
-            );
-        }
+        ui.painter().rect_filled(
+            Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
+            0.0,
+            roles().panel,
+        );
         ui.painter().text(
             number + Vec2::new(0.0, -1.0),
             Align2::CENTER_CENTER,
@@ -204,57 +158,9 @@ impl MixJamApp {
             rect.left() + name_left - 4.0..=rect.left() + name_right,
             rect.top() + 1.0..=rect.bottom() - 1.0,
         );
-        let pick = ui.interact(
-            name_rect,
-            ui.id().with(("lane-name", index)),
-            Sense::click(),
-        );
         let picked = self.inspector_page() == inspector::Page::Track(index);
         let show_song = picked && self.panels.room.inspector;
-        let pick_label = if show_song {
-            "Show the song in the Inspector".to_owned()
-        } else {
-            format!("Show track {} in the Inspector", index + 1)
-        };
-        pick.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::WidgetType::Button,
-                ui.is_enabled(),
-                picked,
-                &pick_label,
-            )
-        });
-        if picked || pick.hovered() || pick.has_focus() {
-            ui.painter().rect_filled(
-                name_rect,
-                3.0,
-                if picked {
-                    roles().raised
-                } else {
-                    ui.visuals().widgets.hovered.weak_bg_fill
-                },
-            );
-        }
-        if picked {
-            ui.painter().rect_filled(
-                Rect::from_x_y_ranges(
-                    name_rect.left()..=name_rect.left() + 2.0,
-                    name_rect.y_range(),
-                ),
-                1.0,
-                roles().accent,
-            );
-        }
-        focus_outline(ui, &pick, roles().accent);
-        if pick
-            .hover_hint(if show_song {
-                "The Inspector shows this track. Click again to show the song."
-            } else {
-                "Show this track's channel processing, level, pan, and sends in the \
-                 Inspector. The clip selection clears."
-            })
-            .clicked()
-        {
+        if lane_name_box(ui, index, name_rect, picked, show_song) {
             if show_song {
                 // A second click returns the Inspector to the song.
                 self.selection.track = None;
@@ -265,29 +171,19 @@ impl MixJamApp {
                 }
             }
         }
-        let name_size = if frame.row_height < 30.0 { 11.0 } else { 12.0 };
-        let name_text = ui.painter().layout_job(elided(
-            &name,
-            name_size,
-            if silenced {
-                roles().muted
-            } else {
-                roles().text
-            },
-            name_right - name_left,
-            1,
-        ));
-        ui.painter().galley(
-            Pos2::new(
-                rect.left() + name_left,
-                rect.center().y - name_text.size().y / 2.0,
+        paint_lane_name_text(
+            ui,
+            Rect::from_x_y_ranges(
+                rect.left() + name_left..=rect.left() + name_right,
+                rect.y_range(),
             ),
-            name_text,
-            roles().text,
+            &name,
+            frame.row_height,
+            silenced,
         );
     }
 
-    /// The track's switches, M, S, L, and R. A click is kept in `route` and
+    /// The track's Mute and Solo squares. Each click is kept in `routes` and
     /// applies after the score is drawn.
     fn lane_switches(
         &self,
@@ -295,13 +191,17 @@ impl MixJamApp {
         frame: &ScoreFrame,
         rect: Rect,
         index: usize,
-        route: &mut Option<(usize, TrackSwitch, bool)>,
+        routes: &mut Vec<(usize, TrackSwitch, bool)>,
     ) {
         let track = &self.session.project().tracks[index];
-        for (switch, x) in TrackSwitch::ALL.into_iter().zip(lanes::SWITCH_X) {
+        let side = (frame.row_height - 6.0).clamp(14.0, 20.0);
+        for (switch, x) in [TrackSwitch::Mute, TrackSwitch::Solo]
+            .into_iter()
+            .zip(lanes::SWITCH_X)
+        {
             let button = Rect::from_center_size(
                 Pos2::new(rect.left() + x, rect.center().y),
-                Vec2::new(24.0, frame.row_height - 3.0),
+                Vec2::splat(side),
             );
             let mut response = ui.interact(
                 button,
@@ -311,18 +211,18 @@ impl MixJamApp {
             let mut on = switch.get(track);
             if response.clicked() {
                 on = !on;
-                *route = Some((index, switch, on));
+                routes.push((index, switch, on));
                 response.mark_changed();
             }
             let label = format!("Arrangement track {} {}", index + 1, switch.name());
             response.widget_info(|| {
                 egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), on, &label)
             });
-            switch_letter(ui.painter(), button, on, switch);
+            paint_lane_switch(ui.painter(), button, on, response.hovered(), switch);
             if response.has_focus() {
                 ui.painter().rect_stroke(
                     button.shrink(1.0),
-                    2.0,
+                    2.5,
                     Stroke::new(1.0_f32, roles().accent),
                     egui::StrokeKind::Inside,
                 );
@@ -330,4 +230,106 @@ impl MixJamApp {
             response.hover_hint(switch_hint(&label, switch, on));
         }
     }
+}
+
+fn lane_name_box(
+    ui: &egui::Ui,
+    index: usize,
+    name_rect: Rect,
+    picked: bool,
+    show_song: bool,
+) -> bool {
+    let pick = ui.interact(
+        name_rect,
+        ui.id().with(("lane-name", index)),
+        Sense::click(),
+    );
+    let pick_label = if show_song {
+        "Show the song in the Inspector".to_owned()
+    } else {
+        format!("Show track {} in the Inspector", index + 1)
+    };
+    pick.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Button,
+            ui.is_enabled(),
+            picked,
+            &pick_label,
+        )
+    });
+    if picked {
+        ui.painter().rect_filled(name_rect, 3.0, roles().raised);
+        ui.painter().rect_filled(
+            Rect::from_x_y_ranges(
+                name_rect.left()..=name_rect.left() + 2.0,
+                name_rect.y_range(),
+            ),
+            1.0,
+            roles().accent,
+        );
+    } else if pick.hovered() || pick.has_focus() {
+        ui.painter()
+            .rect_filled(name_rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    focus_outline(ui, &pick, roles().accent);
+    pick.hover_hint(if show_song {
+        "The Inspector shows this track. Click again to show the song."
+    } else {
+        "Show this track's channel processing in the Inspector. The clip selection clears."
+    })
+    .clicked()
+}
+
+fn paint_lane_name_text(ui: &egui::Ui, rect: Rect, name: &str, row_height: f32, silenced: bool) {
+    let size = if row_height < 30.0 { 11.0 } else { 12.0 };
+    let color = if silenced {
+        roles().muted
+    } else {
+        roles().text
+    };
+    let galley = ui
+        .painter()
+        .layout_job(elided(name, size, color, rect.width(), 1));
+    ui.painter().galley(
+        Pos2::new(rect.left(), rect.center().y - galley.size().y / 2.0),
+        galley,
+        roles().text,
+    );
+}
+
+fn paint_lane_switch(
+    painter: &egui::Painter,
+    rect: Rect,
+    on: bool,
+    hovered: bool,
+    switch: TrackSwitch,
+) {
+    let (fill, letter) = match switch {
+        TrackSwitch::Mute if on => (roles().coral, roles().on_light),
+        TrackSwitch::Solo if on => (roles().accent, roles().on_light),
+        _ => (
+            if hovered {
+                roles().hover
+            } else {
+                roles().raised
+            },
+            roles().muted,
+        ),
+    };
+    painter.rect_filled(rect, 2.5, fill);
+    if !on {
+        painter.rect_stroke(
+            rect,
+            2.5,
+            Stroke::new(1.0_f32, roles().line),
+            egui::StrokeKind::Inside,
+        );
+    }
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        switch.letter(),
+        FontId::proportional(10.0),
+        letter,
+    );
 }

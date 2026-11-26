@@ -54,6 +54,7 @@ pub(super) struct ScoreFrame {
     /// The number of rows that hold clips.
     pub(super) occupied_count: usize,
     pub(super) row_height: f32,
+    /// The bar width the score shows, in points per bar.
     pub(super) bar_width: f32,
     /// The bars the score shows.
     pub(super) bars: u32,
@@ -62,10 +63,7 @@ pub(super) struct ScoreFrame {
     /// The height of all rows.
     pub(super) track_height: f32,
     pub(super) cursor_tick: u32,
-    /// The Mix view widens the lane headers into mixer rows.
-    pub(super) mix: bool,
     pub(super) label_width: f32,
-    pub(super) mix_offset: f32,
     /// The space left of the lanes: the headers and the item spacing.
     pub(super) lane_inset: f32,
     pub(super) viewport_height: f32,
@@ -73,7 +71,6 @@ pub(super) struct ScoreFrame {
     pub(super) visible_width: f32,
     /// The strip above the lanes that holds the ruler.
     pub(super) ruler_strip: Rect,
-    pub(super) any_solo: bool,
 }
 
 impl ScoreFrame {
@@ -87,15 +84,10 @@ impl ScoreFrame {
 /// is drawn.
 #[derive(Default)]
 pub(super) struct HeaderChanges {
-    /// A Mute, Solo, or other switch that was clicked: the track, the switch, and its new state.
-    pub(super) route: Option<(usize, TrackSwitch, bool)>,
-    /// A lane fader that moved: the track and its new gain.
-    pub(super) gain: Option<(usize, f32)>,
-    /// In the Mix view, each track's sound summary, built in one pass.
-    pub(super) summaries: Arc<Vec<(String, String)>>,
-    pub(super) mix: mixer::Changes,
-    /// Horizontal wheel input that the Mix view columns took.
-    pub(super) mix_wheel: f32,
+    /// A Mute or Solo switch that was clicked: the track, the switch, and its new state.
+    pub(super) routes: Vec<(usize, TrackSwitch, bool)>,
+    /// A lane pan knob that moved: the track and its new pan.
+    pub(super) pans: Vec<(usize, f32)>,
 }
 
 impl MixJamApp {
@@ -111,24 +103,11 @@ impl MixJamApp {
         self.score.drop_rect = None;
         self.score.ruler_rect = None;
         let frame = self.score_frame(ui, occupied);
-        let mut headers = HeaderChanges {
-            summaries: if frame.mix {
-                self.sample_summaries()
-            } else {
-                Arc::default()
-            },
-            ..Default::default()
-        };
+        let mut headers = HeaderChanges::default();
         let mut painted_offset_x = 0.0;
         let scroll_area = self.score_scroll_area(ui, &frame);
         let scroll = scroll_area.show_viewport(ui, |ui, viewport| {
             painted_offset_x = viewport.left();
-            if frame.mix {
-                // Egui expands its paint clip past the viewport. The Mix
-                // view keeps whole rows, including their paint and hit areas.
-                let visible = viewport.translate(ui.max_rect().min.to_vec2());
-                ui.set_clip_rect(ui.clip_rect().intersect(visible));
-            }
             self.score_body(ui, &frame, &mut headers);
         });
         name_scroll_area(ui, "arrangement_scroll", "Score");
@@ -137,24 +116,6 @@ impl MixJamApp {
             visible: frame.visible_width,
             bar_width: frame.bar_width,
         });
-        if frame.mix {
-            ui.push_id(self.boards.master_view_generation, |ui| {
-                self.mix_block(
-                    ui,
-                    Rect::from_min_size(frame.ruler_strip.min, Vec2::new(frame.label_width, 26.0)),
-                    Rect::from_min_size(
-                        Pos2::new(frame.body_left(), scroll.inner_rect.bottom() + 6.0),
-                        Vec2::new(frame.label_width, mix_view::BLOCK_ROW * 2.0 + 2.0),
-                    ),
-                    (
-                        frame.mix_offset,
-                        frame.occupied_count == 0,
-                        headers.mix_wheel,
-                    ),
-                    std::mem::take(&mut headers.mix),
-                );
-            });
-        }
         if let Some(slot) = &overview {
             self.paint_overview(ui, slot);
         }
@@ -191,69 +152,17 @@ impl MixJamApp {
             .last()
             .map_or(0, |section| section.start_tick);
         let song_end = project.end_tick().max(cursor_tick).max(last_section);
-        // The Mix view widens the lane headers into mixer rows and keeps the
-        // Master and the returns below the lanes.
-        let mix = self.mix.shown;
-        let label_width = if mix {
-            mix_view::column_width(ui.available_width())
-        } else {
-            lanes::LANE_HEADER_WIDTH
-        };
-        let mix_offset = self
-            .mix
-            .scroll
-            .clamp(0.0, mix_view::max_offset(label_width));
+        let label_width = lanes::LANE_HEADER_WIDTH;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
-        let mut viewport_height =
-            (ui.available_height() - 26.0 - 8.0 - if mix { mix_view::BLOCK_HEIGHT } else { 0.0 })
-                .max(80.0);
-        if mix && track_height > viewport_height {
-            // Whole rows, so the last row in view is never cut in half.
-            viewport_height = (viewport_height / row_height).floor().max(1.0) * row_height;
-        }
-        if mix {
-            // The Master and returns follow the last row, so a short song
-            // keeps them beside the tracks they sum. The empty note needs
-            // 90 points above them.
-            let rows = if occupied_count == 0 {
-                track_height.max(90.0)
-            } else {
-                track_height
-            };
-            viewport_height = viewport_height.min(rows);
-        }
+        let viewport_height = (ui.available_height() - 26.0 - 8.0).max(80.0);
         let (ruler_strip, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
         let visible_width =
             (ui.available_width() - lane_inset - ui.spacing().scroll.allocated_width()).max(1.0);
-        // The Mix view's lanes show where each track plays across the whole
-        // song, so the song fits their width and Zoom rests. The Arrange view
-        // keeps room after the song to place more.
-        let (bars, bar_width) = if mix {
-            let mut bars = song_end.div_ceil(TICKS_PER_BAR).max(MIX_MIN_BARS);
-            if self.sections.bookmarks
-                && let Some(section) = project.sections.last()
-            {
-                // A bookmark's name extends to the right of its start. Keep
-                // room for it even when a bar is narrower than one pixel.
-                let name = ui.painter().layout_no_wrap(
-                    section.name.clone(),
-                    FontId::proportional(11.0),
-                    roles().on_light,
-                );
-                let reserve = (name.size().x + 10.0).min(visible_width * 0.5);
-                let section_bars = section.start_tick as f64 / f64::from(TICKS_PER_BAR);
-                let fitted =
-                    section_bars * f64::from(visible_width) / f64::from(visible_width - reserve);
-                bars = bars.max(fitted.ceil() as u32);
-            }
-            (bars, visible_width / bars as f32)
-        } else {
-            (
-                (song_end / TICKS_PER_BAR + 16).max(64),
-                62.0 * self.score.zoom,
-            )
-        };
+        let (bars, bar_width) = (
+            (song_end / TICKS_PER_BAR + 16).max(64),
+            62.0 * self.score.zoom,
+        );
         self.score.row_height = row_height;
         self.score.bar_width = bar_width;
         let width = bars as f32 * bar_width;
@@ -267,14 +176,11 @@ impl MixJamApp {
             width,
             track_height,
             cursor_tick,
-            mix,
             label_width,
-            mix_offset,
             lane_inset,
             viewport_height,
             visible_width,
             ruler_strip,
-            any_solo: self.session.project().any_solo(),
         }
     }
 
@@ -318,10 +224,6 @@ impl MixJamApp {
             scroll_area = scroll_area.vertical_scroll_offset(frame.track_height);
             self.capture.last_track = false;
         }
-        if frame.mix {
-            // The whole song fits the lanes, so nothing scrolls sideways.
-            scroll_area = scroll_area.hscroll(false).horizontal_scroll_offset(0.0);
-        }
         scroll_area
     }
 
@@ -360,12 +262,6 @@ impl MixJamApp {
                 }
             },
         );
-        // The columns own horizontal wheel input over the headers. Take
-        // it after their controls, before the score's scroll area does.
-        if frame.mix && ui.rect_contains_pointer(labels) {
-            headers.mix_wheel =
-                ui.input_mut(|input| std::mem::take(&mut input.smooth_scroll_delta.x));
-        }
     }
 
     /// The bar ruler above the lanes: the loop, the section tags, and the bar
@@ -489,9 +385,9 @@ impl MixJamApp {
         }
     }
 
-    /// Apply a switch click and a lane fader move from the lane headers.
+    /// Apply a switch click or lane pan change from the lane headers.
     fn apply_header_changes(&mut self, ui: &egui::Ui, headers: HeaderChanges) {
-        if let Some((index, switch, on)) = headers.route {
+        for (index, switch, on) in headers.routes {
             let result = self.session.edit(EditCommand::SetSwitch {
                 track: index,
                 switch,
@@ -502,9 +398,9 @@ impl MixJamApp {
             // new switch state even when the pointer stops after this click.
             ui.ctx().request_repaint();
         }
-        if let Some((index, gain)) = headers.gain {
+        for (index, pan) in headers.pans {
             let mix = TrackMix {
-                gain,
+                pan,
                 ..self.session.project().tracks[index].mix()
             };
             let result = self.session.edit(EditCommand::SetTrackMix { index, mix });
@@ -514,9 +410,6 @@ impl MixJamApp {
     }
 }
 
-/// The Mix view's lanes show at least this many bars, so a short song does
-/// not stretch one bar across the score.
-const MIX_MIN_BARS: u32 = 16;
 /// The least room for one bar number on the ruler.
 const RULER_NUMBER_SPACING: f32 = 28.0;
 /// The least room between two bar lines on the lanes.

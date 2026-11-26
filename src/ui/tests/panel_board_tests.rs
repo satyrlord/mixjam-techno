@@ -289,9 +289,11 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
 }
 
 #[test]
-fn no_two_controls_share_a_name_with_any_board_or_view() {
+fn no_two_controls_share_a_name_with_any_board() {
     let size = Vec2::new(1600.0, 1300.0);
-    let (ctx, mut app, _) = mix_view_fixture(size);
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    ctx.style_mut(|style| style.animation_time = 0.0);
     // The names that more than one control carries on screen.
     let repeated = |app: &mut MixJamApp| {
         frame_at_size(&ctx, app, vec![], egui::Modifiers::NONE, size);
@@ -307,23 +309,15 @@ fn no_two_controls_share_a_name_with_any_board_or_view() {
             .map(|node| node.label)
             .collect::<BTreeSet<_>>()
     };
-    for module in [
-        BottomModule::Mastering,
-        BottomModule::FxReturns,
-        BottomModule::StepSynth,
-    ] {
+    for module in BottomModule::ALL {
         app.boards.module = module;
         app.set_layout(|layout| layout.boards = true);
-        app.mix.shown = true;
         app.resolve_room();
-        let with_mix_view = repeated(&mut app);
-        assert!(app.mix.shown && app.board_shown(module), "{module:?}");
-        app.mix.shown = false;
-        let without = repeated(&mut app);
+        let names = repeated(&mut app);
         assert!(app.board_shown(module), "{module:?}");
         assert!(
-            with_mix_view.is_empty() && without.is_empty(),
-            "{module:?}: repeated names {with_mix_view:?} with the Mix view, {without:?} without"
+            names.is_empty(),
+            "{module:?}: repeated control names {names:?}"
         );
     }
 }

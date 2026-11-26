@@ -481,7 +481,7 @@ fn paint_lane_grid(
     canvas_clip: Rect,
     visible: Rect,
 ) {
-    let (width, row_height, bar_width) = (frame.width, frame.row_height, frame.bar_width);
+    let (width, row_height) = (frame.width, frame.row_height);
     painter.rect_filled(rect, 0.0, roles().canvas);
     for track in 0..frame.occupied_count {
         let row = Rect::from_min_size(
@@ -502,29 +502,7 @@ fn paint_lane_grid(
             Stroke::new(1.0_f32, roles().line.gamma_multiply(0.6)),
         );
     }
-    let first_bar = ((visible.left() - rect.left()) / bar_width)
-        .floor()
-        .max(0.0) as u32;
-    let last_bar = ((visible.right() - rect.left()) / bar_width)
-        .ceil()
-        .min(frame.bars as f32) as u32;
-    // Narrow bars, as in the Mix view, draw every second, fourth, or later
-    // line, so the lanes never fill with lines.
-    let step = super::timeline::bar_step(bar_width, super::timeline::BAR_LINE_SPACING);
-    for bar in (first_bar..=last_bar).filter(|bar| bar % step == 0) {
-        let x = rect.left() + bar as f32 * bar_width;
-        painter.line_segment(
-            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-            Stroke::new(
-                1.0_f32,
-                if bar % (4 * step) == 0 {
-                    roles().line
-                } else {
-                    roles().bar_line
-                },
-            ),
-        );
-    }
+    paint_bar_lines(painter, frame, rect, visible);
     if frame.add_track.is_some() {
         let target = Rect::from_min_size(
             Pos2::new(
@@ -552,5 +530,29 @@ fn paint_lane_grid(
             painter.rect_filled(area.expand2(Vec2::new(6.0, 1.0)), 0.0, roles().canvas);
             painter.galley(area.min, hint, roles().muted);
         }
+    }
+}
+
+/// Paint the bars across the visible horizontal slice of the score grid.
+fn paint_bar_lines(painter: &egui::Painter, frame: &ScoreFrame, rect: Rect, visible: Rect) {
+    let bar_width = frame.bar_width;
+    let first_bar = ((visible.left() - rect.left()) / bar_width)
+        .floor()
+        .max(0.0) as u32;
+    let last_bar = ((visible.right() - rect.left()) / bar_width)
+        .ceil()
+        .min(frame.bars as f32) as u32;
+    let step = super::timeline::bar_step(bar_width, super::timeline::BAR_LINE_SPACING);
+    for bar in (first_bar..=last_bar).filter(|bar| bar % step == 0) {
+        let x = rect.left() + bar as f32 * bar_width;
+        let color = if bar % (4 * step) == 0 {
+            roles().line
+        } else {
+            roles().bar_line
+        };
+        painter.line_segment(
+            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+            Stroke::new(1.0_f32, color),
+        );
     }
 }

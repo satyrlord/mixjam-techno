@@ -17,8 +17,7 @@ pub(super) fn prepare_session(session: &mut Session, view: &str) {
     // panels.
     let mut layout = session.layout();
     layout.tool_names = view != "rail-icons";
-    // The Mix view folds the lower panel, as it does when chosen.
-    layout.boards = view != "boards-folded" && !view.starts_with("mix-view");
+    layout.boards = view != "boards-folded";
     layout.maximised = view == "maximised";
     layout.sounds = matches!(view, "sounds-panel" | "sample-details");
     layout.overview = view != "overview-folded";
@@ -27,7 +26,7 @@ pub(super) fn prepare_session(session: &mut Session, view: &str) {
         eprintln!("{error}");
     }
     master_board(session, view);
-    if matches!(view, "mixer-eq" | "mix-view-eq") {
+    if view == "mixer-eq" {
         tamed_hi_hats(session);
     }
     if view == "unsaved" {

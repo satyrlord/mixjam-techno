@@ -68,7 +68,7 @@ fn lower_panel_divider_resizes_retains_height_and_preserves_arrangement() {
     // The largest minimum any window size gives a module.
     let shared_minimum = BottomModule::ALL
         .into_iter()
-        .map(|module| module.minimum_height(f32::INFINITY, 0.0))
+        .map(|module| module.minimum_height(f32::INFINITY))
         .fold(0.0_f32, f32::max);
     assert!(
         panel().height() <= shared_minimum,
@@ -321,7 +321,6 @@ fn starting_with_sounds_opens_the_sounds_panel_and_folds_the_lower_panel() {
         BottomModule::Mixer,
         "Mixer shows when it opens."
     );
-    assert!(!app.mix.shown);
 }
 
 #[test]
@@ -355,13 +354,12 @@ fn starting_with_mastering_or_effects_opens_the_lower_panel_on_its_tab() {
             app.session.layout().boards,
             "{module:?} must open the lower panel."
         );
-        assert!(!app.mix.shown);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
 
 #[test]
-fn starting_with_the_mixer_opens_the_mix_view() {
+fn starting_with_the_mixer_opens_the_mixer_board() {
     let (_, app) = fixture();
     let root = std::env::temp_dir().join(format!("mixjam-ui-start-mix-{}", std::process::id()));
     let mut session = Session::headless(
@@ -376,11 +374,10 @@ fn starting_with_the_mixer_opens_the_mix_view() {
         .apply_options(options, session.options_revision(), false)
         .unwrap();
     let app = MixJamApp::from_session(session, "UI fixture".into(), false);
-    assert!(app.mix.shown);
-    assert_eq!(app.boards.module, BottomModule::Mastering);
+    assert_eq!(app.boards.module, BottomModule::Mixer);
     assert!(
-        !app.session.layout().boards,
-        "The Mix view folds the lower panel."
+        app.session.layout().boards,
+        "The Mixer startup option opens the lower panel on the Mixer board."
     );
     std::fs::remove_dir_all(root).unwrap();
 }

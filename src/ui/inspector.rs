@@ -1,21 +1,14 @@
 //! The Inspector at the right of the score: the song when nothing is
-//! selected, the selected track, the selected clip, or a summary of several
-//! selected clips. Its fields edit through the clip menu's and the Mixer's
-//! operations, so every change is an undo step. Its controls carry their own
-//! names ("Inspector track ...", "Inspector clip ..."), so they never share a
-//! name with the Mixer, the Mix view, or the clip menu shown beside them.
-use super::mixer::{
-    Look, center_button, gain_value, pan_slider, polarity_button, row_surface, send_knob,
-    switch_button, unity_button,
-};
+//! selected, the selected track's channel processing, the selected clip, or a
+//! summary of several selected clips. Its controls carry their own names
+//! ("Inspector track ...", "Inspector clip ..."), so they never share a name
+//! with the Mixer or the clip menu.
+use super::mixer::row_surface;
 use super::room::Panel;
 use super::sounds::{fold_button, panel_strip};
 use super::view::{GROUPS, group_color, section_color, title_text};
 use super::*;
-use mixjam_techno::application::{
-    Track,
-    fx::{BUSES, FxBuses},
-};
+use mixjam_techno::application::Track;
 
 #[path = "inspector/clip/mod.rs"]
 mod clip;
@@ -87,24 +80,7 @@ impl MixJamApp {
             return;
         }
         if !self.panels.room.inspector {
-            egui::SidePanel::right("inspector-folded")
-                .exact_width(INSPECTOR_STRIP_WIDTH)
-                .resizable(false)
-                .frame(egui::Frame::new().fill(roles().panel))
-                .show(ctx, |ui| {
-                    if panel_strip(
-                        ui,
-                        "Show the Inspector",
-                        "INSPECTOR",
-                        -1.0,
-                        "Show the Inspector: the song, the selected track, or the selected \
-                         clips. In a narrow window the Sounds panel folds to make room.",
-                    )
-                    .clicked()
-                    {
-                        self.open_inspector();
-                    }
-                });
+            self.inspector_folded(ctx);
             return;
         }
         egui::SidePanel::right("inspector")
@@ -116,42 +92,75 @@ impl MixJamApp {
                     .inner_margin(egui::Margin::symmetric(12, 10)),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.set_height(20.0);
-                    ui.label(
-                        egui::RichText::new("Inspector")
-                            .size(12.0)
-                            .color(roles().muted),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if fold_button(ui, "Fold the Inspector", 1.0).clicked() {
-                            self.set_layout(|layout| layout.inspector = false);
-                        }
-                    });
-                });
+                self.inspector_header(ui);
                 let page = self.inspector_page();
-                let mut page_id = ui.id().with((self.boards.master_view_generation, page));
-                if matches!(page, Page::Clips(_)) {
-                    page_id = page_id.with(&self.selection.clips);
-                }
-                ui.push_id(page_id, |ui| {
-                    // The bar takes its own room, so it never covers a card.
-                    ui.spacing_mut().scroll.floating = false;
-                    egui::ScrollArea::vertical()
-                        .id_salt("inspector-page")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
-                            match page {
-                                Page::Song => self.song_page(ui),
-                                Page::Track(track) => self.track_page(ui, track),
-                                Page::Clip(id) => self.clip_page(ui, id),
-                                Page::Clips(count) => self.clips_page(ui, count),
-                            }
-                        });
-                    view::name_scroll_area(ui, "inspector-page", "Inspector");
-                });
+                self.inspector_scroll(ui, page);
             });
+    }
+
+    fn inspector_folded(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::right("inspector-folded")
+            .exact_width(INSPECTOR_STRIP_WIDTH)
+            .resizable(false)
+            .frame(egui::Frame::new().fill(roles().panel))
+            .show(ctx, |ui| {
+                if panel_strip(
+                    ui,
+                    "Show the Inspector",
+                    "INSPECTOR",
+                    -1.0,
+                    "Show the Inspector: the song, the selected track, or the selected clips. In \
+                     a narrow window the Sounds panel folds to make room.",
+                )
+                .clicked()
+                {
+                    self.open_inspector();
+                }
+            });
+    }
+
+    fn inspector_header(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.set_height(26.0);
+            // Painted in the heading face; the status bar's switch is the
+            // one control named Inspector.
+            let heading = ui.painter().layout_no_wrap(
+                title_text("Inspector"),
+                FontId::new(15.0, theme::heading_family()),
+                roles().text,
+            );
+            let (rect, _) = ui.allocate_exact_size(heading.size(), Sense::hover());
+            ui.painter().galley(rect.min, heading, roles().text);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if fold_button(ui, "Fold the Inspector", 1.0).clicked() {
+                    self.set_layout(|layout| layout.inspector = false);
+                }
+            });
+        });
+    }
+
+    fn inspector_scroll(&mut self, ui: &mut egui::Ui, page: Page) {
+        let mut page_id = ui.id().with((self.boards.master_view_generation, page));
+        if matches!(page, Page::Clips(_)) {
+            page_id = page_id.with(&self.selection.clips);
+        }
+        ui.push_id(page_id, |ui| {
+            // The bar takes its own room, so it never covers a card.
+            ui.spacing_mut().scroll.floating = false;
+            egui::ScrollArea::vertical()
+                .id_salt("inspector-page")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+                    match page {
+                        Page::Song => self.song_page(ui),
+                        Page::Track(track) => self.track_page(ui, track),
+                        Page::Clip(id) => self.clip_page(ui, id),
+                        Page::Clips(count) => self.clips_page(ui, count),
+                    }
+                });
+            view::name_scroll_area(ui, "inspector-page", "Inspector");
+        });
     }
 
     fn song_page(&mut self, ui: &mut egui::Ui) {
@@ -343,14 +352,10 @@ impl MixJamApp {
                 if count == 1 { "clip" } else { "clips" }
             )],
         );
-        let any_solo = project.any_solo();
         let mut edited = project.tracks[index].clone();
         let track = &mut edited;
         let open_eq = channel_eq_button(ui, track);
-        let mut switched = channel_power_switches(ui, track, index);
-
-        switched |= channel_level(ui, track, any_solo);
-        channel_sends(ui, track, &project.fx);
+        let switched = channel_power_switches(ui, track, index);
 
         if open_eq {
             self.eq_track = Some(index);
@@ -445,166 +450,6 @@ fn channel_power_switches(ui: &mut egui::Ui, track: &mut Track, index: usize) ->
         track.ducker.set_key(index, f64::from(track.ducker.key));
     }
     switched
-}
-
-fn channel_level(ui: &mut egui::Ui, track: &mut Track, any_solo: bool) -> bool {
-    let width = ui.available_width();
-    // Level, pan, and outputs share one card, a row each.
-    section_heading(ui, "Channel");
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 98.0), Sense::hover());
-    row_surface(ui, rect, false);
-    // The card sets the page's height. Its positioned controls have their own cursor.
-    let mut channel_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .id_salt("inspector-channel")
-            .max_rect(rect),
-    );
-    let w = rect.width();
-    let row = |top: f32, left: f32, right: f32, height: f32| {
-        Rect::from_x_y_ranges(
-            rect.left() + left..=rect.left() + right,
-            rect.top() + top..=rect.top() + top + height,
-        )
-    };
-    let pan_automated = !track.automation.pan.is_empty();
-    lanes::strip_fader(
-        &mut channel_ui,
-        row(6.0, 6.0, w - 122.0, 22.0),
-        TRACK,
-        &mut track.gain,
-    );
-    gain_value(
-        &mut channel_ui,
-        row(6.0, w - 118.0, w - 60.0, 22.0),
-        1.0,
-        TRACK,
-        &mut track.gain,
-    );
-    if unity_button(
-        &mut channel_ui,
-        row(8.0, w - 56.0, w - 6.0, 18.0),
-        Look::Strip(1.0),
-        TRACK,
-    ) {
-        track.gain = 1.0;
-    }
-    // Inset, so the automation ring stays inside the card.
-    pan_slider(
-        &mut channel_ui,
-        row(38.0, 10.0, w - 126.0, 22.0),
-        Look::Strip(1.0),
-        TRACK,
-        &mut track.pan,
-        pan_automated,
-    );
-    if center_button(
-        &mut channel_ui,
-        row(40.0, w - 118.0, w - 60.0, 18.0),
-        Look::Strip(1.0),
-        TRACK,
-    ) {
-        track.pan = 0.0;
-    }
-    channel_ui.painter().text(
-        Pos2::new(rect.left() + w - 54.0, rect.top() + 49.0),
-        Align2::LEFT_CENTER,
-        // While its lane drives the pan, the stored value is not what plays.
-        if pan_automated {
-            "Automated".into()
-        } else {
-            view::pan_description(track.pan)
-        },
-        FontId::proportional(11.0),
-        roles().strip_text,
-    );
-    channel_routing(&mut channel_ui, rect, track, any_solo, pan_automated)
-}
-
-fn channel_routing(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    track: &mut Track,
-    any_solo: bool,
-    pan_automated: bool,
-) -> bool {
-    let mut switched = false;
-    let cell = |x: f32| {
-        Rect::from_center_size(
-            Pos2::new(rect.left() + x, rect.top() + 81.0),
-            Vec2::new(24.0, 22.0),
-        )
-    };
-    for (switch, x) in TrackSwitch::ALL.into_iter().zip([18.0, 44.0, 70.0, 96.0]) {
-        let on = match switch {
-            TrackSwitch::Mute => &mut track.muted,
-            TrackSwitch::Solo => &mut track.solo,
-            TrackSwitch::Left => &mut track.left_enabled,
-            TrackSwitch::Right => &mut track.right_enabled,
-        };
-        switched |= switch_button(ui, cell(x), Look::Strip(1.0), TRACK, switch, on);
-    }
-    switched |= polarity_button(
-        ui,
-        cell(124.0),
-        Look::Strip(1.0),
-        TRACK,
-        &mut track.polarity_inverted,
-    );
-    // Only a silent track says why here; the pan row says the rest.
-    if let Some(silence) = track.silence(any_solo) {
-        ui.painter().text(
-            Pos2::new(rect.left() + 144.0, rect.top() + 81.0),
-            Align2::LEFT_CENTER,
-            mixer::track_state(Some(silence), pan_automated, track.pan),
-            FontId::proportional(11.0),
-            roles().strip_text,
-        );
-    }
-
-    switched
-}
-
-fn channel_sends(ui: &mut egui::Ui, track: &mut Track, fx: &FxBuses) {
-    let width = ui.available_width();
-    section_heading(ui, "Sends");
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 64.0), Sense::hover());
-    row_surface(ui, rect, false);
-    let step = rect.width() / BUSES as f32;
-    for (bus, settings) in fx.buses.iter().enumerate() {
-        let label = settings.module.label();
-        // "Echoform Delay" reads "Delay" under a small knob.
-        let effect = label.rsplit(' ').next().unwrap_or(label);
-        let live = !settings.module.is_empty() && settings.powered;
-        let x = rect.left() + step * (bus as f32 + 0.5);
-        ui.scope(|ui| {
-            // A send to an empty or switched-off return sounds nothing.
-            if !live {
-                ui.multiply_opacity(0.45);
-            }
-            send_knob(
-                ui,
-                Rect::from_center_size(Pos2::new(x, rect.top() + 18.0), Vec2::splat(24.0)),
-                Look::Strip(1.0),
-                &format!("{TRACK} send FX {}", bus + 1),
-                &mut track.sends[bus],
-                !track.automation.sends[bus].is_empty(),
-            );
-            ui.painter().text(
-                Pos2::new(x, rect.top() + 41.0),
-                Align2::CENTER_CENTER,
-                format!("{} {effect}", bus + 1),
-                FontId::proportional(10.0),
-                roles().strip_text,
-            );
-            ui.painter().text(
-                Pos2::new(x, rect.top() + 54.0),
-                Align2::CENTER_CENTER,
-                format!("{:.0}%", track.sends[bus] * 100.0),
-                FontId::proportional(10.0),
-                roles().strip_text,
-            );
-        });
-    }
 }
 
 /// A group heading: small uppercase muted text.

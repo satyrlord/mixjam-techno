@@ -90,9 +90,9 @@ the bus. `points=[]` clears it. `state` lists the four buses under
 ## Track EQ window
 
 The channel EQ, drive, compressor, stereo, filter, and ducker controls are in
-the track's channel strip. To open it, click `Track N EQ` in the Mixer or the
-Mix view, or `Inspector track EQ` for the selected track. The `Track N EQ
-previous track` and `Track N EQ next track` buttons change the track shown.
+the track's channel strip. To open it, click `Track N EQ` in the Mixer, or
+`Inspector track EQ` for the selected track. The `Track N EQ previous track` and
+`Track N EQ next track` buttons change the track shown.
 Set an editable value by name:
 
 1. `set target="Track 1 drive power" value=true`.

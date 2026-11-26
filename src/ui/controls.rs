@@ -59,6 +59,126 @@ pub(super) fn lock_arrows(ui: &egui::Ui, id: egui::Id) {
     });
 }
 
+/// Apply focused arrow, Home, and End keys to `value` within `range`.
+pub(super) fn range_knob_keys(
+    ui: &egui::Ui,
+    id: egui::Id,
+    range: RangeInclusive<f32>,
+    step: f32,
+    value: &mut f32,
+) {
+    lock_arrows(ui, id);
+    let moves = [
+        (egui::Key::ArrowUp, step),
+        (egui::Key::ArrowRight, step),
+        (egui::Key::ArrowDown, -step),
+        (egui::Key::ArrowLeft, -step),
+    ];
+    ui.input_mut(|input| {
+        let modifiers = input.modifiers;
+        for (key, delta) in moves {
+            if input.consume_key(modifiers, key) {
+                *value += delta;
+            }
+        }
+        if input.consume_key(modifiers, egui::Key::Home) {
+            *value = *range.start();
+        }
+        if input.consume_key(modifiers, egui::Key::End) {
+            *value = *range.end();
+        }
+    });
+}
+
+/// Apply AccessKit `SetValue`, `Increment`, and `Decrement` actions to `value`.
+pub(super) fn apply_numeric_accesskit(
+    ui: &egui::Ui,
+    response: &Response,
+    value: &mut f32,
+    range: RangeInclusive<f32>,
+) {
+    if !control_allows_input(ui, response) {
+        return;
+    }
+    ui.input(|input| {
+        for action in numeric_actions(input, response.id) {
+            let next = match action {
+                NumericAction::Set(draft) => draft as f32,
+                NumericAction::Increment => *value + KNOB_STEP as f32,
+                NumericAction::Decrement => *value - KNOB_STEP as f32,
+            };
+            *value = next.clamp(*range.start(), *range.end());
+        }
+    });
+}
+
+pub(super) enum NumericAction {
+    Set(f64),
+    Increment,
+    Decrement,
+}
+
+/// Numeric actions for one control, in the order they arrived.
+pub(super) fn numeric_actions(
+    input: &egui::InputState,
+    id: egui::Id,
+) -> impl Iterator<Item = NumericAction> {
+    use egui::accesskit::{Action, ActionData, NodeId};
+    let target = NodeId(id.value());
+    input.events.iter().filter_map(move |event| {
+        let egui::Event::AccessKitActionRequest(request) = event else {
+            return None;
+        };
+        if request.target != target {
+            return None;
+        }
+        match (request.action, &request.data) {
+            (Action::SetValue, Some(ActionData::NumericValue(value))) if value.is_finite() => {
+                Some(NumericAction::Set(*value))
+            }
+            (Action::Increment, _) => Some(NumericAction::Increment),
+            (Action::Decrement, _) => Some(NumericAction::Decrement),
+            _ => None,
+        }
+    })
+}
+
+const KNOB_STEP: f64 = 0.05;
+
+pub(super) fn control_allows_input(ui: &egui::Ui, response: &Response) -> bool {
+    response.enabled() && layer_allows_input(ui)
+}
+
+/// Disabled controls and controls behind a modal cannot edit the project.
+pub(super) fn layer_allows_input(ui: &egui::Ui) -> bool {
+    ui.is_enabled() && ui.memory(|memory| memory.allows_interaction(ui.layer_id()))
+}
+
+/// Expose the numeric actions that a lane pan or mixer send can apply.
+pub(super) fn knob_accesskit_range(
+    ui: &egui::Ui,
+    response: &Response,
+    value: f32,
+    range: RangeInclusive<f32>,
+) {
+    let enabled = control_allows_input(ui, response);
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        use egui::accesskit::Action;
+        node.set_min_numeric_value(f64::from(*range.start()));
+        node.set_max_numeric_value(f64::from(*range.end()));
+        node.set_numeric_value_step(KNOB_STEP);
+        if enabled {
+            node.add_action(Action::SetValue);
+            if value < *range.end() {
+                node.add_action(Action::Increment);
+            }
+            if value > *range.start() {
+                node.add_action(Action::Decrement);
+            }
+        }
+    });
+}
+
 const POINTER_BUTTONS: [egui::PointerButton; 5] = [
     egui::PointerButton::Primary,
     egui::PointerButton::Secondary,

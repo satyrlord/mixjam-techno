@@ -34,7 +34,6 @@ pub(super) enum Command {
     Duplicate,
     SelectAll,
     Maximise,
-    MixView,
     ToolNames,
     Boards,
     Sounds,
@@ -126,7 +125,6 @@ const DESCRIPTIONS: &[(Command, &str)] = &[
         Command::Maximise,
         "Hide the side and lower panels around the score",
     ),
-    (Command::MixView, "The score's tracks become mixer strips"),
     (
         Command::ToolNames,
         "Show names under the rail icons, or icons only",
@@ -184,7 +182,6 @@ impl Command {
             Self::Duplicate,
             Self::SelectAll,
             Self::Maximise,
-            Self::MixView,
         ]);
         all.extend(PANELS);
         all.push(Self::Lane(None, None));
@@ -265,7 +262,6 @@ impl Command {
             Self::Duplicate => "Duplicate selection".into(),
             Self::SelectAll => "Select every clip".into(),
             Self::Maximise => "Maximise the score".into(),
-            Self::MixView => "Mix view".into(),
             Self::ToolNames => "Tool names in the rail".into(),
             Self::Boards => "Lower panel".into(),
             Self::Sounds => "Sounds panel".into(),
@@ -357,6 +353,18 @@ pub(super) fn matching(query: &str) -> Vec<Command> {
 impl MixJamApp {
     /// Run `command` as its rail tool, switch or shortcut does.
     pub(super) fn run_command(&mut self, command: Command, ctx: &egui::Context) {
+        if self.run_file_command(command, ctx)
+            || self.run_edit_command(command)
+            || self.run_board_command(command)
+            || self.run_tool_command(command, ctx)
+            || self.run_playback_command(command)
+        {
+            return;
+        }
+        self.run_panel_command(command);
+    }
+
+    fn run_file_command(&mut self, command: Command, ctx: &egui::Context) -> bool {
         match command {
             Command::New => self.request_action(PendingAction::New, ctx),
             Command::Open => self.request_action(PendingAction::Open, ctx),
@@ -364,94 +372,140 @@ impl MixJamApp {
             Command::SaveAs => self.save(true),
             Command::Import => self.import_wav(),
             Command::Export => self.export(),
+            _ => return false,
+        }
+        true
+    }
+
+    fn run_edit_command(&mut self, command: Command) -> bool {
+        match command {
             Command::Erase => self.score_tools.erase = !self.score_tools.erase,
             Command::Delete => self.delete_selection(),
-            // Each board button shows its board, and folds the lower panel
-            // when that board already shows. The Mixer board and the Mix
-            // view never show at once, so Mixer leaves the Mix view.
-            Command::Mixer => {
-                self.set_mix_view(false);
-                self.toggle_board(BottomModule::Mixer);
-            }
-            Command::Mastering => self.toggle_board(BottomModule::Mastering),
-            Command::FxReturns => self.toggle_board(BottomModule::FxReturns),
-            Command::StepSynth => self.toggle_board(BottomModule::StepSynth),
-            Command::Effects => self.effects.open = !self.effects.open,
-            Command::Edit => {
-                self.sample_edit.open = !self.sample_edit.open;
-                if self.sample_edit.open {
-                    self.sample_edit.start = 0;
-                    self.sample_edit.end = 0;
-                }
-            }
-            Command::Stretch => {
-                self.stretch.open = !self.stretch.open;
-                if self.stretch.open {
-                    self.stretch.source_bpm = stretch::clamp_bpm(self.source_bpm());
-                } else {
-                    self.close_stretch_request();
-                }
-            }
-            Command::AlbumReview => self.album_review.open = !self.album_review.open,
-            Command::Options => self.open_options(ctx),
-            Command::Help => self.help.main = true,
-            Command::PlayPause => {
-                if self.session.wants_playback() {
-                    self.pause();
-                } else {
-                    self.start_playback();
-                }
-            }
-            Command::StepSynthListen => self.step_synth_listen(),
             Command::Undo => self.history_step(false),
             Command::Redo => self.history_step(true),
             Command::Duplicate => self.duplicate_selection(),
             Command::SelectAll => self.select_all_clips(),
+            _ => return false,
+        }
+        true
+    }
+
+    fn run_board_command(&mut self, command: Command) -> bool {
+        match command {
+            Command::Mixer => self.toggle_board(BottomModule::Mixer),
+            Command::Mastering => self.toggle_board(BottomModule::Mastering),
+            Command::FxReturns => self.toggle_board(BottomModule::FxReturns),
+            Command::StepSynth => self.toggle_board(BottomModule::StepSynth),
+            Command::Lane(lane, bus) => self.choose_lane((lane, bus)),
+            _ => return false,
+        }
+        true
+    }
+
+    fn run_tool_command(&mut self, command: Command, ctx: &egui::Context) -> bool {
+        match command {
+            Command::Effects => self.effects.open = !self.effects.open,
+            Command::Edit => self.toggle_sample_edit_command(),
+            Command::Stretch => self.toggle_stretch_command(),
+            Command::AlbumReview => self.album_review.open = !self.album_review.open,
+            Command::Options => self.open_options(ctx),
+            Command::Help => self.help.main = true,
+            _ => return false,
+        }
+        true
+    }
+
+    fn toggle_sample_edit_command(&mut self) {
+        self.sample_edit.open = !self.sample_edit.open;
+        if self.sample_edit.open {
+            self.sample_edit.start = 0;
+            self.sample_edit.end = 0;
+        }
+    }
+
+    fn toggle_stretch_command(&mut self) {
+        self.stretch.open = !self.stretch.open;
+        if self.stretch.open {
+            self.stretch.source_bpm = stretch::clamp_bpm(self.source_bpm());
+        } else {
+            self.close_stretch_request();
+        }
+    }
+
+    fn run_playback_command(&mut self, command: Command) -> bool {
+        match command {
+            Command::PlayPause => self.toggle_play_pause_command(),
+            Command::StepSynthListen => self.step_synth_listen(),
             Command::Maximise => self.set_layout(|layout| layout.maximised = !layout.maximised),
-            Command::MixView => self.set_mix_view(!self.mix.shown),
-            // In a maximised score each panel switch restores the score with
-            // the previous panel choices.
-            Command::ToolNames => {
-                let shown = !self.session.layout().maximised;
-                self.set_layout(|layout| {
-                    if shown {
-                        layout.tool_names = !layout.tool_names;
-                    }
-                    layout.maximised = false;
-                });
+            Command::ToolNames => self.toggle_tool_names_command(),
+            Command::Overview => self.set_layout(|layout| layout.overview = !layout.overview),
+            _ => return false,
+        }
+        true
+    }
+
+    fn toggle_play_pause_command(&mut self) {
+        if self.session.wants_playback() {
+            self.pause();
+        } else {
+            self.start_playback();
+        }
+    }
+
+    fn toggle_tool_names_command(&mut self) {
+        let shown = !self.session.layout().maximised;
+        self.set_layout(|layout| {
+            if shown {
+                layout.tool_names = !layout.tool_names;
             }
+            layout.maximised = false;
+        });
+    }
+
+    fn run_panel_command(&mut self, command: Command) {
+        match command {
             Command::Boards => {
-                if self.session.layout().maximised {
-                    self.set_layout(|layout| layout.maximised = false);
-                } else if self.panels.room.boards {
-                    self.set_layout(|layout| layout.boards = false);
-                } else {
-                    self.set_layout(|layout| layout.boards = true);
-                    self.claim(super::room::Panel::Boards);
-                }
+                self.toggle_panel_command(self.panels.room.boards, super::room::Panel::Boards);
             }
             Command::Sounds => {
-                if self.session.layout().maximised {
-                    self.set_layout(|layout| layout.maximised = false);
-                } else if self.sounds_panel_open() {
-                    self.set_layout(|layout| layout.sounds = false);
-                } else {
-                    self.open_sounds_panel();
-                }
+                self.toggle_panel_command(self.sounds_panel_open(), super::room::Panel::Sounds);
             }
-            // The overview belongs to the score, so it keeps its place when
-            // the score is maximised.
-            Command::Overview => self.set_layout(|layout| layout.overview = !layout.overview),
             Command::Inspector => {
-                if self.session.layout().maximised {
-                    self.set_layout(|layout| layout.maximised = false);
-                } else if self.panels.room.inspector {
-                    self.set_layout(|layout| layout.inspector = false);
-                } else {
-                    self.open_inspector();
-                }
+                self.toggle_panel_command(
+                    self.panels.room.inspector,
+                    super::room::Panel::Inspector,
+                );
             }
-            Command::Lane(lane, bus) => self.choose_lane((lane, bus)),
+            _ => {}
+        }
+    }
+
+    fn toggle_panel_command(&mut self, open: bool, panel: super::room::Panel) {
+        if self.session.layout().maximised {
+            self.set_layout(|layout| layout.maximised = false);
+        } else if open {
+            self.fold_panel_command(panel);
+        } else {
+            self.open_panel_command(panel);
+        }
+    }
+
+    fn fold_panel_command(&mut self, panel: super::room::Panel) {
+        self.set_layout(|layout| match panel {
+            super::room::Panel::Boards => layout.boards = false,
+            super::room::Panel::Sounds => layout.sounds = false,
+            super::room::Panel::Inspector => layout.inspector = false,
+        });
+    }
+
+    fn open_panel_command(&mut self, panel: super::room::Panel) {
+        match panel {
+            super::room::Panel::Boards => {
+                self.set_layout(|layout| layout.boards = true);
+                self.claim(panel);
+            }
+            super::room::Panel::Sounds => self.open_sounds_panel(),
+            super::room::Panel::Inspector => self.open_inspector(),
         }
     }
 
@@ -460,7 +514,6 @@ impl MixJamApp {
         match command {
             Command::Erase => self.score_tools.erase,
             Command::Mixer => self.board_shown(BottomModule::Mixer),
-            Command::MixView => self.mix.shown,
             Command::Mastering => self.board_shown(BottomModule::Mastering),
             Command::FxReturns => self.board_shown(BottomModule::FxReturns),
             Command::StepSynth => self.board_shown(BottomModule::StepSynth),

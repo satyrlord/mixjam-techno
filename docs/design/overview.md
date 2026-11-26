@@ -15,9 +15,8 @@ The application has three complete themes that the owner selected: Studio
 arrangement, Sounds panel, Mixer, boards, tools, menus, tooltips,
 confirmations, and feedback. See [Themes](themes.md#themes). The rest
 of this document describes the shared layout and behavior, which no theme
-changes. Legacy ivory strips remain only in the older Mixer board until
-retirement; all panels, chassis, buttons, dials, and colorful pedals render
-procedurally across all three themes.
+changes. The Vintage Mixer uses ivory strip artwork. Shared painters draw the
+panels, chassis, buttons, dials, and pedals in all three themes.
 
 In Vintage, every window and board sits on black rack rails with olive-sage
 anodized modular plates, slotted corner screws, cream silk-screen legends,
@@ -62,9 +61,9 @@ The implementation is native Windows Rust with eframe/egui:
   bar, score, clips, and the boards of the lower panel.
 - `src/ui/theme.rs` holds the theme roles.
 - `src/ui/mixer/` paints the Mixer.
-- `sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view/`, and
-  `commands.rs` hold the side panels, the song overview, the Mix view, and the
-  command list. `room.rs` decides which panels fit.
+- `sounds.rs`, `inspector.rs`, `overview.rs`, and `commands.rs` hold the side
+  panels, the song overview, and the command list. `room.rs` decides which
+  panels fit.
 - `src/ui/dialog.rs` owns every floating shell and its lifecycle.
 - `src/ui/controls/` owns the rendering and interaction of reusable controls.
 - `src/ui/stretch.rs`, `src/ui/effects.rs`, and `src/ui/sample_editor.rs`

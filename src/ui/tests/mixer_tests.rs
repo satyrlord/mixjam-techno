@@ -74,39 +74,75 @@ fn mixer_master_stays_visible_while_scrolling_all_tracks_at_supported_sizes() {
 #[test]
 fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
     fn assert_switches(output: &egui::FullOutput, track: usize, state: &Track) {
+        for switch in [TrackSwitch::Mute, TrackSwitch::Solo] {
+            let enabled = switch.get(state);
+            let label = format!("Arrangement track {track} {}", switch.name());
+            let node = screen(output).node(&label);
+            assert_eq!(
+                node.node().toggled(),
+                Some(if enabled {
+                    egui::accesskit::Toggled::True
+                } else {
+                    egui::accesskit::Toggled::False
+                }),
+                "{label}"
+            );
+            let rect = node.rect();
+            let painted = screen(output)
+                .texts()
+                .find(|painted| {
+                    painted.label() == switch.letter() && rect.contains(painted.rect().min)
+                })
+                .unwrap_or_else(|| panic!("Missing painted state for {label}"));
+            assert_eq!(
+                painted.format().color,
+                if enabled {
+                    roles().on_light
+                } else {
+                    roles().muted
+                },
+                "{label}"
+            );
+        }
+        for switch in [TrackSwitch::Left, TrackSwitch::Right] {
+            assert!(
+                !has_control(
+                    output,
+                    &format!("Arrangement track {track} {}", switch.name())
+                ),
+                "Track {track} lane must not carry {}",
+                switch.name()
+            );
+        }
         for switch in TrackSwitch::ALL {
             let enabled = switch.get(state);
-            for label in [
-                format!("Arrangement track {track} {}", switch.name()),
-                format!("Track {track} {}", switch.name()),
-            ] {
-                let node = screen(output).node(&label);
-                assert_eq!(
-                    node.node().toggled(),
-                    Some(if enabled {
-                        egui::accesskit::Toggled::True
-                    } else {
-                        egui::accesskit::Toggled::False
-                    }),
-                    "{label}"
-                );
-                let rect = node.rect();
-                let painted = screen(output)
-                    .texts()
-                    .find(|painted| {
-                        painted.label() == switch.letter() && rect.contains(painted.rect().min)
-                    })
-                    .unwrap_or_else(|| panic!("Missing painted state for {label}"));
-                assert_eq!(
-                    painted.format().color,
-                    if enabled {
-                        roles().accent
-                    } else {
-                        roles().muted
-                    },
-                    "{label}"
-                );
-            }
+            let label = format!("Track {track} {}", switch.name());
+            let node = screen(output).node(&label);
+            assert_eq!(
+                node.node().toggled(),
+                Some(if enabled {
+                    egui::accesskit::Toggled::True
+                } else {
+                    egui::accesskit::Toggled::False
+                }),
+                "{label}"
+            );
+            let rect = node.rect();
+            let painted = screen(output)
+                .texts()
+                .find(|painted| {
+                    painted.label() == switch.letter() && rect.contains(painted.rect().min)
+                })
+                .unwrap_or_else(|| panic!("Missing painted state for {label}"));
+            assert_eq!(
+                painted.format().color,
+                if enabled {
+                    roles().accent
+                } else {
+                    roles().muted
+                },
+                "{label}"
+            );
         }
     }
     let (ctx, mut app) = fixture();
@@ -150,7 +186,7 @@ fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
         assert_switches(&output, 64, &app.session.project().tracks[63].clone());
     }
     for (label, track, switch) in [
-        ("Arrangement track 1 left output", 0, TrackSwitch::Left),
+        ("Track 1 left output", 0, TrackSwitch::Left),
         ("Track 64 right output", 63, TrackSwitch::Right),
         ("Arrangement track 1 mute", 0, TrackSwitch::Mute),
         ("Track 64 solo", 63, TrackSwitch::Solo),
@@ -181,7 +217,7 @@ fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
         assert_switches(&output, track + 1, &changed);
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    focus_control(&ctx, &mut app, &output, "Arrangement track 64 left output");
+    focus_control(&ctx, &mut app, &output, "Track 64 left output");
     frame(
         &ctx,
         &mut app,
@@ -1547,15 +1583,15 @@ fn a_secondary_drag_moves_no_fader_and_no_send() {
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let rail = effects_control_rect(&output, "Track 1 gain").center();
     let send = effects_control_rect(&output, "Track 1 send FX 1").center();
-    let lane = effects_control_rect(&output, "Arrangement track 1 gain").center();
+    let lane = effects_control_rect(&output, "Arrangement track 1 pan").center();
     let drags = [
         ("the Mixer fader", rail, rail + Vec2::new(0.0, 20.0)),
         ("the send knob", send, send + Vec2::new(30.0, 0.0)),
-        ("the lane fader", lane, lane - Vec2::new(10.0, 0.0)),
+        ("the lane pan knob", lane, lane + Vec2::new(12.0, 0.0)),
     ];
     let mix = |app: &MixJamApp| {
         let track = &app.session.project().tracks[0];
-        (track.gain, track.sends[0])
+        (track.gain, track.sends[0], track.pan)
     };
     let mut moved = Vec::new();
     for add_primary in [false, true] {

@@ -106,22 +106,13 @@ impl MixJamApp {
     /// the saved layout stays as it is.
     pub(super) fn song_overview(&mut self, ui: &mut egui::Ui) -> Option<OverviewSlot> {
         self.overview.rect = None;
-        // The Mix view's Master and returns rows also stay below the lanes.
-        let height = ui.available_height() - self.score_block_height();
+        let height = ui.available_height();
         if height < overview_bar_reserve(ui.spacing().item_spacing.y) + SCORE_ROOM {
             return None;
         }
         let wanted = self.session.layout().overview;
         if !wanted || !overview_fits(height, ui.spacing().item_spacing.y) {
-            let (rect, _) = ui.allocate_exact_size(
-                Vec2::new(ui.available_width(), OVERVIEW_BAR_HEIGHT),
-                Sense::hover(),
-            );
-            self.overview.rect = Some(rect);
-            if overview_bar(ui, rect, wanted).clicked() && !wanted {
-                self.set_layout(|layout| layout.overview = true);
-            }
-            ui.add_space(OVERVIEW_GAP);
+            self.folded_overview(ui, wanted);
             return None;
         }
         let (rect, strip) = ui.allocate_exact_size(
@@ -139,53 +130,7 @@ impl MixJamApp {
             ui.id().with("hide-song-overview"),
             Sense::click(),
         );
-        if let Some(view) = self.score.view {
-            let span = overview_span(
-                self.session.project(),
-                self.session.cursor_tick(),
-                view.ticks(),
-            );
-            let lane = rect.x_range().shrink(INSET);
-            if (strip.is_pointer_button_down_on() || strip.clicked())
-                && let Some(pos) = strip.interact_pointer_pos()
-            {
-                let tick = (pos.x - lane.min) / lane.span() * span;
-                self.overview.target = Some(tick.clamp(0.0, span));
-                strip.request_focus();
-            }
-            if strip.has_focus() {
-                ui.memory_mut(|memory| {
-                    memory.set_focus_lock_filter(
-                        strip.id,
-                        egui::EventFilter {
-                            horizontal_arrows: true,
-                            ..Default::default()
-                        },
-                    )
-                });
-                // Left and Right move the view by a screen; Home and End go
-                // to the song's start and end.
-                let half = view.ticks() / 2.0;
-                let centre = view.start_tick() + half;
-                let target = ui.input_mut(|input| {
-                    let modifiers = input.modifiers;
-                    if input.consume_key(modifiers, egui::Key::ArrowLeft) {
-                        Some(centre - view.ticks())
-                    } else if input.consume_key(modifiers, egui::Key::ArrowRight) {
-                        Some(centre + view.ticks())
-                    } else if input.consume_key(modifiers, egui::Key::Home) {
-                        Some(half)
-                    } else if input.consume_key(modifiers, egui::Key::End) {
-                        Some(span - half)
-                    } else {
-                        None
-                    }
-                });
-                if let Some(target) = target {
-                    self.overview.target = Some(target.clamp(0.0, span));
-                }
-            }
-        }
+        self.overview_pointer_and_keys(ui, &strip, rect);
         strip.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Song overview")
         });
@@ -206,6 +151,71 @@ impl MixJamApp {
         Some(OverviewSlot { rect, strip, hide })
     }
 
+    fn folded_overview(&mut self, ui: &mut egui::Ui, wanted: bool) {
+        let (rect, _) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), OVERVIEW_BAR_HEIGHT),
+            Sense::hover(),
+        );
+        self.overview.rect = Some(rect);
+        if overview_bar(ui, rect, wanted).clicked() && !wanted {
+            self.set_layout(|layout| layout.overview = true);
+        }
+        ui.add_space(OVERVIEW_GAP);
+    }
+
+    fn overview_pointer_and_keys(&mut self, ui: &egui::Ui, strip: &Response, rect: Rect) {
+        let Some(view) = self.score.view else {
+            return;
+        };
+        let span = overview_span(
+            self.session.project(),
+            self.session.cursor_tick(),
+            view.ticks(),
+        );
+        let lane = rect.x_range().shrink(INSET);
+        if (strip.is_pointer_button_down_on() || strip.clicked())
+            && let Some(pos) = strip.interact_pointer_pos()
+        {
+            let tick = (pos.x - lane.min) / lane.span() * span;
+            self.overview.target = Some(tick.clamp(0.0, span));
+            strip.request_focus();
+        }
+        if strip.has_focus()
+            && let Some(target) = overview_key_target(ui, strip.id, span, view)
+        {
+            self.overview.target = Some(target.clamp(0.0, span));
+        }
+    }
+}
+
+/// Left and Right move the view by a screen; Home and End go to the ends.
+fn overview_key_target(ui: &egui::Ui, id: egui::Id, span: f32, view: ScoreView) -> Option<f32> {
+    ui.memory_mut(|memory| {
+        memory.set_focus_lock_filter(
+            id,
+            egui::EventFilter {
+                horizontal_arrows: true,
+                ..Default::default()
+            },
+        )
+    });
+    let half = view.ticks() / 2.0;
+    let centre = view.start_tick() + half;
+    let moves = [
+        (egui::Key::ArrowLeft, centre - view.ticks()),
+        (egui::Key::ArrowRight, centre + view.ticks()),
+        (egui::Key::Home, half),
+        (egui::Key::End, span - half),
+    ];
+    ui.input_mut(|input| {
+        let modifiers = input.modifiers;
+        moves
+            .into_iter()
+            .find_map(|(key, pos)| input.consume_key(modifiers, key).then_some(pos))
+    })
+}
+
+impl MixJamApp {
     /// One thin line per clip, a row per shown track, from the same ticks the
     /// score's clip rectangles use.
     fn clip_lines(&self, rect: Rect, span: f32, sections: bool) -> egui::Mesh {

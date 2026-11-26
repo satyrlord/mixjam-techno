@@ -783,8 +783,6 @@ fn score_toolbar_controls_fit_with_the_inspector_open() {
                     .unwrap()
                     .rect;
             let controls = [
-                "Arrange view",
-                "Mix view",
                 "Automation lane",
                 "Follow",
                 "Sections",

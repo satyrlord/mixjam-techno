@@ -23,9 +23,9 @@ The status line under pan tells why a track is silent. The order is Muted, then
 No output (both L and R off), then Solo elsewhere.
 
 Gain runs from negative infinity (silence) to +12 dB, with 0 dB at unity.
-Negative dB attenuates the signal. Values round to one decimal place at rest.
-The active entry field shows full precision. Focus without an edit must not
-change the saved amplitude or the audio. Relative increases must leave
+Negative dB attenuates the signal. The label and initial entry text show one
+decimal place. A typed value can specify more precision. Focus without an
+edit preserves the saved amplitude and the audio. Relative increases must leave
 silence and raise very quiet positive gains. A saved gain below -96 dB must
 not become silent when it increases.
 
@@ -56,9 +56,8 @@ the other dials. The stereo and filter controls have no power switch. The
 ducker key steps over the track that the window shows. Powered sections
 disable their dials while off.
 
-The body is 736 by 500 points. It fits by default at 960 by 720 points when
-there is no row anchor. Scroll bars keep the controls reachable when the
-window opens in a shorter area or the user resizes it.
+The body is 736 by 500 points. It fits by default at 960 by 720 points.
+Scroll bars keep the controls reachable when the user makes the window smaller.
 
 ### Sends and returns
 
@@ -67,7 +66,7 @@ return strips hold the FX bus return levels, input switches, limiter switches,
 and Edit buttons. Edit opens the selected bus on the FX returns board.
 
 While an automation lane sets a send or a pan, a thin ring marks its knob or
-slider. The Mix view and the Inspector use the same mark.
+slider. The lane pan knob uses the same mark.
 
 ### Gain taper
 
@@ -117,12 +116,13 @@ Native mixer buttons use Mixer Face at rest and the shared Raised on hover.
 Keyboard focus changes their one-point border to Mixer Amber. It also adds a
 two-point Mixer Ink ring, because amber alone is not legible on ivory. The
 gain rail, pan rail, and value field show the same ink ring or a cream edge.
-Each 28 by 24-point M/S/L/R button pairs its letter with a 12 by 2-point
-indicator bar. Arrangement and mixer M/S/L/R labels use Accent when on and
-Muted when off. Both expose the same checked state and an on/off tooltip for
-the track. Lane controls show keyboard focus. A lane edit requests a repaint,
-so that the mixer refreshes even if the pointer stops. Pan stays independent
-of L/R.
+Each 28 by 24-point Mixer M/S/L/R button pairs its letter with a 12 by
+2-point indicator bar, using Accent when on and Muted when off. Arrangement
+lane headers keep small square M and S switches that fill Coral and Accent
+when on, plus a small pan knob. Both expose the same checked state and an
+on/off tooltip for the track. Lane controls show keyboard focus. A lane edit
+requests a repaint, so that the mixer refreshes even if the pointer stops. Pan
+stays independent of L/R.
 
 The empty Mixer shows one instruction that tells how to add a sound to the
 arrangement. The frontend sends edits to the application layer. Visual
@@ -159,9 +159,9 @@ board's height, with no vertical scroll bar. If other panels reduce the room,
 the row scrolls horizontally. From top to bottom, each card has these rows:
 
 1. The header: the bus name and In at the left; S, Lim, and Edit at the right.
-   In, S, and Lim are the quiet bus switches of the Mix view, with the same
-   labels, lamps, and struck-off state. Edit opens the bus in the floating FX
-   Deep Edit window. Its width follows its label, so the full word shows.
+   In, S, and Lim are the quiet bus switches, with the same labels, lamps, and
+   struck-off state. Edit opens the bus in the floating FX Deep Edit window.
+   Its width follows its label, so the full word shows.
 2. The effect and preset selectors, at about 34% and 66% of the width. The
    effect shows its short name, such as Delay.
 3. Up to four main dials in equal columns, at most 76 points each. Each value

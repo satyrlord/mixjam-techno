@@ -1,5 +1,5 @@
 //! Scenario fixtures and assertions shared by several themed UI test modules: skin
-//! checks, boards, missing media, agent and mix view setups.
+//! checks, boards, missing media, and agent setups.
 
 use super::*;
 
@@ -476,17 +476,4 @@ pub(super) fn choose_automation_lane(ctx: &egui::Context, app: &mut MixJamApp, l
     for _ in 0..3 {
         frame(ctx, app, vec![], egui::Modifiers::NONE);
     }
-}
-
-/// The fixture in the Mix view at `size`, with its layout settled.
-pub(super) fn mix_view_fixture(size: Vec2) -> (egui::Context, MixJamApp, egui::FullOutput) {
-    let (ctx, mut app) = fixture();
-    ctx.enable_accesskit();
-    ctx.style_mut(|style| style.animation_time = 0.0);
-    app.set_mix_view(true);
-    let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-    for _ in 0..3 {
-        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-    }
-    (ctx, app, output)
 }

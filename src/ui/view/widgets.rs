@@ -678,31 +678,3 @@ pub(in super::super) fn switch_hint(label: &str, switch: TrackSwitch, on: bool) 
         }
     }
 }
-
-fn route_color(active: bool) -> Color32 {
-    if active {
-        roles().accent
-    } else {
-        roles().muted
-    }
-}
-
-pub(super) fn switch_letter(painter: &egui::Painter, rect: Rect, on: bool, switch: TrackSwitch) {
-    // The bar marks a switch that is on, so the state does not rest on color.
-    // It moves up in a short row so it stays inside the button.
-    if on {
-        let below = (rect.height() / 2.0 - 2.5).min(9.0);
-        painter.rect_filled(
-            Rect::from_center_size(rect.center() + Vec2::new(0.0, below), Vec2::new(9.0, 2.0)),
-            1.0,
-            roles().accent,
-        );
-    }
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        switch.letter(),
-        FontId::proportional(10.0),
-        route_color(on),
-    );
-}

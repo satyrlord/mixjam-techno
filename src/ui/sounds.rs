@@ -3,7 +3,7 @@
 //! and the sound actions.
 use super::view::{
     GROUPS, TILE_DETAIL_ALPHA, action_button, elided, focus_outline, group_color, heading,
-    name_control, name_scroll_area, sample_details, tile_tint,
+    name_control, name_scroll_area, sample_details, tile_tint, title_text,
 };
 use super::*;
 use mixjam_techno::application::PeakState;
@@ -99,21 +99,50 @@ impl MixJamApp {
         let total = self.session.library().samples.len();
         let tall = ui.available_height() >= WRAPPED_CHIPS_HEIGHT;
         ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        self.sounds_header(ui, samples.len(), total);
+        self.sounds_filters(ui, &groups, tall);
+        if samples.is_empty() {
+            self.no_sounds(ui, 15.0);
+            return;
+        }
+        let row_width = ui.available_width();
+        ui.spacing_mut().item_spacing = Vec2::new(0.0, ROW_GAP);
+        // The list is one Tab stop; rows stay pointer and assistive targets.
+        let list_id = ui.id().with("sound-list");
+        let focused = ui.memory(|memory| memory.has_focus(list_id));
+        if focused {
+            self.handle_sound_list_keys(ui, list_id, &samples);
+        }
+        self.sound_list_scroll(ui, list_id, &samples, focused, row_width);
+    }
+
+    fn sounds_header(&mut self, ui: &mut egui::Ui, shown: usize, total: usize) {
         ui.horizontal(|ui| {
             ui.set_height(26.0);
-            // Painted, not a label: the status bar's switch is the one
-            // control named Sounds.
+            // Painted in the heading face, not a label: the status bar's switch
+            // is the one control named Sounds.
             let title = ui.painter().layout_no_wrap(
-                "Sounds".to_owned(),
-                FontId::proportional(16.0),
+                title_text("Sounds"),
+                FontId::new(15.0, theme::heading_family()),
                 roles().text,
             );
             let (rect, _) = ui.allocate_exact_size(title.size(), Sense::hover());
             ui.painter().galley(rect.min, title, roles().text);
-            ui.label(
-                egui::RichText::new(format!("{} of {total}", samples.len()))
-                    .size(12.0)
-                    .color(roles().muted),
+            let fold_reserve = 30.0;
+            let count_max = (ui.available_width() - fold_reserve).max(40.0);
+            ui.allocate_ui_with_layout(
+                Vec2::new(count_max, 26.0),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("{shown} of {total}"))
+                                .size(12.0)
+                                .color(roles().muted),
+                        )
+                        .truncate(),
+                    );
+                },
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if fold_button(ui, "Fold the Sounds panel", -1.0).clicked() {
@@ -121,84 +150,83 @@ impl MixJamApp {
                 }
             });
         });
+    }
+
+    fn sounds_filters(&mut self, ui: &mut egui::Ui, groups: &[String], tall: bool) {
         let width = ui.available_width();
         self.sound_search(ui, width);
         ui.horizontal(|ui| {
             let half = (width - ui.spacing().item_spacing.x) / 2.0;
             self.library_filter(ui, half - 18.0, true);
-            self.category_filter(ui, half - 18.0, &groups, true);
+            self.category_filter(ui, half - 18.0, groups, true);
         });
-        let chips = |app: &mut Self, ui: &mut egui::Ui| {
-            let mut chosen = None;
-            if category_chip(ui, "All", None, app.sounds.group.is_none()).clicked() {
-                chosen = Some(None);
-            }
-            for name in GROUPS {
-                let active = app.sounds.group.as_deref() == Some(name);
-                if category_chip(ui, name, Some(group_color(name)), active).clicked() {
-                    chosen = Some(Some(name.to_owned()));
-                }
-            }
-            if let Some(group) = chosen {
-                app.sounds.group = group;
-            }
-        };
-        ui.scope(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-            if tall {
-                ui.horizontal_wrapped(|ui| chips(self, ui));
-            } else {
-                egui::ScrollArea::horizontal()
-                    .id_salt("sounds-panel-categories")
-                    .show(ui, |ui| ui.horizontal(|ui| chips(self, ui)));
-                name_scroll_area(ui, "sounds-panel-categories", "Categories");
-            }
-        });
+        self.sounds_category_chips(ui, tall);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Sort").size(12.0).color(roles().muted));
             self.sort_order(ui, 120.0);
             self.sort_direction(ui);
         });
         ui.add_space(2.0);
-        if samples.is_empty() {
-            self.no_sounds(ui, 15.0);
-            return;
+    }
+
+    fn sounds_category_chips(&mut self, ui: &mut egui::Ui, tall: bool) {
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
+            if tall {
+                ui.horizontal_wrapped(|ui| self.paint_category_chips(ui));
+            } else {
+                egui::ScrollArea::horizontal()
+                    .id_salt("sounds-panel-categories")
+                    .show(ui, |ui| ui.horizontal(|ui| self.paint_category_chips(ui)));
+                name_scroll_area(ui, "sounds-panel-categories", "Categories");
+            }
+        });
+    }
+
+    fn paint_category_chips(&mut self, ui: &mut egui::Ui) {
+        let mut chosen = None;
+        if category_chip(ui, "All", None, self.sounds.group.is_none()).clicked() {
+            chosen = Some(None);
         }
-        let row_width = ui.available_width();
-        ui.spacing_mut().item_spacing = Vec2::new(0.0, ROW_GAP);
-        // The list is one Tab stop. It holds keyboard focus and moves the
-        // selection among its rows, which stay pointer and assistive targets.
-        let list_id = ui.id().with("sound-list");
-        let focused = ui.memory(|memory| memory.has_focus(list_id));
-        let row_of = |app: &Self, id: Option<u32>| {
-            let library = &app.session.library().samples;
-            id.and_then(|id| samples.iter().position(|&index| library[index].id == id))
-        };
-        if focused {
-            controls::keep_transport_key(ui.ctx(), list_id);
-            let page = self.sounds.list_view.map_or(1, |(_, height)| {
-                ((height / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1)
-            });
-            let current = row_of(self, self.selection.sample);
-            if let Some(row) = list_keys(ui, list_id, current, samples.len(), page) {
-                let id = self.session.library().samples[samples[row]].id;
-                self.selection.sample = Some(id);
-                self.sounds.reveal = Some(id);
-            }
-            if let Some(id) = self.selection.sample
-                && current.is_some()
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
-            {
-                self.place(id, self.recording.track, self.session.cursor_tick());
-            }
-            // The list has no use for Delete, and a click on a sound gives
-            // it the focus: the selected clips keep their key.
-            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)) {
-                self.delete_selection();
+        for name in GROUPS {
+            let active = self.sounds.group.as_deref() == Some(name);
+            if category_chip(ui, name, Some(group_color(name)), active).clicked() {
+                chosen = Some(Some(name.to_owned()));
             }
         }
-        // Rows drag sounds to the tracks, so a drag never scrolls the list;
-        // that also keeps its drag surface out of the Tab order.
+        if let Some(group) = chosen {
+            self.sounds.group = group;
+        }
+    }
+
+    fn sample_row_index(&self, samples: &[usize], id: Option<u32>) -> Option<usize> {
+        let library = &self.session.library().samples;
+        id.and_then(|id| samples.iter().position(|&index| library[index].id == id))
+    }
+
+    fn handle_sound_list_keys(&mut self, ui: &egui::Ui, list_id: egui::Id, samples: &[usize]) {
+        controls::keep_transport_key(ui.ctx(), list_id);
+        let page = self.sounds.list_view.map_or(1, |(_, height)| {
+            ((height / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1)
+        });
+        let current = self.sample_row_index(samples, self.selection.sample);
+        if let Some(row) = list_keys(ui, list_id, current, samples.len(), page) {
+            let id = self.session.library().samples[samples[row]].id;
+            self.selection.sample = Some(id);
+            self.sounds.reveal = Some(id);
+        }
+        if let Some(id) = self.selection.sample
+            && current.is_some()
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
+        {
+            self.place(id, self.recording.track, self.session.cursor_tick());
+        }
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)) {
+            self.delete_selection();
+        }
+    }
+
+    fn configured_sound_scroll(&mut self, samples: &[usize]) -> egui::ScrollArea {
         let mut scroll = egui::ScrollArea::vertical()
             .id_salt("sounds-panel-list")
             .scroll_source(egui::scroll_area::ScrollSource {
@@ -207,7 +235,7 @@ impl MixJamApp {
             })
             .auto_shrink(false);
         let reveal = self.sounds.reveal.take();
-        if let Some(row) = row_of(self, reveal)
+        if let Some(row) = self.sample_row_index(samples, reveal)
             && let Some((offset, height)) = self.sounds.list_view
         {
             let top = row as f32 * (ROW_HEIGHT + ROW_GAP);
@@ -218,76 +246,110 @@ impl MixJamApp {
                 scroll = scroll.vertical_scroll_offset((bottom - height).max(0.0));
             }
         }
+        scroll
+    }
+
+    fn sound_list_scroll(
+        &mut self,
+        ui: &mut egui::Ui,
+        list_id: egui::Id,
+        samples: &[usize],
+        focused: bool,
+        row_width: f32,
+    ) {
+        let scroll = self.configured_sound_scroll(samples);
         let output = scroll.show_rows(ui, ROW_HEIGHT, samples.len(), |ui, rows| {
             for row in rows {
-                let sample_index = samples[row];
-                let (id, response) = {
-                    let sample = &self.session.library().samples[sample_index];
-                    let product = self.sample_product(sample.id);
-                    let peaks = self.session.sample_peaks(sample.id);
-                    let selected = self.selection.sample == Some(sample.id);
-                    let response = ui
-                        .push_id(("sound-row", sample.id), |ui| {
-                            sound_row(ui, sample, product, &peaks, selected, row_width)
-                        })
-                        .inner;
-                    if focused && selected {
-                        ui.painter().rect_stroke(
-                            response.rect.shrink(1.0),
-                            roles().corner(5.0),
-                            Stroke::new(2.0_f32, roles().accent),
-                            egui::StrokeKind::Inside,
-                        );
-                    }
-                    if self.capture_view_is("sample-details") && selected {
-                        response.show_tooltip_text(sample_details(sample, product));
-                    }
-                    (sample.id, response)
-                };
-                // Assistive technology focuses a row: the list takes focus
-                // with that sound as its current row.
-                let requested = ui.input(|input| {
-                    input.has_accesskit_action_request(response.id, egui::accesskit::Action::Focus)
-                });
-                if requested || response.clicked() {
-                    self.selection.sample = Some(id);
-                    self.sounds.reveal = Some(id);
-                    ui.memory_mut(|memory| memory.request_focus(list_id));
-                }
-                self.sound_actions(ui, id, &response);
+                self.paint_sound_list_row(ui, list_id, samples[row], focused, row_width);
             }
         });
         name_scroll_area(ui, "sounds-panel-list", "Sound list");
         self.sounds.list_view = Some((output.state.offset.y, output.inner_rect.height()));
-        let list = ui.interact(output.inner_rect, list_id, Sense::FOCUSABLE);
-        // Without a current sound in the list, no row carries the focus
-        // mark, so the list itself does.
-        if list.has_focus() && row_of(self, self.selection.sample).is_none() {
+        self.sound_list_semantics(ui, list_id, output.inner_rect, samples);
+    }
+
+    fn paint_sound_list_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        list_id: egui::Id,
+        sample_index: usize,
+        focused: bool,
+        row_width: f32,
+    ) {
+        let (id, response) = self.render_sound_row(ui, sample_index, focused, row_width);
+        let requested = ui.input(|input| {
+            input.has_accesskit_action_request(response.id, egui::accesskit::Action::Focus)
+        });
+        if requested || response.clicked() {
+            self.selection.sample = Some(id);
+            self.sounds.reveal = Some(id);
+            ui.memory_mut(|memory| memory.request_focus(list_id));
+        }
+        self.sound_actions(ui, id, &response);
+    }
+
+    fn render_sound_row(
+        &self,
+        ui: &mut egui::Ui,
+        sample_index: usize,
+        focused: bool,
+        row_width: f32,
+    ) -> (u32, Response) {
+        let sample = &self.session.library().samples[sample_index];
+        let product = self.sample_product(sample.id);
+        let peaks = self.session.sample_peaks(sample.id);
+        let selected = self.selection.sample == Some(sample.id);
+        let response = ui
+            .push_id(("sound-row", sample.id), |ui| {
+                sound_row(ui, sample, product, &peaks, selected, row_width)
+            })
+            .inner;
+        if focused && selected {
             ui.painter().rect_stroke(
-                output.inner_rect,
+                response.rect.shrink(1.0),
                 roles().corner(5.0),
                 Stroke::new(2.0_f32, roles().accent),
                 egui::StrokeKind::Inside,
             );
         }
-        let current = self
-            .selection
-            .sample
-            .and_then(|id| self.session.library().sample_by_id(id))
-            .map(|sample| sample.name.clone());
+        if self.capture_view_is("sample-details") && selected {
+            response.show_tooltip_text(sample_details(sample, product));
+        }
+        (sample.id, response)
+    }
+
+    fn sound_list_semantics(
+        &mut self,
+        ui: &egui::Ui,
+        list_id: egui::Id,
+        rect: Rect,
+        samples: &[usize],
+    ) {
+        let list = ui.interact(rect, list_id, Sense::FOCUSABLE);
+        // Only focus and accessibility need the selection's row in this filtered list.
+        let current = std::cell::LazyCell::new(|| {
+            self.sample_row_index(samples, self.selection.sample)
+                .map(|row| self.session.library().samples[samples[row]].name.as_str())
+        });
+        if list.has_focus() && current.is_none() {
+            ui.painter().rect_stroke(
+                rect,
+                roles().corner(5.0),
+                Stroke::new(2.0_f32, roles().accent),
+                egui::StrokeKind::Inside,
+            );
+        }
         list.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Sound list"));
         ui.ctx().accesskit_node_builder(list_id, |node| {
             node.set_description(
                 "Up and Down choose a sound, Page Up, Page Down, Home, and End move further, \
                  and Enter places it at the playhead on the recording track.",
             );
-            if let Some(name) = current {
+            if let Some(name) = *current {
                 node.set_value(name);
             }
         });
         if list.gained_focus() {
-            // egui keeps the arrow keys on the list from its next frame on,
-            // so that frame comes at once, before the first key.
             self.sounds.reveal = self.selection.sample;
             ui.ctx().request_repaint();
         }
@@ -343,7 +405,8 @@ impl MixJamApp {
                     .desired_width(width),
             ),
             "Find a sound",
-        );
+        )
+        .hover_hint("Filter the sound list by name.");
     }
 
     /// The filters' boxes truncate a long choice in the narrow panel; the
@@ -365,7 +428,8 @@ impl MixJamApp {
                 }
             })
             .response;
-        name_control(libraries, "Library filter");
+        name_control(libraries, "Library filter")
+            .hover_hint("Show sounds from all libraries or one library.");
     }
 
     pub(super) fn category_filter(
@@ -400,7 +464,7 @@ impl MixJamApp {
                 }
             })
             .response;
-        name_control(categories, "Category filter");
+        name_control(categories, "Category filter").hover_hint("Show all sounds or one category.");
     }
 
     pub(super) fn sort_order(&mut self, ui: &mut egui::Ui, width: f32) {
@@ -413,7 +477,7 @@ impl MixJamApp {
                 }
             })
             .response;
-        name_control(sorting, "Sort order");
+        name_control(sorting, "Sort order").hover_hint("Choose how the sound list is ordered.");
     }
 
     pub(super) fn sort_direction(&mut self, ui: &mut egui::Ui) {

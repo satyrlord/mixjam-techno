@@ -53,10 +53,10 @@ switch of the status bar. To restore a maximised score, click
 `Maximise the score` in the score toolbar. The data folder keeps the layout in
 `layout.json`.
 
-The `Arrange view` and `Mix view` labels of the score switch between the lanes
-and the Mix view. The track rows of the Mix view use the names of the Mixer
-(`Track N mute`, `Track N EQ`). The Mixer board and the Mix view never show
-together. Inspector controls start with `Inspector track` or `Inspector clip`.
+Mixer strips use `Track N mute`, `Track N EQ`, `Track N left output`, and
+`Track N right output`. Arrangement lane headers keep `Arrangement track N
+mute`, `Arrangement track N solo`, and `Arrangement track N pan`. Inspector
+controls start with `Inspector track` or `Inspector clip`.
 `key key=K modifiers=["ctrl"]` opens the All commands list. Its search field is
 `Find a command`.
 
@@ -74,7 +74,7 @@ without an accessible name is not in `focus`.
 moves. The driver then takes the focus from the control that had it, as a
 pointer click on another control does. The control that you click keeps its
 focus. The keys that follow thus go where they go for a person. For example,
-Ctrl+Z after `click target="Arrange view"` undoes the song, and not the Step
+Ctrl+Z after `click target="Follow"` undoes the song, and not the Step
 synth board.
 
 ## Options

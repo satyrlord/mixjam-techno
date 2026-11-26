@@ -30,8 +30,8 @@ audio engine, the frontend, and the checks that keep them apart.
 - [Tool windows and missing
   audio](architecture/tools.md#tool-windows-and-missing-audio): the Sample
   Editor, Time Stretcher, Effect Studio, and missing audio
-- [Lower-panel boards](architecture/boards.md#lower-panel-boards): the Mixer,
-  the Mix view, FX returns, and the lower panel
+- [Lower-panel boards](architecture/boards.md#lower-panel-boards): the Mixer, FX
+  returns, and the lower panel
 - [Mastering board](architecture/mastering-board.md#mastering-board): the
   Mastering board, presets, and meters
 - [Step synth board](architecture/step-synth-board.md#step-synth-board): the

@@ -34,42 +34,6 @@ fn a_deleted_clip_leaves_the_inspector_on_the_song_not_an_older_track() {
 }
 
 #[test]
-fn inspector_track_gain_draft_cannot_change_another_track() {
-    for replace_song in [false, true] {
-        let (ctx, mut app) = fixture();
-        ctx.enable_accesskit();
-        app.open_inspector();
-        app.select_track(0);
-        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        focus_control(&ctx, &mut app, &output, "Inspector track gain value");
-        frame(
-            &ctx,
-            &mut app,
-            vec![
-                key_event(egui::Key::A, egui::Modifiers::COMMAND),
-                egui::Event::Text("+6".into()),
-            ],
-            egui::Modifiers::COMMAND,
-        );
-        if replace_song {
-            app.new_mix();
-            app.session.place(1, 0, 0).unwrap();
-            app.select_track(0);
-        } else {
-            app.select_track(1);
-        }
-        let before = app.session.project().clone();
-        frame(
-            &ctx,
-            &mut app,
-            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
-            egui::Modifiers::NONE,
-        );
-        assert!(app.session.project() == &before);
-    }
-}
-
-#[test]
 fn inspector_clip_draft_cannot_change_another_clip() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -134,23 +98,11 @@ fn the_inspector_shows_the_song_a_track_one_clip_or_several_clips() {
     assert!(has_control(&output, "Go to Intro, bar 1"));
     click_named(&ctx, &mut app, "Go to Drop, bar 9");
 
-    // A track: its level, pan, outputs, sends, and processing.
+    // A track: its channel processing.
     click_named(&ctx, &mut app, "Show track 1 in the Inspector");
     assert_eq!(app.inspector_page(), inspector::Page::Track(0));
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     for name in [
-        "Inspector track gain",
-        "Inspector track gain value",
-        "Reset Inspector track gain to unity",
-        "Inspector track pan",
-        "Center Inspector track pan",
-        "Inspector track mute",
-        "Inspector track solo",
-        "Inspector track left output",
-        "Inspector track right output",
-        "Inspector track polarity invert",
-        "Inspector track send FX 1",
-        "Inspector track send FX 4",
         "Inspector track EQ response curve",
         "Inspector track EQ power",
         "Inspector track drive power",
@@ -159,6 +111,18 @@ fn the_inspector_shows_the_song_a_track_one_clip_or_several_clips() {
         "Inspector track EQ",
     ] {
         assert!(has_control(&output, name), "{name}");
+    }
+    for retired in [
+        "Inspector track gain",
+        "Inspector track pan",
+        "Inspector track mute",
+        "Inspector track solo",
+        "Inspector track left output",
+        "Inspector track right output",
+        "Inspector track polarity invert",
+        "Inspector track send FX 1",
+    ] {
+        assert!(!has_control(&output, retired), "{retired}");
     }
     click_named(&ctx, &mut app, "Inspector track EQ");
     assert_eq!(app.eq_track, Some(0));
@@ -499,14 +463,14 @@ fn every_inspector_edit_is_one_undo_step() {
     let track = app.session.project().tracks[0].clone();
     for (name, changed) in [
         (
-            "Inspector track mute",
-            (|track: &Track| track.muted) as fn(&Track) -> bool,
+            "Inspector track EQ power",
+            (|track: &Track| track.eq.on) as fn(&Track) -> bool,
         ),
-        ("Inspector track polarity invert", |track: &Track| {
-            track.polarity_inverted
-        }),
         ("Inspector track drive power", |track: &Track| {
             track.drive.on
+        }),
+        ("Inspector track compressor power", |track: &Track| {
+            track.compressor.on
         }),
         ("Inspector track ducker power", |track: &Track| {
             track.ducker.on
@@ -857,24 +821,18 @@ fn inspector_picture_fade_handles_can_both_drag_when_they_meet() {
 }
 
 #[test]
-fn inspector_track_sends_stay_below_the_channel_outputs() {
+fn open_inspector_header_is_uppercase_beside_its_fold_button() {
     each_theme(|theme| {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         app.open_inspector();
-        app.select_track(0);
         let size = Vec2::new(1440.0, 1000.0);
         let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-        let outputs = effects_control_rect(&output, "Inspector track polarity invert");
-        let heading = text_rect(&output, "SENDS");
-        let send = effects_control_rect(&output, "Inspector track send FX 1");
+        let title = text_rect(&output, "INSPECTOR");
+        let fold = effects_control_rect(&output, "Fold the Inspector");
         assert!(
-            outputs.bottom() < heading.top(),
-            "{theme:?}: {outputs:?}, {heading:?}"
-        );
-        assert!(
-            heading.bottom() < send.top(),
-            "{theme:?}: {heading:?}, {send:?}"
+            title.right() <= fold.left(),
+            "{theme:?}: {title:?} must clear {fold:?}"
         );
     });
 }

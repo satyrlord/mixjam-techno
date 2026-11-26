@@ -3,6 +3,42 @@
 use super::*;
 
 #[test]
+fn fade_outlines_use_only_their_endpoints_for_straight_edges() {
+    use mixjam_techno::application::FadeCurve;
+    let (ctx, app) = fixture();
+    let mut clip = app.session.project().clips[0].clone();
+    let rect = Rect::from_min_max(Pos2::new(20.0, 20.0), Pos2::new(120.0, 60.0));
+    for curve in FadeCurve::ALL {
+        clip.fades.fade_in.ticks = TICKS_PER_BAR / 2;
+        clip.fades.fade_in.curve = curve;
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                draw_fades(ui.painter(), rect, &clip, None, 100.0, 140.0);
+            });
+        });
+        let points = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Path(path) => Some(&path.points),
+                _ => None,
+            })
+            .expect("fade outline");
+        assert_eq!(points.first(), Some(&rect.left_bottom()));
+        assert_eq!(points.last(), Some(&rect.center_top()));
+        if curve == FadeCurve::Linear {
+            assert_eq!(points.len(), 2);
+        } else {
+            assert_eq!(points.len(), 25);
+            assert_eq!(
+                points[12].y,
+                rect.bottom() - curve.gain(0.5) * rect.height()
+            );
+        }
+    }
+}
+
+#[test]
 fn mouse_wheel_over_the_zoom_slider_steps_the_zoom_within_its_range() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -338,12 +374,12 @@ fn scrolling_reaches_track_64_and_keeps_labels_and_ruler_interactive() {
     click(
         &ctx,
         &mut app,
-        Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[2]), row_y),
+        Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[0]), row_y),
         egui::Modifiers::NONE,
     );
     assert!(
-        !app.session.project().tracks[63].left_enabled,
-        "route click at {row_y}; current canvas {:?}, visible {:?}, row {}; disabled tracks {:?}",
+        app.session.project().tracks[63].muted,
+        "mute click at {row_y}; current canvas {:?}, visible {:?}, row {}; muted tracks {:?}",
         app.score.rect,
         app.score.drop_rect,
         app.score.row_height,
@@ -352,11 +388,11 @@ fn scrolling_reaches_track_64_and_keeps_labels_and_ruler_interactive() {
             .tracks
             .iter()
             .enumerate()
-            .filter(|(_, track)| !track.left_enabled)
+            .filter(|(_, track)| track.muted)
             .map(|(index, _)| index)
             .collect::<Vec<_>>()
     );
-    assert!(app.session.project().tracks[0].left_enabled);
+    assert!(!app.session.project().tracks[0].muted);
     let ruler = app.score.ruler_rect.unwrap();
     let seek_x = ruler.left() + 2.5 * app.score.bar_width;
     click(
@@ -561,7 +597,7 @@ fn arrangement_frame_time() {
 }
 
 #[test]
-fn the_lane_header_names_each_lane_and_its_fader_sets_the_track_gain() {
+fn the_lane_header_names_each_lane_and_its_pan_sets_the_track_pan() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -576,33 +612,122 @@ fn the_lane_header_names_each_lane_and_its_fader_sets_the_track_gain() {
         "Record on track 1",
         "Arrangement track 1 mute",
         "Arrangement track 1 solo",
+        "Arrangement track 1 pan",
+    ] {
+        accessible_node(&output, label);
+    }
+    for retired in [
         "Arrangement track 1 left output",
         "Arrangement track 1 right output",
         "Arrangement track 1 gain",
     ] {
-        accessible_node(&output, label);
+        assert!(!has_control(&output, retired), "{retired}");
     }
-    focus_control(&ctx, &mut app, &output, "Arrangement track 1 gain");
+    focus_control(&ctx, &mut app, &output, "Arrangement track 1 pan");
     frame(
         &ctx,
         &mut app,
-        vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+        vec![key_event(egui::Key::ArrowRight, egui::Modifiers::NONE)],
         egui::Modifiers::NONE,
     );
-    let gain = app.session.project().tracks[0].gain;
-    assert!(
-        (amplitude_to_db(gain) + 0.5).abs() < 0.01,
-        "One key step is 0.5 dB: {gain}"
-    );
-    assert_eq!(app.session.project().tracks[1].gain, 1.0);
-    // A click at the fader's left end silences the track.
+    let pan = app.session.project().tracks[0].pan;
+    assert!((pan - 0.05).abs() < 0.001, "One key step is 5%: {pan}");
+    assert_eq!(app.session.project().tracks[1].pan, 0.0);
+    // Double-clicking the pan knob centers it.
     let canvas = app.score.rect.unwrap();
     let row_y = canvas.top() + 0.5 * app.score.row_height;
-    click(
+    let pan_pos = Pos2::new(header_x(&ctx, visible, lanes::PAN_X), row_y);
+    click(&ctx, &mut app, pan_pos, egui::Modifiers::NONE);
+    click(&ctx, &mut app, pan_pos, egui::Modifiers::NONE);
+    assert_eq!(app.session.project().tracks[0].pan, 0.0);
+}
+
+#[test]
+fn lane_headers_apply_every_edit_from_the_same_frame() {
+    use egui::accesskit::{Action, ActionData, ActionRequest};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let action = |name, action, value: Option<f64>| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            target: accessible_node(&output, name).0,
+            action,
+            data: value.map(ActionData::NumericValue),
+        })
+    };
+    frame(
         &ctx,
         &mut app,
-        Pos2::new(header_x(&ctx, visible, lanes::FADER_SPAN.0 + 2.0), row_y),
+        vec![
+            action("Arrangement track 1 mute", Action::Click, None),
+            action("Arrangement track 2 solo", Action::Click, None),
+            action("Arrangement track 1 pan", Action::Increment, None),
+            action("Arrangement track 1 pan", Action::SetValue, Some(0.5)),
+            action("Arrangement track 2 pan", Action::SetValue, Some(-2.0)),
+            action("Arrangement track 2 pan", Action::Decrement, None),
+            action("Arrangement track 2 pan", Action::Increment, None),
+        ],
         egui::Modifiers::NONE,
     );
-    assert_eq!(app.session.project().tracks[0].gain, 0.0);
+    let tracks = &app.session.project().tracks;
+    assert!(tracks[0].muted && tracks[1].solo);
+    assert_eq!(tracks[0].pan, 0.5);
+    assert_eq!(tracks[1].pan, -0.95);
+}
+
+#[test]
+fn accessible_pan_and_send_steps_match_their_ranges_and_respect_a_blocking_dialog() {
+    use egui::accesskit::{Action, ActionData, ActionRequest};
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mixer;
+    let action = |target, action, value: Option<f64>| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            target,
+            action,
+            data: value.map(ActionData::NumericValue),
+        })
+    };
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let (pan, pan_node) = accessible_node(&output, "Arrangement track 1 pan");
+    let (send, send_node) = accessible_node(&output, "Track 1 send FX 1");
+    for node in [pan_node, send_node] {
+        assert_eq!(node.numeric_value_step(), Some(0.05));
+        assert!(node.supports_action(Action::Increment));
+    }
+    assert!(!send_node.supports_action(Action::Decrement));
+    for value in [0.0000001, 0.0] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![action(pan, Action::SetValue, Some(value))],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[0].pan, value as f32);
+    }
+    frame(
+        &ctx,
+        &mut app,
+        vec![
+            action(pan, Action::Increment, None),
+            action(send, Action::Increment, None),
+        ],
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.session.project().tracks[0].pan, 0.05);
+    assert_eq!(app.session.project().tracks[0].sends[0], 0.05);
+    app.files.pending_action = Some(PendingAction::New);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.blocking_modal(&ctx), Some("Save your changes?"));
+    frame(
+        &ctx,
+        &mut app,
+        vec![
+            action(pan, Action::SetValue, Some(-1.0)),
+            action(send, Action::Decrement, None),
+        ],
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.session.project().tracks[0].pan, 0.05);
+    assert_eq!(app.session.project().tracks[0].sends[0], 0.05);
 }

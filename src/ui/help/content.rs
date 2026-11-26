@@ -144,8 +144,8 @@ pub(super) const ARRANGE: &[Block] = &[
     ]),
     Heading("Boards and view"),
     Facts(&[
-        "Mixer, Mastering, FX returns, and Step synth in the tool rail show their board in the lower panel. Choose it again to fold the panel. Drag the divider above the panel to resize it.",
-        "Mix, in the score toolbar, turns the lane headers into mixer rows. The rail's Mixer returns the score to Arrange.",
+        "Click the track number to select the recording track. Click the lane name to open channel processing in the Inspector. Each lane also has Mute, Solo, and pan.",
+        "Mixer, Mastering, FX returns, and Step synth in the tool rail show their board in the lower panel. Choose one again to fold the panel. Drag the divider above the panel to resize it.",
         "F hides the tool rail, the Sounds panel, the Inspector, and the lower panel. F again restores them.",
     ]),
 ];
@@ -205,38 +205,9 @@ pub(super) const RECORDING: &[Block] = &[
     ]),
 ];
 
-pub(super) const MIX_VIEW: &[Block] = &[
-    Facts(&[
-        "Mix, in the score toolbar, turns each lane header into a mixer row beside its clips. The lower panel folds so the rows take the score. Arrange, or the rail's Mixer, returns to the lanes.",
-        "The lanes fit the whole song, so the clips show where each track plays without scrolling.",
-    ]),
-    Heading("A row"),
-    Facts(&[
-        "From the left: the track number, the sounds, M, S, L, R, polarity, the level and its dB value, pan, the state, four sends, and EQ.",
-        "A row at its defaults stays quiet. The state names only what differs: Muted, No output, Pan automated, or a pan off center.",
-        "A track that cannot be heard is dimmed. While another track is soloed, the dimming and that track's lit S say why, and the hint on the sounds names Solo elsewhere.",
-        "A send at 0 rests as a thin ring; its amount shows while it sends.",
-        "EQ opens the track's channel window beside its row; the Mixer page explains the window.",
-    ]),
-    Keys(&[
-        ("Reset", &[], "Double-click a fader or a send knob"),
-        (
-            "More columns",
-            &["Shift+Wheel"],
-            "when the rows are wider than the column",
-        ),
-    ]),
-    Heading("Master and returns"),
-    Facts(&[
-        "Under the last row, Master holds Bypass, the master level, and Export tracks….",
-        "The returns row holds the four FX buses: the effect, the return level, Input, Limiter, and Edit, which shows the bus on the FX returns board.",
-        "A bus with the Empty effect returns silence, so its controls are dimmed. On the FX returns board, an empty bus shows a key for each effect.",
-    ]),
-];
-
 pub(super) const MIXER: &[Block] = &[
     Facts(&[
-        "Mixer, in the tool rail, shows one strip per track. Mix, in the score toolbar, shows the same controls as rows beside the clips.",
+        "Mixer, in the tool rail, shows the vertical track strips under the arrangement as the main track mixer.",
         "Master stays in view while the tracks scroll.",
     ]),
     Heading("Level and pan"),
@@ -414,7 +385,7 @@ pub(super) const WORKSPACE: &[Block] = &[
     Heading("Inspector"),
     Facts(&[
         "The Inspector, at the right of the score, shows what is selected. With nothing selected, it shows the song: its tempo, its length, a clip count for each category, and its sections.",
-        "Click a track's name in its lane header to see its channel processing, level, pan, outputs, and sends; click the EQ curve to open the channel EQ window, and the name again to see the song.",
+        "Click a lane name to see its channel processing. Click the EQ curve to open the channel EQ window. Click the lane name again to see the song. The Mixer holds the track's level, pan, outputs, and sends.",
         "One clip shows a picture of its length and fades, whose handles you can drag, and its fades, sound, and position as exact values. Several clips share the fade and sound values: a change sets them all, and a dash marks a value that differs.",
         "Click a section in the Inspector to scroll the score to it. Every change in the Inspector can be undone.",
     ]),

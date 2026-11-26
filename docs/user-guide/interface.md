@@ -41,8 +41,8 @@ the list, the up and down arrow keys change the page. Page Up, Page Down,
 Home, and End scroll the page. Press **F1** again to close Help. The Help
 button of a tool or a board opens only its own page, beside the tool.
 
-The score toolbar above the lanes holds Arrange and Mix, the Automation menu,
-Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool rail,
+The score toolbar above the lanes holds the Automation menu, Follow, Sections,
+Zoom, and Maximise. Maximise, or **F**, hides the tool rail,
 the Sounds panel, the Inspector, and the lower panel. The score then fills the
 window. To show the panels again, press **F** again. You can also select the
 **Tools**, **Boards**, **Sounds**, or **Inspector** switch in the status bar.
@@ -86,7 +86,7 @@ that the application can do:
 - The tools of the rail.
 - Options and Help.
 - Playback, Undo, Redo, and the other edits.
-- Maximise and the Mix view.
+- Maximise.
 - The panel switches of the status bar.
 - Each automation lane.
 
@@ -147,9 +147,9 @@ The Inspector at the right of the score shows the selected item:
 - Nothing selected: the song, with its tempo and length, a clip count for
   each category, and its sections. Click a section to scroll the score to it.
 - A track: click the name of a track in its lane header. This opens a
-  folded Inspector. The track page shows the EQ curve, processing switches,
-  level, pan, outputs, and sends. Click the EQ curve to open the channel EQ
-  window. On the track page, click the name again to see the song.
+  folded Inspector. The track page shows the EQ response curve and processing
+  switches. Click the EQ curve to open the channel EQ window. On the track
+  page, click the name again to see the song.
 - One clip: a picture of the clip with fade handles that you can drag. The page
   also shows its fades, gain, pitch, Reverse, start, length, and trim start.
   If its sound is missing, **Locate the sound…** asks for the file.

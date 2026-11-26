@@ -13,7 +13,7 @@ These boards have their own pages:
 
 `src/ui/mixer.rs`, with its `src/ui/mixer/` modules, owns the compact strip
 presentation of the Mixer in the current theme. Its `gain_keys` and
-`gain_semantics` (`mixer/gain.rs`) give the gain rail of the Mixer and the lane
+`gain_semantics` (`mixer/gain.rs`) give the gain rail of the Mixer and the clip
 fader the same wheel, key, accessibility, and double-click behavior. Vintage
 tiles the graphite and ivory artwork (`mixer/artwork.rs`). Studio and Aero
 paint the strips and fader caps in code at the same physical-pixel scale.
@@ -32,79 +32,21 @@ Inspector also shows, the Drive transfer curve, and the live compressor and
 ducker gain reduction from the session. The toolbar of the Mixer holds Export
 tracks, which asks for a folder through `ask_path`.
 
-## Mix view
+## Mixer controls and artwork
 
-`src/ui/mix_view.rs` and its modules in `src/ui/mix_view/` own the Mix view
-of the score:
+Each strip change goes through `apply_mixer_changes` in `src/ui/view/boards.rs`,
+editing the `TrackMix` of its track (level, polarity, pan, switches, and sends)
+so views never clone a whole `Track` each frame:
 
-- `layout.rs` holds the column table. Each column is a `Column` constant. The
-  rows, the captions, the Master and returns rows, and the tests read the same
-  table. `Columns` places a column on screen for a row, its scroll offset, and
-  the extra room of a wide header. `return_parts` divides the returns row among
-  the buses. `reveal` gives the scroll that shows a focused control. This
-  module has no Ui and no session.
-- `rows.rs` paints a track's row from plain values: `RowFacts`, the
-  `TrackMix` that it edits, and the row's names. It reports an `Outcome`.
-- `block.rs` holds these items:
-  - The captions.
-  - The Master row (Bypass, level, Export tracks).
-  - The returns row (the effect, its bus and `return_state`, the return knob,
-    Input, Limiter, and `edit_button`).
-  - `mix_block`, which places them below the lanes and sends their edits.
-- `state.rs` holds `MixViewState`, `set_mix_view`, and `score_block_height`.
-
-The `MixViewState::shown` flag of the frontend turns the header of each used
-lane into a row of fixed columns. The clips keep the remainder of the lane,
-and `score_frame` fits the whole song to the lanes. The rows use these widgets
-in `Look::Quiet`:
-
-- The widgets of `src/ui/mixer/`: `switch_button`, `polarity_button`,
-  `gain_value_in`, `unity_button`, `pan_slider`, `center_button`, `send_knob`,
-  `eq_button`, and `bus_switches`.
-- `strip_fader`, the lane fader on the strip's rail roles.
-
-A quiet widget paints a row at its defaults without lit faces. It keeps the
-name, keys, state, and hint of the strip's widget. Thus the accessible names
-and the operations are the same as those of the strips. While columns remain to
-the right, `edge_fade` paints the surface of each row again over its last 24
-points, with more opacity at each step. It uses `row_surface_each` and a
-clipped painter.
-
-Each change goes to `apply_mixer_changes` in `src/ui/view/boards.rs`, the same
-path that the Mixer board uses. A strip and a Mix view row edit the `TrackMix`
-of their track: the level, polarity, pan, switches, and sends. It is small and
-`Copy`, so no view clones a track each frame. `TrackMix::silence` gives the
-reason why the mix cannot hear a track (Muted, No output, or Solo elsewhere).
-`Track::processing_on` lights the EQ button. The render, the lanes, the
-overview, and the rows all use these backend rules. The edits go to the
-session as follows:
-
-- One changed track goes as `EditCommand::SetTrackMix`. The session applies it
-  as a `SetTrack`. This `SetTrack` keeps the processing and automation of the
-  track, so undo steps and live levels are the same.
+- One changed track goes as `EditCommand::SetTrackMix`, preserving channel
+  processing and automation.
 - The master level, or more than one track in a frame, goes as one
   `SetMixer`.
 - The buses go as `SetEffects`, and the board goes as `SetMaster`.
 
-A wider column gives up to 40 points to the sounds' column, and the
-columns after it shift right. The rows are 944 points wide. If the header
-column of the lanes is narrower, `MixViewState::scroll` scrolls the columns
-after the track number and arm sideways. The caption bar, Shift with the wheel,
-or a control that gets keyboard focus outside the visible part scrolls them.
-Header rows take horizontal wheel input after their controls and before the
-score scrolls. The track rows and the pinned Master and returns block include
-the frontend generation in their control identities. Thus drafts and held
-controls cannot edit a replacement project.
-
-The Mix view and the Mixer board never show together. `set_mix_view` moves the
-lower panel to Mastering, and the Mixer button of the tool rail turns the Mix
-view off. `set_mix_view` also folds the lower panel and keeps
-`MixViewState::restore_boards`. Thus the panel opens again when the user leaves
-the view. A `set_layout` call that opens or folds the panel in between clears
-`restore_boards`. A launch with the Starting module Mixer folds the panel in
-the same way.
-
-## Mixer controls and artwork
+Backend rules such as `TrackMix::silence` (Muted, No output, or Solo elsewhere)
+and `Track::processing_on` keep mute/solo and EQ status consistent across the
+render, lane headers, overview, and strips.
 
 Native controls paint live labels, dB values, rail marks, pan, routing,
 polarity, focus, and hover. Gain uses a piecewise dB taper, with 72% of the
@@ -146,18 +88,16 @@ board:
   help. Its messages show in the status bar.
 
 Each board renders only its body below that row. A folded lower panel leaves
-no strip. The Mix view of the score has its own Arrange and Mix switch in the
-score toolbar. The command list has a Mix view command.
+no strip.
 
 The selection and the shared panel height are frontend session state. A
 switch keeps the resized height. When a board opens, it raises a shorter panel
 to its minimum. The minimum is 400 points for Mixer, or the whole board for
 Mastering, FX returns, and Step synth. If the window is too short to keep a
-150-point lane viewport, each minimum goes down to 370 points, and the board
-then scrolls. While the Mix view shows, the score also keeps its 70-point
-Master and returns rows below the lanes. The reserve then grows by 70 points,
-and the floor goes down to 300 points.
+150-point lane viewport, boards taller than 370 points can shrink to that
+height and scroll.
 
 If the Starting module is Sounds, the launch opens the Sounds panel and folds
-the lower panel. `from_session` stores that layout, and the lower panel keeps
-Mixer for when it opens.
+the lower panel while keeping `BottomModule::Mixer` selected for when it
+opens. If Starting module is Mixer, Mastering, or FX returns, the launch opens
+the lower panel on that board.

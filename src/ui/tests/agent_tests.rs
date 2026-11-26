@@ -705,7 +705,7 @@ fn agent_click_moves_keyboard_focus_and_state_names_the_focused_control() {
     // a person does, so Ctrl+Z then acts on the song and not on the board.
     send(&mut app, &["click", &format!("target={note}")]);
     assert_eq!(app.step_synth.state.steps[0], Step::note(12));
-    let reply = send(&mut app, &["click", "target=Arrange view"]);
+    let reply = send(&mut app, &["click", "target=Follow"]);
     assert_eq!(reply["ok"], true, "{reply}");
     let state = send(&mut app, &["state"]);
     assert_eq!(state["focus"], serde_json::Value::Null, "{state}");

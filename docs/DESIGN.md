@@ -208,8 +208,7 @@ accents; **Aero** renders soft Y2K molded plastic shells over deep cobalt and
 navy; **Vintage** pairs stark dark rack cabinets with brushed olive-sage
 anodized modular plates, corner slotted screws, amber indicators, and bespoke 3D
 hardware stompboxes. Procedural painters draw every chassis, dial, and unit
-motif in code; only the brand PNG mark, rail masks, and retiring Mixer strip
-tiles stay on disk.
+motif in code. The brand mark, rail masks, and Vintage Mixer artwork use PNGs.
 
 **Key Characteristics:**
 
@@ -253,7 +252,7 @@ rack boards, and floating tools.
   dialogs. In Vintage Red, focus rings fall back to warm cream (`modular-cream`)
   because the Red accent reaches only 2.6:1 against its chassis.
 - **Polarity & Override Highlights**: `mixer-amber` marks inverted polarity on
-  Mixer and Mix view strips.
+  Mixer strips.
 
 ### Neutral
 
@@ -263,8 +262,7 @@ rack boards, and floating tools.
 - **Hardware Chassis Neutrals** (`modular-ink`, `modular-cream`, `modular-face`,
   `modular-primary`, `modular-danger`): Define dark recessed bays, value wells,
   pale-metal primary triggers, and rust-red destructive triggers (`Confirm
-  discard`), while `mixer-metal` and `mixer-ink` cover legacy ivory Mixer
-  strips.
+  discard`), while `mixer-metal` and `mixer-ink` cover Mixer strips.
 
 ### Bespoke Pedal & FX Motifs
 
@@ -309,7 +307,7 @@ so Aero and Vintage never reflow shared panel geometry.
 
 - **Display** (700, 20px base / 11px & 9px subtitle): `MIXJAM` header identity
   paired with muted `TECHNO` sub-mark.
-- **Headline** (600, 20px) & **Section** (600, 18px, uppercase): Arrangement/Mix
+- **Headline** (600, 20px) & **Section** (600, 18px, uppercase): Arrangement
   header and floating tool window titles.
 - **Title** (600, 15px, uppercase) & **Module Tab** (600, 16px): Top-bar project
   name (wrapping to a 9px floor below full width) and lower-panel board titles.
@@ -337,12 +335,12 @@ outer-to-inner priority: 64pt top bar (narrowing 42x42 transport keys to 34x40
 below 1240pt), 30pt status bar, 84pt labeled (or 64pt icon-only) left tool rail,
 optional lower board panel, 250pt collapsible Sounds panel, 280pt collapsible
 Inspector (28pt strips when folded), and the Arrangement canvas (`60pt`
-overview, toolbar, `26pt` ruler, `250pt` lane headers).
+overview, toolbar, `26pt` ruler, `196pt` lane headers).
 
 Lower boards claim preferred minimum heights (`Mixer` 400pt, `Mastering` 346pt,
-`FX returns` 320pt, `Step synth` 580pt), clamping down to 370pt (`300pt` in Mix
-view to preserve the 70pt Master/returns footer) so track lanes keep at least
-150pt of height. Floating windows open to content-fit sizes (`300x160` minimum),
+`FX returns` 320pt, `Step synth` 580pt). Taller boards can shrink to 370pt
+to leave 150pt for the lanes. Floating windows open to content-fit sizes
+(`300x160` minimum),
 collapse in place to their 44pt header bar, and use solid scrollbars when
 overflowing; scrollable panes draw persistent 4pt floating scrollbars over
 content without consuming width.
@@ -371,9 +369,9 @@ and 3D hardware bevels.
 ### Depth rules
 
 **The Code-Only Hardware Rule.** Render every chassis bevel, screw, rotary dial,
-meter, and pedal face with bounded procedural geometry in `egui` — no runtime
-hardware bitmap tiles outside the brand mark, rail alpha masks, and retiring
-Mixer strips — and keep state changes immediate with zero motion tokens.
+meter, and pedal face with bounded procedural geometry in `egui`. Use the
+prepared artwork for the brand mark, rail alpha masks, and Vintage Mixer.
+Apply state changes immediately.
 
 ## Shapes
 
@@ -453,12 +451,12 @@ tabs switch Mixer, Mastering, FX returns, and Step synth in place; `Ctrl+K`
 opens the searchable 580pt command palette; status bar panel switches persist
 workspace visibility.
 
-### Arrangement, Mix View, Mixer & Step Synth
+### Arrangement, Mixer & Step Synth
 
-Arrangement lanes support 20/30/40pt row heights, inline Mix view track/returns
-controls, a legacy 108pt-wide Mixer board with piecewise dB faders and compact
-`Unity`/`Center`/routing switches until retirement, and a `836x512` Step synth
-board (`16` steps x `25` visible pitch rows).
+Arrangement lanes support 20/30/40pt row heights with lane M/S switches and a
+small pan knob, a 108pt-wide Mixer board with piecewise dB faders and compact
+`Unity`/`Center`/routing switches, and a `836x512` Step synth board (`16`
+steps x `25` visible pitch rows).
 
 ## Detailed design pages
 
@@ -486,8 +484,8 @@ These pages hold the per-panel chapters and state matrices.
   panel room, song overview, top bar.
 - [Score toolbar and Maximise](design/components-score-toolbar.md): score
   toolbar and Maximise.
-- [Sounds, clips, and Mix view](design/components-clips.md): clip drawing and
-  the Mix view.
+- [Sounds and clips](design/components-clips.md): clip drawing and arrangement
+  lanes.
 - [Mixer, tool windows, and FX returns](design/components-boards.md): the boards
   of the lower panel, and the shared window shell and controls.
 - [Sound tools and Album Review](design/components-tools.md): Time Stretcher,

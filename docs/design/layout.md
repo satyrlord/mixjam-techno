@@ -25,10 +25,6 @@ spans the space that the later panels share:
    - the 26-point ruler,
    - the lanes.
 
-   The Mix view adds its 70-point block of Master and return rows under the
-   lanes, after an 8-point gap. Its lanes end at the last row, so the block
-   follows a short song's rows.
-
 A scroll area that has more content than space shows its scroll bar at all
 times, also when the pointer is not on it. Thus a short window shows where
 there is more content. The shared bars float over the content, 4 points wide,
@@ -48,17 +44,15 @@ the top row:
 | Board | Minimum height |
 | --- | --- |
 | Mixer | 400 points |
-| Mastering | 432 points |
-| FX returns | 462 points |
+| Mastering | 346 points |
+| FX returns | 320 points |
 | Step synth | 580 points |
 
 When a board opens, a shorter panel grows to that minimum. A change to a
-different board otherwise keeps the resized height. In a short window, a board
-loses height, down to 370 points, so that the lane viewport keeps
-150 points. The board then scrolls. Mastering scrolls its chip strip below
-the pedals. In the Mix view, the 70-point Master and returns rows stay below
-the lanes. The board then loses 70 more points, down to 300 points, so that
-the lane viewport keeps its 150 points above those rows.
+different board otherwise keeps the resized height. In a short window,
+boards taller than 370 points can shrink to that height to reserve 150 points
+for the lanes.
+The board then scrolls. Mastering scrolls its chip strip below the pedals.
 
 When there is space, the maximum panel height leaves 290 points for the score
 toolbar, the ruler, and the lanes. At the minimum client height, the largest
@@ -93,18 +87,8 @@ mix and changes neither reading. The board bodies start below the top row.
 
 The Mixer, Mastering, FX returns, and Step synth buttons of the tool rail
 choose the board. Each of these buttons shows its board, and folds the lower
-panel when that board already shows.
-
-The Arrange and Mix switch of the score toolbar, or the Mix view command,
-changes the view of the score. The Mix view and the Mixer board never show
-together. The Mix view moves a lower panel on Mixer to Mastering, and the
-Mixer button of the rail returns the score to Arrange. The Mix view is its
-own mode. If you choose it, the lower panel folds. If you leave it, the lower
-panel opens again, unless you opened or folded the panel in between. If the
-Starting module is Mixer, the application starts with the Mix view, the lower
-panel folded on Mastering. If the Starting module is Mastering or FX returns,
-the application starts with the lower panel on that board. The Mix view is
-session state, not part of `layout.json`.
+panel when that board already shows. If Starting module is Mixer, Mastering, or
+FX returns, the application starts with the lower panel on that board.
 
 ## Status bar
 
@@ -130,12 +114,12 @@ In narrow lanes it shortens to "Drop a sound for a new track", then "Drop a
 sound here". It hides where even that text does not fit.
 Compact reversed clips keep space between their name and the `rev` mark.
 
-The lane header is 250 points wide. From the left, it holds:
+The lane header is 196 points wide. From the left, it holds:
 
 - the track number,
 - the name of the lane,
-- M, S, L, R,
-- a short horizontal level fader.
+- Mute and Solo,
+- a pan knob.
 
 The song stores no lane names. A lane takes the sound family of its first clip
 as its name. This is the name of the sound without the number at its end. A
@@ -143,10 +127,9 @@ lane without clips has the name "Track N". An ellipsis shortens the name to
 its span. It uses 11-point text in 20-point lanes, and 12-point text in other
 lanes.
 
-The lane fader edits the same track gain as the Mixer, with the same taper,
-keys, and double-click to unity. It has a Canvas slot, a fill to the cap, a
-unity tick, and a Cap-colored cap. If Mute or the Solo of another track
-silences a lane, the lane dims. Its track number and name use Muted.
+The knob edits the same pan as the Mixer. Double-click it to center the pan.
+If a track is silent because of its mute, solo, or output settings, its lane
+dims. Its track number and name use Muted.
 
 The fixed ruler is 26 points high. A bar is 62 points multiplied by the zoom.
 The timeline scrolls horizontally. The track labels stay in place.

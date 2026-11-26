@@ -223,24 +223,30 @@ fn a_short_channel_strip_scrolls_to_its_bottom_controls() {
 }
 
 #[test]
-fn mix_view_channel_strip_keeps_the_invoking_row_visible() {
-    let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
-    click_named(&ctx, &mut app, "Track 2 EQ");
-    let row = app.mix.eq_row.unwrap();
-    let window = dialog::window_rect(&ctx, "Track 2 EQ").unwrap();
-    assert!(!row.intersects(window), "{row:?} / {window:?}");
-    assert!(window.bottom() <= 970.0);
-}
-
-#[test]
 fn the_track_switcher_keeps_the_window_in_place() {
-    let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.set_layout(|layout| layout.boards = true);
+    app.boards.module = BottomModule::Mixer;
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![],
+        egui::Modifiers::NONE,
+        Vec2::new(1440.0, 1000.0),
+    );
     click_named(&ctx, &mut app, "Track 2 EQ");
     let before = dialog::window_rect(&ctx, "Track 2 EQ").unwrap();
     click_named(&ctx, &mut app, "Track 2 EQ next track");
     assert_eq!(app.eq_track, Some(2));
     for _ in 0..2 {
-        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![],
+            egui::Modifiers::NONE,
+            Vec2::new(1440.0, 1000.0),
+        );
     }
     let after = dialog::window_rect(&ctx, "Track 3 EQ").unwrap();
     assert_eq!(after, before);

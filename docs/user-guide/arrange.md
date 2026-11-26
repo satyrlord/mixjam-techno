@@ -8,16 +8,12 @@
 
 Each lane header shows these items, from the left:
 
-- The track number. Click it to record on that track.
+- The track number. Click it to select the destination for the next recording.
 - The name of the lane. This is the sound family of the first clip on the
   lane: for example, "deep chord" for "deep chord 3".
-- Mute and Solo.
-- The left and right outputs.
-- A short level fader.
-
-The fader sets the same track gain as the Mixer. To move it, drag it, turn the
-mouse wheel, or use the arrow keys. For fine steps, hold Shift while you drag.
-To set unity gain, double-click the fader.
+- Small **M** (Mute) and **S** (Solo) buttons.
+- A small pan knob. To move it, drag it or use the arrow keys. For fine steps,
+  hold Shift while you drag. To center the pan, double-click the knob.
 
 ## Place and edit clips
 

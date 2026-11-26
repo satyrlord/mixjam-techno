@@ -100,10 +100,6 @@ The capture cases include these views:
 - `fx-board` shows the four FX Returns cards. `fx-deep-edit`,
   `fx-deep-edit-delay`, and `fx-deep-edit-reverb` open the editors for Drive,
   Delay, and Reverb.
-- `mix-view` shows the Mix view of the score, with the lower panel on
-  Mastering. `mix-view-dense` fills it with the full song. `mix-view-empty`
-  shows it with no tracks. `mix-view-states` uses the song with the Mixer
-  states. `mix-view-eq` adds the EQ window of the first track.
 
 The Mixer cases cover these states:
 
@@ -135,7 +131,7 @@ Inspect the accessibility tree separately from the capture appearance.
 [Native frontend](../architecture/frontend.md) describes the themes, the shared
 shell and controls, and the collapse behavior that the captures show.
 
-The ignored `arrangement_frame_time` test times the Arrange view. The song has
+The ignored `arrangement_frame_time` test times the arrangement. The song has
 64 tracks of 256 bars, with waveforms. The test covers each lane height and the
 zoom limits. It prints the median, p95, and maximum frame time of each case.
 Run it optimized with `cargo.ps1 -CargoArguments @('test','--release',

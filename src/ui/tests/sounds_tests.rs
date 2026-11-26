@@ -453,3 +453,75 @@ fn the_sounds_panel_asks_peaks_only_for_the_rows_it_shows() {
         "Only the rows on screen ask for peaks, not all 600: {asked}"
     );
 }
+
+#[test]
+fn sound_list_value_tracks_the_selection_in_the_filtered_list() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    with_more_sounds(&mut app);
+    app.open_sounds_panel();
+    app.selection.sample = Some(1);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        screen(&output).node("Sound list").value(),
+        Some("good grasp 2")
+    );
+    app.sounds.search = "Extra sound".into();
+    let filtered = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(screen(&filtered).node("Sound list").value(), None);
+    assert_eq!(app.selection.sample, Some(1));
+}
+
+#[test]
+fn open_sounds_header_is_uppercase_and_clears_fold_button() {
+    each_theme(|theme| {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.open_sounds_panel();
+        let output = frame_at_size(
+            &ctx,
+            &mut app,
+            vec![],
+            egui::Modifiers::NONE,
+            Vec2::new(1440.0, 1000.0),
+        );
+        let title = text_rect(&output, "SOUNDS");
+        let fold = effects_control_rect(&output, "Fold the Sounds panel");
+        assert!(
+            title.right() <= fold.left(),
+            "{theme:?}: {title:?} must clear {fold:?}"
+        );
+    });
+}
+
+#[test]
+fn sounds_browser_filters_and_search_expose_hover_hints() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.open_sounds_panel();
+    ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for (name, fragment) in [
+        ("Find a sound", "Filter the sound list by name"),
+        ("Library filter", "Show sounds from all libraries"),
+        ("Category filter", "Show all sounds or one category"),
+        ("Sort order", "Choose how the sound list is ordered"),
+    ] {
+        let at = screen(&output).node(name).rect().center();
+        for _ in 0..12 {
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(at)],
+                egui::Modifiers::NONE,
+            );
+        }
+        let hovered = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            screen(&hovered)
+                .texts()
+                .any(|text| text.label().contains(fragment)),
+            "{name} must expose its tooltip ({fragment})"
+        );
+    }
+}

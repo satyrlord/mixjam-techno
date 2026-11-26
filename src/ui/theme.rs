@@ -2,8 +2,8 @@
 //! renderers read, the material that they paint, and the theme's type faces.
 //! Studio paints flat matte surfaces, Aero molded plastic, and Vintage anodized
 //! modular metal plates in a dark rack cabinet. Layout, control positions,
-//! behavior, and features never depend on the theme. Surfaces are painted in
-//! code; Vintage keeps only the legacy Mixer artwork until Mixer retirement.
+//! behavior, and features never depend on the theme. Shared painters draw
+//! surfaces in code. The Vintage Mixer uses prepared strip and fader artwork.
 use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Stroke, Vec2};
 pub(super) use mixjam_techno::application::options::Theme;
 use std::cell::Cell;
@@ -78,7 +78,7 @@ pub(super) struct Roles {
     /// A selected strip button.
     pub strip_lit: Color32,
     pub strip_slot: Color32,
-    /// The empty part of a Mix view rail on a strip, and its filled part.
+    /// The empty part of a clip rail on a strip, and its filled part.
     pub strip_well: Color32,
     pub strip_fill: Color32,
     /// The keyboard focus ring on a track strip.
@@ -411,10 +411,6 @@ pub(super) mod type_size {
     pub(crate) const BODY: f32 = 13.0;
     /// Sample and clip names.
     pub(crate) const CLIP: f32 = 12.0;
-    /// Compact native controls.
-    pub(crate) const SMALL: f32 = 11.0;
-    /// Sample details and dense clip labels.
-    pub(crate) const METADATA: f32 = 10.0;
 }
 
 /// Every heading row is this many ems high in every theme: the line box of

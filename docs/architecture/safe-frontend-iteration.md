@@ -4,9 +4,6 @@ Put each frontend change in the module that owns it:
 
 - Workspace layout: `src/ui/view/`.
 - Mixer presentation: `src/ui/mixer/`.
-- The Mix view: `src/ui/mix_view/`. Its column table is `layout.rs`. A row
-  takes plain values and reports what it changed. Thus a layout change needs no
-  change to the session.
 - The type sizes: `theme::type_size`.
 - The geometry and lifecycle of the tool shell: `src/ui/dialog.rs`.
 - Shared control rendering and interaction: `src/ui/controls/`.
@@ -23,8 +20,8 @@ Use the same shell and controls for each in-app window and modal. Keep the
 domain behavior in its caller.
 
 A mixer widget draws in a `Look`. It uses `Look::Strip(scale)` on a Mixer strip
-or in the Inspector, and `Look::Quiet` in a Mix view row. Change how a control
-looks in one place. Keep its name, keys, and hint the same in both looks.
+and `Look::Quiet` for FX bus mini-switches. Change how a control looks in one
+place, keeping its name, keys, and hint consistent.
 
 A mixer view edits a `TrackMix`, not a whole `Track`, and sends it as
 `EditCommand::SetTrackMix`. Domain rules such as `TrackMix::silence` and
@@ -98,12 +95,10 @@ After asset or source changes, run the raster asset check in
 
 Write each test at the lowest layer that can show the behavior:
 
-1. Pure logic: a layout function or a domain rule, with no `egui::Ui`. For
-   example, `mix_view::layout` tests and `TrackMix::silence`.
+1. Pure logic: a layout function or a domain rule, with no `egui::Ui`, such as
+   `TrackMix::silence`.
 2. Component: one widget or row on a bare `egui::Context`, from plain values,
-   with no app and no session. For example,
-   `src/ui/tests/mix_view_row_tests.rs` paints a track row from a `TrackMix`
-   and a `RowFacts`.
+   with no app and no session, such as `sounds::sound_row` in `sounds_tests`.
 3. Session contract: a typed command on a headless `Session`, in
    `src/application/boundary_tests/`.
 4. Window: the full app in `src/ui/tests/`, for input, focus, and layout that
@@ -113,8 +108,7 @@ In tests, query a painted frame through `src/ui/tests/screen.rs`, not through
 its shapes: `screen(&output).text("Muted").color()`,
 `screen(&output).within(row).shows("35")`, and
 `screen(&output).node("Track 1 EQ").toggled()`. `Text::color` gives the
-color that the code asks for. `Text::opacity` gives the opacity that the
-painter applies to the glyphs.
+color that the code asks for.
 
 ## Captures
 

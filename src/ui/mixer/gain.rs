@@ -136,6 +136,66 @@ fn parse_db(text: &str) -> Option<f64> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct GainEdit {
+    before: f32,
+    db: f32,
+    shown: Option<f32>,
+    typed: bool,
+    relative_edit: bool,
+    accesskit_entry: bool,
+}
+
+impl GainEdit {
+    fn value(&self, gain: &mut f32, value: Option<f64>) -> f64 {
+        if let Some(value) = value {
+            self.apply_value(gain, value as f32);
+        }
+        // Relative input needs a finite origin. An absolute SetValue must
+        // distinguish that origin (-96 dB) from actual silence.
+        f64::from(if *gain == 0.0 && !self.accesskit_entry {
+            SILENCE_DB
+        } else {
+            amplitude_to_db(*gain)
+        })
+    }
+
+    fn apply_value(&self, gain: &mut f32, value: f32) {
+        if self.suppressed_edit(value) || value == self.db {
+            return;
+        }
+        if value.is_finite() || value == f32::NEG_INFINITY {
+            *gain = db_to_amplitude(value.min(MAX_MIXER_GAIN_DB));
+        }
+    }
+
+    fn suppressed_edit(&self, value: f32) -> bool {
+        let lowering_silence = self.before == 0.0 && self.relative_edit && value <= SILENCE_DB;
+        let untouched = !self.typed && !self.relative_edit && Some(value) == self.shown;
+        !self.accesskit_entry && (lowering_silence || untouched)
+    }
+
+    fn format_value(&self, context: &egui::Context, id: egui::Id, value: f64) -> String {
+        let value = value as f32;
+        let shown = if self.silenced(value) {
+            f32::NEG_INFINITY
+        } else {
+            value
+        };
+        if context.memory(|memory| memory.has_focus(id)) {
+            db_edit_text(shown)
+        } else {
+            db_text(shown)
+        }
+    }
+
+    fn silenced(&self, value: f32) -> bool {
+        self.before == 0.0
+            && !self.accesskit_entry
+            && (value == SILENCE_DB || self.relative_edit && value <= SILENCE_DB)
+    }
+}
+
 pub(crate) fn gain_value(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -143,162 +203,151 @@ pub(crate) fn gain_value(
     name: &str,
     gain: &mut f32,
 ) -> bool {
-    gain_value_in(ui, rect, scale, name, gain, false)
+    ui.painter().rect_filled(rect, 3.0, roles().strip_face);
+    let before = *gain;
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .id_salt(("gain-value", name))
+            .max_rect(rect),
+        |ui| gain_value_widget(ui, rect, scale, name, gain, roles().legend),
+    );
+    before != *gain
 }
 
-/// `gain_value`, or with `outline` a Strip edge outline and strip ink on the
-/// row's own surface, for a silent Mix view row.
-pub(crate) fn gain_value_in(
+fn gain_value_widget(
     ui: &mut egui::Ui,
     rect: Rect,
     scale: f32,
     name: &str,
     gain: &mut f32,
-    outline: bool,
-) -> bool {
-    let ink = if outline {
-        ui.painter().rect_stroke(
-            rect,
-            3.0,
-            Stroke::new(1.0 * scale, roles().strip_edge),
-            egui::StrokeKind::Inside,
-        );
-        roles().strip_text
-    } else {
-        ui.painter().rect_filled(rect, 3.0, roles().strip_face);
-        roles().legend
-    };
+    ink: Color32,
+) {
+    style_gain_value(ui, rect, scale, ink);
     let before = *gain;
     let db = amplitude_to_db(before);
-    ui.scope_builder(
-        egui::UiBuilder::new()
-            .id_salt(("gain-value", name))
-            .max_rect(rect),
-        |ui| {
-            ui.spacing_mut().interact_size = rect.size();
-            // The value starts a little inside its face, so its sign clears
-            // the edge.
-            ui.spacing_mut().button_padding = Vec2::new(4.0 * scale, 0.0);
-            ui.style_mut().override_text_style = Some(egui::TextStyle::Body);
-            ui.style_mut()
-                .text_styles
-                .insert(egui::TextStyle::Body, FontId::proportional(12.0 * scale));
-            // The workspace style overrides every text colour with the theme's
-            // text; the value takes the ink of its own face or outline instead.
-            ui.visuals_mut().override_text_color = Some(ink);
-            let widgets = &mut ui.style_mut().visuals.widgets;
-            for widget in [
-                &mut widgets.inactive,
-                &mut widgets.hovered,
-                &mut widgets.active,
-            ] {
-                widget.bg_fill = Color32::TRANSPARENT;
-                widget.weak_bg_fill = Color32::TRANSPARENT;
-                widget.bg_stroke = Stroke::NONE;
-                widget.fg_stroke.color = ink;
-            }
-            // A focused value shows an edge before it is typed in.
-            widgets.active.bg_stroke = Stroke::new(1.0 * scale, ink);
-            let id = ui.next_auto_id();
-            let context = ui.ctx().clone();
-            // DragValue needs a finite origin for relative edits. Keep silence's
-            // text and parser independent from that origin, so passive focus and
-            // explicit finite entry retain their exact meaning.
-            let has_focus = context.memory(|memory| memory.has_focus(id));
-            let relative_edit = ui.ctx().is_being_dragged(id)
-                || ui.input(|input| {
-                    use egui::accesskit::Action;
-                    (input.key_pressed(egui::Key::ArrowUp)
-                        || input.key_pressed(egui::Key::ArrowDown))
-                        && has_focus
-                        || input.num_accesskit_action_requests(id, Action::Increment) > 0
-                        || input.num_accesskit_action_requests(id, Action::Decrement) > 0
-                });
-            // The edit text shows one decimal. Leaving the field without typing
-            // commits that text, which must not round the saved amplitude.
-            let typed_id = id.with("typed");
-            let typed = context.data(|data| data.get_temp::<bool>(typed_id)) == Some(true)
-                || has_focus
-                    && ui.input(|input| {
-                        input.events.iter().any(|event| {
-                            matches!(
-                                event,
-                                egui::Event::Text(_)
-                                    | egui::Event::Paste(_)
-                                    | egui::Event::Key {
-                                        key: egui::Key::Backspace | egui::Key::Delete,
-                                        pressed: true,
-                                        ..
-                                    }
-                            )
-                        })
-                    });
-            let shown = parse_db(&db_edit_text(db)).map(|shown| shown as f32);
-            let response = ui.add(
-                egui::DragValue::from_get_set(|value| {
-                    if let Some(value) = value {
-                        let value = value as f32;
-                        let lowering_silence =
-                            before == 0.0 && relative_edit && value <= SILENCE_DB;
-                        let untouched_text = !typed && !relative_edit && Some(value) == shown;
-                        if !lowering_silence
-                            && !untouched_text
-                            && value != db
-                            && (value.is_finite() || value == f32::NEG_INFINITY)
-                        {
-                            *gain = db_to_amplitude(value.min(MAX_MIXER_GAIN_DB));
-                        }
-                    }
-                    f64::from(if *gain == 0.0 {
-                        SILENCE_DB
-                    } else {
-                        amplitude_to_db(*gain)
-                    })
-                })
-                .range(f64::NEG_INFINITY..=f64::from(amplitude_to_db(4.0)))
-                .clamp_existing_to_range(false)
-                .speed(0.1)
-                .update_while_editing(false)
-                .custom_formatter(move |value, _| {
-                    let value = if before == 0.0
-                        && (value as f32 == SILENCE_DB
-                            || relative_edit && value as f32 <= SILENCE_DB)
-                    {
-                        f32::NEG_INFINITY
-                    } else {
-                        value as f32
-                    };
-                    if context.memory(|memory| memory.has_focus(id)) {
-                        db_edit_text(value)
-                    } else {
-                        db_text(value)
-                    }
-                })
-                .custom_parser(parse_db),
-            );
-            let focused = response.has_focus();
-            ui.ctx().data_mut(|data| {
-                if focused {
-                    data.insert_temp(typed_id, typed);
-                } else {
-                    data.remove::<bool>(typed_id);
-                }
-            });
-            response.widget_info(|| {
-                let mut info =
-                    egui::WidgetInfo::drag_value(ui.is_enabled(), f64::from(db.max(SILENCE_DB)));
-                info.label = Some(format!("{name} gain value"));
-                info.current_text_value = Some(db_text(db));
-                info
-            });
-            response.hover_hint(format!(
-                "{name} gain: {}. Click to enter dB, then press Enter. Negative dB attenuates. \
-                 Enter -inf for silence. Polarity stays unchanged.",
-                db_text(db)
-            ));
-        },
+    let id = ui.next_auto_id();
+    let context = ui.ctx().clone();
+    let has_focus = context.memory(|memory| memory.has_focus(id));
+    let relative_edit = is_relative_gain_edit(ui, id, has_focus);
+    let typed_id = id.with("typed");
+    let typed = was_gain_typed(ui, &context, typed_id, has_focus);
+    let accesskit_entry = ui.input(|input| {
+        input.num_accesskit_action_requests(id, egui::accesskit::Action::SetValue) != 0
+    });
+    let edit = GainEdit {
+        before,
+        db,
+        shown: parse_db(&db_edit_text(db)).map(|shown| shown as f32),
+        typed,
+        relative_edit,
+        accesskit_entry,
+    };
+    let fmt_context = context.clone();
+    let enabled = controls::layer_allows_input(ui);
+    let response = ui.add(
+        egui::DragValue::from_get_set(|value| edit.value(gain, value.filter(|_| enabled)))
+            .range(f64::NEG_INFINITY..=f64::from(amplitude_to_db(4.0)))
+            .clamp_existing_to_range(false)
+            .speed(0.1)
+            .update_while_editing(false)
+            .custom_formatter(move |value, _| edit.format_value(&fmt_context, id, value))
+            .custom_parser(parse_db),
     );
-    before != *gain
+    let focused = response.has_focus();
+    ui.ctx().data_mut(|data| {
+        if focused {
+            data.insert_temp(typed_id, typed);
+        } else {
+            data.remove::<bool>(typed_id);
+        }
+    });
+    gain_value_semantics(ui, response, name, amplitude_to_db(*gain), enabled);
+}
+
+fn style_gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, ink: Color32) {
+    ui.spacing_mut().interact_size = rect.size();
+    // The value starts a little inside its face, so its sign clears the edge.
+    ui.spacing_mut().button_padding = Vec2::new(4.0 * scale, 0.0);
+    ui.style_mut().override_text_style = Some(egui::TextStyle::Body);
+    ui.style_mut()
+        .text_styles
+        .insert(egui::TextStyle::Body, FontId::proportional(12.0 * scale));
+    // The workspace style overrides text color; use the face's ink instead.
+    ui.visuals_mut().override_text_color = Some(ink);
+    let widgets = &mut ui.style_mut().visuals.widgets;
+    for widget in [
+        &mut widgets.inactive,
+        &mut widgets.hovered,
+        &mut widgets.active,
+    ] {
+        widget.bg_fill = Color32::TRANSPARENT;
+        widget.weak_bg_fill = Color32::TRANSPARENT;
+        widget.bg_stroke = Stroke::NONE;
+        widget.fg_stroke.color = ink;
+    }
+    widgets.active.bg_stroke = Stroke::new(1.0 * scale, ink);
+}
+
+fn is_relative_gain_edit(ui: &egui::Ui, id: egui::Id, has_focus: bool) -> bool {
+    if ui.ctx().is_being_dragged(id) {
+        return true;
+    }
+    ui.input(|input| {
+        use egui::accesskit::Action;
+        let arrow = has_focus
+            && (input.key_pressed(egui::Key::ArrowUp) || input.key_pressed(egui::Key::ArrowDown));
+        let acc = input.num_accesskit_action_requests(id, Action::Increment) > 0
+            || input.num_accesskit_action_requests(id, Action::Decrement) > 0;
+        arrow || acc
+    })
+}
+
+fn is_typing_event(event: &egui::Event) -> bool {
+    matches!(
+        event,
+        egui::Event::Text(_)
+            | egui::Event::Paste(_)
+            | egui::Event::Key {
+                key: egui::Key::Backspace | egui::Key::Delete,
+                pressed: true,
+                ..
+            }
+    )
+}
+
+fn was_gain_typed(
+    ui: &egui::Ui,
+    context: &egui::Context,
+    typed_id: egui::Id,
+    has_focus: bool,
+) -> bool {
+    if context.data(|data| data.get_temp::<bool>(typed_id)) == Some(true) {
+        return true;
+    }
+    has_focus && ui.input(|input| input.events.iter().any(is_typing_event))
+}
+
+fn gain_value_semantics(ui: &egui::Ui, response: Response, name: &str, db: f32, enabled: bool) {
+    response.widget_info(|| {
+        let number = if db.is_finite() { db } else { SILENCE_DB };
+        let mut info = egui::WidgetInfo::drag_value(enabled, f64::from(number));
+        info.label = Some(format!("{name} gain value"));
+        info.current_text_value = Some(db_text(db));
+        info
+    });
+    if !enabled {
+        ui.ctx().accesskit_node_builder(response.id, |node| {
+            use egui::accesskit::Action;
+            for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+                node.remove_action(action);
+            }
+        });
+    }
+    response.hover_hint(format!(
+        "{name} gain: {}. Click to enter dB, then press Enter. Negative dB attenuates. \
+         Enter -inf for silence. Polarity stays unchanged.",
+        db_text(db)
+    ));
 }
 
 pub(super) fn gain_rail(
@@ -378,92 +427,107 @@ pub(crate) fn gain_keys(
     gain: &mut f32,
     range: FaderRange,
 ) -> bool {
-    let mut step = controls::wheel(ui, response);
-    let mut edited = false;
-    if response.has_focus() {
-        controls::keep_transport_key(ui.ctx(), response.id);
-        ui.memory_mut(|memory| {
-            memory.set_focus_lock_filter(
-                response.id,
-                egui::EventFilter {
-                    horizontal_arrows: true,
-                    vertical_arrows: true,
-                    ..Default::default()
-                },
-            )
-        });
-        ui.input_mut(|input| {
-            let modifiers = input.modifiers;
-            if input.consume_key(modifiers, egui::Key::ArrowUp)
-                || input.consume_key(modifiers, egui::Key::ArrowRight)
-            {
-                step = 1.0;
-            }
-            if input.consume_key(modifiers, egui::Key::ArrowDown)
-                || input.consume_key(modifiers, egui::Key::ArrowLeft)
-            {
-                step = -1.0;
-            }
-            if input.consume_key(modifiers, egui::Key::Home) {
-                *gain = 0.0;
-                edited = true;
-            }
-            if input.consume_key(modifiers, egui::Key::End) {
-                *gain = range.gain_at_db(range.maximum_db());
-                edited = true;
-            }
-        });
+    if !controls::control_allows_input(ui, response) {
+        return false;
     }
-    ui.input(|input| {
-        use egui::accesskit::{Action, ActionData};
-        for request in input.accesskit_action_requests(response.id, Action::SetValue) {
-            if let Some(ActionData::NumericValue(value)) = request.data
-                && value.is_finite()
-            {
-                *gain = if value <= f64::from(range.silence_db()) {
-                    0.0
-                } else {
-                    range.gain_at_db(value as f32)
-                };
-                edited = true;
-            }
-        }
-        step += input.num_accesskit_action_requests(response.id, Action::Increment) as f32
-            - input.num_accesskit_action_requests(response.id, Action::Decrement) as f32;
-    });
-    if step != 0.0 {
-        if response.has_focus() {
-            ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
-        }
-        let previous_db = amplitude_to_db(*gain);
-        let increment = step
-            * if ui.input(|input| input.modifiers.shift) {
-                GAIN_FINE_STEP_DB
-            } else {
-                GAIN_STEP_DB
-            };
-        let db = match range {
-            FaderRange::Clip => previous_db.max(range.silence_db()) + increment,
-            FaderRange::Mixer if *gain == 0.0 => {
-                if step > 0.0 {
-                    -60.0
-                } else {
-                    f32::NEG_INFINITY
-                }
-            }
-            FaderRange::Mixer => previous_db + increment,
-        };
-        *gain = if step < 0.0 && previous_db >= range.silence_db() && db <= range.silence_db() {
-            0.0
-        } else {
-            range.gain_at_db(db)
-        };
+    let step_db = if ui.input(|input| input.modifiers.shift) {
+        GAIN_FINE_STEP_DB
+    } else {
+        GAIN_STEP_DB
+    };
+    let mut edited = gain_wheel_and_keys(ui, response, gain, range, step_db);
+    edited |= ui.input(|input| gain_accesskit(input, response.id, range, gain, step_db));
+    if edited && response.has_focus() {
+        ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
     }
     if response.double_clicked() {
         *gain = 1.0;
         edited = true;
     }
-    edited || step != 0.0
+    edited
+}
+
+fn gain_wheel_and_keys(
+    ui: &egui::Ui,
+    response: &Response,
+    gain: &mut f32,
+    range: FaderRange,
+    step_db: f32,
+) -> bool {
+    let mut step = controls::wheel(ui, response);
+    let mut edited = false;
+    if response.has_focus() {
+        controls::lock_arrows(ui, response.id);
+        edited = ui.input_mut(|input| gain_keyboard(input, range, gain, &mut step));
+    }
+    if step != 0.0 {
+        nudge_gain(range, gain, step * step_db);
+        edited = true;
+    }
+    edited
+}
+
+fn gain_keyboard(
+    input: &mut egui::InputState,
+    range: FaderRange,
+    gain: &mut f32,
+    step: &mut f32,
+) -> bool {
+    let modifiers = input.modifiers;
+    if input.consume_key(modifiers, egui::Key::ArrowUp)
+        || input.consume_key(modifiers, egui::Key::ArrowRight)
+    {
+        *step = 1.0;
+    }
+    if input.consume_key(modifiers, egui::Key::ArrowDown)
+        || input.consume_key(modifiers, egui::Key::ArrowLeft)
+    {
+        *step = -1.0;
+    }
+    let home = input.consume_key(modifiers, egui::Key::Home);
+    let end = input.consume_key(modifiers, egui::Key::End);
+    if home {
+        *gain = 0.0;
+    }
+    if end {
+        *gain = range.gain_at_db(range.maximum_db());
+    }
+    home || end
+}
+
+fn gain_accesskit(
+    input: &egui::InputState,
+    id: egui::Id,
+    range: FaderRange,
+    gain: &mut f32,
+    step_db: f32,
+) -> bool {
+    use controls::NumericAction;
+    let mut edited = false;
+    for action in controls::numeric_actions(input, id) {
+        match action {
+            NumericAction::Set(db) if db <= f64::from(range.silence_db()) => *gain = 0.0,
+            NumericAction::Set(db) => *gain = range.gain_at_db(db as f32),
+            NumericAction::Increment => nudge_gain(range, gain, step_db),
+            NumericAction::Decrement => nudge_gain(range, gain, -step_db),
+        }
+        edited = true;
+    }
+    edited
+}
+
+fn nudge_gain(range: FaderRange, gain: &mut f32, increment: f32) {
+    let previous_db = amplitude_to_db(*gain);
+    let db = match range {
+        FaderRange::Clip => previous_db.max(range.silence_db()) + increment,
+        FaderRange::Mixer if *gain == 0.0 && increment > 0.0 => -60.0,
+        FaderRange::Mixer => previous_db + increment,
+    };
+    *gain = if increment < 0.0 && previous_db >= range.silence_db() && db <= range.silence_db() {
+        0.0
+    } else {
+        range.gain_at_db(db)
+    };
 }
 
 /// A gain fader's accessible name, value, range, and hint: "{name} gain".
@@ -476,9 +540,10 @@ pub(crate) fn gain_semantics(
     range: FaderRange,
 ) -> Response {
     let db = amplitude_to_db(gain);
+    let enabled = response.enabled() && controls::layer_allows_input(ui);
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(
-            response.enabled(),
+            enabled,
             f64::from(db.max(range.silence_db())),
             format!("{name} gain"),
         );
@@ -490,9 +555,11 @@ pub(crate) fn gain_semantics(
         node.set_min_numeric_value(f64::from(range.silence_db()));
         node.set_max_numeric_value(f64::from(range.maximum_db()));
         node.set_numeric_value_step(f64::from(GAIN_STEP_DB));
-        node.add_action(Action::SetValue);
-        node.add_action(Action::Increment);
-        node.add_action(Action::Decrement);
+        if enabled {
+            node.add_action(Action::SetValue);
+            node.add_action(Action::Increment);
+            node.add_action(Action::Decrement);
+        }
     });
     if before != gain {
         response.mark_changed();

@@ -77,7 +77,7 @@ also as an accessible workspace status.
 | Lane height | 30 px | Choices: 20 px, 30 px, 40 px: the height of each arrangement row. Apply resizes the rows immediately, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data or undo history. |
 | Follow playhead on startup | On | Sets the initial Follow state at the next start of the application. The Follow toggle in the toolbar still controls the current session. Do not turn Follow on again silently after a user turns it off. |
 | Show section bookmarks | The existing saved value, otherwise On | Shares one current value with the Sections toggle in the toolbar. Both update the same preference. Neither edits the song or its section data. |
-| Starting module | Sounds | Choices: Sounds, Mixer, Mastering, FX returns. Sounds opens the Sounds panel and folds the lower panel. Mixer opens the Mix view of the score, with Mastering in the lower panel. Mastering and FX returns open the lower panel on that board. Applies at the next start, not when a project opens. Capture and verification modes keep their explicit view overrides. |
+| Starting module | Sounds | Choices: Sounds, Mixer, Mastering, FX returns. Sounds opens the Sounds panel and folds the lower panel. Mixer opens the lower panel on the Mixer board. Mastering and FX returns open the lower panel on that board. Applies at the next start, not when a project opens. Capture and verification modes keep their explicit view overrides. |
 | Show tooltips | On | Controls hover hints. Never removes accessible names, descriptions, focus indication, errors, or necessary visible instructions. |
 
 ### Files

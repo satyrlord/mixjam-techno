@@ -132,7 +132,7 @@ rail icon has no registered command.
 
 - The layout constants of the Arrange lane header.
 - The lane name, which is the sound family of the first clip.
-- The lane fader.
+- The lane pan knob.
 
 In each frame, `src/ui/room.rs` decides which of these show: the Sounds panel,
 the Inspector, and the board of the lower panel. The saved layout holds the
@@ -141,14 +141,15 @@ together. If two panels do not fit, the panel that the user opened last shows.
 `src/ui/room.rs` never changes the saved layout.
 
 `src/ui/inspector.rs` draws the Inspector, and `src/ui/inspector/clip/` its clip
-pages. Its page follows the clip and track selection. Its fields use the Mixer
-controls under their own names. The clip card fields and the fade handles are in
-`src/ui/controls/clip_fields.rs`, which the clip context menu also uses. The
-fields edit through `SetTrack`, `SetClip`, and `SetClipSounds`. `SetClipSounds`
-sets the gain, fades, pitch, and reverse of several clips as one step.
-`SetTrack` replaces one track with its processing. The Mixer and the Mix view
-send `SetTrackMix`, which replaces only the mixer settings of one track. Thus a
-view that edits one track copies only that track in each frame, not all tracks.
+pages. Its page follows the clip and track selection; its track page keeps the
+EQ response curve button and channel processing power switches. The clip card
+fields and the fade handles are in `src/ui/controls/clip_fields.rs`, which the
+clip context menu also uses. The fields edit through `SetTrack`, `SetClip`,
+and `SetClipSounds`. `SetClipSounds` sets the gain, fades, pitch, and reverse
+of several clips as one step. `SetTrack` replaces one track with its
+processing. The Mixer and arrangement lane controls send `SetTrackMix`, which
+replaces only the mixer settings of one track. Thus a view that edits one
+track copies only that track in each frame, not all tracks.
 The page and control identities include the selection and the frontend
 generation. Thus pending value entries and held controls cannot edit another
 selection or a replacement project.

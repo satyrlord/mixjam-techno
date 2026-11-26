@@ -16,18 +16,18 @@ mod buttons;
 mod gain;
 #[path = "mixer/strips.rs"]
 mod strips;
+pub(super) use artwork::row_surface;
 use artwork::*;
-pub(super) use artwork::{row_surface, row_surface_each};
 use buttons::*;
 pub(super) use buttons::{
     LIMITER_HINT, Look, bus_solo, bus_switches, bypass_button, center_button, edit_button,
     eq_button, pan_slider, polarity_button, send_knob, switch_button, unity_button,
 };
 use gain::*;
-pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value, gain_value_in};
+pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value};
 #[cfg(test)]
 pub(super) use gain::{GAIN_FINE_STEP_DB, GAIN_STEP_DB, useful_taper_span};
-pub(super) use strips::{MasterState, master_summary, return_state, show, track_state};
+pub(super) use strips::{MasterState, show};
 
 /// What the mixer changed: the mix of each edited track with its index,
 /// whether the master level moved, the FX buses, the master pedalboard's

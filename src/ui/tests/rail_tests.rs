@@ -626,8 +626,9 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         let (_, node) = accessible_node(&hovered_undo, label);
         assert_eq!(node.role(), egui::accesskit::Role::Button, "{label}");
     }
-    // From the Mix view, the rail's Mixer shows the Mixer board instead.
-    app.set_mix_view(true);
+    // With another board open, the rail's Mixer switches to the Mixer board.
+    app.boards.module = BottomModule::Mastering;
+    app.set_layout(|layout| layout.boards = true);
     pointer(&ctx, &mut app, mixer, true, egui::Modifiers::NONE);
     let clicked = frame(
         &ctx,
@@ -641,8 +642,8 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         egui::Modifiers::NONE,
     );
     assert!(
-        !app.mix.shown && app.board_shown(BottomModule::Mixer),
-        "The rail's Mixer leaves the Mix view and shows the Mixer board."
+        app.board_shown(BottomModule::Mixer),
+        "The rail's Mixer switches to the Mixer board."
     );
     assert!(
         clicked.platform_output.events.iter().any(|event| {
@@ -658,7 +659,7 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
     assert!(screen(&output).node("Mixer").toggled());
     click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
     assert!(
-        !app.mix.shown && !app.session.layout().boards,
+        !app.session.layout().boards,
         "A repeated click folds the lower panel."
     );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);

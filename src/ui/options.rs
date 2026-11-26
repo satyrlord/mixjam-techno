@@ -390,7 +390,15 @@ fn actions_row(
     let status = window.status(facts);
     let blocked = window.apply_blocked(facts);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if form::button(ui, CANCEL, controls::ButtonRole::Secondary).clicked() {
+        let cancel_hint = if pending {
+            "Choose whether to apply or discard your changes."
+        } else {
+            "Close Options."
+        };
+        if form::button(ui, CANCEL, controls::ButtonRole::Secondary)
+            .hover_hint(cancel_hint)
+            .clicked()
+        {
             actions.push(Action::Close);
         }
         ui.add_enabled_ui(blocked.is_none(), |ui| {
@@ -402,18 +410,21 @@ fn actions_row(
             }
         });
         if !status.is_empty() {
-            let color = if pending {
-                roles().warning
-            } else {
-                roles().legend
-            };
-            let label =
-                ui.add(egui::Label::new(egui::RichText::new(&status).color(color)).truncate());
-            // Screen readers hear the count as it changes.
-            ui.ctx().accesskit_node_builder(label.id, |node| {
-                node.set_live(egui::accesskit::Live::Polite)
-            });
+            actions_status(ui, &status, pending);
         }
+    });
+}
+
+fn actions_status(ui: &mut egui::Ui, status: &str, pending: bool) {
+    let color = if pending {
+        roles().warning
+    } else {
+        roles().legend
+    };
+    let label = ui.add(egui::Label::new(egui::RichText::new(status).color(color)).truncate());
+    // Screen readers hear the count as it changes.
+    ui.ctx().accesskit_node_builder(label.id, |node| {
+        node.set_live(egui::accesskit::Live::Polite)
     });
 }
 

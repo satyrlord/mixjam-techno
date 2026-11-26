@@ -87,25 +87,11 @@ impl Artwork {
     }
 }
 
-/// Paints a Mix view row in the strips' material: the ivory, or for a return
-/// the graphite, tiles in Vintage, and the theme's strip colors elsewhere.
+/// Paints an Inspector clip card in the strips' material: the ivory, or for a
+/// return the graphite, tiles in Vintage, and the theme's strip colors
+/// elsewhere.
 pub(crate) fn row_surface(ui: &egui::Ui, rect: Rect, is_return: bool) {
     paint_row_surface(ui.painter(), row_art(ui).as_deref(), rect, is_return);
-}
-
-/// `row_surface` with each of `painters` in turn, for the parts of a row
-/// painted on their own, such as the slices of a faded edge. The artwork is
-/// looked up once for all of them.
-pub(crate) fn row_surface_each(
-    ui: &egui::Ui,
-    painters: impl IntoIterator<Item = egui::Painter>,
-    rect: Rect,
-    is_return: bool,
-) {
-    let art = row_art(ui);
-    for painter in painters {
-        paint_row_surface(&painter, art.as_deref(), rect, is_return);
-    }
 }
 
 /// The artwork that Vintage paints rows with; other themes have none.

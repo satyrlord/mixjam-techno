@@ -615,3 +615,31 @@ fn cancelling_options_expands_a_collapsed_discard_prompt() {
     assert_eq!(app.blocking_modal(&ctx), Some(DISCARD));
     remove_settings(&root);
 }
+
+#[test]
+fn options_cancel_hint_matches_the_close_action_for_each_draft_state() {
+    let (ctx, mut app, root) = isolated_fixture();
+    open_on(&ctx, &mut app, Page::Workspace);
+    let clean = frame(&ctx, &mut app, vec![], NONE);
+    assert_eq!(
+        screen(&clean).node(CANCEL).node().description(),
+        Some("Close Options.")
+    );
+    click_named(&ctx, &mut app, SECTION_BOOKMARKS);
+    let dirty = frame(&ctx, &mut app, vec![], NONE);
+    let cancel = screen(&dirty).node(CANCEL);
+    let hint = "Choose whether to apply or discard your changes.";
+    assert_eq!(cancel.node().description(), Some(hint));
+    ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(cancel.rect().center())],
+        NONE,
+    );
+    let hovered = frame(&ctx, &mut app, vec![], NONE);
+    assert!(screen(&hovered).shows(hint));
+    click_named(&ctx, &mut app, CANCEL);
+    assert!(draft(&app).confirm_discard);
+    remove_settings(&root);
+}

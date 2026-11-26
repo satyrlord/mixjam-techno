@@ -238,11 +238,11 @@ fn sparse_tracks_keep_model_ids_for_drag_copy_selection_and_mixer() {
     click(
         &ctx,
         &mut app,
-        Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[2]), second_y),
+        Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[0]), second_y),
         egui::Modifiers::NONE,
     );
-    assert!(!app.session.project().tracks[63].left_enabled);
-    assert!(app.session.project().tracks[1].left_enabled);
+    assert!(app.session.project().tracks[63].muted);
+    assert!(!app.session.project().tracks[1].muted);
     let output = ctx.run(
         egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 350.0))),

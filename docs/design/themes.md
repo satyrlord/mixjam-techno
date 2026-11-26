@@ -67,9 +67,9 @@ module status LEDs, burnt-orange silk-screen routing traces and bracket rules,
 machined silver-top slider blocks, and dark phenolic fluted skirts with spun
 aluminum or scoped anodized/chrome caps. Pedals layer bespoke hardware artwork
 under a unified 3D bevel, grain, sheen, and scratch finish pass. Dense working
-areas (the arrangement, the Sounds panel, and value wells) stay clean. Legacy
-Mixer strips keep the ivory artwork until Mix view retirement. The position
-readout and VU face use warm cream; indicators use modular orange-amber.
+areas (the arrangement, the Sounds panel, and value wells) stay clean. Mixer
+strips keep the ivory artwork. The position readout and VU face use warm
+cream; indicators use modular orange-amber.
 
 **Category colors** for sounds and **section colors** are the same in every
 theme. States keep their cues that are not color (outlines, bars, names, and

@@ -75,6 +75,110 @@ fn mixer_db_gain_labels_do_not_change_saved_amplitude_precision() {
 }
 
 #[test]
+fn mixer_gain_value_accepts_exact_accesskit_entries() {
+    use egui::accesskit::{Action, ActionData, ActionRequest};
+    use mixjam_techno::application::db_to_amplitude;
+
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mixer;
+    let mut track = app.session.project().tracks[0].clone();
+    track.gain = 0.3333;
+    app.session
+        .edit(EditCommand::SetTrack {
+            index: 0,
+            track: Box::new(track),
+        })
+        .unwrap();
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let (target, _) = accessible_node(&output, "Track 1 gain value");
+    for db in [-9.5, f64::NEG_INFINITY, -96.0, -120.0] {
+        let request = ActionRequest {
+            action: Action::SetValue,
+            target,
+            data: Some(ActionData::NumericValue(db)),
+        };
+        let output = frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(request)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.session.project().tracks[0].gain,
+            db_to_amplitude(db as f32)
+        );
+        if db.is_finite() {
+            let (_, node) = accessible_node(&output, "Track 1 gain value");
+            assert_eq!(node.numeric_value(), Some(db));
+        }
+    }
+}
+
+#[test]
+fn gain_rail_applies_each_accessible_step_in_order_at_its_limits() {
+    use egui::accesskit::{Action, ActionData, ActionRequest};
+    use mixjam_techno::application::db_to_amplitude;
+
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mixer;
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let (target, _) = accessible_node(&output, "Track 1 gain");
+    let action = |action, db: Option<f64>| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            target,
+            action,
+            data: db.map(ActionData::NumericValue),
+        })
+    };
+    for (db, step, reverse, expected) in [
+        (12.0, Action::Increment, Action::Decrement, 11.5),
+        (-96.0, Action::Decrement, Action::Increment, -60.0),
+    ] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                action(Action::SetValue, Some(db)),
+                action(step, None),
+                action(reverse, None),
+            ],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.session.project().tracks[0].gain,
+            db_to_amplitude(expected)
+        );
+    }
+}
+
+#[test]
+fn queued_gain_actions_leave_the_mix_unchanged_while_a_modal_is_open() {
+    use egui::accesskit::{Action, ActionData, ActionRequest};
+
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mixer;
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let actions = ["Track 1 gain value", "Track 2 gain"].map(|name| {
+        let (target, _) = accessible_node(&output, name);
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            target,
+            action: Action::SetValue,
+            data: Some(ActionData::NumericValue(-12.0)),
+        })
+    });
+    app.files.pending_action = Some(PendingAction::New);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.blocking_modal(&ctx), Some("Save your changes?"));
+    let before = app.session.project().clone();
+    frame(&ctx, &mut app, actions.into(), egui::Modifiers::NONE);
+    assert!(app.session.project() == &before);
+}
+
+#[test]
 fn mixer_increasing_silent_and_very_quiet_gain_does_not_stick_or_silence() {
     let (ctx, mut app) = fixture();
     let mut project = app.session.project().clone();

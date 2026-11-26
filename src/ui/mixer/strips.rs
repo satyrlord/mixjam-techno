@@ -159,7 +159,7 @@ pub(crate) struct MasterState<'a> {
 }
 
 /// The Master strip's summary line: the state of the master pedalboard.
-pub(crate) fn master_summary(bypass: bool, pedals: usize) -> String {
+fn master_summary(bypass: bool, pedals: usize) -> String {
     match (bypass, pedals) {
         (true, _) => "Bypassed".into(),
         (false, 0) => "No pedals on".into(),
@@ -394,7 +394,6 @@ fn track_controls(
         Look::Strip(scale),
         name,
         eq_on,
-        false,
     ) {
         *open_eq = true;
     }
@@ -520,7 +519,7 @@ fn return_strip(
 
 /// A return's state: "Return automated" while its lane sets the level, else
 /// the level.
-pub(crate) fn return_state(bus: &FxBus, automated: bool) -> String {
+fn return_state(bus: &FxBus, automated: bool) -> String {
     if automated {
         "Return automated".to_string()
     } else {
@@ -530,7 +529,7 @@ pub(crate) fn return_state(bus: &FxBus, automated: bool) -> String {
 
 /// A track's state: why it is silent, else its pan: Muted, No output,
 /// Solo elsewhere, Pan automated, or the pan position.
-pub(crate) fn track_state(silence: Option<Silence>, pan_automated: bool, pan: f32) -> String {
+fn track_state(silence: Option<Silence>, pan_automated: bool, pan: f32) -> String {
     match silence {
         Some(Silence::Muted) => "Muted".into(),
         Some(Silence::NoOutput) => "No output".into(),

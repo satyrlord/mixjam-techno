@@ -44,8 +44,6 @@ mod lanes;
 mod libraries;
 #[path = "ui/master.rs"]
 mod master;
-#[path = "ui/mix_view.rs"]
-mod mix_view;
 #[path = "ui/mixer.rs"]
 mod mixer;
 #[path = "ui/modals.rs"]

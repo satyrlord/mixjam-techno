@@ -73,8 +73,6 @@ fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
     let toolbar = [
         "Song overview",
         "Hide the song overview",
-        "Arrange view",
-        "Mix view",
         "Automation lane",
         "Follow",
         "Sections",
@@ -244,27 +242,25 @@ fn every_tab_stop_of_every_board_has_a_name() {
     // The short window makes the boards scroll, so their scroll areas show.
     for size in [Vec2::new(1440.0, 1000.0), Vec2::new(1024.0, 768.0)] {
         for module in BottomModule::ALL {
-            for mix in [false, true] {
-                let (ctx, mut app) = fixture();
-                ctx.enable_accesskit();
-                app.boards.module = module;
-                app.set_mix_view(mix);
-                let stops = tab_stops(&ctx, &mut app, size);
-                let unnamed: Vec<String> = stops
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(at, stop)| {
-                        let role = stop.as_ref().err()?;
-                        let before = stops[..at].iter().rev().flatten().next();
-                        Some(format!("{role} after {before:?}"))
-                    })
-                    .collect();
-                assert!(
-                    unnamed.is_empty(),
-                    "Unnamed Tab stops on {} at {size:?}, Mix view {mix}: {unnamed:?}",
-                    module.label()
-                );
-            }
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.boards.module = module;
+            app.set_layout(|layout| layout.boards = true);
+            let stops = tab_stops(&ctx, &mut app, size);
+            let unnamed: Vec<String> = stops
+                .iter()
+                .enumerate()
+                .filter_map(|(at, stop)| {
+                    let role = stop.as_ref().err()?;
+                    let before = stops[..at].iter().rev().flatten().next();
+                    Some(format!("{role} after {before:?}"))
+                })
+                .collect();
+            assert!(
+                unnamed.is_empty(),
+                "Unnamed Tab stops on {} at {size:?}: {unnamed:?}",
+                module.label()
+            );
         }
     }
 }

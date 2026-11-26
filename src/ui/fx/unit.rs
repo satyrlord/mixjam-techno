@@ -506,7 +506,7 @@ pub(super) fn left_division(ui: &mut egui::Ui, rect: Rect, prefix: &str, delay: 
 
 /// The header row: the bus name and its In switch at the left; S, Lim, and
 /// Edit at the right. In, S, and Lim are the mixer's quiet bus switches, so
-/// a bus reads the same on its return strip, in the Mix view, and here.
+/// a bus reads the same on its return strip and here.
 fn card_header(
     ui: &mut egui::Ui,
     rect: Rect,

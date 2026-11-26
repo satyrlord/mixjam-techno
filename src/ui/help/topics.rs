@@ -1,8 +1,8 @@
 //! The pages of the manual, and what each one has: its name, its window,
 //! its palette, and its content.
 use super::content::{
-    ALBUM_REVIEW, ARRANGE, AUTOMATION, Block, EFFECTS, FX_RETURNS, MASTERING, MIX_VIEW, MIXER,
-    RECORDING, SAMPLE_EDITOR, SHORTCUTS, STEP_SYNTH, STRETCH, WORKSPACE,
+    ALBUM_REVIEW, ARRANGE, AUTOMATION, Block, EFFECTS, FX_RETURNS, MASTERING, MIXER, RECORDING,
+    SAMPLE_EDITOR, SHORTCUTS, STEP_SYNTH, STRETCH, WORKSPACE,
 };
 use super::*;
 
@@ -15,7 +15,6 @@ pub(in super::super) enum Topic {
     Automation,
     Recording,
     Mixer,
-    MixView,
     Mastering,
     FxReturns,
     Workspace,
@@ -27,13 +26,12 @@ pub(in super::super) enum Topic {
 }
 
 impl Topic {
-    pub(in super::super) const ALL: [Topic; 14] = [
+    pub(in super::super) const ALL: [Topic; 13] = [
         Topic::Shortcuts,
         Topic::Arrange,
         Topic::Automation,
         Topic::Recording,
         Topic::Mixer,
-        Topic::MixView,
         Topic::Mastering,
         Topic::FxReturns,
         Topic::Workspace,
@@ -51,7 +49,6 @@ impl Topic {
             Topic::Automation => "Automation",
             Topic::Recording => "Recording",
             Topic::Mixer => "Mixer",
-            Topic::MixView => "Mix view",
             Topic::Mastering => "Mastering",
             Topic::FxReturns => "FX returns",
             Topic::Workspace => "Workspace",
@@ -106,7 +103,6 @@ impl Topic {
             Topic::Automation => AUTOMATION,
             Topic::Recording => RECORDING,
             Topic::Mixer => MIXER,
-            Topic::MixView => MIX_VIEW,
             Topic::Mastering => MASTERING,
             Topic::FxReturns => FX_RETURNS,
             Topic::Workspace => WORKSPACE,

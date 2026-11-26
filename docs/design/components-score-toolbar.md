@@ -3,18 +3,15 @@
 A toolbar row is at the top of the arrangement. At the left, it holds the
 Arrangement heading and its counts. At the right, it holds:
 
-- the Arrange and Mix pair,
 - the Automation lane menu,
 - Follow,
 - Sections,
 - the Zoom slider (the mouse wheel over it zooms),
 - the Maximise switch.
 
-The pair is two selectable labels, 2 points apart, with the shown view
-selected. In the Mix view, the Zoom slider rests, because the lanes fit the
-whole song. If the score is narrower than 840 points, its smaller heading and
-counts share a two-line block. The Automation menu then omits its separate
-printed label. It narrows to 96 points, and its Off choice reads No lane.
+If the score is narrower than 840 points, its smaller heading and counts share
+a two-line block. The Automation menu then omits its separate printed label. It
+narrows to 96 points, and its Off choice reads No lane.
 
 If the score is narrower than 600 points, the heading and counts hide. Then
 every action stays within the score. If less than 700 points remain after the

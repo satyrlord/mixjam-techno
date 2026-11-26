@@ -9,8 +9,8 @@ page.
 ## Inspector
 
 The Inspector is a 280-point column at the right of the score, above the
-lower panel, on Panel fill with 12-point and 10-point margins. A muted
-Inspector label and a fold chevron are at its top. Below them, one page
+lower panel, on Panel fill with 12-point and 10-point margins. An uppercase
+`INSPECTOR` heading and a fold chevron are at its top. Below them, one page
 scrolls. The selection chooses the page:
 
 - Nothing selected: the song. The page shows the title in the heading face,
@@ -20,22 +20,14 @@ scrolls. The selection chooses the page:
   - SECTIONS: a 3-point bar in the color of each section, its name, and its
     bars. A click on a section row scrolls the score to that section. It
     never moves the playhead.
-- A track: a click on its name in the Arrange lane header selects it. The
-  click also opens a folded Inspector, and the name then has Raised fill and a
-  2-point accent edge. If the Inspector is open on the track, a second click
-  on the name shows the song. The page shows:
+- A track: a click on its name in the lane header selects it. The click also
+  opens a folded Inspector, and the name then has Raised fill and a 2-point
+  accent edge. If the Inspector is open on the track, a second click on the
+  name shows the song. The page shows:
   - CHANNEL PROCESSING: the EQ response curve and the EQ, Drive, Compressor,
     and Ducker switches. The curve is the button that opens the channel EQ
     window with every dial: "Open EQ" in its corner, and an accent edge on
     hover.
-  - CHANNEL: one strip card of three rows. The first row has the strip
-    fader, the dB field, and Unity. The second row has the pan slider,
-    Center, and the pan, or "Automated" while a lane drives it. The third row
-    has Mute, Solo, Left, Right, polarity, and, only for a silent track, why
-    it is silent. A single row cannot fit the 256-point column, so the rows
-    stack in one card.
-  - SENDS: the four send knobs, each with its return's effect and the send
-    amount below it. The knob of an empty or switched-off return is dimmed.
 - One clip: the sound's name, then two lines: its category, and its bars and
   track. Below them is a picture of the clip at the panel's width. The picture
   shows its category fill and waveform, its shaded fades, its gain line, and a
@@ -58,11 +50,11 @@ scrolls. The selection chooses the page:
   semitones and cents separately, within the clip's pitch limits.
 
 The controls have the names "Inspector track ..." and "Inspector clip ...".
-These names never match a name in the Mixer, the Mix view, or the clip menu.
-Every edit is one undo step, and the handles on the clips stay. The scroll bar
-takes its own room, so it never covers a card. The folded strip is 28 points
-wide, with a chevron and INSPECTOR read top to bottom. A click anywhere on the
-strip opens the Inspector. A maximised score hides both.
+These names never match a name in the Mixer or the clip menu. Every edit is one
+undo step, and the handles on the clips stay. The scroll bar takes its own
+room, so it never covers a card. The folded strip is 28 points wide, with a
+chevron and INSPECTOR read top to bottom. A click anywhere on the strip opens
+the Inspector. A maximised score hides both.
 
 ## Room for the panels
 

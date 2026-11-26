@@ -113,9 +113,9 @@ impl StepSynthAudition {
 
 impl MixJamApp {
     /// The lower panel's least height for the open board in a content area
-    /// `available` points high, with the room the score keeps below its lanes.
+    /// `available` points high.
     pub(in super::super) fn board_minimum(&self, module: BottomModule, available: f32) -> f32 {
-        module.minimum_height(available, self.score_block_height())
+        module.minimum_height(available)
     }
 
     /// True when `module`'s board shows in an open lower panel.
@@ -145,11 +145,6 @@ impl MixJamApp {
         change(&mut layout);
         if layout == before {
             return;
-        }
-        if layout.boards != before.boards {
-            // The lower panel was opened or folded by hand, so leaving the
-            // Mix view keeps it as it is.
-            self.mix.restore_boards = false;
         }
         if let Err(error) = self.session.set_layout(layout) {
             self.error(error);
@@ -190,7 +185,7 @@ impl MixJamApp {
             .into_iter()
             .map(|module| self.board_minimum(module, available))
             .fold(0.0_f32, f32::max);
-        let mut max_height = (available - 290.0 - self.score_block_height()).max(shared_minimum);
+        let mut max_height = (available - 290.0).max(shared_minimum);
         if self.panels.room.sounds {
             // An open Sounds panel keeps its least height above the board, so
             // a drag never folds one of them.
@@ -220,7 +215,11 @@ impl MixJamApp {
                 }
             });
         help::note_board_rect(ctx, sounds.response.rect);
-        // egui makes the panel's drag edge a Tab stop and leaves it unnamed.
+        Self::paint_lower_panel_grip(ctx, sounds.response.rect);
+    }
+
+    /// Paint the lower panel resize splitter and name its drag edge for screen readers.
+    fn paint_lower_panel_grip(ctx: &egui::Context, rect: Rect) {
         let edge = egui::Id::new(LOWER_PANEL_ID).with("__resize");
         if ctx.read_response(edge).is_some() {
             ctx.accesskit_node_builder(edge, |node| {
@@ -229,10 +228,7 @@ impl MixJamApp {
             });
         }
         let grip = Rect::from_center_size(
-            Pos2::new(
-                sounds.response.rect.center().x,
-                sounds.response.rect.top() + 2.0,
-            ),
+            Pos2::new(rect.center().x, rect.top() + 2.0),
             Vec2::new(48.0, 3.0),
         );
         ctx.layer_painter(egui::LayerId::background())
@@ -581,7 +577,7 @@ impl MixJamApp {
         self.export_tracks_button(ui, theme::type_size::BODY);
     }
 
-    /// Export tracks…, in the Mixer's toolbar and the Mix view's Master row.
+    /// Export tracks…, in the Mixer's toolbar.
     pub(in super::super) fn export_tracks_button(&mut self, ui: &mut egui::Ui, size: f32) {
         let response = ui.add_enabled(
             !self.session.is_exporting(),
@@ -652,9 +648,9 @@ impl MixJamApp {
         self.apply_mixer_changes(ui, changes, master, buses, board);
     }
 
-    /// Applies what the Mixer's strips or the Mix view's rows changed: the
-    /// tracks and master level, the FX buses, the master bypass, a bus to
-    /// show on the FX returns board, and a track's EQ window to open.
+    /// Applies what the Mixer's strips changed: the tracks and master level,
+    /// the FX buses, the master bypass, a bus to show on the FX returns board,
+    /// and a track's EQ window to open.
     pub(in super::super) fn apply_mixer_changes(
         &mut self,
         ui: &egui::Ui,
@@ -700,7 +696,6 @@ impl MixJamApp {
         if let Some(bus) = changes.open {
             self.boards.module = BottomModule::FxReturns;
             self.boards.fx_reveal = Some(bus);
-            // The Mix view's returns can open a folded lower panel.
             self.set_layout(|layout| {
                 layout.boards = true;
                 layout.maximised = false;

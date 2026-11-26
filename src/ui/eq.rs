@@ -57,12 +57,10 @@ impl MixJamApp {
         };
         if track >= self.session.project().tracks.len() {
             self.eq_track = None;
-            self.mix.eq_row = None;
             return;
         }
         let project = self.session.project();
         let current = &project.tracks[track];
-        let filter_active = !current.automation.filter.is_empty();
         let channel = Channel {
             eq: current.eq,
             drive: current.drive,
@@ -73,18 +71,15 @@ impl MixJamApp {
             filter_slope: current.filter_slope,
             ducker: current.ducker,
         };
+        let filter_active = !current.automation.filter.is_empty();
         let dynamics = scopes::Dynamics::read(&self.session, track);
         let generation = self.boards.master_view_generation;
         let name = format!("Track {} EQ", track + 1);
         let mut open = true;
         let mut event = WindowEvent::Action(Action::None);
-        let anchor = self.mix.shown.then_some(self.mix.eq_row).flatten();
-        let mut viewport = ctx.viewport_rect().shrink(8.0);
-        if anchor.is_some() {
-            viewport.max.y -= 30.0;
-        }
-        // If an anchor or a resize shortens the window, reserve a vertical
-        // bar in the default width so the right bay still fits.
+        let viewport = ctx.viewport_rect().shrink(8.0);
+        // Include the vertical scrollbar in the default width so the right
+        // bay still fits in a short window.
         let scrollbar = egui::style::ScrollStyle::solid().allocated_width();
 
         dialog::window(&name)
@@ -93,7 +88,6 @@ impl MixJamApp {
             .default_width(CONTENT_W + 36.0 + scrollbar)
             .default_height(CONTENT_H + 20.0)
             .constrain_to(viewport)
-            .anchor(anchor)
             .show(ctx, |ui| {
                 event = ui
                     .push_id(generation, |ui| {
@@ -104,7 +98,6 @@ impl MixJamApp {
 
         if !open {
             self.eq_track = None;
-            self.mix.eq_row = None;
             return;
         }
         match event {
@@ -113,7 +106,6 @@ impl MixJamApp {
                 // The title names the track, so keep the window where it is.
                 dialog::carry_geometry(ctx, &name, &format!("Track {} EQ", next + 1));
                 self.eq_track = Some(next);
-                self.mix.eq_row = None;
                 ctx.request_repaint();
             }
             WindowEvent::Action(Action::None) => {}

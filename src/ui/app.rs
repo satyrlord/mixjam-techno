@@ -31,19 +31,16 @@ impl BottomModule {
     /// high. Mixer prefers 400 points, and Mastering and Effects the height of
     /// their whole boards. A short window reduces each, down to 370, so the
     /// arrangement keeps its toolbar and ruler and a 150-point lane viewport;
-    /// Mixer's gain rail shortens and the boards scroll. When the score also
-    /// keeps `extra` points below its lanes (the Mix view's Master and returns
-    /// rows), the floor drops by the same amount, so the lanes keep their
-    /// viewport.
-    pub(super) fn minimum_height(self, available: f32, extra: f32) -> f32 {
+    /// Mixer's gain rail shortens and the boards scroll.
+    pub(super) fn minimum_height(self, available: f32) -> f32 {
         let preferred = match self {
             Self::Mixer => 400.0,
             Self::Mastering => master::MODULE_HEIGHT,
             Self::FxReturns => fx::MODULE_HEIGHT,
             Self::StepSynth => step_synth::MODULE_HEIGHT,
         };
-        let floor = (370.0 - extra).min(preferred);
-        (available - Self::ARRANGEMENT_RESERVE - extra).clamp(floor, preferred)
+        let floor = 370.0_f32.min(preferred);
+        (available - Self::ARRANGEMENT_RESERVE).clamp(floor, preferred)
     }
 
     pub(super) fn label(self) -> &'static str {
@@ -81,8 +78,6 @@ pub struct MixJamApp {
     pub(super) overview: overview::OverviewState,
     /// The section bookmarks on the bar ruler.
     pub(super) sections: SectionState,
-    /// The score's Mix view.
-    pub(super) mix: mix_view::MixViewState,
     /// The lower panel's boards.
     pub(super) boards: BoardsState,
     /// The Step synth board's pattern and file.
@@ -210,134 +205,32 @@ impl MixJamApp {
     }
 
     pub(super) fn from_session(mut session: Session, status: String, status_error: bool) -> Self {
-        let capture_path = std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO").map(PathBuf::from);
-        let capture_view = if capture_path.is_some() {
-            std::env::var("MIXJAM_TECHNO_CAPTURE_VIEW").unwrap_or_default()
-        } else {
-            String::new()
-        };
+        let (capture_path, capture_view) = capture_env();
         let status = with_import_summary(status, session.project());
         capture_setup::prepare_session(&mut session, &capture_view);
-        let import_path = (capture_view == "import")
-            .then(|| {
-                session
-                    .library()
-                    .samples
-                    .first()
-                    .and_then(|sample| sample.wav_path.clone())
-            })
-            .flatten();
+        let import_path = capture_import_path(&session, &capture_view);
         let needs_sample_folder =
             session.library().samples.is_empty() && session.project().clips.is_empty();
         let startup_scan = session.wave_scan().is_some();
-        let selected_sample = if capture_view.starts_with("missing") {
-            session.missing_samples().first().map(|sample| sample.id)
-        } else if capture_view == "sample-details" {
-            session
-                .project()
-                .imported_samples
-                .first()
-                .map(|sample| sample.id)
-        } else {
-            (!capture_view.is_empty())
-                .then(|| session.library().samples.first().map(|sample| sample.id))
-                .flatten()
-        };
+        let selected_sample = capture_selected_sample(&session, &capture_view);
         let section_bookmarks = session.section_bookmarks_setting();
         let follow_on_startup = session.options().follow_on_startup;
-        // Starting with Mixer opens the score's Mix view and folds the lower
-        // panel, as choosing the Mix view does; the panel then keeps
-        // Mastering, since the Mixer board never shows with it, and opens
-        // again on leaving the Mix view if it was open. Starting with Sounds opens the Sounds panel and folds the lower
-        // panel, which keeps Mixer for when it opens. Starting with Mastering
-        // or Effects opens the lower panel on that board.
-        use mixjam_techno::application::options::StartingModule;
-        let start_in_mix_view = session.options().starting_module == StartingModule::Mixer;
-        let starting_module = match session.options().starting_module {
-            StartingModule::Sounds => BottomModule::Mixer,
-            StartingModule::Mixer | StartingModule::Mastering => BottomModule::Mastering,
-            StartingModule::Effects => BottomModule::FxReturns,
-        };
-        let mut restore_boards = false;
-        let (status, status_error) = if capture_view.is_empty() {
-            let mut layout = session.layout();
-            match session.options().starting_module {
-                StartingModule::Sounds => {
-                    layout.boards = false;
-                    layout.sounds = true;
-                }
-                StartingModule::Mastering | StartingModule::Effects => layout.boards = true,
-                StartingModule::Mixer => {
-                    restore_boards = layout.boards;
-                    layout.boards = false;
-                }
-            }
-            match session.set_layout(layout) {
-                Ok(()) => (status, status_error),
-                Err(error) => (error, true),
-            }
-        } else {
-            (status, status_error)
-        };
+        let (starting_module, status, status_error) =
+            apply_starting_module(&mut session, &capture_view, status, status_error);
         let options_window = options_for_capture(&session, &capture_view);
-        // A first launch with no sounds opens the sample libraries.
         let libraries_open = capture_view.starts_with("librar")
             || (needs_sample_folder && !capture_view.starts_with("options"));
-        // Select the clip whose fades the capture demonstrates, or the clips
-        // that the Inspector's pages describe.
-        let capture_clips: BTreeSet<u64> = match capture_view.as_str() {
-            "clip-fades" | "inspector-clip" => session
-                .project()
-                .clips
-                .first()
-                .map(|clip| clip.id)
-                .into_iter()
-                .collect(),
-            "inspector-clips" => session
-                .project()
-                .clips
-                .iter()
-                .take(6)
-                .map(|clip| clip.id)
-                .collect(),
-            _ => BTreeSet::new(),
-        };
-        let inspector_capture = capture_view.starts_with("inspector");
+        let (selection, panels) =
+            capture_selection_and_panels(&session, &capture_view, selected_sample);
+        let (boards, step_synth) = capture_boards_and_windows(&capture_view, starting_module);
+        let (effects, sample_edit, stretch) = capture_tool_windows(&capture_view);
         let mut app = Self {
             session,
             status,
             status_error,
             status_log: StatusLog::default(),
-            selection: selection::SelectionState {
-                sample: selected_sample,
-                clip: capture_clips.iter().next().copied(),
-                clips: capture_clips,
-                track: (capture_view == "inspector-track").then_some(0),
-                ..Default::default()
-            },
-            panels: room::Panels {
-                order: if inspector_capture {
-                    [
-                        room::Panel::Inspector,
-                        room::Panel::Boards,
-                        room::Panel::Sounds,
-                    ]
-                } else if matches!(capture_view.as_str(), "sounds-panel" | "sample-details") {
-                    [
-                        room::Panel::Sounds,
-                        room::Panel::Boards,
-                        room::Panel::Inspector,
-                    ]
-                } else {
-                    [
-                        room::Panel::Boards,
-                        room::Panel::Sounds,
-                        room::Panel::Inspector,
-                    ]
-                },
-                inspector_opened: inspector_capture,
-                ..Default::default()
-            },
+            selection,
+            panels,
             score: ScoreState {
                 follow_playhead: follow_on_startup,
                 ..Default::default()
@@ -355,46 +248,8 @@ impl MixJamApp {
                 bookmarks: section_bookmarks,
                 ..Default::default()
             },
-            mix: mix_view::MixViewState {
-                shown: capture_view.starts_with("mix-view")
-                    || (capture_view.is_empty() && start_in_mix_view),
-                restore_boards,
-                ..Default::default()
-            },
-            boards: BoardsState {
-                module: if capture_view.starts_with("mixer") || capture_view == "sounds-panel" {
-                    BottomModule::Mixer
-                } else if capture_view.starts_with("master") || capture_view.starts_with("mix-view")
-                {
-                    BottomModule::Mastering
-                } else if capture_view.starts_with("fx") {
-                    BottomModule::FxReturns
-                } else if capture_view.contains("step-synth") {
-                    BottomModule::StepSynth
-                } else if capture_view.is_empty() {
-                    starting_module
-                } else {
-                    BottomModule::Mixer
-                },
-                master_reveal: match capture_view.as_str() {
-                    "master-end" => Some(PedalKind::Limiter),
-                    "master-metering" => Some(PedalKind::BusCompressor),
-                    _ => None,
-                },
-                ..Default::default()
-            },
-            step_synth: StepSynthBoard {
-                state: if capture_view == "step-synth-effects" {
-                    StepSynthState {
-                        effects: every_effect(),
-                        ..Default::default()
-                    }
-                } else {
-                    Default::default()
-                },
-                effects_expanded: capture_view == "step-synth-effects",
-                ..Default::default()
-            },
+            boards,
+            step_synth,
             sounds: Default::default(),
             commands: (capture_view == "command-list").then(commands::CommandList::new),
             rail_icons: None,
@@ -417,44 +272,18 @@ impl MixJamApp {
                 details_open: matches!(capture_view.as_str(), "missing-details" | "import-details"),
                 ..Default::default()
             },
-            effects: EffectsWindow {
-                open: matches!(
-                    capture_view.as_str(),
-                    "effects" | "effects-expanded" | "missing-effects"
-                ),
-                state: if capture_view == "effects-expanded" {
-                    every_effect()
-                } else {
-                    Default::default()
-                },
-                ..Default::default()
-            },
-            sample_edit: SampleEditWindow {
-                open: matches!(capture_view.as_str(), "edit" | "missing-edit"),
-                ..Default::default()
-            },
-            stretch: StretchWindow {
-                open: matches!(capture_view.as_str(), "stretch" | "missing-stretch"),
-                ..Default::default()
-            },
-            eq_track: matches!(capture_view.as_str(), "mixer-eq" | "mix-view-eq").then_some(0),
-            fx_deep_edit: match capture_view.as_str() {
-                "fx-deep-edit" => Some(0),
-                "fx-deep-edit-reverb" => Some(1),
-                "fx-deep-edit-delay" => Some(2),
-                _ => None,
-            },
+            effects,
+            sample_edit,
+            stretch,
+            eq_track: (capture_view == "mixer-eq").then_some(0),
+            fx_deep_edit: capture_fx_deep_edit(&capture_view),
             master_deep_edit: capture_setup::mastering_editor(&capture_view),
             album_review: AlbumReviewWindow {
                 open: capture_view.starts_with("album-review"),
                 state: album_review::capture_state(&capture_view),
             },
             recording: RecordingState {
-                track: if capture_view == "track64" {
-                    TRACK_COUNT - 1
-                } else {
-                    0
-                },
+                track: capture_recording_track(&capture_view),
                 ..Default::default()
             },
             files: FileRequests {
@@ -603,6 +432,225 @@ impl MixJamApp {
         } else {
             ctx.request_repaint_after(Duration::from_millis(20));
         }
+    }
+}
+
+fn capture_env() -> (Option<PathBuf>, String) {
+    let capture_path = std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO").map(PathBuf::from);
+    let capture_view = if capture_path.is_some() {
+        std::env::var("MIXJAM_TECHNO_CAPTURE_VIEW").unwrap_or_default()
+    } else {
+        String::new()
+    };
+    (capture_path, capture_view)
+}
+
+fn capture_import_path(session: &Session, capture_view: &str) -> Option<PathBuf> {
+    (capture_view == "import")
+        .then(|| {
+            session
+                .library()
+                .samples
+                .first()
+                .and_then(|sample| sample.wav_path.clone())
+        })
+        .flatten()
+}
+
+fn capture_selected_sample(session: &Session, capture_view: &str) -> Option<u32> {
+    if capture_view.starts_with("missing") {
+        session.missing_samples().first().map(|sample| sample.id)
+    } else if capture_view == "sample-details" {
+        session
+            .project()
+            .imported_samples
+            .first()
+            .map(|sample| sample.id)
+    } else {
+        (!capture_view.is_empty())
+            .then(|| session.library().samples.first().map(|sample| sample.id))
+            .flatten()
+    }
+}
+
+fn starting_board_for(module: mixjam_techno::application::options::StartingModule) -> BottomModule {
+    use mixjam_techno::application::options::StartingModule;
+    match module {
+        StartingModule::Sounds | StartingModule::Mixer => BottomModule::Mixer,
+        StartingModule::Mastering => BottomModule::Mastering,
+        StartingModule::Effects => BottomModule::FxReturns,
+    }
+}
+
+fn apply_starting_module(
+    session: &mut Session,
+    capture_view: &str,
+    status: String,
+    status_error: bool,
+) -> (BottomModule, String, bool) {
+    use mixjam_techno::application::options::StartingModule;
+    let starting = session.options().starting_module;
+    let board = starting_board_for(starting);
+    if !capture_view.is_empty() {
+        return (board, status, status_error);
+    }
+    let mut layout = session.layout();
+    match starting {
+        StartingModule::Sounds => {
+            layout.boards = false;
+            layout.sounds = true;
+        }
+        StartingModule::Mixer | StartingModule::Mastering | StartingModule::Effects => {
+            layout.boards = true;
+        }
+    }
+    let (status, status_error) = match session.set_layout(layout) {
+        Ok(()) => (status, status_error),
+        Err(error) => (error, true),
+    };
+    (board, status, status_error)
+}
+
+fn capture_selection_and_panels(
+    session: &Session,
+    capture_view: &str,
+    selected_sample: Option<u32>,
+) -> (selection::SelectionState, room::Panels) {
+    let capture_clips: BTreeSet<u64> = match capture_view {
+        "clip-fades" | "inspector-clip" => session
+            .project()
+            .clips
+            .first()
+            .map(|clip| clip.id)
+            .into_iter()
+            .collect(),
+        "inspector-clips" => session
+            .project()
+            .clips
+            .iter()
+            .take(6)
+            .map(|clip| clip.id)
+            .collect(),
+        _ => BTreeSet::new(),
+    };
+    let inspector_capture = capture_view.starts_with("inspector");
+    let selection = selection::SelectionState {
+        sample: selected_sample,
+        clip: capture_clips.iter().next().copied(),
+        clips: capture_clips,
+        track: (capture_view == "inspector-track").then_some(0),
+        ..Default::default()
+    };
+    let order = if inspector_capture {
+        [
+            room::Panel::Inspector,
+            room::Panel::Boards,
+            room::Panel::Sounds,
+        ]
+    } else if matches!(capture_view, "sounds-panel" | "sample-details") {
+        [
+            room::Panel::Sounds,
+            room::Panel::Boards,
+            room::Panel::Inspector,
+        ]
+    } else {
+        [
+            room::Panel::Boards,
+            room::Panel::Sounds,
+            room::Panel::Inspector,
+        ]
+    };
+    let panels = room::Panels {
+        order,
+        inspector_opened: inspector_capture,
+        ..Default::default()
+    };
+    (selection, panels)
+}
+
+fn capture_board_module(capture_view: &str, starting_module: BottomModule) -> BottomModule {
+    if capture_view.starts_with("mixer") || capture_view == "sounds-panel" {
+        BottomModule::Mixer
+    } else if capture_view.starts_with("master") {
+        BottomModule::Mastering
+    } else if capture_view.starts_with("fx") {
+        BottomModule::FxReturns
+    } else if capture_view.contains("step-synth") {
+        BottomModule::StepSynth
+    } else if capture_view.is_empty() {
+        starting_module
+    } else {
+        BottomModule::Mixer
+    }
+}
+
+fn capture_boards_and_windows(
+    capture_view: &str,
+    starting_module: BottomModule,
+) -> (BoardsState, StepSynthBoard) {
+    let boards = BoardsState {
+        module: capture_board_module(capture_view, starting_module),
+        master_reveal: match capture_view {
+            "master-end" => Some(PedalKind::Limiter),
+            "master-metering" => Some(PedalKind::BusCompressor),
+            _ => None,
+        },
+        ..Default::default()
+    };
+    let effects_expanded = capture_view == "step-synth-effects";
+    let step_synth = StepSynthBoard {
+        state: if effects_expanded {
+            StepSynthState {
+                effects: every_effect(),
+                ..Default::default()
+            }
+        } else {
+            Default::default()
+        },
+        effects_expanded,
+        ..Default::default()
+    };
+    (boards, step_synth)
+}
+
+fn capture_tool_windows(capture_view: &str) -> (EffectsWindow, SampleEditWindow, StretchWindow) {
+    let effects = EffectsWindow {
+        open: matches!(
+            capture_view,
+            "effects" | "effects-expanded" | "missing-effects"
+        ),
+        state: if capture_view == "effects-expanded" {
+            every_effect()
+        } else {
+            Default::default()
+        },
+        ..Default::default()
+    };
+    let sample_edit = SampleEditWindow {
+        open: matches!(capture_view, "edit" | "missing-edit"),
+        ..Default::default()
+    };
+    let stretch = StretchWindow {
+        open: matches!(capture_view, "stretch" | "missing-stretch"),
+        ..Default::default()
+    };
+    (effects, sample_edit, stretch)
+}
+
+fn capture_fx_deep_edit(capture_view: &str) -> Option<usize> {
+    match capture_view {
+        "fx-deep-edit" => Some(0),
+        "fx-deep-edit-reverb" => Some(1),
+        "fx-deep-edit-delay" => Some(2),
+        _ => None,
+    }
+}
+
+fn capture_recording_track(capture_view: &str) -> usize {
+    if capture_view == "track64" {
+        TRACK_COUNT - 1
+    } else {
+        0
     }
 }
 

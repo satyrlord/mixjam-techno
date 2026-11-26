@@ -34,8 +34,6 @@ mod layout_tests;
 mod libraries_tests;
 mod mastering_board_tests;
 mod mastering_tests;
-mod mix_view_row_tests;
-mod mix_view_tests;
 mod mixer_gain_tests;
 mod mixer_tests;
 mod options_draft_tests;

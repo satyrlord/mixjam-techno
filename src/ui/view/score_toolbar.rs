@@ -36,17 +36,7 @@ impl MixJamApp {
         // Below this width, the heading would push actions behind a side panel.
         let show_heading = ui.available_width() >= 600.0;
         ui.horizontal(|ui| {
-            if show_heading && narrow {
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.label(heading("Arrangement", 12.0));
-                    ui.label(egui::RichText::new(&counts).size(10.0).color(roles().muted));
-                });
-            } else if show_heading {
-                ui.label(heading("Arrangement", 18.0));
-                ui.add_space(10.0);
-                ui.label(egui::RichText::new(&counts).size(12.0).color(roles().muted));
-            }
+            score_toolbar_heading(ui, show_heading, narrow, &counts);
             let compact = ui.available_width() < 700.0;
             // A compact toolbar packs its controls closer.
             if compact {
@@ -59,108 +49,11 @@ impl MixJamApp {
             let width = ui.ctx().data(|data| data.get_temp::<f32>(width_id));
             ui.add_space((ui.available_width() - width.unwrap_or_default()).max(16.0));
             let start = ui.cursor().left();
-            let spacing = ui.spacing().clone();
-            ui.spacing_mut().item_spacing.x = 2.0;
-            ui.spacing_mut().button_padding.x = 6.0;
-            for (mix, label, name, hint) in [
-                (
-                    false,
-                    "Arrange",
-                    "Arrange view",
-                    "Arrange view: lane headers with the track number, name, M, S, L, R, and a \
-                     short level fader beside the lanes.",
-                ),
-                (
-                    true,
-                    "Mix",
-                    "Mix view",
-                    "Mix view: each lane header widens into a mixer row with its level, exact \
-                     dB, pan, sends, EQ, outputs, and polarity; the Master and the FX returns \
-                     stay below the lanes. The lanes fit the whole song, and the lower panel \
-                     folds until you leave. Mix view in the command list (Ctrl+K) switches too.",
-                ),
-            ] {
-                let selected = self.mix.shown == mix;
-                let response = ui.selectable_label(selected, label);
-                response.widget_info(|| {
-                    egui::WidgetInfo::selected(
-                        egui::WidgetType::SelectableLabel,
-                        true,
-                        selected,
-                        name,
-                    )
-                });
-                if response.hover_hint(hint).clicked() {
-                    self.set_mix_view(mix);
-                }
-            }
-            *ui.spacing_mut() = spacing;
-            ui.add_space(if compact { 4.0 } else { 10.0 });
             self.automation_selector(ui, !narrow);
             ui.add_space(if compact { 4.0 } else { 10.0 });
-            let follow = toggled(
-                ui.toggle_value(&mut self.score.follow_playhead, "Follow"),
-                "Follow",
-                self.score.follow_playhead,
-            );
-            if follow
-                .hover_hint("Keep the playhead in view during playback and seeking.")
-                .changed()
-            {
-                self.score.last_follow_position = None;
-            }
-            let sections = toggled(
-                ui.toggle_value(&mut self.sections.bookmarks, "Sections"),
-                "Sections",
-                self.sections.bookmarks,
-            );
-            if sections
-                .hover_hint(
-                    "Show the song's section bookmarks on the bar ruler, the lanes and the song \
-                     overview. With sections shown, double-click the bar ruler to add a section, \
-                     double-click a name to rename it, right-click a name to delete it, and Loop \
-                     loops the section at the playhead.",
-                )
-                .changed()
-                && let Err(error) = self
-                    .session
-                    .remember_section_bookmarks(self.sections.bookmarks)
-            {
-                self.sections.bookmarks = self.session.options().show_section_bookmarks;
-                self.error(error);
-            }
+            self.score_toolbar_toggles(ui);
             ui.add_space(if compact { 4.0 } else { 10.0 });
-            ui.label(egui::RichText::new("Zoom").size(12.0).color(roles().muted));
-            ui.spacing_mut().slider_width = if compact { 48.0 } else { 72.0 };
-            // The Mix view fits the whole song in its lanes, so Zoom rests
-            // there and keeps the Arrange view's zoom.
-            let zoomable = !self.mix.shown;
-            let zoom = name_control(
-                ui.add_enabled(
-                    zoomable,
-                    egui::Slider::new(&mut self.score.zoom, ZOOM_RANGE)
-                        .show_value(false)
-                        .clamping(egui::SliderClamping::Always),
-                ),
-                "Zoom",
-            )
-            .hover_hint("Zoom: the width of a bar. The wheel over it zooms too.")
-            .disabled_hint("Zoom rests in the Mix view, which fits the whole song in the lanes.");
-            // An egui slider ignores the wheel; each notch scales the zoom by
-            // a tenth, as the other wheel-driven controls take one step.
-            let turn = if zoomable {
-                controls::wheel(ui, &zoom)
-            } else {
-                0.0
-            };
-            if turn != 0.0 {
-                self.score.zoom = (self.score.zoom * ZOOM_WHEEL_STEP.powf(turn))
-                    .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
-            }
-            let maximised = self.session.layout().maximised;
-            if maximise_button(ui, maximised).clicked() {
-                self.set_layout(|layout| layout.maximised = !layout.maximised);
-            }
+            self.score_toolbar_zoom_and_maximise(ui, compact);
             let measured = ui.min_rect().right() - start;
             if width.is_none_or(|width| (width - measured).abs() > 0.5) {
                 ui.ctx()
@@ -170,6 +63,81 @@ impl MixJamApp {
         });
     }
 
+    fn score_toolbar_toggles(&mut self, ui: &mut egui::Ui) {
+        let follow = toggled(
+            ui.toggle_value(&mut self.score.follow_playhead, "Follow"),
+            "Follow",
+            self.score.follow_playhead,
+        );
+        if follow
+            .hover_hint("Keep the playhead in view during playback and seeking.")
+            .changed()
+        {
+            self.score.last_follow_position = None;
+        }
+        let sections = toggled(
+            ui.toggle_value(&mut self.sections.bookmarks, "Sections"),
+            "Sections",
+            self.sections.bookmarks,
+        );
+        if sections
+            .hover_hint(
+                "Show the song's section bookmarks on the bar ruler, the lanes and the song \
+                 overview. With sections shown, double-click the bar ruler to add a section, \
+                 double-click a name to rename it, right-click a name to delete it, and Loop \
+                 loops the section at the playhead.",
+            )
+            .changed()
+            && let Err(error) = self
+                .session
+                .remember_section_bookmarks(self.sections.bookmarks)
+        {
+            self.sections.bookmarks = self.session.options().show_section_bookmarks;
+            self.error(error);
+        }
+    }
+
+    fn score_toolbar_zoom_and_maximise(&mut self, ui: &mut egui::Ui, compact: bool) {
+        ui.label(egui::RichText::new("Zoom").size(12.0).color(roles().muted));
+        ui.spacing_mut().slider_width = if compact { 48.0 } else { 72.0 };
+        let zoom = name_control(
+            ui.add(
+                egui::Slider::new(&mut self.score.zoom, ZOOM_RANGE)
+                    .show_value(false)
+                    .clamping(egui::SliderClamping::Always),
+            ),
+            "Zoom",
+        )
+        .hover_hint("Zoom: the width of a bar. The wheel over it zooms too.");
+        // An egui slider ignores the wheel; each notch scales the zoom by
+        // a tenth, as the other wheel-driven controls take one step.
+        let turn = controls::wheel(ui, &zoom);
+        if turn != 0.0 {
+            self.score.zoom = (self.score.zoom * ZOOM_WHEEL_STEP.powf(turn))
+                .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
+        }
+        let maximised = self.session.layout().maximised;
+        if maximise_button(ui, maximised).clicked() {
+            self.set_layout(|layout| layout.maximised = !layout.maximised);
+        }
+    }
+}
+
+fn score_toolbar_heading(ui: &mut egui::Ui, show_heading: bool, narrow: bool, counts: &str) {
+    if show_heading && narrow {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.label(heading("Arrangement", 12.0));
+            ui.label(egui::RichText::new(counts).size(10.0).color(roles().muted));
+        });
+    } else if show_heading {
+        ui.label(heading("Arrangement", 18.0));
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(counts).size(12.0).color(roles().muted));
+    }
+}
+
+impl MixJamApp {
     /// The arrangement's automation lane: Off, or the lane that the track
     /// rows show and edit.
     fn automation_selector(&mut self, ui: &mut egui::Ui, show_label: bool) {

@@ -150,30 +150,6 @@ impl<'a> Text<'a> {
         drawn_text_color(self.shape)
     }
 
-    /// The colour its first glyph reaches the screen in, with any opacity the
-    /// painter baked into the glyphs. `color` reports the colour asked for.
-    pub(crate) fn glyph_color(self) -> Color32 {
-        let vertex = self
-            .shape
-            .galley
-            .rows
-            .iter()
-            .find_map(|row| row.row.visuals.mesh.vertices.first())
-            .map(|vertex| vertex.color);
-        let color = match (self.shape.override_text_color, vertex) {
-            (Some(color), _) => color,
-            (None, Some(color)) if color != Color32::PLACEHOLDER => color,
-            _ => self.shape.fallback_color,
-        };
-        color.gamma_multiply(self.shape.opacity_factor)
-    }
-
-    /// The opacity it was painted at, such as a dimmed row's: its glyphs'
-    /// alpha against the alpha of the colour asked for.
-    pub(crate) fn opacity(self) -> f32 {
-        f32::from(self.glyph_color().a()) / f32::from(self.color().a().max(1))
-    }
-
     /// The first section's format: its font, colour, and decorations.
     pub(crate) fn format(self) -> &'a egui::TextFormat {
         &self.shape.galley.job.sections[0].format

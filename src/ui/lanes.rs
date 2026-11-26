@@ -1,18 +1,18 @@
-//! The lane header's own parts in the Arrange view: the derived lane name
-//! and the short level fader. The song stores no lane names, so a lane is
-//! named after the sound family of its first clip.
+//! The lane header's own parts: the derived lane name and the small pan knob.
+//! The song stores no lane names, so a lane is named after the sound family of
+//! its first clip.
 use super::mixer::{FaderRange, gain_keys, gain_semantics};
 use super::*;
 use mixjam_techno::application::LibraryView;
 
-/// The lane header's width in the Arrange view.
-pub(super) const LANE_HEADER_WIDTH: f32 = 250.0;
+/// The lane header's width.
+pub(super) const LANE_HEADER_WIDTH: f32 = 196.0;
 /// Where each part of the header sits, from its left edge: the track number,
-/// the name's span, the M, S, L, and R switches' centres, and the fader's span.
+/// the name's span, the M and S switches' centres, and the pan knob's centre.
 pub(super) const NUMBER_X: f32 = 17.0;
-pub(super) const NAME_SPAN: (f32, f32) = (34.0, 104.0);
-pub(super) const SWITCH_X: [f32; 4] = [118.0, 142.0, 166.0, 190.0];
-pub(super) const FADER_SPAN: (f32, f32) = (210.0, 244.0);
+pub(super) const NAME_SPAN: (f32, f32) = (34.0, 114.0);
+pub(super) const SWITCH_X: [f32; 2] = [128.0, 152.0];
+pub(super) const PAN_X: f32 = 178.0;
 
 /// A sound's family: its name without the number that tells it from its
 /// siblings, so "deep chord 3" and "deep chord 12" are both "deep chord".
@@ -58,47 +58,120 @@ pub(super) fn lane_name(
         .unwrap_or_else(|| format!("Track {}", track + 1))
 }
 
-/// A short horizontal level fader for a lane: the same taper, keys, and
-/// accessible name pattern as the Mixer's gain rail, named "{name} gain".
-/// Returns whether the gain changed.
-pub(super) fn lane_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
-    fader_in(
-        ui,
+/// A small pan knob for an arrangement lane header: drag up/right or down/left,
+/// double-click to center, or use arrow keys (Shift for fine steps), Home, and
+/// End. An `automated` knob carries an outer ring (`U8`). The mouse wheel stays
+/// free for vertical lane scrolling.
+pub(super) fn lane_pan_knob(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    pan: &mut f32,
+    automated: bool,
+) -> bool {
+    let before = *pan;
+    let response = ui.interact(
         rect,
-        name,
-        gain,
-        FaderRange::Mixer,
-        (roles().canvas, roles().muted, roles().text),
-    )
+        ui.id().with(("lane-pan", name)),
+        Sense::click_and_drag(),
+    );
+    pan_knob_input(ui, &response, pan);
+    paint_pan_knob(ui, &response, rect, *pan, automated);
+    pan_knob_semantics(ui, response, name, *pan, automated);
+    before != *pan
 }
 
-/// The lane fader on a mixer strip, as in the Mix view: its well and fill
-/// use the strip's rail roles, so it reads the right way round on Vintage's
-/// ivory.
-pub(super) fn strip_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
-    strip_fader_in(ui, rect, name, gain, FaderRange::Mixer)
+fn pan_knob_input(ui: &egui::Ui, response: &Response, pan: &mut f32) {
+    let fine = ui.input(|input| input.modifiers.shift);
+    if controls::primary_dragged(ui, response) {
+        let delta = ui.input(|input| input.pointer.delta());
+        *pan += (delta.x - delta.y) / 90.0 * if fine { 0.1 } else { 1.0 };
+    }
+    if response.double_clicked() {
+        *pan = 0.0;
+    }
+    if response.has_focus() {
+        controls::range_knob_keys(
+            ui,
+            response.id,
+            -1.0..=1.0,
+            if fine { 0.01 } else { 0.05 },
+            pan,
+        );
+    }
+    controls::apply_numeric_accesskit(ui, response, pan, -1.0..=1.0);
+    *pan = pan.clamp(-1.0, 1.0);
+}
+
+fn paint_pan_knob(ui: &egui::Ui, response: &Response, rect: Rect, pan: f32, automated: bool) {
+    let center = rect.center();
+    let radius = rect.width().min(rect.height()) / 2.0 - 1.5;
+    let painter = ui.painter();
+    painter.circle_filled(center, radius, roles().raised);
+    let rim = if response.has_focus() {
+        roles().accent
+    } else if response.hovered() || response.dragged() {
+        roles().muted
+    } else {
+        roles().line
+    };
+    painter.circle_stroke(center, radius, Stroke::new(1.0_f32, rim));
+    // Mark 12 o'clock center so balanced pan reads immediately.
+    painter.line_segment(
+        [
+            center - Vec2::new(0.0, radius - 0.5),
+            center - Vec2::new(0.0, radius - 3.0),
+        ],
+        Stroke::new(1.0_f32, roles().muted.gamma_multiply(0.7)),
+    );
+    if pan.abs() > 0.005 {
+        let arc: Vec<Pos2> = (0..=16)
+            .map(|step| {
+                let angle = (-90.0 + 135.0 * pan * step as f32 / 16.0).to_radians();
+                center + Vec2::angled(angle) * (radius - 1.5)
+            })
+            .collect();
+        painter.add(egui::Shape::line(arc, Stroke::new(1.5_f32, roles().accent)));
+    }
+    let angle = (-90.0 + 135.0 * pan).to_radians();
+    let dir = Vec2::angled(angle);
+    painter.line_segment(
+        [center, center + dir * (radius - 2.5)],
+        Stroke::new(1.5_f32, roles().text),
+    );
+    if automated {
+        painter.circle_stroke(center, radius + 1.5, Stroke::new(1.0_f32, roles().legend));
+    }
+}
+
+fn pan_knob_semantics(ui: &egui::Ui, response: Response, name: &str, pan: f32, automated: bool) {
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::slider(response.enabled(), f64::from(pan), name);
+        info.current_text_value = Some(view::pan_description(pan));
+        info
+    });
+    controls::knob_accesskit_range(ui, &response, pan, -1.0..=1.0);
+    response.hover_hint(format!(
+        "{name}: {}. Drag or use arrow keys; Shift for fine steps; double-click to center.{}",
+        view::pan_description(pan),
+        if automated {
+            "\nAutomated: its automation lane sets it while the song plays."
+        } else {
+            ""
+        }
+    ));
 }
 
 /// A clip gain fader reports explicit edits even at its current value. The
 /// displayed value can stand for a selection with different saved gains.
 pub(super) fn clip_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
-    strip_fader_in(ui, rect, name, gain, FaderRange::Clip)
-}
-
-fn strip_fader_in(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    name: &str,
-    gain: &mut f32,
-    range: FaderRange,
-) -> bool {
     let roles = roles();
     fader_in(
         ui,
         rect,
         name,
         gain,
-        range,
+        FaderRange::Clip,
         (roles.strip_well, roles.strip_fill, roles.strip_text),
     )
 }
