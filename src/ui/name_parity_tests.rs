@@ -233,6 +233,19 @@ const RENAMED: &[(&str, &str)] = &[
         "button\tCollapse FX Deep Edit",
         "button\tCollapse FX deep edit",
     ),
+    // Effect Studio / Step Synth Upgrade Phase 1: 6-bay rack, non-destructive switches, and tails.
+    (
+        "label\tFilter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings; turning it on restores its defaults.",
+        "label\tFilter, Modulation, Echo, Robotize, and Reverb each have a bypass switch beside their name. Turning a section off bypasses it without losing its settings.",
+    ),
+    (
+        "label\tDirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults.",
+        "label\tDistortion / output and presets adjust Warm, Acid, Fuzz, or Crush saturation, noise, and output volume. Reset restores all defaults.",
+    ),
+    (
+        "label\tCutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
+        "label\tCutoff, Modulation rate, and Color use logarithmic ranges. Echo delay is in beats; Tail mode picks Trim, Wrap loop, or Ring out.",
+    ),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {

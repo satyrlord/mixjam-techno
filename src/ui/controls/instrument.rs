@@ -325,6 +325,7 @@ pub(in super::super) fn bat_toggle(
         ),
     );
     let response = toggle_at(ui, hit_rect, name, "", value);
+    super::reveal_focus(ui, &response);
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *value, name)
     });
@@ -405,6 +406,7 @@ fn draw_strip_key<T: Copy + PartialEq>(
         strip_key_id(ui, strip.name, draw.index),
         egui::Sense::click(),
     );
+    super::reveal_focus(ui, &response);
     name_key(
         &response,
         &format!("{} {label}", strip.name),

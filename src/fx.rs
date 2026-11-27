@@ -11,12 +11,12 @@
 //! The effects are this application's own designs. The delay's and the
 //! reverb's controls, ranges and presets follow the return modules of the
 //! MixJam Electron app, whose v7 projects saved them; that app had no drive.
-mod adaa;
+pub(crate) mod adaa;
 mod delay;
 mod distortion;
 pub(crate) mod migration;
 pub(crate) mod oversample;
-mod parts;
+pub(crate) mod parts;
 mod processor;
 mod reverb;
 mod settings;
@@ -24,6 +24,7 @@ mod settings;
 pub(crate) use adaa::sample_transfer_curve;
 pub(crate) use delay::sample_delay_taps;
 pub use reverb::ReverbProfile;
+pub(crate) use reverb::hadamard;
 pub(crate) use reverb::sample_reverb_profile;
 
 /// Build the shared tables before a processor reaches the audio thread.

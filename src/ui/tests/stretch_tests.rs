@@ -334,7 +334,7 @@ fn musical_tools_collapsed_help_icons_preserve_processing_drafts() {
         app.selection.sample = Some(1);
         app.stretch.source_bpm = 160.0;
         app.stretch.target_bpm = 120.0;
-        app.effects.state.echo = Some(Default::default());
+        app.effects.state.echo.enabled = true;
         app.effects.state.dirty = 0.375;
         app.step_synth.state.steps[19] = Step::note(-7);
         app.step_synth.state.length = 32;

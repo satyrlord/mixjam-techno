@@ -16,21 +16,21 @@ pub(super) fn cubic_lagrange([a, b, c, d]: [f64; 4], f: f64) -> f64 {
 
 /// A delay line of one channel, read at fractional positions with cubic
 /// Lagrange interpolation.
-pub(super) struct Line {
+pub(crate) struct Line {
     buffer: Box<[f32]>,
     /// Where the next sample goes.
     write: usize,
 }
 impl Line {
     /// A line that reaches at least `frames` back, with 16-tap sinc margin.
-    pub(super) fn new(frames: usize) -> Self {
+    pub(crate) fn new(frames: usize) -> Self {
         let size = (frames + 16).next_power_of_two();
         Self {
             buffer: vec![0.0; size].into_boxed_slice(),
             write: 0,
         }
     }
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buffer.fill(0.0);
     }
     /// The longest delay that `read` reaches.
@@ -38,21 +38,21 @@ impl Line {
         (self.buffer.len() - 3) as f64
     }
     #[inline]
-    pub(super) fn push(&mut self, sample: f32) {
+    pub(crate) fn push(&mut self, sample: f32) {
         let mask = self.buffer.len().wrapping_sub(1);
         self.buffer[self.write & mask] = sample;
         self.write = self.write.wrapping_add(1) & mask;
     }
     /// The sample pushed `delay` pushes ago; 1 is the last one.
     #[inline]
-    pub(super) fn at(&self, delay: usize) -> f32 {
+    pub(crate) fn at(&self, delay: usize) -> f32 {
         let mask = self.buffer.len().wrapping_sub(1);
         self.buffer[self.write.wrapping_sub(delay) & mask]
     }
     /// The signal `delay` frames back, between pushed samples. The delay is
     /// held between 2 frames and the line's reach.
     #[inline]
-    pub(super) fn read(&self, delay: f64) -> f64 {
+    pub(crate) fn read(&self, delay: f64) -> f64 {
         read_cubic_ring(&self.buffer, self.write, delay)
     }
     /// The sum of the samples at `delays`, each times its gain.
@@ -68,7 +68,7 @@ impl Line {
     /// 16-tap Blackman-windowed sinc interpolation for transparent offline
     /// high-frequency reads, from a 128-phase table.
     #[inline]
-    pub(super) fn read_sinc(&self, delay: f64) -> f64 {
+    pub(crate) fn read_sinc(&self, delay: f64) -> f64 {
         read_sinc_ring(&self.buffer, self.write, delay)
     }
 }
@@ -185,7 +185,7 @@ fn sinc_table() -> &'static SincTable {
 }
 
 /// Build the sinc table before a processor reaches the audio thread.
-pub(super) fn warm_sinc_table() {
+pub(crate) fn warm_sinc_table() {
     sinc_table();
 }
 
@@ -503,7 +503,7 @@ pub(super) fn drive(input: f64, amount: f64) -> f64 {
 
 /// Keeps a feedback loop finite: unchanged up to 0.9, then bending toward 1.5.
 #[inline]
-pub(super) fn bound(sample: f64) -> f64 {
+pub(crate) fn bound(sample: f64) -> f64 {
     let size = sample.abs();
     if size <= 0.9 {
         sample

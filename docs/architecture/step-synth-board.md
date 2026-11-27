@@ -16,8 +16,8 @@ board. The board is 512 points high, and the panel gives it its whole height
 when the window has the space. Text, grid cells, switches, and input stay
 live. The pitch grid, the settings column, and the replacement effects form
 have bounded scrolling. The source, the step labels, the actions, and the
-feedback stay available. The shared `effects_controls` form keeps its
-algorithms and ranges, and uses the common controls.
+feedback stay available. The board uses the same six effect bays and controls
+as Effect Studio. Their settings are part of the pattern.
 
 `StepSynthBoard` in `src/ui/view/boards.rs`, which `MixJamApp` holds, owns
 these items:

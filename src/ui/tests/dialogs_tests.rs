@@ -440,7 +440,7 @@ fn resized_musical_content_keeps_nested_grid_effects_and_status_inside_the_chass
         match tool {
             "effects" => {
                 app.effects.open = true;
-                app.effects.state.filter = Some(Default::default());
+                app.effects.state.filter.enabled = true;
             }
             "stretch" => app.stretch.open = true,
             _ => unreachable!(),

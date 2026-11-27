@@ -39,25 +39,25 @@ does not process audio or write files.
 
 ## Effect Studio
 
-`src/ui/effects.rs` supplies four sections inside the common shell:
+Effect Studio and Step synth share six sections in `src/ui/effects_rack.rs`.
+Effect Studio also shows a preset selector, tail controls, and response curves.
 
 | Section | Controls |
 | --- | --- |
-| Filter | Cutoff, Resonance, Overdrive, Filter volume |
-| Echo | Delay (beats), Feedback, Echo volume |
-| Robotize | Color, Robotize volume |
-| Distortion / output | Dirty distortion, Noise distortion, Output volume |
+| Filter | Mode, Cutoff, Resonance, Overdrive, Filter volume |
+| Modulation | Chorus or Phaser, Rate, Depth, Feedback, Wet |
+| Echo | Delay (beats), Feedback, Tone, Ping-pong, Echo volume |
+| Robotize | Ring or Shift, Color, Robotize volume |
+| Reverb | Space, Decay, Damping, Wet |
+| Distortion / output | Shape, Dirty distortion, Noise distortion, Output volume |
 
 Use the same control geometry and interaction as the other windows. Keep dial
 marks, values, and labels in separate regions with measured clearance.
 
 An optional section pairs a named switch with a visible state. A disabled
-section dims its controls. When a section goes off, it loses its settings.
-When it comes on, it uses its defaults. Reset restores the current effects
-draft. Cutoff and Color keep their logarithmic mapping. Wheel, arrow, and
-accessible steps move them by 1% of the dial range. The window does not change
-the parameter ranges, defaults, or algorithms. The source label truncates, but
-keeps its full tooltip and accessible value.
+section dims its controls and keeps its settings. Reset restores the default
+draft. Cutoff and Color use a logarithmic scale. The source label truncates
+and keeps its full tooltip and accessible value.
 
 Listen and Save sound need selected, available audio. Missing audio offers
 Import details. Processing and preview use synchronous application calls. The

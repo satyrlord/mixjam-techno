@@ -1,39 +1,106 @@
-//! Deterministic DSP reconstruction of the controls described by the installed
-//! Effect Studio manual. These are new algorithms, not recovered original DSP.
+//! Pro-audio 6-bay effects chain (`Filter`, `Modulation`, `Echo`, `Robotize`,
+//! `Reverb`, `Distortion / Output`) with non-destructive bypass, TailMode policies,
+//! 16x FIR + ADAA2 nonlinear processing, and built-in presets.
 use crate::audio::Pcm;
-use crate::master::dsp::Coefficients;
+use crate::fx::oversample::FirOversampler;
 use serde::{Deserialize, Serialize};
+use std::f64::consts::PI;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Filter {
-    pub cutoff_hz: f32,
-    pub resonance: f32,
-    pub drive: f32,
-    pub wet: f32,
+mod distortion;
+mod echo;
+mod filter;
+mod modulation;
+mod presets;
+mod reverb;
+mod robotize;
+
+pub use distortion::sample_drive_curve;
+pub use filter::sample_filter_curve;
+pub use presets::{EffectPreset, effect_presets, matching_effect_preset};
+
+/// The shortest echo delay: a sixteenth of a beat.
+pub const MIN_ECHO_BEATS: f32 = 0.0625;
+const OLD_MIN_ECHO_BEATS: f32 = 0.001;
+const RING_OUT_MAX_SECONDS: f64 = 6.0;
+const RING_OUT_SILENCE_RMS: f64 = 0.000_251_188_64; // -72 dBFS
+const RING_OUT_CHUNK: usize = 1024;
+
+pub(super) trait StereoTailEngine {
+    fn step_tail(&mut self, dry: [f64; 2], produce: bool) -> [f64; 2];
 }
-impl Default for Filter {
-    fn default() -> Self {
-        Self {
-            cutoff_hz: 2000.0,
-            resonance: 0.0,
-            drive: 0.0,
-            wet: 1.0,
+
+pub(super) fn run_stereo_tail_engine<E: StereoTailEngine>(
+    engine: &mut E,
+    stereo: &mut Vec<[f64; 2]>,
+    warm_passes: usize,
+    ring_wait: Option<usize>,
+    max_frames: usize,
+    fade_frames: usize,
+) -> bool {
+    for _ in 0..warm_passes {
+        for &frame in stereo.iter() {
+            engine.step_tail(frame, false);
         }
+    }
+    for frame in stereo.iter_mut() {
+        *frame = engine.step_tail(*frame, true);
+    }
+    if let Some(min_wait) = ring_wait {
+        return extend_ring_out(stereo, max_frames, min_wait, fade_frames, |f| {
+            engine.step_tail(f, true)
+        });
+    }
+    false
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct TptPole {
+    s: f64,
+    g: f64,
+    active: bool,
+}
+impl TptPole {
+    pub(super) fn new(hz: f64, rate: f64, active: bool) -> Self {
+        if !active {
+            return Self {
+                s: 0.0,
+                g: 1.0,
+                active: false,
+            };
+        }
+        let w = (PI * hz.max(10.0).min(0.48 * rate) / rate).tan();
+        Self {
+            s: 0.0,
+            g: w / (1.0 + w),
+            active: true,
+        }
+    }
+
+    #[inline]
+    pub(super) fn tick(&mut self, x: f64) -> f64 {
+        if !self.active {
+            return x;
+        }
+        let v = (x - self.s) * self.g;
+        let y = v + self.s;
+        let next = y + v;
+        self.s = if next.abs() < 1e-30 { 0.0 } else { next };
+        y
     }
 }
 
-/// The shortest echo delay: a sixteenth of a beat. A shorter delay sounds
-/// as a comb filter, not as an echo.
-pub const MIN_ECHO_BEATS: f32 = 0.0625;
+fn default_true() -> bool {
+    true
+}
 
-/// The shortest delay that files from before `MIN_ECHO_BEATS` can hold.
-/// Such a delay opens at `MIN_ECHO_BEATS`.
-const OLD_MIN_ECHO_BEATS: f32 = 0.001;
+fn deserialize_legacy_bay<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
-/// Read an echo delay. A delay from an older file that is shorter than
-/// `MIN_ECHO_BEATS` becomes `MIN_ECHO_BEATS`; other values stay as they are,
-/// for `EffectsState::validate`.
 fn echo_delay<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
     let value = f32::deserialize(deserializer)?;
     Ok(if (OLD_MIN_ECHO_BEATS..MIN_ECHO_BEATS).contains(&value) {
@@ -43,97 +110,339 @@ fn echo_delay<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f32, 
     })
 }
 
+/// Filter response topology.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterMode {
+    #[default]
+    Lp12,
+    Lp24,
+    Bp12,
+    Hp12,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Echo {
-    /// Four beats are one bar. The original manual permits up to half a bar.
-    #[serde(deserialize_with = "echo_delay")]
-    pub delay_beats: f32,
+pub struct Filter {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub mode: FilterMode,
+    pub cutoff_hz: f32,
+    pub resonance: f32,
+    pub drive: f32,
+    pub wet: f32,
+}
+impl Default for Filter {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: FilterMode::Lp12,
+            cutoff_hz: 2000.0,
+            resonance: 0.0,
+            drive: 0.0,
+            wet: 1.0,
+        }
+    }
+}
+
+/// Stereo modulation algorithm.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModulationMode {
+    #[default]
+    Chorus,
+    Phaser,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Modulation {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub mode: ModulationMode,
+    pub rate_hz: f32,
+    pub depth: f32,
     pub feedback: f32,
     pub wet: f32,
 }
-impl Default for Echo {
+impl Default for Modulation {
     fn default() -> Self {
         Self {
-            delay_beats: 0.5,
-            feedback: 0.4,
-            wet: 0.35,
+            enabled: false,
+            mode: ModulationMode::Chorus,
+            rate_hz: 0.65,
+            depth: 0.45,
+            feedback: 0.25,
+            wet: 0.45,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Echo {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub enabled: bool,
+    /// Four beats are one bar.
+    #[serde(deserialize_with = "echo_delay")]
+    pub delay_beats: f32,
+    pub feedback: f32,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub tone: f32,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub ping_pong: bool,
+    pub wet: f32,
+}
+impl Default for Echo {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            delay_beats: 0.5,
+            feedback: 0.4,
+            tone: 0.0,
+            ping_pong: false,
+            wet: 0.35,
+        }
+    }
+}
+
+/// Frequency/ring modulation topology.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RobotizeMode {
+    #[default]
+    RingMod,
+    FreqShift,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Robotize {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub mode: RobotizeMode,
     pub frequency_hz: f32,
     pub wet: f32,
 }
 impl Default for Robotize {
     fn default() -> Self {
         Self {
+            enabled: false,
+            mode: RobotizeMode::RingMod,
             frequency_hz: 80.0,
             wet: 0.5,
         }
     }
 }
 
+/// FDN reverb space geometry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReverbSpace {
+    Room,
+    #[default]
+    Hall,
+    Plate,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Reverb {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub space: ReverbSpace,
+    pub decay_s: f32,
+    pub damping: f32,
+    pub wet: f32,
+}
+impl Default for Reverb {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            space: ReverbSpace::Hall,
+            decay_s: 2.2,
+            damping: 0.4,
+            wet: 0.3,
+        }
+    }
+}
+
+/// Output waveshaper character.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistortionShape {
+    #[default]
+    Warm,
+    Acid,
+    Fuzz,
+    Crush,
+}
+
+/// Effect Studio tail rendering mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TailMode {
+    #[default]
+    Trim,
+    WrapLoop,
+    RingOut,
+}
+
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectsState {
-    pub filter: Option<Filter>,
-    pub echo: Option<Echo>,
-    pub robotize: Option<Robotize>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_legacy_bay",
+        skip_serializing_if = "is_default"
+    )]
+    pub filter: Filter,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub modulation: Modulation,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_legacy_bay",
+        skip_serializing_if = "is_default"
+    )]
+    pub echo: Echo,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_legacy_bay",
+        skip_serializing_if = "is_default"
+    )]
+    pub robotize: Robotize,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub reverb: Reverb,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub dist_shape: DistortionShape,
     pub dirty: f32,
     pub noise: f32,
     pub volume: f32,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub tail_mode: TailMode,
 }
+
 impl Default for EffectsState {
     fn default() -> Self {
         Self {
-            filter: None,
-            echo: None,
-            robotize: None,
+            filter: Filter::default(),
+            modulation: Modulation::default(),
+            echo: Echo::default(),
+            robotize: Robotize::default(),
+            reverb: Reverb::default(),
+            dist_shape: DistortionShape::Warm,
             dirty: 0.0,
             noise: 0.0,
             volume: 1.0,
+            tail_mode: TailMode::Trim,
         }
     }
 }
 
 impl EffectsState {
+    /// True when no bay or output stage alters audio.
+    pub fn is_bypassed(&self) -> bool {
+        let bays = [
+            (self.filter.enabled, self.filter.wet),
+            (self.modulation.enabled, self.modulation.wet),
+            (self.echo.enabled, self.echo.wet),
+            (self.robotize.enabled, self.robotize.wet),
+            (self.reverb.enabled, self.reverb.wet),
+        ];
+        bays.iter().all(|&(enabled, wet)| !enabled || wet == 0.0)
+            && self.dirty == 0.0
+            && self.noise == 0.0
+            && self.volume == 1.0
+    }
+
     pub fn validate(&self) -> Result<(), String> {
-        let unit = |x: f32| x.is_finite() && (0.0..=1.0).contains(&x);
-        if !unit(self.dirty)
-            || !unit(self.noise)
+        self.validate_output()?;
+        self.filter.validate()?;
+        self.modulation.validate()?;
+        self.echo.validate()?;
+        self.robotize.validate()?;
+        self.reverb.validate()
+    }
+
+    fn validate_output(&self) -> Result<(), String> {
+        if !unit_f32(self.dirty)
+            || !unit_f32(self.noise)
             || !self.volume.is_finite()
             || !(0.0..=2.0).contains(&self.volume)
         {
             return Err("Effect volume or distortion is outside its permitted range.".into());
         }
-        // The upper bound is above every usable cutoff: `process` limits the
-        // cutoff to 0.45 of the sample rate, which is at most 172.8 kHz.
-        if let Some(f) = &self.filter
-            && (!f.cutoff_hz.is_finite()
-                || !(20.0..=180000.0).contains(&f.cutoff_hz)
-                || !unit(f.resonance)
-                || !unit(f.drive)
-                || !unit(f.wet))
+        Ok(())
+    }
+}
+
+#[inline]
+fn unit_f32(x: f32) -> bool {
+    x.is_finite() && (0.0..=1.0).contains(&x)
+}
+
+impl Filter {
+    fn validate(&self) -> Result<(), String> {
+        if !self.cutoff_hz.is_finite()
+            // Saved patterns can use ultrasonic cutoffs at high sample rates.
+            || !(20.0..=180_000.0).contains(&self.cutoff_hz)
+            || !unit_f32(self.resonance)
+            || !unit_f32(self.drive)
+            || !unit_f32(self.wet)
         {
             return Err("Filter values are outside their permitted ranges.".into());
         }
-        if let Some(e) = &self.echo
-            && (!e.delay_beats.is_finite()
-                || !(MIN_ECHO_BEATS..=2.0).contains(&e.delay_beats)
-                || !e.feedback.is_finite()
-                || !(0.0..=0.95).contains(&e.feedback)
-                || !unit(e.wet))
+        Ok(())
+    }
+}
+
+impl Modulation {
+    fn validate(&self) -> Result<(), String> {
+        if !self.rate_hz.is_finite()
+            || !(0.05..=8.0).contains(&self.rate_hz)
+            || !unit_f32(self.depth)
+            || !self.feedback.is_finite()
+            || !(-0.85..=0.85).contains(&self.feedback)
+            || !unit_f32(self.wet)
+        {
+            return Err("Modulation values are outside their permitted ranges.".into());
+        }
+        Ok(())
+    }
+}
+
+impl Echo {
+    fn validate(&self) -> Result<(), String> {
+        if !self.delay_beats.is_finite()
+            || !(MIN_ECHO_BEATS..=2.0).contains(&self.delay_beats)
+            || !self.feedback.is_finite()
+            || !(0.0..=0.95).contains(&self.feedback)
+            || !unit_f32(self.tone)
+            || !unit_f32(self.wet)
         {
             return Err("Echo delay, feedback, or volume is outside its permitted range.".into());
         }
-        if let Some(r) = &self.robotize
-            && (!r.frequency_hz.is_finite()
-                || !(1.0..=20000.0).contains(&r.frequency_hz)
-                || !unit(r.wet))
+        Ok(())
+    }
+}
+
+impl Robotize {
+    fn validate(&self) -> Result<(), String> {
+        if !self.frequency_hz.is_finite()
+            || !(1.0..=20000.0).contains(&self.frequency_hz)
+            || !unit_f32(self.wet)
         {
             return Err("Robotize color or volume is outside its permitted range.".into());
         }
@@ -141,30 +450,35 @@ impl EffectsState {
     }
 }
 
-/// Preserve the input duration and channel count. Echo tails are cut at the
-/// sample boundary. No effect state is shared between calls or channels.
+impl Reverb {
+    fn validate(&self) -> Result<(), String> {
+        if !self.decay_s.is_finite()
+            || !(0.2..=8.0).contains(&self.decay_s)
+            || !unit_f32(self.damping)
+            || !unit_f32(self.wet)
+        {
+            return Err("Reverb decay, damping, or volume is outside its permitted range.".into());
+        }
+        Ok(())
+    }
+}
+
+/// Process a standalone sample in Effect Studio honoring `state.tail_mode`.
 pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
     input.validate()?;
-    let output = process_validated(input, state, bpm, 1.0, false)?;
+    let output = process_validated(input, state, bpm, 1.0, state.tail_mode)?;
     output.validate()?;
     Ok(output)
 }
 
-/// A normalized source with the synth's maximum 12 dB accent stays below
-/// four times full scale. Keep that headroom through the effects and the
-/// output gain. When the result peaks above full scale, turn all of it down
-/// to full scale, so accents and resonance keep their shape and never
-/// hard-clip. Returns the result and the gain that it got, at most 1.
-///
-/// A pattern plays as a loop, so the filter and echo tails at its end wrap
-/// into its start: the result is the loop as it sounds on every repeat.
+/// Process a Step Synth sequence as a seamless loop (`WrapLoop`) with peak headroom normalization.
 pub(crate) fn process_synth(
     input: &Pcm,
     state: &EffectsState,
     bpm: f64,
 ) -> Result<(Pcm, f32), String> {
     input.validate_with_peak_limit(4.0)?;
-    let mut output = process_validated(input, state, bpm, f32::MAX, true)?;
+    let mut output = process_validated(input, state, bpm, f32::MAX, TailMode::WrapLoop)?;
     let peak = output
         .samples
         .iter()
@@ -179,471 +493,324 @@ pub(crate) fn process_synth(
     Ok((output, gain))
 }
 
-/// The effects, with the output held within `ceiling`. With `looped`, the
-/// input is one period of a loop: the filter and the echo start in the state
-/// that the end of the loop leaves them in, so their tails wrap into the
-/// start. The caller validates the result.
+/// Shared zero-latency 16x linear-phase FIR runner with optional loop pre-roll.
+pub(crate) fn run_oversampled_16x(
+    samples: &mut [f64],
+    looped: bool,
+    shape: impl FnMut(f64) -> f64,
+) {
+    oversample_with_preroll(samples, looped, 256, shape);
+}
+
+fn oversample_with_preroll(
+    samples: &mut [f64],
+    looped: bool,
+    warm_frames: usize,
+    mut shape: impl FnMut(f64) -> f64,
+) {
+    let n = samples.len();
+    if n == 0 {
+        return;
+    }
+    crate::fx::prepare_tables();
+    let lat = FirOversampler::LATENCY_16X;
+    let pre = if looped { warm_frames } else { 0 };
+    let pre_start = n - pre % n;
+    let mut os = FirOversampler::new(true);
+    let total = pre + n + lat;
+    let src = samples.to_vec();
+    for k in 0..total {
+        let x = if k < pre {
+            src[(pre_start + k) % n]
+        } else if k < pre + n {
+            src[k - pre]
+        } else if looped {
+            src[(k - pre - n) % n]
+        } else {
+            0.0
+        };
+        let y = os.process(x, &mut shape);
+        if k >= pre + lat {
+            samples[k - pre - lat] = y;
+        }
+    }
+}
+
+fn needs_stereo(input_channels: u16, state: &EffectsState) -> bool {
+    if input_channels >= 2 {
+        return true;
+    }
+    (state.modulation.enabled && state.modulation.wet > 0.0)
+        || (state.reverb.enabled && state.reverb.wet > 0.0)
+        || (state.echo.enabled && state.echo.wet > 0.0 && state.echo.ping_pong)
+}
+
+fn render_frame_limit(frames: usize, channels: usize, rate: f64) -> Result<usize, String> {
+    let wav_frames = crate::audio::MAX_WAV_SAMPLES / channels;
+    if frames > wav_frames {
+        return Err("The sample is too long for a WAV file.".into());
+    }
+    let tail_frames = (rate * RING_OUT_MAX_SECONDS).round() as usize;
+    Ok(wav_frames.min(frames.saturating_add(tail_frames)))
+}
+
 fn process_validated(
     input: &Pcm,
     state: &EffectsState,
     bpm: f64,
     ceiling: f32,
-    looped: bool,
+    tail: TailMode,
 ) -> Result<Pcm, String> {
     state.validate()?;
     if !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(&bpm) {
         return Err("Source tempo must be from 7.5 to 1200 BPM.".into());
     }
-    // The result is saved as a WAV, so it can be no longer than one holds.
-    if input.samples.len() > crate::audio::MAX_WAV_SAMPLES {
-        return Err("The sample is too long for a WAV file.".into());
-    }
-    let mut output = input.clone();
-    let channels = input.channels as usize;
+    let out_channels = if needs_stereo(input.channels, state) {
+        2
+    } else {
+        1
+    };
     let frames = input.frames() as usize;
     let rate = f64::from(input.sample_rate);
-    let robotize = state.robotize.as_ref().map(|settings| {
-        let frequency = robotize_frequency(
-            f64::from(settings.frequency_hz),
-            rate,
-            looped.then_some(frames),
-        );
-        (frequency, settings.wet)
-    });
-    for channel in 0..channels {
-        let mut noise_state = 0x6d2b79f5u32.wrapping_add(channel as u32);
-        for frame in 0..frames {
-            let index = frame * channels + channel;
-            if state.noise > 0.0 {
-                noise_state ^= noise_state << 13;
-                noise_state ^= noise_state >> 17;
-                noise_state ^= noise_state << 5;
-                let noise = noise_state as f64 / u32::MAX as f64 * 2.0 - 1.0;
-                output.samples[index] += output.samples[index].abs() * noise as f32 * state.noise;
-            }
-        }
-        if let Some(filter) = &state.filter
-            && filter.wet > 0.0
-        {
-            let rate = input.sample_rate as f64;
-            let [b0, b1, b2, a1, a2] = Coefficients::low_pass_at(
-                (filter.cutoff_hz as f64).min(rate * 0.45),
-                0.5 + 15.0 * filter.resonance as f64,
-                rate,
-            )
-            .values();
-            let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
-            let drive = 1.0 + 20.0 * filter.drive as f64;
-            // Low cutoffs with high resonance can ring across several
-            // repeats. Let that initial state decay before writing the loop.
-            let warm = filter_warm_passes(looped, frames, a2);
-            for pass in 0..=warm {
-                for frame in 0..frames {
-                    let index = frame * channels + channel;
-                    let dry = output.samples[index] as f64;
-                    let x = if filter.drive > 0.0 {
-                        (dry * drive).tanh() / drive.tanh()
-                    } else {
-                        dry
-                    };
-                    let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-                    // The synth turns down the whole render later. Keep
-                    // resonant peaks intact until that stage. Effect Studio
-                    // retains its existing bounded filter state.
-                    let y = if looped { y } else { y.clamp(-8.0, 8.0) };
-                    x2 = x1;
-                    x1 = x;
-                    y2 = y1;
-                    y1 = y;
-                    if pass == warm {
-                        output.samples[index] = (dry + (y - dry) * filter.wet as f64) as f32;
-                    }
-                }
-            }
-        }
-        if let Some(echo) = &state.echo
-            && echo.wet > 0.0
-        {
-            let delay_frames = (input.sample_rate as f64 * 60.0 / bpm * echo.delay_beats as f64)
-                .round()
-                .max(1.0) as usize;
-            let mut delay = vec![0.0; delay_frames];
-            let mut at = 0;
-            // A loop first fills the delay line as the loop's earlier repeats
-            // leave it, until their echoes are below -100 dB.
-            for _ in 0..echo_warm_passes(looped, echo.feedback, frames, delay_frames) {
-                for frame in 0..frames {
-                    let dry = output.samples[frame * channels + channel];
-                    delay[at] = dry + delay[at] * echo.feedback;
-                    at = (at + 1) % delay_frames;
-                }
-            }
-            for frame in 0..frames {
-                let index = frame * channels + channel;
-                let dry = output.samples[index];
-                let delayed = delay[at];
-                delay[at] = dry + delayed * echo.feedback;
-                at = (at + 1) % delay_frames;
-                output.samples[index] = dry + (delayed - dry) * echo.wet;
-            }
-        }
-        for frame in 0..frames {
-            let index = frame * channels + channel;
-            let mut value = output.samples[index];
-            if let Some((frequency, wet)) = robotize {
-                let carrier =
-                    (std::f64::consts::TAU * frequency * frame as f64 / rate).sin() as f32;
-                value += (value * carrier - value) * wet;
-            }
-            if state.dirty > 0.0 {
-                let drive = 1.0 + 40.0 * state.dirty;
-                value = (value * drive).tanh() / drive.tanh();
-            }
-            output.samples[index] = (value * state.volume).clamp(-ceiling, ceiling);
-        }
+    let max_frames = render_frame_limit(frames, out_channels, rate)?;
+    if state.is_bypassed() {
+        return Ok(input.clone());
     }
-    Ok(output)
+    let looped = tail == TailMode::WrapLoop;
+
+    let mut channels = extract_channels(input, out_channels);
+    apply_noise(&mut channels, state.noise);
+    for ch in &mut channels {
+        filter::apply(ch, &state.filter, rate, looped);
+    }
+    let mut stereo = to_stereo_frames(&channels);
+    modulation::apply(&mut stereo, &state.modulation, rate, looped);
+
+    let mut extended = run_echo_stage(&mut stereo, state, rate, bpm, tail, max_frames);
+    run_robotize_stereo(&mut stereo, &state.robotize, rate, looped);
+    extended |= run_reverb_stage(&mut stereo, &state.reverb, rate, tail, looped, max_frames);
+    if extended {
+        apply_tail_fade(&mut stereo[frames..], tail_fade_frames(rate));
+    }
+    finish_output(
+        &stereo,
+        out_channels,
+        state,
+        ceiling,
+        looped,
+        input.sample_rate,
+    )
 }
 
-/// The Robotize carrier frequency. Fit whole cycles into a loop when a cycle
-/// fits below the rate limit, so the carrier has no phase step at the seam.
-fn robotize_frequency(hz: f64, sample_rate: f64, loop_frames: Option<usize>) -> f64 {
-    const RATE_FRACTION: f64 = 0.45;
-    let frequency = hz.min(sample_rate * RATE_FRACTION);
-    let Some(frames) = loop_frames else {
-        return frequency;
+fn run_echo_stage(
+    stereo: &mut Vec<[f64; 2]>,
+    state: &EffectsState,
+    rate: f64,
+    bpm: f64,
+    tail: TailMode,
+    max_frames: usize,
+) -> bool {
+    if !state.echo.enabled || state.echo.wet <= 0.0 {
+        return false;
+    }
+    let loop_frames = (tail == TailMode::WrapLoop).then_some(stereo.len());
+    let mut engine = echo::EchoEngine::new(&state.echo, rate, bpm, loop_frames);
+    let warm = engine.warm_passes(stereo.len(), tail);
+    let wait = (tail == TailMode::RingOut).then(|| engine.delay_frames() + RING_OUT_CHUNK);
+    run_stereo_tail_engine(
+        &mut engine,
+        stereo,
+        warm,
+        wait,
+        max_frames,
+        tail_fade_frames(rate),
+    )
+}
+
+fn run_reverb_stage(
+    stereo: &mut Vec<[f64; 2]>,
+    reverb: &Reverb,
+    rate: f64,
+    tail: TailMode,
+    looped: bool,
+    max_frames: usize,
+) -> bool {
+    if !reverb.enabled || reverb.wet <= 0.0 {
+        return false;
+    }
+    let mut engine = reverb::ReverbEngine::new(reverb, rate, looped.then_some(stereo.len()));
+    let warm = reverb::warm_passes(stereo.len(), reverb.decay_s, rate, tail);
+    let wait = (tail == TailMode::RingOut).then(|| (0.15 * rate).round() as usize);
+    run_stereo_tail_engine(
+        &mut engine,
+        stereo,
+        warm,
+        wait,
+        max_frames,
+        tail_fade_frames(rate),
+    )
+}
+
+fn extract_channels(input: &Pcm, out_channels: usize) -> Vec<Vec<f64>> {
+    let in_ch = usize::from(input.channels);
+    let frames = input.frames() as usize;
+    let mut channels = vec![Vec::with_capacity(frames); out_channels];
+    for frame in 0..frames {
+        let base = frame * in_ch;
+        let l = f64::from(input.samples[base]);
+        let r = if in_ch == 2 {
+            f64::from(input.samples[base + 1])
+        } else {
+            l
+        };
+        channels[0].push(l);
+        if out_channels == 2 {
+            channels[1].push(r);
+        }
+    }
+    channels
+}
+
+fn to_stereo_frames(channels: &[Vec<f64>]) -> Vec<[f64; 2]> {
+    let frames = channels[0].len();
+    let mut stereo = Vec::with_capacity(frames);
+    for i in 0..frames {
+        let l = channels[0][i];
+        let r = if channels.len() > 1 {
+            channels[1][i]
+        } else {
+            l
+        };
+        stereo.push([l, r]);
+    }
+    stereo
+}
+
+fn apply_noise(channels: &mut [Vec<f64>], noise_amount: f32) {
+    if noise_amount <= 0.0 {
+        return;
+    }
+    let scale = f64::from(noise_amount);
+    for (c, ch) in channels.iter_mut().enumerate() {
+        let mut rng = 0x6d2b_79f5_u32.wrapping_add(c as u32);
+        for sample in ch.iter_mut() {
+            rng ^= rng << 13;
+            rng ^= rng >> 17;
+            rng ^= rng << 5;
+            let rand = rng as f64 / u32::MAX as f64 * 2.0 - 1.0;
+            *sample += sample.abs() * rand * scale;
+        }
+    }
+}
+
+fn extend_ring_out(
+    stereo: &mut Vec<[f64; 2]>,
+    max_frames: usize,
+    min_wait_frames: usize,
+    fade_frames: usize,
+    mut step: impl FnMut([f64; 2]) -> [f64; 2],
+) -> bool {
+    let before = stereo.len();
+    let mut active_end = before;
+    while stereo.len() < max_frames {
+        let n = RING_OUT_CHUNK.min(max_frames - stereo.len());
+        let mut energy = 0.0_f64;
+        for _ in 0..n {
+            let out = step([0.0, 0.0]);
+            energy += out[0] * out[0] + out[1] * out[1];
+            stereo.push(out);
+        }
+        let rms = (energy / (2.0 * n as f64)).sqrt();
+        if rms >= RING_OUT_SILENCE_RMS {
+            active_end = stereo.len();
+        } else if stereo.len() - active_end >= min_wait_frames.max(fade_frames) {
+            break;
+        }
+    }
+    let extended = active_end > before;
+    let keep = if extended {
+        active_end + fade_frames
+    } else {
+        before
     };
-    let max_cycles = (frames as f64 * RATE_FRACTION).floor();
-    if max_cycles < 1.0 {
-        return frequency;
-    }
-    let cycles = (frequency * frames as f64 / sample_rate)
-        .round()
-        .clamp(1.0, max_cycles);
-    cycles * sample_rate / frames as f64
+    stereo.truncate(keep);
+    extended
 }
 
-/// The low-pass poles have radius `sqrt(a2)` for the supported Q >= 0.5.
-/// Run whole repeats until their initial state has decayed below -140 dB.
-/// A synth render is at least a bar, so even the lowest cutoff and highest
-/// resonance need only a few passes. Bound tiny internal test buffers too.
-fn filter_warm_passes(looped: bool, frames: usize, a2: f64) -> usize {
-    if !looped || frames == 0 {
-        return 0;
-    }
-    let decay = 0.5 * a2.max(f64::MIN_POSITIVE).ln() * frames as f64;
-    ((1e-7_f64.ln() / decay).ceil() as usize).clamp(1, 256)
+fn tail_fade_frames(rate: f64) -> usize {
+    (0.015 * rate).round().max(1.0) as usize
 }
 
-/// How many times a loop of `frames` runs through the echo before the
-/// result, so that the echoes of its earlier repeats are in the delay line.
-/// Each repeat passes the delay `frames / delay_frames` times, and each pass
-/// scales the echo by `feedback`. A pattern is at least four beats and the
-/// delay at most two, so a repeat passes the delay at least twice.
-fn echo_warm_passes(looped: bool, feedback: f32, frames: usize, delay_frames: usize) -> usize {
-    if !looped || frames == 0 {
-        return 0;
+fn apply_tail_fade(stereo: &mut [[f64; 2]], fade_frames: usize) {
+    let fade = fade_frames.min(stereo.len());
+    let start = stereo.len() - fade;
+    for (i, frame) in stereo[start..].iter_mut().enumerate() {
+        let w = 0.5 * (1.0 + (PI * (i + 1) as f64 / fade as f64).cos());
+        frame[0] *= w;
+        frame[1] *= w;
     }
-    if feedback <= 0.0 {
-        return 1;
+}
+
+fn run_robotize_stereo(stereo: &mut [[f64; 2]], robotize: &Robotize, rate: f64, looped: bool) {
+    if !robotize.enabled || robotize.wet <= 0.0 || stereo.is_empty() {
+        return;
     }
-    let trips = (frames as f64 / delay_frames as f64).max(1.0);
-    let per_pass = f64::from(feedback).ln() * trips;
-    // -100 dB. The feedback is at most 0.95, so this is at most 225 passes.
-    ((1e-5_f64.ln() / per_pass).ceil() as usize).clamp(1, 256)
+    for ch in 0..2 {
+        let mut buf: Vec<f64> = stereo.iter().map(|f| f[ch]).collect();
+        robotize::apply(&mut buf, robotize, rate, looped);
+        for (dst, val) in stereo.iter_mut().zip(buf) {
+            dst[ch] = val;
+        }
+    }
+}
+
+fn trim_gibbs_peak(channels: &mut [Vec<f64>]) {
+    let max_peak = channels
+        .iter()
+        .flat_map(|ch| ch.iter())
+        .fold(0.0_f64, |p, x| p.max(x.abs()));
+    if max_peak > 0.995 {
+        let trim = 0.995 / max_peak;
+        for ch in channels.iter_mut() {
+            for sample in ch.iter_mut() {
+                *sample *= trim;
+            }
+        }
+    }
+}
+
+fn finish_output(
+    stereo: &[[f64; 2]],
+    out_channels: usize,
+    state: &EffectsState,
+    ceiling: f32,
+    looped: bool,
+    sample_rate: u32,
+) -> Result<Pcm, String> {
+    let frames = stereo.len();
+    let vol = f64::from(state.volume);
+    let ceil = f64::from(ceiling);
+    let mut channels = Vec::with_capacity(out_channels);
+    for ch in 0..out_channels {
+        let mut buf: Vec<f64> = stereo.iter().map(|f| f[ch]).collect();
+        distortion::apply_and_scale(&mut buf, state.dist_shape, state.dirty, vol, ceil, looped);
+        channels.push(buf);
+    }
+    if ceil <= 1.01 {
+        trim_gibbs_peak(&mut channels);
+    }
+    let mut interleaved = vec![0.0_f32; frames * out_channels];
+    for (ch, buf) in channels.iter().enumerate() {
+        for (i, &val) in buf.iter().enumerate() {
+            interleaved[i * out_channels + ch] = val as f32;
+        }
+    }
+    Ok(Pcm {
+        sample_rate,
+        channels: out_channels as u16,
+        samples: interleaved,
+    })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_looped_robotize_carrier_runs_whole_cycles_per_loop() {
-        // A two-second loop: 30.3 Hz would leave 0.6 of a cycle at the seam.
-        let looped = robotize_frequency(30.3, 44_100.0, Some(88_200));
-        assert!((looped - 30.5).abs() < 1e-9, "{looped}");
-        assert_eq!(robotize_frequency(30.3, 44_100.0, None), 30.3);
-        // A carrier slower than the loop still runs one whole cycle.
-        assert!((robotize_frequency(0.1, 44_100.0, Some(88_200)) - 0.5).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_looped_robotize_carrier_stays_below_the_rate_limit() {
-        let rate = 8_000.0;
-        let frames = 1477;
-        let frequency = robotize_frequency(20_000.0, rate, Some(frames));
-        assert!(frequency <= rate * 0.45, "{frequency} Hz");
-        let cycles = frequency * frames as f64 / rate;
-        assert!((cycles - 664.0).abs() < 1e-9, "{cycles} cycles");
-    }
-
-    #[test]
-    fn a_looped_resonant_filter_settles_before_the_render() {
-        for amplitude in [0.125, 4.0] {
-            check_looped_resonant_filter(amplitude);
-        }
-    }
-
-    #[test]
-    fn synth_filter_headroom_preserves_the_normalized_waveform() {
-        let input = Pcm {
-            sample_rate: 8000,
-            channels: 1,
-            samples: (0..16000)
-                .map(|frame| {
-                    (0.125 * (2.0 * std::f64::consts::PI * 600.0 * f64::from(frame) / 8000.0).sin())
-                        as f32
-                })
-                .collect(),
-        };
-        let state = EffectsState {
-            filter: Some(Filter {
-                cutoff_hz: 600.0,
-                resonance: 1.0,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let (quiet, quiet_gain) = process_synth(&input, &state, 120.0).unwrap();
-        let loud = Pcm {
-            samples: input.samples.iter().map(|sample| sample * 32.0).collect(),
-            ..input
-        };
-        let (loud, loud_gain) = process_synth(&loud, &state, 120.0).unwrap();
-        assert!(quiet_gain < 1.0 && loud_gain < quiet_gain);
-        let error = quiet
-            .samples
-            .iter()
-            .zip(loud.samples)
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0_f32, f32::max);
-        assert!(
-            error < 1e-5,
-            "Filter headroom changes the normalized waveform: {error}"
-        );
-    }
-
-    fn check_looped_resonant_filter(amplitude: f64) {
-        let sample_rate = 8000;
-        let frames = (f64::from(sample_rate) * 60.0 / 180.0 * 4.0).round() as usize;
-        let mut samples = vec![0.0; frames];
-        // Excite the slowest supported filter near the end of a short loop.
-        // One earlier repeat does not let this resonance settle.
-        for (index, sample) in samples[frames - 667..].iter_mut().enumerate() {
-            *sample = (amplitude
-                * (2.0 * std::f64::consts::PI * 20.0 * index as f64 / f64::from(sample_rate)).sin())
-                as f32;
-        }
-        let input = Pcm {
-            sample_rate,
-            channels: 1,
-            samples,
-        };
-        let state = EffectsState {
-            filter: Some(Filter {
-                cutoff_hz: 20.0,
-                resonance: 1.0,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let (once, _) = process_synth(&input, &state, 180.0).unwrap();
-        let repeated = Pcm {
-            samples: input.samples.repeat(8),
-            ..input
-        };
-        let (settled, _) = process_synth(&repeated, &state, 180.0).unwrap();
-        let error = once
-            .samples
-            .iter()
-            .zip(&settled.samples[7 * frames..])
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0_f32, f32::max);
-        assert!(
-            error < 1e-5,
-            "The loop retains a filter transient at amplitude {amplitude}: {error}"
-        );
-    }
-
-    #[test]
-    fn a_looped_echo_wraps_its_tail_into_the_start() {
-        // 120 BPM at 1000 Hz: a beat is 500 frames. A two-beat loop with one
-        // click near its end, and an echo of half a beat.
-        let mut samples = vec![0.0; 1000];
-        samples[900] = 1.0;
-        let input = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples,
-        };
-        let state = EffectsState {
-            echo: Some(Echo {
-                delay_beats: 0.5,
-                feedback: 0.5,
-                wet: 0.5,
-            }),
-            ..Default::default()
-        };
-        let cut = process(&input, &state, 120.0).unwrap();
-        assert!(
-            cut.samples[..900].iter().all(|x| *x == 0.0),
-            "An Effect Studio sample cuts its tail."
-        );
-        let (looped, _) = process_synth(&input, &state, 120.0).unwrap();
-        // The echo of the click, 250 frames on, wraps to frame 150.
-        assert!(
-            // It holds the echoes of every earlier repeat: 0.5 / (1 - 0.5^4).
-            (looped.samples[150] - 0.5 / (1.0 - 0.5_f32.powi(4))).abs() < 1e-3,
-            "{}",
-            looped.samples[150]
-        );
-        // The second echo, of the earlier repeats too, adds at frame 400.
-        assert!(looped.samples[400] > 0.2, "{}", looped.samples[400]);
-        // Each repeat ends as the one before: the loop is seamless.
-        let (twice, _) = process_synth(
-            &Pcm {
-                samples: [input.samples.clone(), input.samples.clone()].concat(),
-                ..input.clone()
-            },
-            &state,
-            120.0,
-        )
-        .unwrap();
-        for (a, b) in looped.samples.iter().zip(&twice.samples[1000..]) {
-            assert!((a - b).abs() < 1e-4, "{a} {b}");
-        }
-    }
-
-    #[test]
-    fn an_older_echo_delay_opens_at_the_minimum() {
-        let echo: Echo =
-            serde_json::from_str(r#"{"delay_beats":0.01,"feedback":0.4,"wet":0.35}"#).unwrap();
-        assert_eq!(echo.delay_beats, MIN_ECHO_BEATS);
-        let echo: Echo =
-            serde_json::from_str(r#"{"delay_beats":0.25,"feedback":0.4,"wet":0.35}"#).unwrap();
-        assert_eq!(echo.delay_beats, 0.25);
-        let state = EffectsState {
-            echo: Some(Echo {
-                delay_beats: 0.03,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        assert!(
-            state.validate().is_err(),
-            "A new delay under the minimum is refused."
-        );
-    }
-
-    #[test]
-    fn synth_headroom_is_bounded_and_does_not_relax_public_pcm() {
-        let mut source = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: vec![4.0],
-        };
-        let state = EffectsState {
-            volume: 0.2,
-            ..Default::default()
-        };
-        assert!(source.validate().is_err());
-        assert!(process(&source, &state, 120.0).is_err());
-        let (output, gain) = process_synth(&source, &state, 120.0).unwrap();
-        assert_eq!((output.samples, gain), (vec![0.8], 1.0));
-        let loud = EffectsState {
-            volume: 0.5,
-            ..Default::default()
-        };
-        let (output, gain) = process_synth(&source, &loud, 120.0).unwrap();
-        assert_eq!(
-            output.samples,
-            vec![1.0],
-            "A loud result is turned down, not clipped."
-        );
-        assert_eq!(gain, 0.5);
-        for invalid in [4.01, f32::INFINITY, f32::NAN] {
-            source.samples[0] = invalid;
-            assert!(process_synth(&source, &state, 120.0).is_err());
-        }
-    }
-
-    #[test]
-    fn bypass_preserves_audio_and_each_call_has_fresh_state() {
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 2,
-            samples: vec![0.25, -0.5, 0.0, 0.75],
-        };
-        assert_eq!(
-            process(&source, &EffectsState::default(), 140.0)
-                .unwrap()
-                .samples,
-            source.samples
-        );
-        let state = EffectsState {
-            noise: 0.8,
-            ..Default::default()
-        };
-        assert_eq!(
-            process(&source, &state, 140.0).unwrap().samples,
-            process(&source, &state, 140.0).unwrap().samples
-        );
-    }
-    #[test]
-    fn echo_has_measured_delay_feedback_and_channel_isolation() {
-        let mut source = Pcm {
-            sample_rate: 1000,
-            channels: 2,
-            samples: vec![0.0; 1400],
-        };
-        source.samples[0] = 1.0;
-        let state = EffectsState {
-            echo: Some(Echo {
-                delay_beats: 0.5,
-                feedback: 0.5,
-                wet: 1.0,
-            }),
-            ..Default::default()
-        };
-        let output = process(&source, &state, 120.0).unwrap();
-        assert_eq!(output.samples[0], 0.0);
-        assert_eq!(output.samples[250 * 2], 1.0);
-        assert_eq!(output.samples[500 * 2], 0.5);
-        assert!(output.samples.iter().skip(1).step_by(2).all(|x| *x == 0.0));
-    }
-    #[test]
-    fn resonant_filter_and_distortion_remain_finite_and_bounded() {
-        let source = Pcm {
-            sample_rate: 44100,
-            channels: 1,
-            samples: vec![1.0; 20000],
-        };
-        let state = EffectsState {
-            filter: Some(Filter {
-                cutoff_hz: 20.0,
-                resonance: 1.0,
-                drive: 1.0,
-                wet: 1.0,
-            }),
-            dirty: 1.0,
-            noise: 1.0,
-            volume: 2.0,
-            ..Default::default()
-        };
-        assert!(
-            process(&source, &state, 140.0)
-                .unwrap()
-                .samples
-                .iter()
-                .all(|x| x.is_finite() && x.abs() <= 1.0)
-        );
-        let invalid = EffectsState {
-            echo: Some(Echo {
-                feedback: 1.0,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        assert!(process(&source, &invalid, 140.0).is_err());
-    }
-}
+mod tests;

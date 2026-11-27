@@ -31,27 +31,33 @@ fn atan_curve_antiderivs(x: f64, gain_in: f64, gain_out: f64) -> (f64, f64, f64)
 }
 
 #[inline]
-pub(super) fn eval_shape(shape: DistortionShape, x: f64) -> (f64, f64, f64) {
+fn tube_antiderivs(x: f64) -> (f64, f64, f64) {
+    if x >= 0.0 {
+        alg_curve_antiderivs(x, 1.0)
+    } else {
+        alg_curve_antiderivs(x, 0.65)
+    }
+}
+
+#[inline]
+fn hard_clip_antiderivs(x: f64) -> (f64, f64, f64) {
+    let a = x.abs();
+    let s = x.signum();
+    if a <= 1.0 {
+        (x, 0.5 * x * x, x * x * x / 6.0)
+    } else {
+        (s, a - 0.5, s * (0.5 * a * a - 0.5 * a + (1.0 / 6.0)))
+    }
+}
+
+#[inline]
+pub(crate) fn eval_shape(shape: DistortionShape, x: f64) -> (f64, f64, f64) {
     match shape {
-        DistortionShape::Tube => {
-            if x >= 0.0 {
-                alg_curve_antiderivs(x, 1.0)
-            } else {
-                alg_curve_antiderivs(x, 0.65)
-            }
-        }
+        DistortionShape::Tube => tube_antiderivs(x),
         DistortionShape::Tape => atan_curve_antiderivs(x, FRAC_PI_2, 1.0 / FRAC_PI_2),
         DistortionShape::Overdrive => alg_curve_antiderivs(x, 1.0),
         DistortionShape::Fuzz => atan_curve_antiderivs(x, PI, 2.0 / PI),
-        DistortionShape::HardClip => {
-            let a = x.abs();
-            let s = x.signum();
-            if a <= 1.0 {
-                (x, 0.5 * x * x, x * x * x / 6.0)
-            } else {
-                (s, a - 0.5, s * (0.5 * a * a - 0.5 * a + (1.0 / 6.0)))
-            }
-        }
+        DistortionShape::HardClip => hard_clip_antiderivs(x),
         DistortionShape::Foldback => {
             let s = x.sin();
             (s, 1.0 - x.cos(), x - s)
@@ -93,12 +99,12 @@ fn alg_f2(x: f64, k: f64) -> f64 {
 }
 
 #[inline]
-pub(super) fn curve_only(shape: DistortionShape, x: f64) -> f64 {
+pub(crate) fn curve_only(shape: DistortionShape, x: f64) -> f64 {
     eval_shape(shape, x).0
 }
 
 #[inline]
-pub(super) fn pre_gain(shape: DistortionShape) -> f64 {
+pub(crate) fn pre_gain(shape: DistortionShape) -> f64 {
     match shape {
         DistortionShape::Fuzz => 4.0,
         _ => 1.0,
@@ -110,18 +116,18 @@ pub(super) fn biased_input(sample: f64, gain: f64, asymmetry: f64, envelope: f64
     sample * gain + DYNAMIC_BIAS_SCALE * asymmetry * (envelope * gain).min(1.2)
 }
 
-pub(super) fn crusher_levels(bits: u8) -> f64 {
+pub(crate) fn crusher_levels(bits: u8) -> f64 {
     f64::from(2u32.pow(u32::from(bits.clamp(1, 16)) - 1))
 }
 
 #[inline]
-pub(super) fn quantize(sample: f64, levels: f64, dither: f64) -> f64 {
+pub(crate) fn quantize(sample: f64, levels: f64, dither: f64) -> f64 {
     ((sample.clamp(-1.0, 1.0) + dither) * levels).round() / levels
 }
 
 /// One channel's ADAA2 integration memory.
 #[derive(Clone, Copy, Default)]
-pub(super) struct Adaa2State {
+pub(crate) struct Adaa2State {
     x1: f64,
     x2: f64,
     f2_1: f64,
@@ -129,7 +135,7 @@ pub(super) struct Adaa2State {
 }
 
 impl Adaa2State {
-    pub(super) fn rest_at(&mut self, shape: DistortionShape, x: f64) {
+    pub(crate) fn rest_at(&mut self, shape: DistortionShape, x: f64) {
         self.x1 = x;
         self.x2 = x;
         self.retarget(shape);
@@ -152,7 +158,7 @@ impl Adaa2State {
 
     /// Evaluate the 2nd-order antiderivative filter and update history.
     #[inline]
-    pub(super) fn process(&mut self, shape: DistortionShape, x0: f64) -> f64 {
+    pub(crate) fn process(&mut self, shape: DistortionShape, x0: f64) -> f64 {
         let f2_0 = eval_f2(shape, x0);
         let dx2 = x0 - self.x2;
         let out = if dx2.abs() > ADAA_EPS {

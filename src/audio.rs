@@ -9,7 +9,7 @@ mod output;
 mod pcm;
 mod player;
 mod prepare;
-mod resample;
+pub(crate) mod resample;
 mod schedule;
 mod source;
 mod track;

@@ -1,14 +1,16 @@
-//! Effect Studio body. Shared hardware controls and shell own presentation.
+//! Effect Studio tool window (`880x542 pt`, `Palette::Red`): Source sound bar,
+//! factory preset selector, tail mode selector, shared 6-bay hardware rack,
+//! transport/save actions, and live status footer.
 use super::rect_in;
 use super::*;
+use mixjam_techno::application::effects::{
+    EffectsState, TailMode, effect_presets, matching_effect_preset,
+};
 
-const WINDOW_SIZE: Vec2 = Vec2::new(640.0, 432.0);
+const WINDOW_SIZE: Vec2 = Vec2::new(880.0, 542.0);
 const PAD_X: f32 = 12.0;
-const INNER_W: f32 = 616.0;
-const FILTER_ACCENT: Color32 = Color32::from_rgb(86, 204, 188);
-const ECHO_ACCENT: Color32 = Color32::from_rgb(96, 194, 242);
-const ROBOT_ACCENT: Color32 = Color32::from_rgb(186, 152, 246);
-const DISTORT_ACCENT: Color32 = Color32::from_rgb(246, 148, 76);
+const INNER_W: f32 = 856.0;
+const HEADER_ACCENT: Color32 = Color32::from_rgb(232, 92, 92);
 
 pub(super) struct Source<'a> {
     pub name: &'a str,
@@ -28,14 +30,6 @@ pub(super) enum Action {
     Reset,
     Details,
     Help,
-}
-
-fn dial_positions(bounds: Rect, x: f32, knob_y: f32) -> [Pos2; 3] {
-    [
-        bounds.min + Vec2::new(x, knob_y),
-        bounds.min + Vec2::new(x, knob_y + 38.0),
-        bounds.min + Vec2::new(x, knob_y + 63.0),
-    ]
 }
 
 pub(super) fn show(
@@ -67,8 +61,13 @@ fn draw_body(
     state: &mut EffectsState,
 ) -> Action {
     let (bounds, mut panel) = super::tool_panel(ui, WINDOW_SIZE);
-    draw_source_strip(&mut panel, bounds, source);
-    draw_effect_bays(&mut panel, bounds, state);
+    draw_top_bar(&mut panel, bounds, source, state);
+    effects_rack::draw_rack(
+        &mut panel,
+        rect_in(bounds, PAD_X, 40.0, INNER_W, 392.0),
+        state,
+        true,
+    );
     let action = draw_actions(&mut panel, bounds, source);
     if draw_footer(&mut panel, bounds, source, feedback) {
         return Action::Details;
@@ -76,23 +75,47 @@ fn draw_body(
     action
 }
 
-fn draw_effect_bays(ui: &mut egui::Ui, bounds: Rect, state: &mut EffectsState) {
-    draw_filter_bay(ui, bounds, state);
-    draw_echo_bay(ui, bounds, state);
-    draw_robotize_bay(ui, bounds, state);
-    draw_distortion_bay(ui, bounds, state);
+fn draw_top_bar(ui: &mut egui::Ui, bounds: Rect, source: &Source<'_>, state: &mut EffectsState) {
+    draw_source_strip(ui, rect_in(bounds, PAD_X, 6.0, 340.0, 28.0), source);
+    draw_preset_combo(ui, rect_in(bounds, 360.0, 8.0, 188.0, 24.0), state);
+    let tail_rect = rect_in(bounds, 556.0, 8.0, 312.0, 24.0);
+    controls::instrument::key_strip(
+        ui,
+        controls::instrument::KeyStrip {
+            rect: tail_rect,
+            vertical: false,
+            name: "Tail mode",
+            accent: HEADER_ACCENT,
+        },
+        &mut state.tail_mode,
+        &[
+            (
+                TailMode::Trim,
+                "Trim",
+                "Keep the original sample length fixed.",
+            ),
+            (
+                TailMode::WrapLoop,
+                "Wrap",
+                "Pre-roll seams so looping patterns wrap seamlessly.",
+            ),
+            (
+                TailMode::RingOut,
+                "Ring",
+                "Extend past the sample boundary for echo and reverb decay.",
+            ),
+        ],
+    );
 }
 
-fn draw_source_strip(ui: &mut egui::Ui, bounds: Rect, source: &Source<'_>) {
-    controls::well(ui, rect_in(bounds, PAD_X, 6.0, INNER_W, 28.0));
+fn draw_source_strip(ui: &mut egui::Ui, well_rect: Rect, source: &Source<'_>) {
+    controls::well(ui, well_rect);
     ui.scope(|ui| {
         let text = egui::RichText::new(source.name)
             .font(FontId::proportional(13.0))
             .color(roles().legend);
-        let label = ui.put(
-            rect_in(bounds, 22.0, 9.0, 596.0, 22.0),
-            egui::Label::new(text).truncate(),
-        );
+        let label_rect = well_rect.shrink2(Vec2::new(10.0, 3.0));
+        let label = ui.put(label_rect, egui::Label::new(text).truncate());
         named(&label, egui::WidgetType::Label, "Source sound");
         ui.ctx().accesskit_node_builder(label.id, |builder| {
             builder.set_label("Source sound");
@@ -102,380 +125,47 @@ fn draw_source_strip(ui: &mut egui::Ui, bounds: Rect, source: &Source<'_>) {
     });
 }
 
-fn bank_toggle(ui: &mut egui::Ui, bay: Rect, name: &str, value: &mut bool) -> bool {
-    let rect = Rect::from_min_size(
-        Pos2::new(bay.right() - 44.0, bay.top() + 1.0),
-        Vec2::new(28.0, 20.0),
-    );
-    controls::instrument::bat_toggle(
-        ui,
-        rect,
-        name,
-        "",
-        value,
-        "Turning it off discards its settings.",
-        false,
-    )
-    .changed()
-}
-
-fn draw_filter_bay(ui: &mut egui::Ui, bounds: Rect, state: &mut EffectsState) {
-    let bay = rect_in(bounds, PAD_X, 44.0, 344.0, 138.0);
-    let mut enabled = state.filter.is_some();
-    controls::instrument::bay_with_state(ui, bay, "Filter", FILTER_ACCENT, false, enabled);
-    if bank_toggle(ui, bay, "Filter", &mut enabled) {
-        state.filter = enabled.then(Default::default);
-    }
-    let mut filter = state.filter.clone().unwrap_or_default();
-    theme::with_knob_style(theme::KnobStyle::Anodized([44, 156, 138]), || {
-        for (x, value, name, low, high, reset, step, decimals, logarithmic) in [
-            (
-                61.0,
-                &mut filter.cutoff_hz,
-                "Cutoff",
-                20.0,
-                20000.0,
-                2000.0,
-                1.0,
-                0,
-                true,
-            ),
-            (
-                143.0,
-                &mut filter.resonance,
-                "Resonance",
-                0.0,
-                1.0,
-                0.0,
-                0.001,
-                3,
-                false,
-            ),
-            (
-                225.0,
-                &mut filter.drive,
-                "Overdrive",
-                0.0,
-                1.0,
-                0.0,
-                0.001,
-                3,
-                false,
-            ),
-            (
-                307.0,
-                &mut filter.wet,
-                "Filter volume",
-                0.0,
-                1.0,
-                1.0,
-                0.001,
-                3,
-                false,
-            ),
-        ] {
-            control(
-                ui,
-                dial_positions(bounds, x, 98.0),
-                value,
-                Control {
-                    name,
-                    low,
-                    high,
-                    reset,
-                    step,
-                    decimals,
-                    logarithmic,
-                },
-                enabled,
-            );
-        }
-    });
-    if enabled {
-        state.filter = Some(filter);
-    }
-}
-
-fn draw_echo_bay(ui: &mut egui::Ui, bounds: Rect, state: &mut EffectsState) {
-    let bay = rect_in(bounds, 366.0, 44.0, 262.0, 138.0);
-    let mut enabled = state.echo.is_some();
-    controls::instrument::bay_with_state(ui, bay, "Echo", ECHO_ACCENT, false, enabled);
-    if bank_toggle(ui, bay, "Echo", &mut enabled) {
-        state.echo = enabled.then(Default::default);
-    }
-    let mut echo = state.echo.clone().unwrap_or_default();
-    theme::with_knob_style(theme::KnobStyle::Anodized([56, 162, 214]), || {
-        for (x, value, name, low, high, reset, step, decimals) in [
-            (
-                415.0,
-                &mut echo.delay_beats,
-                "Delay (beats)",
-                mixjam_techno::application::MIN_ECHO_BEATS,
-                2.0,
-                0.5,
-                0.01,
-                3,
-            ),
-            (
-                497.0,
-                &mut echo.feedback,
-                "Feedback",
-                0.0,
-                0.95,
-                0.4,
-                0.01,
-                2,
-            ),
-            (579.0, &mut echo.wet, "Echo volume", 0.0, 1.0, 0.35, 0.01, 2),
-        ] {
-            control(
-                ui,
-                dial_positions(bounds, x, 98.0),
-                value,
-                Control {
-                    name,
-                    low,
-                    high,
-                    reset,
-                    step,
-                    decimals,
-                    logarithmic: false,
-                },
-                enabled,
-            );
-        }
-    });
-    if enabled {
-        state.echo = Some(echo);
-    }
-}
-
-fn draw_robotize_bay(ui: &mut egui::Ui, bounds: Rect, state: &mut EffectsState) {
-    let bay = rect_in(bounds, PAD_X, 192.0, 246.0, 138.0);
-    let mut enabled = state.robotize.is_some();
-    controls::instrument::bay_with_state(ui, bay, "Robotize", ROBOT_ACCENT, false, enabled);
-    if bank_toggle(ui, bay, "Robotize", &mut enabled) {
-        state.robotize = enabled.then(Default::default);
-    }
-    let mut robot = state.robotize.clone().unwrap_or_default();
-    theme::with_knob_style(theme::KnobStyle::BrushedChrome([42, 34, 86]), || {
-        for (x, value, name, low, high, reset, step, decimals, logarithmic) in [
-            (
-                80.0,
-                &mut robot.frequency_hz,
-                "Color",
-                1.0,
-                20000.0,
-                80.0,
-                1.0,
-                0,
-                true,
-            ),
-            (
-                190.0,
-                &mut robot.wet,
-                "Robotize volume",
-                0.0,
-                1.0,
-                0.5,
-                0.01,
-                2,
-                false,
-            ),
-        ] {
-            control(
-                ui,
-                dial_positions(bounds, x, 246.0),
-                value,
-                Control {
-                    name,
-                    low,
-                    high,
-                    reset,
-                    step,
-                    decimals,
-                    logarithmic,
-                },
-                enabled,
-            );
-        }
-    });
-    if enabled {
-        state.robotize = Some(robot);
-    }
-}
-
-fn draw_distortion_bay(ui: &mut egui::Ui, bounds: Rect, state: &mut EffectsState) {
-    let bay = rect_in(bounds, 268.0, 192.0, 360.0, 138.0);
-    controls::instrument::bay_with_state(
-        ui,
-        bay,
-        "Distortion / output",
-        DISTORT_ACCENT,
-        false,
-        true,
-    );
-    theme::with_knob_style(theme::KnobStyle::Anodized([208, 102, 42]), || {
-        for (x, value, name, high, reset, step, decimals) in [
-            (
-                336.0,
-                &mut state.dirty,
-                "Dirty distortion",
-                1.0,
-                0.0,
-                0.001,
-                3,
-            ),
-            (
-                448.0,
-                &mut state.noise,
-                "Noise distortion",
-                1.0,
-                0.0,
-                0.001,
-                3,
-            ),
-            (560.0, &mut state.volume, "Output volume", 2.0, 1.0, 0.01, 2),
-        ] {
-            control(
-                ui,
-                dial_positions(bounds, x, 246.0),
-                value,
-                Control {
-                    name,
-                    low: 0.0,
-                    high,
-                    reset,
-                    step,
-                    decimals,
-                    logarithmic: false,
-                },
-                true,
-            );
-        }
-    });
+fn draw_preset_combo(ui: &mut egui::Ui, rect: Rect, state: &mut EffectsState) {
+    let current = matching_effect_preset(state).unwrap_or("Custom");
+    let ctx = ui.ctx().clone();
+    let mut preset_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    let combo = egui::ComboBox::from_id_salt("effect_studio_preset")
+        .selected_text(current)
+        .width(rect.width())
+        .height(360.0);
+    let response = view::tall_menu(&ctx, || {
+        combo.show_ui(&mut preset_ui, |ui| {
+            for preset in effect_presets() {
+                if ui
+                    .selectable_label(preset.name == current, preset.name)
+                    .clicked()
+                {
+                    *state = preset.state.clone();
+                    ui.close();
+                }
+            }
+        })
+    })
+    .response;
+    form::choice_named(&response, "Effect preset", current);
+    response.hover_hint("Load an Effect Studio preset across all six bays.");
 }
 
 fn draw_actions(ui: &mut egui::Ui, bounds: Rect, source: &Source<'_>) -> Action {
     let available = source.available && !source.missing;
     let mut action = Action::None;
     for (x, width, text, next, enabled) in [
-        (PAD_X, 199.0, "Listen", Action::Listen, available),
-        (221.0, 198.0, "Save sound", Action::Save, available),
-        (429.0, 199.0, "Reset", Action::Reset, true),
+        (PAD_X, 277.0, "Listen", Action::Listen, available),
+        (301.0, 278.0, "Save sound", Action::Save, available),
+        (591.0, 277.0, "Reset", Action::Reset, true),
     ] {
-        if action_button(ui, rect_in(bounds, x, 340.0, width, 36.0), text, enabled).clicked() {
+        if action_button(ui, rect_in(bounds, x, 442.0, width, 34.0), text, enabled).clicked() {
             action = next;
         }
     }
     action
 }
 
-fn draw_footer(
-    ui: &mut egui::Ui,
-    bounds: Rect,
-    source: &Source<'_>,
-    feedback: &Feedback<'_>,
-) -> bool {
-    let status = if source.missing {
-        "Missing audio. Open Import details to resolve the sound."
-    } else if !source.available {
-        "Select a sound in the palette to begin."
-    } else {
-        feedback
-            .message
-            .unwrap_or("Listen before saving. Save sound adds a new WAV to Effect.")
-    };
-    let status_rect = rect_in(bounds, PAD_X, 386.0, INNER_W, 38.0);
-    status_footer(
-        ui,
-        status_rect,
-        status,
-        feedback.error || source.missing,
-        source.missing,
-    );
-    source.missing
-        && controls::button_at(
-            ui,
-            rect_in(bounds, 492.0, 390.0, 128.0, 30.0),
-            "Import details",
-            "Import details",
-            controls::ButtonRole::Secondary,
-            true,
-        )
-        .clicked()
-}
-
-#[derive(Clone, Copy)]
-struct Control<'a> {
-    name: &'a str,
-    low: f32,
-    high: f32,
-    reset: f32,
-    step: f32,
-    decimals: usize,
-    logarithmic: bool,
-}
-fn control(
-    ui: &mut egui::Ui,
-    positions: [Pos2; 3],
-    value: &mut f32,
-    spec: Control<'_>,
-    enabled: bool,
-) {
-    let [center, well, label] = positions;
-    // The logarithmic dials are the frequency dials, Cutoff and Color: their
-    // values show Hz, in a wider well.
-    let (unit, width) = if spec.logarithmic {
-        (" Hz", 72.0)
-    } else {
-        ("", 60.0)
-    };
-    ui.painter().text(
-        label,
-        Align2::CENTER_CENTER,
-        spec.name,
-        FontId::proportional(12.0),
-        roles().legend,
-    );
-    controls::well(ui, Rect::from_center_size(well, Vec2::new(width, 20.0)));
-    ui.add_enabled_ui(enabled, |ui| {
-        let mut draft = f64::from(*value);
-        let before = draft;
-        controls::rotary(
-            ui,
-            Rect::from_center_size(center, Vec2::splat(44.0)),
-            &mut draft,
-            controls::RotarySpec {
-                name: spec.name,
-                low: f64::from(spec.low),
-                high: f64::from(spec.high),
-                reset: f64::from(spec.reset),
-                step: f64::from(spec.step),
-                decimals: spec.decimals,
-                logarithmic: spec.logarithmic,
-                choices: &[],
-            },
-        );
-        if draft != before {
-            *value = draft as f32;
-        }
-        ui.scope(|ui| {
-            controls::value_style(ui);
-            let response = ui.put(
-                Rect::from_center_size(well, Vec2::new(width - 2.0, 24.0)),
-                egui::DragValue::new(value)
-                    .range(spec.low..=spec.high)
-                    .clamp_existing_to_range(false)
-                    .speed(spec.step)
-                    .fixed_decimals(spec.decimals)
-                    .suffix(unit),
-            );
-            name_control(response, &format!("{} value", spec.name))
-                .hover_hint(format!("{}: drag, or click to enter a value.", spec.name));
-        });
-    });
-}
 fn action_button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool) -> Response {
     controls::button_at(
         ui,
@@ -496,6 +186,42 @@ fn action_button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool) -> Re
         text
     })
 }
+
+fn draw_footer(
+    ui: &mut egui::Ui,
+    bounds: Rect,
+    source: &Source<'_>,
+    feedback: &Feedback<'_>,
+) -> bool {
+    let status = if source.missing {
+        "Missing audio. Open Import details to resolve the sound."
+    } else if !source.available {
+        "Select a sound in the palette to begin."
+    } else {
+        feedback
+            .message
+            .unwrap_or("Listen before saving. Save sound adds a new WAV to Effect.")
+    };
+    let status_rect = rect_in(bounds, PAD_X, 484.0, INNER_W, 42.0);
+    status_footer(
+        ui,
+        status_rect,
+        status,
+        feedback.error || source.missing,
+        source.missing,
+    );
+    source.missing
+        && controls::button_at(
+            ui,
+            rect_in(bounds, 732.0, 490.0, 128.0, 30.0),
+            "Import details",
+            "Import details",
+            controls::ButtonRole::Secondary,
+            true,
+        )
+        .clicked()
+}
+
 fn status_footer(ui: &mut egui::Ui, rect: Rect, text: &str, error: bool, missing: bool) {
     controls::status_well(ui, rect, error);
     let response = ui.interact(rect, ui.id().with("status"), Sense::hover());

@@ -474,7 +474,7 @@ pub(super) fn effects_pane(
         .max_height(effects_rect.height())
         .show(&mut form, |ui| {
             let before = state.effects.clone();
-            effects_controls(ui, &mut state.effects);
+            super::super::effects_rack::draw_rack_scrolling(ui, &mut state.effects, true);
             named_change(editor, before, state.effects.clone(), "the effect change");
         });
     super::super::view::name_scroll_area(&form, "step-synth-effects", "Step synth effects");

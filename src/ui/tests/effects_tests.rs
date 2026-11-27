@@ -41,12 +41,15 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         ctx.style_mut(|style| style.animation_time = 0.0);
         app.selection.sample = Some(1);
         app.effects.open = true;
-        app.effects.state.filter = Some(crate::effects::Filter {
+        app.effects.state.filter = crate::effects::Filter {
+            enabled: true,
             cutoff_hz: 4567.0,
             ..Default::default()
-        });
-        app.effects.state.echo = Some(Default::default());
-        app.effects.state.robotize = Some(Default::default());
+        };
+        app.effects.state.modulation.enabled = true;
+        app.effects.state.echo.enabled = true;
+        app.effects.state.robotize.enabled = true;
+        app.effects.state.reverb.enabled = true;
         app.effects.state.dirty = 0.375;
         let before = app.effects.state.clone();
         let size = Vec2::new(960.0, 720.0);
@@ -264,26 +267,40 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
 }
 
 #[test]
-fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
+fn effects_switches_preserve_settings_and_disable_only_their_own_controls() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.effects.open = true;
     app.effects.state = EffectsState {
-        filter: Some(crate::effects::Filter {
+        filter: crate::effects::Filter {
+            enabled: true,
             cutoff_hz: 4567.0,
             ..Default::default()
-        }),
-        echo: Some(crate::effects::Echo {
+        },
+        modulation: crate::effects::Modulation {
+            enabled: true,
+            rate_hz: 2.5,
+            ..Default::default()
+        },
+        echo: crate::effects::Echo {
+            enabled: true,
             feedback: 0.7,
             ..Default::default()
-        }),
-        robotize: Some(crate::effects::Robotize {
+        },
+        robotize: crate::effects::Robotize {
+            enabled: true,
             frequency_hz: 333.0,
             ..Default::default()
-        }),
+        },
+        reverb: crate::effects::Reverb {
+            enabled: true,
+            decay_s: 3.5,
+            ..Default::default()
+        },
         dirty: 0.25,
         noise: 0.125,
         volume: 0.75,
+        ..EffectsState::default()
     };
     for _ in 0..3 {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -298,8 +315,10 @@ fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
     app.selection.sample = Some(1);
     for (switch, knob) in [
         ("Filter", "Cutoff"),
+        ("Modulation", "Modulation rate"),
         ("Echo", "Feedback"),
         ("Robotize", "Color"),
+        ("Reverb", "Reverb decay"),
     ] {
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(!accessible_node(&output, knob).1.is_disabled());
@@ -356,9 +375,16 @@ fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
             egui::Modifiers::NONE,
         );
     }
-    assert_eq!(app.effects.state.filter, Some(Default::default()));
-    assert_eq!(app.effects.state.echo, Some(Default::default()));
-    assert_eq!(app.effects.state.robotize, Some(Default::default()));
+    assert!(app.effects.state.filter.enabled);
+    assert_eq!(app.effects.state.filter.cutoff_hz, 4567.0);
+    assert!(app.effects.state.modulation.enabled);
+    assert_eq!(app.effects.state.modulation.rate_hz, 2.5);
+    assert!(app.effects.state.echo.enabled);
+    assert_eq!(app.effects.state.echo.feedback, 0.7);
+    assert!(app.effects.state.robotize.enabled);
+    assert_eq!(app.effects.state.robotize.frequency_hz, 333.0);
+    assert!(app.effects.state.reverb.enabled);
+    assert_eq!(app.effects.state.reverb.decay_s, 3.5);
     assert_eq!(
         (
             app.effects.state.dirty,
@@ -378,7 +404,7 @@ fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
     assert_eq!(app.effects.state, EffectsState::default());
     assert_eq!(
         app.effects.feedback.message.as_deref(),
-        Some("Effects reset. Filter, Echo, and Robotize are off.")
+        Some("Effects reset. Filter, Modulation, Echo, Robotize, and Reverb are off.")
     );
 }
 
@@ -497,15 +523,119 @@ fn effects_knob_input_is_stable_bounded_and_accessible() {
 }
 
 #[test]
+fn rack_double_click_resets_each_bay_to_its_audio_default() {
+    for label in [
+        "Resonance",
+        "Modulation rate",
+        "Modulation depth",
+        "Modulation feedback",
+        "Modulation volume",
+        "Feedback",
+        "Echo volume",
+        "Color",
+        "Robotize volume",
+        "Reverb decay",
+        "Reverb damping",
+    ] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.effects.open = true;
+        let state = &mut app.effects.state;
+        state.filter.enabled = true;
+        state.modulation.enabled = true;
+        state.echo.enabled = true;
+        state.robotize.enabled = true;
+        state.reverb.enabled = true;
+        let defaults = state.clone();
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let dial = effects_control_rect(&output, label).center();
+        focus_control(&ctx, &mut app, &output, label);
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::End, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_ne!(app.effects.state, defaults, "{label} must first move.");
+        click(&ctx, &mut app, dial, egui::Modifiers::NONE);
+        click(&ctx, &mut app, dial, egui::Modifiers::NONE);
+        assert_eq!(
+            app.effects.state, defaults,
+            "{label} must return to its default."
+        );
+    }
+}
+
+#[test]
+fn scrolling_rack_ends_at_the_last_bay() {
+    let ctx = egui::Context::default();
+    let mut state = EffectsState::default();
+    for width in [560.0, 1000.0] {
+        let mut measured = (0.0, 0.0);
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(width, 270.0))),
+            ..Default::default()
+        };
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let area = egui::ScrollArea::vertical().show(ui, |ui| {
+                    let height = effects_rack::rack_height(ui.available_width(), true);
+                    effects_rack::draw_rack_scrolling(ui, &mut state, true);
+                    height
+                });
+                measured = (area.content_size.y, area.inner);
+            });
+        });
+        assert!(
+            (measured.0 - measured.1).abs() < 1.0,
+            "Scroll height {} must match the bottom of the rack at {}.",
+            measured.0,
+            measured.1
+        );
+    }
+}
+
+#[test]
+fn rack_retains_thousandth_steps_and_exact_value_readouts() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.effects.open = true;
+    app.effects.state.filter.enabled = true;
+    app.effects.state.dirty = 0.375;
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for name in [
+        "Resonance",
+        "Overdrive",
+        "Filter volume",
+        "Dirty distortion",
+        "Noise distortion",
+    ] {
+        let step = accessible_node(&output, name)
+            .1
+            .numeric_value_step()
+            .unwrap();
+        assert!((step - 0.001).abs() < 1e-9, "{name} uses thousandths.");
+    }
+    assert!(screen(&output).shows("0.375"));
+}
+
+#[test]
 fn effects_logarithmic_knobs_step_along_the_dial() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.effects.open = true;
-    app.effects.state.filter = Some(Default::default());
-    app.effects.state.robotize = Some(crate::effects::Robotize {
+    app.effects.state.filter.enabled = true;
+    app.effects.state.robotize = crate::effects::Robotize {
+        enabled: true,
         frequency_hz: 1.0,
         ..Default::default()
-    });
+    };
     for _ in 0..3 {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
@@ -519,8 +649,7 @@ fn effects_logarithmic_knobs_step_along_the_dial() {
         egui::Modifiers::NONE,
     );
     assert_eq!(
-        app.effects.state.filter.as_ref().unwrap().cutoff_hz,
-        2143.0,
+        app.effects.state.filter.cutoff_hz, 2143.0,
         "A key must turn Cutoff 1% of its dial."
     );
     frame(
@@ -535,7 +664,7 @@ fn effects_logarithmic_knobs_step_along_the_dial() {
         )],
         egui::Modifiers::NONE,
     );
-    assert_eq!(app.effects.state.filter.as_ref().unwrap().cutoff_hz, 2000.0);
+    assert_eq!(app.effects.state.filter.cutoff_hz, 2000.0);
     for key in [egui::Key::End, egui::Key::ArrowUp] {
         frame(
             &ctx,
@@ -544,10 +673,7 @@ fn effects_logarithmic_knobs_step_along_the_dial() {
             egui::Modifiers::NONE,
         );
     }
-    assert_eq!(
-        app.effects.state.filter.as_ref().unwrap().cutoff_hz,
-        20000.0
-    );
+    assert_eq!(app.effects.state.filter.cutoff_hz, 20000.0);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     focus_control(&ctx, &mut app, &output, "Color");
     frame(
@@ -557,8 +683,7 @@ fn effects_logarithmic_knobs_step_along_the_dial() {
         egui::Modifiers::NONE,
     );
     assert_eq!(
-        app.effects.state.robotize.as_ref().unwrap().frequency_hz,
-        2.0,
+        app.effects.state.robotize.frequency_hz, 2.0,
         "Rounding must not hold the low end in place."
     );
 }
@@ -732,4 +857,67 @@ fn a_secondary_drag_turns_no_knob() {
             "The primary button must still turn the knob."
         );
     }
+}
+
+#[test]
+fn effects_presets_tail_mode_and_scopes_update_state() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.selection.sample = Some(1);
+    app.effects.open = true;
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        accessible_node(&output, "Effect preset").1.value(),
+        Some("Clean / Init")
+    );
+    assert!(screen(&output).shows("Filter Curve"));
+    assert_eq!(
+        accessible_node(&output, "Drive Curve").1.value(),
+        Some("Non-linear transfer curve (OFF)")
+    );
+    focus_control(&ctx, &mut app, &output, "Effect preset");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let acid = screen(&output)
+        .nodes()
+        .find(|n| n.node().label() == Some("Acid Squelch"))
+        .and_then(|n| n.bounds())
+        .expect("Acid Squelch menu item");
+    click(&ctx, &mut app, acid.center(), egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        app.effects.state.filter.mode,
+        crate::effects::FilterMode::Lp24
+    );
+    assert_eq!(
+        app.effects.state.dist_shape,
+        crate::effects::DistortionShape::Acid
+    );
+    assert_eq!(
+        accessible_node(&output, "Drive Curve").1.value(),
+        Some("Non-linear transfer curve (Active)")
+    );
+    assert_eq!(
+        accessible_node(&output, "Effect preset").1.value(),
+        Some("Acid Squelch")
+    );
+    let ring = effects_control_rect(&output, "Tail mode Ring").center();
+    click(&ctx, &mut app, ring, egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        app.effects.state.tail_mode,
+        crate::effects::TailMode::RingOut
+    );
+    assert_eq!(
+        accessible_node(&output, "Effect preset").1.value(),
+        Some("Custom")
+    );
 }

@@ -432,7 +432,7 @@ bar and a cream viewport outline around scrolled cards.
 - **Floating Windows & Channel Strip**: One resizable, collapsible shared
   hardware shell wraps Time Stretcher (`Marine`, `Original BPM` & `Target BPM`
   modular bays with live ratio readout), Sample Editor (`Granite`, `Trim Range`
-  visual bar & `Pitch & Speed` bay), Effect Studio (`Red`, four accented modular
+  visual bar & `Pitch & Speed` bay), Effect Studio (`Red`, six accented modular
   bays with `bat_toggle` switches and module-scoped knobs), Help windows,
   blocking confirmations, and `Track N EQ` (`736x500` shared instrument scope
   and dial window).

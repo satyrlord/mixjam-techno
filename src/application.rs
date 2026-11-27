@@ -1,4 +1,11 @@
 //! Headless application boundary. UI clients read immutable views and submit typed commands.
+pub mod effects {
+    pub use crate::effects::{
+        DistortionShape, Echo, EffectPreset, EffectsState, Filter, FilterMode, MIN_ECHO_BEATS,
+        Modulation, ModulationMode, Reverb, ReverbSpace, Robotize, RobotizeMode, TailMode,
+        effect_presets, matching_effect_preset, sample_drive_curve, sample_filter_curve,
+    };
+}
 pub use crate::{
     APP_VERSION, agent, album_review,
     audio::Pcm,

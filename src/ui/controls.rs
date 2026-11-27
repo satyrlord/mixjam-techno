@@ -34,6 +34,13 @@ pub(super) use surfaces::{
     inset, metal_rack_cabinet, panel, rail_panel, rail_separator, section, status_well, well,
 };
 
+/// Reveal a control when keyboard or assistive focus moves outside its viewport.
+pub(super) fn reveal_focus(ui: &egui::Ui, response: &Response) {
+    if response.gained_focus() && !ui.clip_rect().contains_rect(response.rect) {
+        response.scroll_to_me(None);
+    }
+}
+
 /// Record the focused dial or fader. These controls use only arrows, Home,
 /// and End, so the workspace keeps its transport key while one has focus.
 pub(super) fn keep_transport_key(ctx: &egui::Context, id: egui::Id) {

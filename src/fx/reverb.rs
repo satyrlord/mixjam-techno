@@ -138,7 +138,7 @@ fn prime_frames(seconds: f64) -> usize {
 }
 
 /// A fast Walsh-Hadamard transform of the lines, unit-gain.
-fn hadamard(x: &mut [f64; LINES]) {
+pub(crate) fn hadamard(x: &mut [f64; LINES]) {
     let mut h = 1;
     while h < LINES {
         for start in (0..LINES).step_by(h * 2) {

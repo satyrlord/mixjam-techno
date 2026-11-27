@@ -435,9 +435,9 @@ pub(super) const STRETCH: &[Block] = &[
 pub(super) const EFFECTS: &[Block] = &[
     Facts(&[
         "Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.",
-        "Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings; turning it on restores its defaults.",
-        "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults.",
-        "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
+        "Filter, Modulation, Echo, Robotize, and Reverb each have a bypass switch beside their name. Turning a section off bypasses it without losing its settings.",
+        "Distortion / output and presets adjust Warm, Acid, Fuzz, or Crush saturation, noise, and output volume. Reset restores all defaults.",
+        "Cutoff, Modulation rate, and Color use logarithmic ranges. Echo delay is in beats; Tail mode picks Trim, Wrap loop, or Ring out.",
     ]),
     Heading("Knobs"),
     KNOBS,

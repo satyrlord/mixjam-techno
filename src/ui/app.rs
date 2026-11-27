@@ -143,12 +143,16 @@ pub(super) fn startup_status(session: &mut Session) -> (String, bool) {
 /// The effect settings with every optional group switched on, for the capture
 /// views that show the groups open.
 fn every_effect() -> EffectsState {
-    EffectsState {
-        filter: Some(Default::default()),
-        echo: Some(Default::default()),
-        robotize: Some(Default::default()),
+    let mut state = EffectsState {
+        dirty: 0.2,
         ..Default::default()
-    }
+    };
+    state.filter.enabled = true;
+    state.modulation.enabled = true;
+    state.echo.enabled = true;
+    state.robotize.enabled = true;
+    state.reverb.enabled = true;
+    state
 }
 
 /// The Options window that a capture view shows, if it shows one. Two of

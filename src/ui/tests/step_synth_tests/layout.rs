@@ -105,7 +105,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         app.selection.sample = Some(1);
         app.boards.module = BottomModule::StepSynth;
         app.step_synth.state.steps[63] = Step::note(-48);
-        app.step_synth.state.effects.echo = Some(Default::default());
+        app.step_synth.state.effects.echo.enabled = true;
         let before = app.step_synth.state.clone();
         let viewport = Rect::from_min_size(Pos2::ZERO, size);
         let output = settle_at(&ctx, &mut app, 4, size);
@@ -285,5 +285,37 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         activate_control(&ctx, &mut app, &output, "Step synth help");
         assert!(app.help.step_synth);
         assert_eq!(app.step_synth.state, before);
+    }
+}
+
+#[test]
+fn focusing_a_rack_control_scrolls_it_into_the_short_step_synth_pane() {
+    let (ctx, mut app) = board_fixture();
+    no_animation(&ctx);
+    app.step_synth.effects_expanded = true;
+    app.step_synth.state.effects.filter.enabled = true;
+    let size = Vec2::new(960.0, 720.0);
+    let mut output = settle_at(&ctx, &mut app, 4, size);
+    for label in [
+        "Output volume",
+        "Filter",
+        "Distortion shape Fuzz",
+        "Cutoff value",
+    ] {
+        let node = step_synth_accessible_node(&output, label).0;
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![access_request(node, egui::accesskit::Action::Focus)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        output = settle_at(&ctx, &mut app, 4, size);
+        let control = step_synth_control_rect(&output, label);
+        let board = step_synth_board_rect(&output);
+        assert!(
+            board.contains_rect(control),
+            "Focused {label} {control:?} must scroll inside {board:?}."
+        );
     }
 }

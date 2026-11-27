@@ -260,13 +260,14 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
         &["set", "target=Filter", "value=true", "window=Effect Studio"],
     );
     assert_eq!(reply["control"]["checked"], true, "{reply}");
-    assert!(app.effects.state.filter.is_some());
+    assert!(app.effects.state.filter.enabled);
     let reply = send(&mut app, &["set", "target=Cutoff", "value=1000"]);
     assert_eq!(reply["control"]["number"], 1000.0, "{reply}");
-    assert_eq!(app.effects.state.filter.as_ref().unwrap().cutoff_hz, 1000.0);
+    assert_eq!(app.effects.state.filter.cutoff_hz, 1000.0);
     let reply = send(&mut app, &["set", "target=Filter", "value=false"]);
     assert_eq!(reply["ok"], true, "{reply}");
-    assert!(app.effects.state.filter.is_none());
+    assert!(!app.effects.state.filter.enabled);
+    assert_eq!(app.effects.state.filter.cutoff_hz, 1000.0);
 
     let reply = send(&mut app, &["set", "target=Project BPM", "value=160"]);
     assert_eq!(reply["control"]["number"], 160.0, "{reply}");

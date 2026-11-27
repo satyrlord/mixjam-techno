@@ -316,11 +316,17 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
             app.options = Some(options::OptionsWindow::new(&app.session, page));
         })
     };
-    let all_effects = || EffectsState {
-        filter: Some(Default::default()),
-        echo: Some(Default::default()),
-        robotize: Some(Default::default()),
-        ..Default::default()
+    let all_effects = || {
+        let mut s = EffectsState {
+            dirty: 0.2,
+            ..Default::default()
+        };
+        s.filter.enabled = true;
+        s.modulation.enabled = true;
+        s.echo.enabled = true;
+        s.robotize.enabled = true;
+        s.reverb.enabled = true;
+        s
     };
     // Each state, a stop that shows the walk reached it, and its setup.
     let states: Vec<(&str, &str, Setup)> = vec![

@@ -70,10 +70,11 @@ registers the WAV in Effect at the source BPM, and selects the saved sound. A
 source change clears the local feedback. The save choice, the cancellation, a
 failure, and a success update it. Reset restores `EffectsState::default`.
 
-When the user turns an optional section off, the form discards its settings.
-When the user turns it on, it uses the defaults of that section. This
-presentation does not change the algorithms or the shared `effects_controls`
-form that Step synth uses. It adds no background processing job.
+Effect Studio and Step synth use the same six bays in `src/ui/effects_rack.rs`.
+Bypass preserves the settings of each optional bay. Effect Studio also offers
+eight presets and three tail modes. Trim keeps the source length. Wrap warms
+the effects with the repeating source. Ring extends echo and reverb for up to
+six seconds. Step synth always renders with Wrap.
 
 ## Missing audio and sample conflicts
 
