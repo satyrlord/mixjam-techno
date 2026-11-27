@@ -180,6 +180,9 @@ impl Session {
         id: Option<u32>,
         state: &StepSynthState,
     ) -> Result<(Pcm, f64), String> {
+        if state.source_mode == crate::synth::SourceMode::Synth {
+            return crate::synth::render_standalone_measured(state);
+        }
         crate::synth::render_measured(&self.step_synth_source(id, state)?, state)
     }
     /// The Step synth pattern's source audio: its source file, or else the

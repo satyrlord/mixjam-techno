@@ -76,6 +76,11 @@ eight presets and three tail modes. Trim keeps the source length. Wrap warms
 the effects with the repeating source. Ring extends echo and reverb for up to
 six seconds. Step synth always renders with Wrap.
 
+`src/effects.rs` and submodules under `src/effects/` own the six DSP bays
+(`Filter`, `Modulation`, `Echo`, `Robotize`, `Reverb`, `Distortion / output`).
+The engine uses oversampled filter, drive, and ring processing, and accepts
+per-frame filter modulation (`FilterMod`) for voiced Step synth patterns.
+
 ## Missing audio and sample conflicts
 
 Missing audio is explicit project state. The renderer keeps those placements

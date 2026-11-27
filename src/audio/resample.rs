@@ -125,14 +125,38 @@ fn quantized_scale(scale: f32) -> f32 {
 /// read never reaches past either end.
 #[inline]
 pub(crate) fn read(samples: &[f32], channels: usize, position: f64, scale: f32) -> [f32; 2] {
+    read_inner(samples, channels, None, position, scale)
+}
+
+/// Read `samples` with modular wrap-around inside `[loop_start .. frames)`,
+/// keeping Kaiser-sinc reconstruction continuous across loop seams.
+#[inline]
+pub(crate) fn read_looped(
+    samples: &[f32],
+    channels: usize,
+    loop_start: usize,
+    position: f64,
+    scale: f32,
+) -> [f32; 2] {
+    read_inner(samples, channels, Some(loop_start), position, scale)
+}
+
+#[inline]
+fn read_inner(
+    samples: &[f32],
+    channels: usize,
+    loop_start: Option<usize>,
+    position: f64,
+    scale: f32,
+) -> [f32; 2] {
     if samples.is_empty() {
         return [0.0; 2];
     }
     let scale = quantized_scale(scale);
     let sums = if channels == 1 {
-        taps::<1>(samples, position, scale)
+        taps::<1>(samples, position, scale, loop_start)
     } else {
-        taps::<2>(samples, position, scale)
+        taps::<2>(samples, position, scale, loop_start)
     };
     [sums[0] * scale, sums[1] * scale]
 }
@@ -140,94 +164,149 @@ pub(crate) fn read(samples: &[f32], channels: usize, position: f64, scale: f32) 
 /// The bits of a table position below its point.
 const POINT_BITS: u32 = 16;
 
-/// The kernel's sum over the taps around `position`, before its scale.
-/// Each tap's table position is kept in fixed point and steps by a whole
-/// number from the read outwards, so a tap needs no conversion from a float
-/// and its table index is exact. The taps before and after the read add up
-/// side by side, in two sums, so that neither waits on the other.
+struct KernelPlan {
+    below: i64,
+    before: i64,
+    after: i64,
+    earlier: usize,
+    later: usize,
+    step: i64,
+}
+
 #[inline]
-fn taps<const CHANNELS: usize>(samples: &[f32], position: f64, scale: f32) -> [f32; 2] {
-    let table = &**TABLE;
-    let frames = (samples.len() / CHANNELS) as i64;
+fn tap_count(at: i64, edge: i64, step: i64, per_step: f64) -> usize {
+    if at > edge {
+        return 0;
+    }
+    let mut count = ((edge - at) as f64 * per_step) as i64 + 1;
+    if at + count * step <= edge {
+        count += 1;
+    } else if at + (count - 1) * step > edge {
+        count -= 1;
+    }
+    count as usize
+}
+
+#[inline]
+fn plan_kernel(position: f64, scale: f32) -> KernelPlan {
     let unit = f64::from(1_u32 << POINT_BITS);
     let density = f64::from(scale) * DENSITY as f64 * unit;
     let step = density.round() as i64;
     let edge = (EDGE as i64) << POINT_BITS;
-    let below = position.floor();
-    let fraction = position - below;
-    let below = below as i64;
-    // The table positions of the nearest taps: the frame at or before the
-    // read, and the frame after it.
-    let (before, after) = (
-        (fraction * density).round() as i64,
-        ((1.0 - fraction) * density).round() as i64,
-    );
-    // The taps from `at` outwards up to the kernel's edge. A float quotient
-    // spares two integer divisions a frame; the check after it settles the
-    // last tap exactly.
+    let below_f = position.floor();
+    let fraction = position - below_f;
+    let before = (fraction * density).round() as i64;
+    let after = ((1.0 - fraction) * density).round() as i64;
     let per_step = 1.0 / step as f64;
-    let count = |at: i64| {
-        if at > edge {
-            return 0;
+    KernelPlan {
+        below: below_f as i64,
+        before,
+        after,
+        earlier: tap_count(before, edge, step, per_step),
+        later: tap_count(after, edge, step, per_step),
+        step,
+    }
+}
+
+#[inline]
+fn tap_weight(table: &[[f32; 2]], at: i64) -> f32 {
+    let [value, slope] = table[(at >> POINT_BITS) as usize];
+    let fraction = (at & ((1 << POINT_BITS) - 1)) as f32;
+    value + slope * (fraction * (1.0 / (1 << POINT_BITS) as f32))
+}
+
+#[inline]
+fn boundary_frame<const CHANNELS: usize>(
+    samples: &[f32],
+    frames: i64,
+    frame: i64,
+    loop_start: Option<usize>,
+) -> [f32; CHANNELS] {
+    let idx = match loop_start {
+        Some(ls) => {
+            let ls = ls.min(frames as usize - 1) as i64;
+            let len = (frames - ls).max(1);
+            ((frame - ls).rem_euclid(len) + ls) as usize
         }
-        let mut count = ((edge - at) as f64 * per_step) as i64 + 1;
-        if at + count * step <= edge {
-            count += 1;
-        } else if at + (count - 1) * step > edge {
-            count -= 1;
+        None => frame.clamp(0, frames - 1) as usize,
+    };
+    let start = idx * CHANNELS;
+    let mut values = [0.0; CHANNELS];
+    values.copy_from_slice(&samples[start..start + CHANNELS]);
+    values
+}
+
+#[inline]
+fn add_frame<const CHANNELS: usize>(sum: &mut [f64; 2], frame: &[f32; CHANNELS], weight: f32) {
+    for (sum, sample) in sum.iter_mut().zip(frame) {
+        *sum += f64::from(sample * weight);
+    }
+}
+
+#[inline]
+fn taps_edge<const CHANNELS: usize>(
+    samples: &[f32],
+    frames: i64,
+    plan: &KernelPlan,
+    loop_start: Option<usize>,
+    table: &[[f32; 2]],
+) -> [f32; 2] {
+    let mut sums = [0.0_f64; 2];
+    for (dir, base, count, mut at) in [
+        (-1_i64, plan.below, plan.earlier, plan.before),
+        (1_i64, plan.below + 1, plan.later, plan.after),
+    ] {
+        for tap in 0..count as i64 {
+            let f = boundary_frame::<CHANNELS>(samples, frames, base + dir * tap, loop_start);
+            add_frame(&mut sums, &f, tap_weight(table, at));
+            at += plan.step;
         }
-        count as usize
-    };
-    let (earlier, later) = (count(before), count(after));
-    let weight = |at: i64| {
-        let [value, slope] = table[(at >> POINT_BITS) as usize];
-        let fraction = (at & ((1 << POINT_BITS) - 1)) as f32;
-        value + slope * (fraction * (1.0 / (1 << POINT_BITS) as f32))
-    };
-    let add = |sum: &mut [f64; 2], frame: &[f32; CHANNELS], weight: f32| {
-        for (sum, sample) in sum.iter_mut().zip(frame) {
-            *sum += f64::from(sample * weight);
-        }
-    };
-    let (first, last) = (below + 1 - earlier as i64, below + later as i64);
+    }
+    [sums[0] as f32, sums[1] as f32]
+}
+
+/// The kernel's sum over the taps around `position`, before its scale.
+#[inline]
+fn taps<const CHANNELS: usize>(
+    samples: &[f32],
+    position: f64,
+    scale: f32,
+    loop_start: Option<usize>,
+) -> [f32; 2] {
+    let table = &**TABLE;
+    let frames = (samples.len() / CHANNELS) as i64;
+    let plan = plan_kernel(position, scale);
+    let (first, last) = (
+        plan.below + 1 - plan.earlier as i64,
+        plan.below + plan.later as i64,
+    );
+    let lower_bound = loop_start.unwrap_or(0) as i64;
+    if first < lower_bound || last >= frames {
+        return taps_edge::<CHANNELS>(samples, frames, &plan, loop_start, table);
+    }
     let mut sums = [[0.0_f64; 2]; 2];
-    let (mut at_before, mut at_after) = (before, after);
-    if first >= 0 && last < frames {
-        // Every tap is inside the source.
-        let (head, tail) = samples[first as usize * CHANNELS..(last as usize + 1) * CHANNELS]
-            .split_at(earlier * CHANNELS);
-        let mut head = head.as_chunks::<CHANNELS>().0.iter().rev();
-        let mut tail = tail.as_chunks::<CHANNELS>().0.iter();
-        for (back, ahead) in head.by_ref().zip(tail.by_ref()).take(earlier.min(later)) {
-            add(&mut sums[0], back, weight(at_before));
-            add(&mut sums[1], ahead, weight(at_after));
-            at_before += step;
-            at_after += step;
-        }
-        for back in head {
-            add(&mut sums[0], back, weight(at_before));
-            at_before += step;
-        }
-        for ahead in tail {
-            add(&mut sums[1], ahead, weight(at_after));
-            at_after += step;
-        }
-    } else {
-        // Near an end, the taps past it read the end frame.
-        let frame = |frame: i64| {
-            let start = frame.clamp(0, frames - 1) as usize * CHANNELS;
-            let mut values = [0.0; CHANNELS];
-            values.copy_from_slice(&samples[start..start + CHANNELS]);
-            values
-        };
-        for tap in 0..earlier as i64 {
-            add(&mut sums[0], &frame(below - tap), weight(at_before));
-            at_before += step;
-        }
-        for tap in 0..later as i64 {
-            add(&mut sums[1], &frame(below + 1 + tap), weight(at_after));
-            at_after += step;
-        }
+    let (mut at_before, mut at_after) = (plan.before, plan.after);
+    let (head, tail) = samples[first as usize * CHANNELS..(last as usize + 1) * CHANNELS]
+        .split_at(plan.earlier * CHANNELS);
+    let mut head = head.as_chunks::<CHANNELS>().0.iter().rev();
+    let mut tail = tail.as_chunks::<CHANNELS>().0.iter();
+    for (back, ahead) in head
+        .by_ref()
+        .zip(tail.by_ref())
+        .take(plan.earlier.min(plan.later))
+    {
+        add_frame(&mut sums[0], back, tap_weight(table, at_before));
+        add_frame(&mut sums[1], ahead, tap_weight(table, at_after));
+        at_before += plan.step;
+        at_after += plan.step;
+    }
+    for back in head {
+        add_frame(&mut sums[0], back, tap_weight(table, at_before));
+        at_before += plan.step;
+    }
+    for ahead in tail {
+        add_frame(&mut sums[1], ahead, tap_weight(table, at_after));
+        at_after += plan.step;
     }
     [
         (sums[0][0] + sums[1][0]) as f32,
@@ -552,5 +631,23 @@ mod tests {
             String::from_utf8_lossy(&result.stdout),
             String::from_utf8_lossy(&result.stderr)
         );
+    }
+
+    #[test]
+    fn looped_read_wraps_periodically_across_the_loop_seam() {
+        // Exact period over frames 50..250 -> length 200.
+        let mut source = vec![0.0_f32; 250];
+        for (i, sample) in source[50..].iter_mut().enumerate() {
+            *sample = (2.0 * PI * 3.0 * i as f64 / 200.0).sin() as f32;
+        }
+        for offset in [0.0, 0.37, 199.4, 200.25, 210.75] {
+            let pos = 50.0 + offset;
+            let got = read_looped(&source, 1, 50, pos, 1.0)[0];
+            let expected = (2.0 * PI * 3.0 * offset / 200.0).sin() as f32;
+            assert!(
+                (got - expected).abs() < 1e-4,
+                "offset {offset}: got {got}, expected {expected}"
+            );
+        }
     }
 }

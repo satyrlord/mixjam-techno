@@ -51,6 +51,7 @@ pub(super) struct Source<'a> {
     pub available: bool,
     pub missing: bool,
     pub explicit_file: bool,
+    pub synth_mode: bool,
     /// The source's length in ms, when it can be read. Start stays inside it.
     pub length_ms: Option<f64>,
 }
@@ -58,15 +59,16 @@ pub(super) struct Source<'a> {
 impl Source<'_> {
     /// True when the palette's sound is missing and no file replaces it.
     fn missing_audio(&self) -> bool {
-        self.missing && !self.explicit_file
+        !self.synth_mode && self.missing && !self.explicit_file
     }
 
     /// True when Listen and Save sound have audio to play.
     fn playable(&self) -> bool {
-        self.available && !self.missing_audio()
+        self.synth_mode || (self.available && !self.missing_audio())
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) enum Action {
     None,
     ChooseSource,

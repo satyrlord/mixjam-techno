@@ -27,6 +27,13 @@ The name of each pitch cell has its step and its pitch, such as
 the scale: `Note A, in scale.` or `Note C#, not in scale.` Read it with
 `ui all=true contains="Step 16"`.
 
+In the settings column (`window="Step synth"`), use `Source mode Sample` and
+`Source mode Synth`. In Synth mode, use `Oscillator Saw`, `Oscillator Square`,
+`Oscillator Triangle`, `Synth octave down`, `Synth octave up`, and `Sub`. Note
+that `Synth octave down`/`up` shift the built-in oscillator, while `Octave
+down`/`up` shift the pitch grid. Under Voice, use `Step synth preset`, `Amp
+decay`, `Filter env`, and `Env decay`.
+
 ## Arrangement edits
 
 The arrangement lanes are one painted surface. These requests edit them

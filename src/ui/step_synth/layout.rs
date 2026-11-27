@@ -8,7 +8,7 @@ pub(super) const BOARD_INSET: f32 = 2.0;
 pub(in super::super) const MODULE_HEIGHT: f32 = 512.0 + 2.0 * BOARD_INSET + 64.0;
 /// The settings column's width, and the height of its content.
 pub(super) const SETTINGS_WIDTH: f32 = 232.0;
-pub(super) const SETTINGS_HEIGHT: f32 = 496.0;
+pub(super) const SETTINGS_HEIGHT: f32 = 672.0;
 /// Steps a pattern stores, and the steps in a bar.
 pub(super) const STEPS: usize = pattern::STEPS;
 pub(super) const BAR: usize = pattern::BAR_STEPS;

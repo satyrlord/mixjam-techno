@@ -44,12 +44,16 @@ impl Standalone {
             missing,
             explicit_file,
         } = self;
-        let source = || step_synth::Source {
+        let source = |synth_mode| step_synth::Source {
             name: "Source",
             available: *available,
             missing: *missing,
             explicit_file: *explicit_file,
+            synth_mode,
             length_ms: None,
+        };
+        let is_synth = |s: &StepSynthState| {
+            s.source_mode == mixjam_techno::application::pattern::SourceMode::Synth
         };
         let output = ctx.run(
             egui::RawInput {
@@ -61,12 +65,13 @@ impl Standalone {
             |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     // Import details sits in the top row above the board.
+                    let synth_mode = is_synth(state);
                     let bar = ui
                         .horizontal(|ui| {
                             step_synth::toolbar(
                                 ui,
                                 800.0,
-                                source(),
+                                source(synth_mode),
                                 effects,
                                 step_synth::History {
                                     undo: false,
@@ -76,9 +81,10 @@ impl Standalone {
                             )
                         })
                         .inner;
+                    let synth_mode = is_synth(state);
                     action = step_synth::show(
                         ui,
-                        source(),
+                        source(synth_mode),
                         state,
                         view_bar,
                         *effects,
@@ -201,5 +207,80 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
             .take_notice()
             .is_some_and(|(message, _)| message.contains("Audio output is unavailable")),
         "Step synth options must not start the transport."
+    );
+}
+
+#[test]
+fn the_idle_hint_asks_for_a_source_only_in_sample_mode() {
+    let source = |synth_mode| step_synth::Source {
+        name: "Source",
+        available: false,
+        missing: false,
+        explicit_file: false,
+        synth_mode,
+        length_ms: None,
+    };
+    assert_eq!(
+        step_synth::hint(&source(false), false),
+        "Choose a source file or select a sound in the palette."
+    );
+    assert_eq!(
+        step_synth::hint(&source(true), false),
+        "Click places or clears a note. Drag a note's end to hold it."
+    );
+    assert_eq!(
+        step_synth::hint(&source(true), true),
+        "Adjust the pattern effects. Notes returns to the grid."
+    );
+}
+
+#[test]
+fn standalone_synth_mode_enables_listen_and_save_without_sample_and_keeps_notes() {
+    use mixjam_techno::application::pattern::{OscWaveform, SourceMode, step_synth_presets};
+    let (ctx, mut app) = board_fixture();
+    app.selection.sample = None;
+    app.step_synth.state.steps[2] = Step::note(7);
+    let placed_notes = app.step_synth.state.steps.clone();
+    let output = settle(&ctx, &mut app, 4);
+    assert!(accessible_node(&output, "Listen").1.is_disabled());
+    assert!(accessible_node(&output, "Save sound").1.is_disabled());
+
+    let output = activate_control(&ctx, &mut app, &output, "Source mode Synth");
+    assert_eq!(app.step_synth.state.source_mode, SourceMode::Synth);
+    assert!(!accessible_node(&output, "Listen").1.is_disabled());
+    assert!(!accessible_node(&output, "Save sound").1.is_disabled());
+    let output = activate_control(&ctx, &mut app, &output, "Oscillator Square");
+    assert_eq!(app.step_synth.state.osc_waveform, OscWaveform::Square);
+    let output = activate_control(&ctx, &mut app, &output, "Synth octave up");
+    assert_eq!(app.step_synth.state.osc_octave, 1);
+    let _output = activate_control(&ctx, &mut app, &output, "Synth octave down");
+    assert_eq!(app.step_synth.state.osc_octave, 0);
+    app.step_synth.state.osc_octave = 2;
+    let output = settle(&ctx, &mut app, 2);
+    let up = accessible_node(&output, "Synth octave up").1;
+    assert!(up.is_disabled());
+    assert_eq!(
+        up.description(),
+        Some("The oscillator is at its highest octave.")
+    );
+    assert_eq!(
+        accessible_node(&output, "Synth octave down")
+            .1
+            .description(),
+        Some("Play the oscillator one octave lower.")
+    );
+    app.step_synth.state.osc_octave = 0;
+
+    let acid = step_synth_presets()
+        .into_iter()
+        .find(|p| p.name == "303 Acid Saw")
+        .expect("303 Acid Saw preset");
+    acid.apply(&mut app.step_synth.state);
+    assert_eq!(app.step_synth.state.steps, placed_notes);
+    assert!(app.step_synth.state.validate().is_ok());
+    assert!(
+        app.session
+            .step_synth_pcm(None, &app.step_synth.state)
+            .is_ok()
     );
 }

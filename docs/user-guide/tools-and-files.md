@@ -12,8 +12,8 @@
   edit** plays the draft. **Save edited sound** writes a new WAV file in the
   Wave category.
 - **Stretch** opens Time Stretcher, which fits a sound to a tempo. **Effects**
-  opens Effect Studio, which applies effects to a sound. Both save a new WAV
-  sample.
+  opens Effect Studio, which applies six effect bays across eight presets and
+  three tail modes (**Trim**, **Wrap**, and **Ring**) to save a new WAV.
 
 ### Step synth
 
@@ -23,9 +23,11 @@ maximum of four bars. A wide panel shows all four bars at the same time.
 
 To make a sound:
 
-1. Choose the source: select **Source file…**, or select a sound in the
-   Sounds panel and then **Palette sound**. A new source sets **Start** to
-   its first hit and turns **Loop source** off.
+1. Choose the source. In **Sample** mode, select **Source file…**, or select
+   a sound in the Sounds panel and then **Palette sound**. A new source sets
+   **Start** to its first hit and turns **Loop source** off. In **Synth**
+   mode, the board plays its own oscillator and needs no WAV file: choose
+   **Saw**, **Sq**, or **Tri**, then set **Octave** and **Sub**.
 2. Set **Length**, under Pattern, or drag the end marker on the step ruler.
    **×2** doubles the length and **÷2** halves it. If the new steps are
    empty, **×2** repeats the loop into them. Steps after the length keep
@@ -56,7 +58,11 @@ Other Step synth controls:
 - **Gate** sets how much of its last step a note plays, in percent. With
   swing, the step is the swung one, so a note on the beat plays longer than
   a note off the beat.
+- **Preset**, under Voice, loads eight voice and effects presets while keeping
+  all notes and rhythm.
 - **Swing**, **Accent**, and **Slide time** set the timing and the voice.
+  **Amp decay** fades each note out. **Filter env** and **Env decay** sweep
+  the filter cutoff at each note.
 - **Scale** and its root, in the top row of the grid, shade the pitch rows.
   All notes stay playable. **Randomise**, beside them, writes a new line in
   the scale for the length of the pattern.
@@ -71,9 +77,10 @@ Other Step synth controls:
   Ctrl+Y do the same. Elsewhere they act on the song.
 - **Fill** copies the bar in view onto every bar. **Clear**, under Pattern,
   clears every bar.
-- **Effects** shows the effects of the pattern. **Notes** shows the note grid
-  again. In the effects view, the strip beside **Listen** shows the step that
-  plays. The pattern plays as a loop, so the echo and filter tails at its end
+- **Effects** shows the six shared bays (**Filter**, **Modulation**, **Echo**,
+  **Robotize**, **Reverb**, and **Distortion / output**), and **Notes** returns
+  to the grid. In Effects view, the strip beside **Listen** lights the playing
+  step. The pattern plays as a loop, so the echo and filter tails at its end
   return at its start. **Delay (beats)** of the echo is from 1/16 to 2
   beats. A shorter delay in an older pattern file opens at 1/16 beat.
   **Cutoff** and **Color** show their values in Hz.

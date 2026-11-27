@@ -75,9 +75,42 @@ fn named_change<T: PartialEq>(editor: &mut Editor, before: T, after: T, what: &'
     }
 }
 
-/// The source's name, the keys that pick it, where its notes start, and
-/// Loop source.
-fn source_section(
+fn source_mode_keys(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, editor: &mut Editor) {
+    let half = at.half();
+    for (x, text, mode, hint) in [
+        (
+            0.0,
+            "Sample",
+            pattern::SourceMode::Sample,
+            "Play the selected WAV or palette sound.",
+        ),
+        (
+            half + 6.0,
+            "Synth",
+            pattern::SourceMode::Synth,
+            "Play the built-in oversampled oscillator without an audio sample.",
+        ),
+    ] {
+        let selected = state.source_mode == mode;
+        if key(
+            ui,
+            at.rect(x, 24.0, half, 24.0),
+            Key {
+                selected: Some(selected),
+                ..Key::new(&format!("Source mode {text}"), text)
+            },
+        )
+        .hover_hint(hint)
+        .clicked()
+            && !selected
+        {
+            state.source_mode = mode;
+            editor.edit("the source mode change");
+        }
+    }
+}
+
+fn sample_source_controls(
     ui: &mut egui::Ui,
     at: Place,
     source: &Source<'_>,
@@ -85,8 +118,7 @@ fn source_section(
     editor: &mut Editor,
 ) -> Option<Action> {
     let (width, half) = (at.width, at.half());
-    controls::section(ui, at.rect(0.0, 0.0, width, 20.0), "Source");
-    let source_rect = at.rect(0.0, 26.0, width, 28.0);
+    let source_rect = at.rect(0.0, 54.0, width, 28.0);
     controls::well(ui, source_rect);
     let label = ui.put(
         source_rect.shrink2(Vec2::new(8.0, 4.0)),
@@ -103,8 +135,6 @@ fn source_section(
         node.set_value(source.name);
     });
     label.hover_hint(source.name);
-    // Where the source comes from: the palette's selected sound, or
-    // a file. File… opens the chooser each time.
     let mut action = None;
     for (x, text, selected, next, hint) in [
         (
@@ -125,7 +155,7 @@ fn source_section(
     ] {
         if key(
             ui,
-            at.rect(x, 60.0, half, 28.0),
+            at.rect(x, 88.0, half, 28.0),
             Key {
                 selected: Some(selected),
                 ..Key::new(text, text)
@@ -137,10 +167,7 @@ fn source_section(
             action = Some(next);
         }
     }
-    // Where each note starts to read the source: a sound with silence
-    // before its hit plays late on every step without it.
     let before = state.start_ms;
-    // Start ends 1 ms before the source does, so a note always has audio.
     let high = source
         .length_ms
         .map_or(*pattern::START_MS_RANGE.end(), |ms| {
@@ -151,7 +178,7 @@ fn source_section(
         });
     dial(
         ui,
-        at.rect(0.0, 94.0, half, 48.0),
+        at.rect(0.0, 122.0, half, 48.0),
         &mut state.start_ms,
         Dial {
             name: "Start",
@@ -168,7 +195,7 @@ fn source_section(
     named_change(editor, before, state.start_ms, "the start change");
     let response = key(
         ui,
-        at.rect(half + 6.0, 94.0, half, 28.0),
+        at.rect(half + 6.0, 122.0, half, 28.0),
         Key {
             enabled: source.playable(),
             ..Key::new("Find start", "Find start")
@@ -182,12 +209,11 @@ fn source_section(
     if response.clicked() {
         action = Some(Action::FindStart);
     }
-    // Whether a note repeats its source: like Start, it suits one source.
     let looped = state.loop_source;
     toggle(
         ui,
-        at.point(half + 14.0, 135.0),
-        at.point(half + 30.0, 135.0),
+        at.point(half + 14.0, 163.0),
+        at.point(half + 30.0, 163.0),
         "Loop source",
         &mut state.loop_source,
     );
@@ -195,23 +221,140 @@ fn source_section(
     action
 }
 
-/// The pattern's length, its file keys, and Save sound.
-fn pattern_section(
+fn synth_source_controls(
     ui: &mut egui::Ui,
     at: Place,
     state: &mut StepSynthState,
     editor: &mut Editor,
-    icons: Option<&RailIcons>,
-    available: bool,
+) {
+    let (width, half) = (at.width, at.half());
+    let third = (width - 12.0) / 3.0;
+    for (i, (text, name, wave)) in [
+        ("Saw", "Oscillator Saw", pattern::OscWaveform::Saw),
+        ("Sq", "Oscillator Square", pattern::OscWaveform::Square),
+        ("Tri", "Oscillator Triangle", pattern::OscWaveform::Triangle),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let selected = state.osc_waveform == wave;
+        if key(
+            ui,
+            at.rect(i as f32 * (third + 6.0), 54.0, third, 28.0),
+            Key {
+                selected: Some(selected),
+                ..Key::new(name, text)
+            },
+        )
+        .hover_hint("Built-in oscillator waveform.")
+        .clicked()
+            && !selected
+        {
+            state.osc_waveform = wave;
+            editor.edit("the waveform change");
+        }
+    }
+    left_text(ui, at.point(2.0, 102.0), "Octave", 13.0, roles().legend);
+    let (min_oct, max_oct) = (
+        *pattern::OSC_OCTAVE_RANGE.start(),
+        *pattern::OSC_OCTAVE_RANGE.end(),
+    );
+    let before_oct = state.osc_octave;
+    if key(
+        ui,
+        at.rect(width - 108.0, 88.0, 28.0, 28.0),
+        Key {
+            enabled: state.osc_octave > min_oct,
+            ..Key::new("Synth octave down", "−")
+        },
+    )
+    .hover_hint("Play the oscillator one octave lower.")
+    .disabled_hint("The oscillator is at its lowest octave.")
+    .clicked()
+    {
+        state.osc_octave = (state.osc_octave - 1).max(min_oct);
+    }
+    let oct_well = at.rect(width - 76.0, 90.0, 44.0, 24.0);
+    controls::well(ui, oct_well);
+    let oct_label = if state.osc_octave > 0 {
+        format!("+{}", state.osc_octave)
+    } else {
+        format!("{}", state.osc_octave)
+    };
+    lettering(ui, oct_well.center(), &oct_label, 12.5, roles().legend);
+    if key(
+        ui,
+        at.rect(width - 28.0, 88.0, 28.0, 28.0),
+        Key {
+            enabled: state.osc_octave < max_oct,
+            ..Key::new("Synth octave up", "+")
+        },
+    )
+    .hover_hint("Play the oscillator one octave higher.")
+    .disabled_hint("The oscillator is at its highest octave.")
+    .clicked()
+    {
+        state.osc_octave = (state.osc_octave + 1).min(max_oct);
+    }
+    named_change(editor, before_oct, state.osc_octave, "the octave change");
+
+    let mut sub_pct = f64::from(state.osc_sub) * 100.0;
+    dial(
+        ui,
+        at.rect(0.0, 122.0, half, 48.0),
+        &mut sub_pct,
+        Dial {
+            name: "Sub",
+            low: 0.0,
+            high: 100.0,
+            reset: 0.0,
+            step: 2.0,
+            decimals: 0,
+            logarithmic: false,
+        },
+        "Sub mixes a square oscillator one octave below the primary waveform.",
+    );
+    let next_sub = (sub_pct / 100.0).clamp(0.0, 1.0) as f32;
+    named_change(editor, state.osc_sub, next_sub, "the sub level change");
+    state.osc_sub = next_sub;
+
+    let pitch_well = at.rect(half + 6.0, 132.0, half, 28.0);
+    controls::well(ui, pitch_well);
+    let hz = 65.406 * 2.0_f64.powi(i32::from(state.osc_octave));
+    let pitch_text = format!("C{} · {:.0} Hz", 2 + state.osc_octave, hz);
+    lettering(ui, pitch_well.center(), &pitch_text, 12.0, roles().legend);
+}
+
+/// The source's mode (Sample or Synth) and its controls.
+fn source_section(
+    ui: &mut egui::Ui,
+    at: Place,
+    source: &Source<'_>,
+    state: &mut StepSynthState,
+    editor: &mut Editor,
 ) -> Option<Action> {
+    controls::section(ui, at.rect(0.0, 0.0, at.width, 20.0), "Source");
+    source_mode_keys(ui, at, state, editor);
+    if state.source_mode == pattern::SourceMode::Synth {
+        synth_source_controls(ui, at, state, editor);
+        None
+    } else {
+        sample_source_controls(ui, at, source, state, editor)
+    }
+}
+
+fn pattern_length_row(
+    ui: &mut egui::Ui,
+    at: Place,
+    state: &mut StepSynthState,
+    editor: &mut Editor,
+) {
     let width = at.width;
-    controls::section(ui, at.rect(0.0, 158.0, width, 20.0), "Pattern");
-    // The pattern's length, with the keys that double and halve it.
     let before = state.length;
-    left_text(ui, at.point(2.0, 198.0), "Length", 13.0, roles().legend);
+    left_text(ui, at.point(2.0, 226.0), "Length", 13.0, roles().legend);
     length_control(
         ui,
-        at.rect(width - 132.0, 186.0, 52.0, 24.0),
+        at.rect(width - 132.0, 214.0, 52.0, 24.0),
         &mut state.length,
     );
     for (x, text, name, double, next, hint, disabled) in [
@@ -237,7 +380,7 @@ fn pattern_section(
         let enabled = next != state.length;
         let response = key(
             ui,
-            at.rect(x, 184.0, 34.0, 28.0),
+            at.rect(x, 212.0, 34.0, 28.0),
             Key {
                 enabled,
                 ..Key::new(name, text)
@@ -259,8 +402,17 @@ fn pattern_section(
     if state.length != before {
         editor.edit("the length change");
     }
+}
+
+fn pattern_file_row(
+    ui: &mut egui::Ui,
+    at: Place,
+    state: &mut StepSynthState,
+    editor: &mut Editor,
+    icons: Option<&RailIcons>,
+) -> Option<Action> {
     let mut action = None;
-    let third = (width - 12.0) / 3.0;
+    let third = (at.width - 12.0) / 3.0;
     for (x, text, name, icon, next, hint) in [
         (
             0.0,
@@ -282,7 +434,7 @@ fn pattern_section(
     ] {
         if key(
             ui,
-            at.rect(x, 218.0, third, 28.0),
+            at.rect(x, 246.0, third, 28.0),
             Key {
                 glyph: Glyph::rail(icons, icon),
                 ..Key::new(name, text)
@@ -297,7 +449,7 @@ fn pattern_section(
     let empty = pattern::pattern_is_empty(state);
     let response = key(
         ui,
-        at.rect(2.0 * third + 12.0, 218.0, third, 28.0),
+        at.rect(2.0 * third + 12.0, 246.0, third, 28.0),
         Key {
             enabled: !empty,
             ..Key::new("Clear pattern", "Clear")
@@ -316,9 +468,25 @@ fn pattern_section(
         editor.selection = None;
         editor.edit_saying("Clear pattern", "Cleared the pattern.".into());
     }
+    action
+}
+
+/// The pattern's length, its file keys, and Save sound.
+fn pattern_section(
+    ui: &mut egui::Ui,
+    at: Place,
+    state: &mut StepSynthState,
+    editor: &mut Editor,
+    icons: Option<&RailIcons>,
+    available: bool,
+) -> Option<Action> {
+    let width = at.width;
+    controls::section(ui, at.rect(0.0, 186.0, width, 20.0), "Pattern");
+    pattern_length_row(ui, at, state, editor);
+    let mut action = pattern_file_row(ui, at, state, editor, icons);
     let response = key(
         ui,
-        at.rect(0.0, 252.0, width, 28.0),
+        at.rect(0.0, 280.0, width, 28.0),
         Key {
             enabled: available,
             primary: true,
@@ -340,10 +508,10 @@ fn pattern_section(
 fn tempo_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, editor: &mut Editor) {
     let (width, half) = (at.width, at.half());
     let before = (state.bpm, state.swing, state.gate);
-    controls::section(ui, at.rect(0.0, 294.0, width, 20.0), "Tempo");
-    left_text(ui, at.point(2.0, 332.0), "BPM", 13.0, roles().legend);
+    controls::section(ui, at.rect(0.0, 322.0, width, 20.0), "Tempo");
+    left_text(ui, at.point(2.0, 360.0), "BPM", 13.0, roles().legend);
     ui.scope_builder(
-        egui::UiBuilder::new().max_rect(at.rect(44.0, 320.0, width - 44.0, 24.0)),
+        egui::UiBuilder::new().max_rect(at.rect(44.0, 348.0, width - 44.0, 24.0)),
         |ui| {
             form_style(ui);
             name_control(
@@ -355,7 +523,7 @@ fn tempo_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, edito
     let mut swing = f64::from(state.swing);
     dial(
         ui,
-        at.rect(0.0, 354.0, half, 48.0),
+        at.rect(0.0, 382.0, half, 48.0),
         &mut swing,
         Dial {
             name: "Swing",
@@ -373,7 +541,7 @@ fn tempo_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, edito
     let mut gate = f64::from(state.gate);
     dial(
         ui,
-        at.rect(half + 6.0, 354.0, half, 48.0),
+        at.rect(half + 6.0, 382.0, half, 48.0),
         &mut gate,
         Dial {
             name: "Gate",
@@ -393,14 +561,73 @@ fn tempo_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, edito
     named_change(editor, before.2, state.gate, "the gate change");
 }
 
-/// Accent and Slide time.
+fn voice_preset_combo(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    state: &mut StepSynthState,
+    editor: &mut Editor,
+) {
+    let current = pattern::matching_step_synth_preset(state).unwrap_or("Custom");
+    let ctx = ui.ctx().clone();
+    let mut combo_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    form_style(&mut combo_ui);
+    let combo = egui::ComboBox::from_id_salt("step-synth-preset")
+        .selected_text(current)
+        .width(rect.width())
+        .truncate()
+        .height(340.0);
+    let response = view::tall_menu(&ctx, || {
+        combo.show_ui(&mut combo_ui, |ui| {
+            for preset in pattern::step_synth_presets() {
+                if ui
+                    .selectable_label(preset.name == current, preset.name)
+                    .clicked()
+                {
+                    preset.apply(state);
+                    editor.edit("the preset change");
+                    ui.close();
+                }
+            }
+        })
+    })
+    .response;
+    controls::reveal_focus(ui, &response);
+    form::choice_named(&response, "Step synth preset", current);
+    response.hover_hint("Load Voice and Effects preset while keeping all notes.");
+}
+
+#[inline]
+fn snap_amp_decay(before: f64, raw: f64) -> f64 {
+    let min = *pattern::AMP_DECAY_MS_RANGE.start();
+    let max = *pattern::AMP_DECAY_MS_RANGE.end();
+    if raw <= 0.0 || (before >= min && raw < min) {
+        0.0
+    } else if before == 0.0 && raw > 0.0 && raw < min {
+        min
+    } else if raw < min * 0.5 {
+        0.0
+    } else {
+        raw.clamp(min, max)
+    }
+}
+
+/// Presets, Accent, Slide time, Amp decay, Filter envelope depth, and Env decay.
 fn voice_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, editor: &mut Editor) {
     let (width, half) = (at.width, at.half());
-    let before = (state.accent_db, state.slide_ms);
-    controls::section(ui, at.rect(0.0, 416.0, width, 20.0), "Voice");
+    controls::section(ui, at.rect(0.0, 444.0, width, 20.0), "Voice");
+    left_text(ui, at.point(2.0, 483.0), "Preset", 13.0, roles().legend);
+    voice_preset_combo(ui, at.rect(52.0, 470.0, width - 52.0, 26.0), state, editor);
+
+    let before = (
+        state.accent_db,
+        state.slide_ms,
+        state.amp_decay_ms,
+        state.filter_env_amount,
+        state.filter_env_decay_ms,
+    );
     dial(
         ui,
-        at.rect(0.0, 442.0, half, 48.0),
+        at.rect(0.0, 504.0, half, 48.0),
         &mut state.accent_db,
         Dial {
             name: "Accent",
@@ -415,7 +642,7 @@ fn voice_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, edito
     );
     dial(
         ui,
-        at.rect(half + 6.0, 442.0, half, 48.0),
+        at.rect(half + 6.0, 504.0, half, 48.0),
         &mut state.slide_ms,
         Dial {
             name: "Slide time",
@@ -428,8 +655,70 @@ fn voice_section(ui: &mut egui::Ui, at: Place, state: &mut StepSynthState, edito
         },
         "Slide time is how long a slide takes to reach the next note's pitch, in ms.",
     );
+    let mut amp_decay = state.amp_decay_ms;
+    dial(
+        ui,
+        at.rect(0.0, 558.0, half, 48.0),
+        &mut amp_decay,
+        Dial {
+            name: "Amp decay",
+            low: 0.0,
+            high: *pattern::AMP_DECAY_MS_RANGE.end(),
+            reset: 0.0,
+            step: 5.0,
+            decimals: 0,
+            logarithmic: false,
+        },
+        "Exponential volume decay per phrase in ms; 0 keeps full note gate sustain.",
+    );
+    state.amp_decay_ms = snap_amp_decay(before.2, amp_decay);
+    let mut env_pct = f64::from(state.filter_env_amount) * 100.0;
+    dial(
+        ui,
+        at.rect(half + 6.0, 558.0, half, 48.0),
+        &mut env_pct,
+        Dial {
+            name: "Filter env",
+            low: -100.0,
+            high: 100.0,
+            reset: 0.0,
+            step: 2.0,
+            decimals: 0,
+            logarithmic: false,
+        },
+        "Bipolar filter envelope depth in percent; accented notes boost the sweep.",
+    );
+    state.filter_env_amount = (env_pct / 100.0).clamp(-1.0, 1.0) as f32;
+    dial(
+        ui,
+        at.rect(0.0, 612.0, half, 48.0),
+        &mut state.filter_env_decay_ms,
+        Dial {
+            name: "Env decay",
+            low: *pattern::FILTER_ENV_DECAY_MS_RANGE.start(),
+            high: *pattern::FILTER_ENV_DECAY_MS_RANGE.end(),
+            reset: pattern::DEFAULT_FILTER_ENV_DECAY_MS,
+            step: 5.0,
+            decimals: 0,
+            logarithmic: true,
+        },
+        "Filter envelope sweep decay time in ms.",
+    );
     named_change(editor, before.0, state.accent_db, "the accent level change");
     named_change(editor, before.1, state.slide_ms, "the slide time change");
+    named_change(editor, before.2, state.amp_decay_ms, "the amp decay change");
+    named_change(
+        editor,
+        before.3,
+        state.filter_env_amount,
+        "the filter env change",
+    );
+    named_change(
+        editor,
+        before.4,
+        state.filter_env_decay_ms,
+        "the env decay change",
+    );
 }
 
 /// The pattern effects in place of the note grid. Listen keeps its place at

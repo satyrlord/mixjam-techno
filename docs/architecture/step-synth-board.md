@@ -31,12 +31,13 @@ these items:
 The pattern does not save the grid view. `src/ui/view/boards.rs` adapts the
 actions of the panel to current `Session` operations.
 
-The board only draws and reads input. The pattern edits and the board's undo
-history do not use the GUI. They are in `src/synth/edit.rs` and
-`src/synth/history.rs`, and the board calls them through
-`application::pattern`. Thus a change of look stays in the board files, and
-`src/synth/edit_tests.rs` tests the edits without a window. The board files
-are these:
+The board only draws and reads input. Pattern synthesis, presets, edits, and
+board undo history live in `src/synth.rs`, `src/synth/osc.rs`,
+`src/synth/render.rs`, `src/synth/presets.rs`, `src/synth/edit.rs`, and
+`src/synth/history.rs`. The board calls them through `application::pattern`.
+Thus a change of look stays in the board files, and `src/synth/edit_tests.rs`
+and `src/synth/tests.rs` test pattern edits and synthesis without a window. The
+board files are these:
 
 - `step_synth.rs`: the source, actions, and the board's frame.
 - `editor.rs`: the grid view, and its link to the undo history.
@@ -57,8 +58,10 @@ stand-alone packed files. The predictor starts from the header word. The audio
 ends at the last complete opcode, also if the header declares a longer
 duration.
 
-When the user selects Listen or Save sound, `Session::step_synth_pcm` reads the
-source and renders it synchronously. The
+When the user selects Listen or Save sound, `Session::step_synth_pcm` renders
+synchronously: in `SourceMode::Sample` it reads the chosen source and calls
+`synth::render_measured`, and in `SourceMode::Synth` it synthesizes standalone
+at 44,100 Hz through `synth::render_standalone_measured` without a WAV. The
 frontend then requests the PCM preview or the WAV save workflow. Save registers
 the result in Step synth at the draft BPM and keeps the source selection.
 `Session::save_sequence` stages the WAV and the draft at
@@ -71,18 +74,19 @@ the board is hidden. An unrelated application notice stays visible, and an
 explicit file keeps its own feedback. For missing palette audio, the board
 offers Import details.
 
-`synth::render_measured` gives the render and the number of dB that it turned
-the render down. `effects::process_synth` runs the pattern effects without a
-clip. If the peak is over full scale, it scales the whole render to full scale.
-Robotize fits whole carrier cycles into the pattern loop when a cycle fits
-below 45% of the sample rate. This keeps the carrier in phase at the loop seam.
-Listen and Save sound name the dB in their message.
+`synth::render_measured` and `synth::render_standalone_measured` give the stereo
+render and the number of dB turned down. `effects::process_synth_voiced` runs
+the pattern effects with per-frame `FilterMod` cutoff octaves and resonance
+boost from the two-pass wrap-preroll filter and accent envelope. If the peak is
+over full scale, it scales the render to full scale. Robotize fits whole carrier
+cycles into the loop below 45% of the sample rate. Listen and Save sound name
+the dB in their message.
 
-`MixJamApp::step_synth_adopt_source` watches the source key: the file path,
-or the palette sound. The board keeps the first source after the start or a
-load as it is. A later change sets Start to the first hit of the new source and
-turns Loop source off, as one undo step. It also gives the source length, which
-limits the Start dial.
+`MixJamApp::step_synth_adopt_source` skips adoption in `SourceMode::Synth` and
+otherwise watches the source key: the file path, or the palette sound. The board
+keeps the first source after the start or a load as it is. A later change sets
+Start to the first hit of the new source and turns Loop source off, as one undo
+step. It also gives the source length, which limits the Start dial.
 
 Pattern save and load use `Session::save_pattern` and
 `Session::load_pattern_snapped`, which also gives the BPM of the file. A load
@@ -106,13 +110,17 @@ so a window above the board keeps its own input. The L key runs
 `Command::StepSynthListen` while the board shows. The 25 visible pitch rows do
 not limit the serialized note range of -48 through +48.
 
-`synth::render` plays `StepSynthState::notes`. Each note continues through its
-ties. It then sounds for the share of its last step that the gate sets. If it
-slides into the next note, it sounds up to that note. A slide glides pitch and
-level over the slide time, and does not restart the source. A new target starts
-from the pitch and level that the slide has reached. Accent headroom passes
-through the sequence effects and the output gain before the final sample clamp.
-The public PCM boundaries still need normalized samples.
+`synth::render` plays `StepSynthState::notes` in stereo (`Sample` uses 48-tap
+Kaiser-sinc resampling via `crate::audio::resample` `read` and `read_looped`
+with an integer unity shortcut; `Synth` renders `8x` PolyBLEP and PolyBLAMP
+`Saw`, `Square`, or `Triangle` plus `-1` octave `Sub` through
+`FirDecimator8x`). Each note continues through its ties, sounds for the gate
+fraction of its last step, and fades out over 3 ms unless sliding. A slide
+glides pitch and level smoothly; `amp_decay_ms` applies legato exponential amp
+decay. Eight presets in `src/synth/presets.rs` apply Voice and Effects state
+while preserving notes and rhythm, and `.pattern.json` fields migrate with
+additive defaults. Accent headroom passes through sequence effects before the
+final clamp. The public PCM boundaries still need normalized samples.
 
 Swing delays each second sixteenth. The audition marker uses that timing and
 the preview revision, so another preview cannot keep an old marker. A pattern

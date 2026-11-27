@@ -23,7 +23,7 @@ pub(super) fn dial(ui: &mut egui::Ui, cell: Rect, value: &mut f64, spec: Dial<'_
         12.0,
         roles().legend,
     );
-    controls::rotary(
+    let rotary = controls::rotary(
         ui,
         Rect::from_center_size(center, Vec2::splat(44.0)),
         value,
@@ -37,8 +37,9 @@ pub(super) fn dial(ui: &mut egui::Ui, cell: Rect, value: &mut f64, spec: Dial<'_
             logarithmic: spec.logarithmic,
             choices: &[],
         },
-    )
-    .hover_hint(hint);
+    );
+    controls::reveal_focus(ui, &rotary);
+    rotary.hover_hint(hint);
     controls::well(ui, Rect::from_center_size(well, Vec2::new(54.0, 20.0)));
     ui.scope(|ui| {
         controls::value_style(ui);
@@ -50,6 +51,7 @@ pub(super) fn dial(ui: &mut egui::Ui, cell: Rect, value: &mut f64, spec: Dial<'_
                 .speed(spec.step)
                 .fixed_decimals(spec.decimals),
         );
+        controls::reveal_focus(ui, &response);
         name_control(response, &format!("{} value", spec.name))
             .hover_hint(format!("{}: drag, or click to enter a value.", spec.name));
     });

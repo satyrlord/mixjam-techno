@@ -8,7 +8,7 @@ use super::*;
 pub(in super::super) fn hint(source: &Source<'_>, show_effects: bool) -> &'static str {
     if source.missing_audio() {
         "Missing audio. Choose a source file or open Import details."
-    } else if !source.available {
+    } else if !source.playable() {
         "Choose a source file or select a sound in the palette."
     } else if show_effects {
         "Adjust the pattern effects. Notes returns to the grid."

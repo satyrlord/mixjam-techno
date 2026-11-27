@@ -319,3 +319,29 @@ fn focusing_a_rack_control_scrolls_it_into_the_short_step_synth_pane() {
         );
     }
 }
+
+#[test]
+fn voice_envelope_controls_scroll_into_view_and_stay_valid() {
+    let (ctx, mut app) = board_fixture();
+    no_animation(&ctx);
+    let size = Vec2::new(960.0, 720.0);
+    let mut output = settle_at(&ctx, &mut app, 4, size);
+    for label in ["Amp decay", "Filter env", "Env decay"] {
+        let node = step_synth_accessible_node(&output, label).0;
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![access_request(node, egui::accesskit::Action::Focus)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        output = settle_at(&ctx, &mut app, 4, size);
+        let control = step_synth_control_rect(&output, label);
+        let board = step_synth_board_rect(&output);
+        assert!(
+            board.contains_rect(control),
+            "Focused {label} {control:?} must scroll inside {board:?}."
+        );
+    }
+    assert!(app.step_synth.state.validate().is_ok());
+}

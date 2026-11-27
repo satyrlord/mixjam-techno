@@ -1,10 +1,7 @@
 //! Step synth patterns and their render. The step model (note, tie, or rest,
 //! with accent and slide), gate, swing, resampling, source looping, and DSP
 //! are the application's own policies.
-use crate::{
-    audio::Pcm,
-    effects::{self, EffectsState},
-};
+use crate::{audio::Pcm, effects::EffectsState};
 use serde::{Deserialize, Serialize};
 use std::{ops::RangeInclusive, path::PathBuf};
 
@@ -12,6 +9,13 @@ pub mod edit;
 #[cfg(test)]
 mod edit_tests;
 pub mod history;
+pub mod osc;
+pub mod presets;
+mod render;
+#[cfg(test)]
+mod tests;
+
+pub use presets::{StepSynthPreset, matching_step_synth_preset, step_synth_presets};
 
 /// The steps a pattern stores: four bars of sixteenths.
 pub const STEPS: usize = 64;
@@ -35,9 +39,60 @@ pub const ACCENT_DB_RANGE: RangeInclusive<f64> = 0.0..=12.0;
 pub const SLIDE_MS_RANGE: RangeInclusive<f64> = 1.0..=1000.0;
 /// Where each note starts to read the source, in ms from its beginning.
 pub const START_MS_RANGE: RangeInclusive<f64> = 0.0..=2000.0;
+/// Base octave shift for built-in oscillator synthesis around C2.
+pub const OSC_OCTAVE_RANGE: RangeInclusive<i8> = -2..=2;
+/// Exponential amp decay range in ms (`0.0` = Off / full gate).
+pub const AMP_DECAY_MS_RANGE: RangeInclusive<f64> = 15.0..=2000.0;
+/// Filter envelope decay range in ms.
+pub const FILTER_ENV_DECAY_MS_RANGE: RangeInclusive<f64> = 20.0..=2000.0;
+/// Default filter envelope decay time in ms.
+pub const DEFAULT_FILTER_ENV_DECAY_MS: f64 = 220.0;
+/// Sample rate used for standalone oscillator rendering.
+pub const SYNTH_SAMPLE_RATE: u32 = crate::audio::Mix::SAMPLE_RATE;
 /// The fade at the end of every note that does not slide, so a cut never
 /// clicks.
 const END_FADE_SECONDS: f64 = 0.003;
+
+/// Whether Step Synth triggers a WAV sample or its built-in anti-aliased oscillator.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceMode {
+    #[default]
+    Sample,
+    Synth,
+}
+
+/// Primary waveform in standalone Synth mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OscWaveform {
+    #[default]
+    Saw,
+    Square,
+    Triangle,
+}
+
+fn is_default_source_mode(v: &SourceMode) -> bool {
+    *v == SourceMode::Sample
+}
+fn is_default_osc_waveform(v: &OscWaveform) -> bool {
+    *v == OscWaveform::Saw
+}
+fn is_zero_f32(v: &f32) -> bool {
+    *v == 0.0
+}
+fn is_zero_f64(v: &f64) -> bool {
+    *v == 0.0
+}
+fn is_zero_i8(v: &i8) -> bool {
+    *v == 0
+}
+fn default_filter_env_decay_ms() -> f64 {
+    DEFAULT_FILTER_ENV_DECAY_MS
+}
+fn is_default_filter_env_decay(v: &f64) -> bool {
+    (*v - DEFAULT_FILTER_ENV_DECAY_MS).abs() < 1e-9
+}
 
 /// What a step does.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,6 +188,23 @@ pub struct StepSynthState {
     /// in the palette.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "is_default_source_mode")]
+    pub source_mode: SourceMode,
+    #[serde(default, skip_serializing_if = "is_default_osc_waveform")]
+    pub osc_waveform: OscWaveform,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub osc_sub: f32,
+    #[serde(default, skip_serializing_if = "is_zero_i8")]
+    pub osc_octave: i8,
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub amp_decay_ms: f64,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub filter_env_amount: f32,
+    #[serde(
+        default = "default_filter_env_decay_ms",
+        skip_serializing_if = "is_default_filter_env_decay"
+    )]
+    pub filter_env_decay_ms: f64,
 }
 impl Default for StepSynthState {
     fn default() -> Self {
@@ -152,6 +224,13 @@ impl Default for StepSynthState {
             root: 0,
             start_ms: 0.0,
             source: None,
+            source_mode: SourceMode::default(),
+            osc_waveform: OscWaveform::default(),
+            osc_sub: 0.0,
+            osc_octave: 0,
+            amp_decay_ms: 0.0,
+            filter_env_amount: 0.0,
+            filter_env_decay_ms: DEFAULT_FILTER_ENV_DECAY_MS,
         }
     }
 }
@@ -178,6 +257,20 @@ struct Stored {
     start_ms: f64,
     #[serde(default)]
     source: Option<PathBuf>,
+    #[serde(default)]
+    source_mode: SourceMode,
+    #[serde(default)]
+    osc_waveform: OscWaveform,
+    #[serde(default)]
+    osc_sub: f32,
+    #[serde(default)]
+    osc_octave: i8,
+    #[serde(default)]
+    amp_decay_ms: f64,
+    #[serde(default)]
+    filter_env_amount: f32,
+    #[serde(default = "default_filter_env_decay_ms")]
+    filter_env_decay_ms: f64,
 }
 
 /// Patterns saved before ties: one optional note per step, Active bar
@@ -218,6 +311,13 @@ impl TryFrom<serde_json::Value> for StepSynthState {
             root: stored.root,
             start_ms: stored.start_ms,
             source: stored.source,
+            source_mode: stored.source_mode,
+            osc_waveform: stored.osc_waveform,
+            osc_sub: stored.osc_sub,
+            osc_octave: stored.osc_octave,
+            amp_decay_ms: stored.amp_decay_ms,
+            filter_env_amount: stored.filter_env_amount,
+            filter_env_decay_ms: stored.filter_env_decay_ms,
         })
     }
 }
@@ -268,10 +368,7 @@ impl StepSynthState {
         })
     }
 
-    pub fn validate(&self) -> Result<(), String> {
-        if !self.bpm.is_finite() || !(30.0..=300.0).contains(&self.bpm) {
-            return Err("Tempo must be from 30 to 300 BPM.".into());
-        }
+    fn validate_steps(&self) -> Result<(), String> {
         if self.steps.len() != STEPS
             || self
                 .steps
@@ -289,6 +386,39 @@ impl StepSynthState {
         {
             return Err("Each step's velocity must be from 1 to 100.".into());
         }
+        Ok(())
+    }
+
+    fn validate_osc(&self) -> Result<(), String> {
+        if !self.osc_sub.is_finite() || !(0.0..=1.0).contains(&self.osc_sub) {
+            return Err("Sub oscillator level must be from 0 to 100 percent.".into());
+        }
+        if !OSC_OCTAVE_RANGE.contains(&self.osc_octave) {
+            return Err("Oscillator octave must be from -2 to +2.".into());
+        }
+        Ok(())
+    }
+
+    fn validate_envelopes(&self) -> Result<(), String> {
+        let amp_ok = self.amp_decay_ms == 0.0 || AMP_DECAY_MS_RANGE.contains(&self.amp_decay_ms);
+        if !self.amp_decay_ms.is_finite() || !amp_ok {
+            return Err("Amp decay must be Off (0) or from 15 to 2000 ms.".into());
+        }
+        if !self.filter_env_amount.is_finite() || !(-1.0..=1.0).contains(&self.filter_env_amount) {
+            return Err("Filter envelope depth must be from -100 to +100 percent.".into());
+        }
+        if !self.filter_env_decay_ms.is_finite()
+            || !FILTER_ENV_DECAY_MS_RANGE.contains(&self.filter_env_decay_ms)
+        {
+            return Err("Filter envelope decay must be from 20 to 2000 ms.".into());
+        }
+        Ok(())
+    }
+
+    fn validate_rhythm(&self) -> Result<(), String> {
+        if !self.bpm.is_finite() || !(30.0..=300.0).contains(&self.bpm) {
+            return Err("Tempo must be from 30 to 300 BPM.".into());
+        }
         if !LENGTH_RANGE.contains(&self.length) {
             return Err("The pattern length must be from 1 to 64 steps.".into());
         }
@@ -298,6 +428,10 @@ impl StepSynthState {
         if !SWING_RANGE.contains(&self.swing) {
             return Err("Swing must be from 50 to 75 percent.".into());
         }
+        Ok(())
+    }
+
+    fn validate_expression(&self) -> Result<(), String> {
         if !self.accent_db.is_finite() || !ACCENT_DB_RANGE.contains(&self.accent_db) {
             return Err("The accent level must be from 0 to 12 dB.".into());
         }
@@ -310,6 +444,15 @@ impl StepSynthState {
         if !self.start_ms.is_finite() || !START_MS_RANGE.contains(&self.start_ms) {
             return Err("The source start must be from 0 to 2000 ms.".into());
         }
+        Ok(())
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        self.validate_rhythm()?;
+        self.validate_steps()?;
+        self.validate_expression()?;
+        self.validate_osc()?;
+        self.validate_envelopes()?;
         self.effects.validate()
     }
 
@@ -362,6 +505,7 @@ impl StepSynthState {
                 },
                 note,
                 gain: f64::from(step.velocity) / 100.0 * if step.accent { accent } else { 1.0 },
+                accent: step.accent,
                 slide_in,
             });
             slide_in = legato;
@@ -378,6 +522,7 @@ pub struct Note {
     pub end: f64,
     pub note: i8,
     pub gain: f64,
+    pub accent: bool,
     /// The note before it glides into this one without restarting the source.
     pub slide_in: bool,
 }
@@ -402,123 +547,28 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
 /// can raise a normalized source above full scale; the whole render is then
 /// turned down, so no note hard-clips and the accents keep their contrast.
 pub fn render_measured(source: &Pcm, state: &StepSynthState) -> Result<(Pcm, f64), String> {
+    if state.source_mode == SourceMode::Synth {
+        source.validate()?;
+        return render::render_measured(None, state, source.sample_rate.max(1));
+    }
     source.validate()?;
-    state.validate()?;
     if source.frames() == 0 {
         return Err("Choose a nonempty sample.".into());
     }
-    let sample_rate = f64::from(source.sample_rate);
-    let frames_per_step = sample_rate * 60.0 / state.bpm / 4.0;
-    let frame = |steps: f64| (steps * frames_per_step).round() as usize;
-    // The longest sequence, 63 steps repeated to 1,008, lasts about 8 minutes
-    // at 30 BPM. That fits a WAV file at any supported rate.
-    let total_frames = frame(state.sequence_steps() as f64);
-    let mut samples = vec![0.0; total_frames];
-    let source_frames = source.frames() as usize;
-    let channel_count = usize::from(source.channels);
-    let mono = |frame: usize| {
-        source.samples[frame * channel_count..(frame + 1) * channel_count]
-            .iter()
-            .sum::<f32>()
-            / channel_count as f32
-    };
-    // Each note reads the source from the start; a looped source repeats
-    // from there too.
-    let start_frame = (state.start_ms / 1000.0 * sample_rate).round();
-    if start_frame >= source_frames as f64 {
-        return Err(format!(
-            "The source start, {:.0} ms, is past the end of the source.",
-            state.start_ms
-        ));
+    render::render_measured(Some(source), state, source.sample_rate)
+}
+
+/// Render a pattern in standalone `SourceMode::Synth` at the mix sample rate.
+pub fn render_standalone(state: &StepSynthState) -> Result<Pcm, String> {
+    render_standalone_measured(state).map(|(pcm, _)| pcm)
+}
+
+/// Render a standalone synth pattern and return the turned-down attenuation in dB.
+pub fn render_standalone_measured(state: &StepSynthState) -> Result<(Pcm, f64), String> {
+    if state.source_mode != SourceMode::Synth {
+        return Err("Standalone synth rendering requires Synth source mode.".into());
     }
-    let loop_frames = source_frames as f64 - start_frame;
-    let fade_frames = (END_FADE_SECONDS * sample_rate).round().max(1.0);
-    let slide_frames = (state.slide_ms / 1000.0 * sample_rate).max(1.0);
-    let notes = state.notes();
-    let mut first = 0;
-    while first < notes.len() {
-        // A phrase is a note and the notes it slides into: the source plays
-        // on through it without restarting.
-        let mut after = first + 1;
-        while after < notes.len() && notes[after].slide_in {
-            after += 1;
-        }
-        let phrase = &notes[first..after];
-        first = after;
-        let start = frame(phrase[0].start);
-        let end = frame(phrase[phrase.len() - 1].end).min(total_frames);
-        let mut written_end = start.min(end);
-        let mut position = start_frame;
-        let mut current = 0;
-        let mut slide_from = (f64::from(phrase[0].note), phrase[0].gain);
-        let interpolate = |from: (f64, f64), to: Note, t: f64| {
-            (
-                from.0 + (f64::from(to.note) - from.0) * t,
-                from.1 + (to.gain - from.1) * t,
-            )
-        };
-        for (index, output) in (start..end).zip(&mut samples[start.min(end)..end]) {
-            while current + 1 < phrase.len() && index >= frame(phrase[current + 1].start) {
-                let before = phrase[current];
-                let t = ((frame(phrase[current + 1].start) - frame(before.start)) as f64
-                    / slide_frames)
-                    .min(1.0);
-                // Retarget an unfinished glide from its current pitch and
-                // level, rather than jumping to the previous target.
-                slide_from = if current == 0 {
-                    (f64::from(before.note), before.gain)
-                } else {
-                    interpolate(slide_from, before, t)
-                };
-                current += 1;
-            }
-            let note = phrase[current];
-            let (semitones, gain) = if current > 0 {
-                let t = ((index - frame(note.start)) as f64 / slide_frames).min(1.0);
-                interpolate(slide_from, note, t)
-            } else {
-                (f64::from(note.note), note.gain)
-            };
-            if state.loop_source && position >= source_frames as f64 {
-                position = start_frame + (position - start_frame) % loop_frames;
-            }
-            if position >= source_frames as f64 {
-                break;
-            }
-            let first = position.floor() as usize;
-            let next = if state.loop_source && first + 1 >= source_frames {
-                start_frame as usize
-            } else if state.loop_source {
-                first + 1
-            } else {
-                (first + 1).min(source_frames - 1)
-            };
-            let a = mono(first);
-            let value = a + (mono(next) - a) * (position - first as f64) as f32;
-            *output = value * gain as f32;
-            written_end = index + 1;
-            position += 2f64.powf(semitones / 12.0);
-        }
-        // The source can run out before the gate or the end of a slide
-        // phrase. Fade where audio actually ends in either case.
-        let fade_start = written_end
-            .saturating_sub(fade_frames as usize)
-            .max(start.min(end));
-        for (index, output) in (fade_start..written_end).zip(&mut samples[fade_start..written_end])
-        {
-            *output *= ((written_end - index) as f64 / fade_frames) as f32;
-        }
-    }
-    let (pcm, gain) = effects::process_synth(
-        &Pcm {
-            sample_rate: source.sample_rate,
-            channels: 1,
-            samples,
-        },
-        &state.effects,
-        state.bpm,
-    )?;
-    Ok((pcm, -20.0 * f64::from(gain).log10()))
+    render::render_measured(None, state, SYNTH_SAMPLE_RATE)
 }
 
 /// Where the source's first hit starts, in whole ms for the Start setting:
@@ -539,437 +589,4 @@ pub fn first_hit(source: &Pcm) -> f64 {
     let ms = (index / channels) as f64 * 1000.0 / f64::from(source.sample_rate) - 1.0;
     ms.floor()
         .clamp(*START_MS_RANGE.start(), *START_MS_RANGE.end())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn flat_source() -> Pcm {
-        Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: vec![0.5; 4000],
-        }
-    }
-
-    fn rest_pattern() -> StepSynthState {
-        StepSynthState {
-            bpm: 120.0,
-            steps: vec![Step::default(); STEPS],
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn a_note_sounds_for_the_gate_of_its_step_and_fades_out() {
-        // 120 BPM at 1000 Hz: 125 frames per step, a 3-frame end fade.
-        let mut state = rest_pattern();
-        state.steps[0] = Step::note(0);
-        state.gate = 50;
-        let output = render(&flat_source(), &state).unwrap();
-        assert_eq!(output.frames(), 2000);
-        assert!(output.samples[..61].iter().all(|x| *x == 0.5));
-        assert!(output.samples[61] < 0.5 && output.samples[62] > 0.0);
-        assert!(output.samples[63..].iter().all(|x| *x == 0.0));
-    }
-
-    #[test]
-    fn source_exhaustion_fades_at_the_actual_end_including_slides() {
-        for (pitch, slide) in [(0, false), (12, false), (0, true)] {
-            let source = Pcm {
-                sample_rate: 1000,
-                channels: 1,
-                samples: vec![0.5; if slide { 200 } else { 100 }],
-            };
-            let mut state = rest_pattern();
-            state.steps[0] = Step {
-                slide,
-                ..Step::note(pitch)
-            };
-            if slide {
-                state.steps[1] = Step::note(12);
-            }
-            let output = render(&source, &state).unwrap();
-            let end = output.samples.iter().rposition(|x| *x != 0.0).unwrap() + 1;
-            assert!(end < if slide { 250 } else { 125 });
-            assert_eq!(output.samples[end - 3], 0.5);
-            assert!((output.samples[end - 2] - 1.0 / 3.0).abs() < 1e-6);
-            assert!((output.samples[end - 1] - 1.0 / 6.0).abs() < 1e-6);
-            assert!(output.samples[end..].iter().all(|x| *x == 0.0));
-
-            state.loop_source = true;
-            let output = render(&source, &state).unwrap();
-            let scheduled_end = if slide { 250 } else { 125 };
-            assert_eq!(output.samples[scheduled_end - 3], 0.5);
-            assert!(output.samples[scheduled_end - 1] > 0.0);
-            assert_eq!(output.samples[scheduled_end], 0.0);
-        }
-    }
-
-    #[test]
-    fn ties_hold_a_note_and_a_new_note_restarts_the_source() {
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: (0..1000).map(|i| i as f32 / 1000.0).collect(),
-        };
-        let mut state = rest_pattern();
-        state.steps[0] = Step::note(0);
-        state.steps[1] = Step::tie();
-        state.steps[2] = Step::note(12);
-        for step in &mut state.steps[3..8] {
-            *step = Step::tie();
-        }
-        let output = render(&source, &state).unwrap();
-        // The tie keeps reading: frame 200 is 0.2, not a restart.
-        assert_eq!(output.samples[200], 0.2);
-        assert_eq!(output.samples[250], 0.0);
-        assert_eq!(output.samples[251], 0.002);
-        // An octave up reads twice as fast and runs out after 500 frames.
-        assert!(output.samples[747] > 0.99);
-        assert!(output.samples[749] > 0.0 && output.samples[749] < 0.34);
-        assert_eq!(output.samples[750], 0.0);
-    }
-
-    #[test]
-    fn a_slide_glides_into_the_next_note_without_restarting() {
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: (0..1000).map(|i| i as f32 / 1000.0).collect(),
-        };
-        let mut state = rest_pattern();
-        state.steps[0] = Step {
-            slide: true,
-            ..Step::note(0)
-        };
-        state.steps[1] = Step::note(12);
-        state.slide_ms = 100.0;
-        let notes = state.notes();
-        assert_eq!(notes.len(), 2);
-        assert_eq!(notes[0].end, 1.0);
-        assert!(notes[1].slide_in);
-        let output = render(&source, &state).unwrap();
-        // No restart at frame 125, and halfway through the glide the source
-        // reads faster than at the original pitch.
-        assert!(output.samples[125] > 0.12);
-        let step = output.samples[176] - output.samples[175];
-        assert!(step > 0.0013 && step < 0.002, "{step}");
-    }
-
-    #[test]
-    fn unfinished_slides_retarget_the_current_pitch_and_level() {
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: (0..10000).map(|i| i as f32 / 10000.0).collect(),
-        };
-        let mut state = rest_pattern();
-        state.slide_ms = 1000.0;
-        for (index, note) in [0, 12, 24].into_iter().enumerate() {
-            state.steps[index] = Step {
-                slide: index < 2,
-                ..Step::note(note)
-            };
-        }
-        let output = render(&source, &state).unwrap();
-        // The first glide has reached only 1.5 semitones when the third
-        // note starts at frame 250. Its next source step must continue there.
-        let increment = output.samples[251] - output.samples[250];
-        let expected = 2f32.powf(1.5 / 12.0) / 10000.0;
-        assert!((increment - expected).abs() < 1e-8, "{increment}");
-
-        state.steps[0].velocity = 20;
-        state.steps[1].velocity = 100;
-        state.steps[2].velocity = 40;
-        let output = render(&flat_source(), &state).unwrap();
-        // The level has moved one eighth of the way from 0.2 to 1.0.
-        assert!((output.samples[250] - 0.15).abs() < 1e-6);
-        assert!((output.samples[250] - output.samples[249]).abs() < 0.001);
-    }
-
-    #[test]
-    fn accent_and_velocity_set_the_level() {
-        let mut state = rest_pattern();
-        state.steps[0] = Step {
-            velocity: 50,
-            ..Step::note(0)
-        };
-        state.steps[1] = Step {
-            accent: true,
-            ..Step::note(0)
-        };
-        state.accent_db = 6.0;
-        let output = render(&flat_source(), &state).unwrap();
-        assert_eq!(output.samples[10], 0.25);
-        assert!((output.samples[135] - 0.5 * 10f32.powf(0.3)).abs() < 1e-6);
-    }
-
-    #[test]
-    fn a_loud_render_is_turned_down_whole_instead_of_clipping() {
-        // A full-scale source with a 6 dB accent peaks at twice full scale.
-        let mut source = flat_source();
-        source.samples.fill(1.0);
-        let mut state = rest_pattern();
-        state.steps[0] = Step::note(0);
-        state.steps[1] = Step {
-            accent: true,
-            ..Step::note(0)
-        };
-        state.accent_db = 6.0;
-        let (output, turned_down) = render_measured(&source, &state).unwrap();
-        let accent = 10f64.powf(0.3);
-        assert!(
-            (turned_down - 20.0 * accent.log10()).abs() < 1e-4,
-            "{turned_down}"
-        );
-        // The accented note reaches full scale; the plain one keeps the
-        // accent's contrast below it.
-        assert!((output.samples[135] - 1.0).abs() < 1e-6);
-        assert!((output.samples[10] - (1.0 / accent) as f32).abs() < 1e-5);
-        let full_scale = output.samples.iter().filter(|x| x.abs() >= 1.0).count();
-        assert!(
-            full_scale < 125,
-            "Only the accented step reaches full scale."
-        );
-
-        state.steps[1].accent = false;
-        let (output, turned_down) = render_measured(&source, &state).unwrap();
-        assert_eq!(turned_down, 0.0);
-        assert_eq!(output.samples[10], 1.0);
-    }
-
-    #[test]
-    fn full_accent_keeps_headroom_until_the_effects_output_gain() {
-        let mut source = flat_source();
-        source.samples.fill(0.8);
-        let mut state = rest_pattern();
-        state.steps[0] = Step {
-            accent: true,
-            ..Step::note(0)
-        };
-        state.accent_db = 12.0;
-        state.effects.volume = 0.2;
-        let output = render(&source, &state).unwrap();
-        let expected = 0.8 * 10f32.powf(12.0 / 20.0) * 0.2;
-        assert!((output.samples[10] - expected).abs() < 1e-6);
-        output.validate().unwrap();
-
-        state.effects.volume = 1.0;
-        let output = render(&source, &state).unwrap();
-        assert_eq!(output.samples[10], 1.0);
-        output.validate().unwrap();
-        source.samples[0] = 1.0;
-        assert!(render(&source, &state).is_ok());
-        source.samples[0] = 1.01;
-        assert!(render(&source, &state).is_err());
-    }
-
-    #[test]
-    fn swing_delays_every_second_sixteenth() {
-        let mut state = rest_pattern();
-        state.steps[1] = Step::note(0);
-        state.swing = 75;
-        let notes = state.notes();
-        assert_eq!((notes[0].start, notes[0].end), (1.5, 2.0));
-        let output = render(&flat_source(), &state).unwrap();
-        assert_eq!(output.samples[186], 0.0);
-        assert_eq!(output.samples[188], 0.5);
-    }
-
-    #[test]
-    fn an_odd_length_renders_until_it_lines_up_with_the_bar() {
-        let mut state = rest_pattern();
-        state.length = 12;
-        state.steps[0] = Step::note(0);
-        state.steps[20] = Step::note(5);
-        assert_eq!(state.sequence_steps(), 48);
-        let starts: Vec<f64> = state.notes().iter().map(|note| note.start).collect();
-        assert_eq!(starts, vec![0.0, 12.0, 24.0, 36.0]);
-        assert_eq!(render(&flat_source(), &state).unwrap().frames(), 6000);
-        state.length = 63;
-        assert_eq!(state.sequence_steps(), 1008);
-        state.length = 64;
-        assert_eq!(state.sequence_steps(), 64);
-    }
-
-    #[test]
-    fn old_patterns_preserve_note_timing_and_bar_contents() {
-        let mut steps = vec![None; 64];
-        steps[0] = Some(0);
-        steps[4] = Some(7);
-        steps[32] = Some(-3);
-        steps[48] = Some(12);
-        let old = serde_json::json!({
-            "bpm": 140.0,
-            "active_bars": [true, false, true, false],
-            "steps": steps,
-            "cut_sixteenth": false,
-            "loop_source": true,
-            "effects": EffectsState::default(),
-        });
-        let state: StepSynthState = serde_json::from_value(old.clone()).unwrap();
-        state.validate().unwrap();
-        assert_eq!(state.length, 32);
-        assert!(state.loop_source);
-        // Bar 1, then bar 3, then the inactive bars 2 and 4.
-        assert_eq!(state.steps[0], Step::note(0));
-        assert_eq!(state.steps[1], Step::tie());
-        assert_eq!(state.steps[4], Step::note(7));
-        assert_eq!(state.steps[16], Step::note(-3));
-        assert_eq!(state.steps[31], Step::tie());
-        assert_eq!(state.steps[32], Step::default());
-        assert_eq!(state.steps[48], Step::note(12));
-        assert_eq!(state.steps[63], Step::tie());
-        let notes = state.notes();
-        assert_eq!(
-            notes
-                .iter()
-                .map(|note| (note.start, note.end, note.note))
-                .collect::<Vec<_>>(),
-            vec![(0.0, 4.0, 0), (4.0, 16.0, 7), (16.0, 32.0, -3)]
-        );
-
-        let mut cut = old;
-        cut["cut_sixteenth"] = true.into();
-        let state: StepSynthState = serde_json::from_value(cut).unwrap();
-        assert_eq!(state.steps[1], Step::default());
-        assert_eq!(state.notes()[0].end, 1.0);
-    }
-
-    #[test]
-    fn old_patterns_without_an_active_bar_stay_invalid() {
-        let old = serde_json::json!({
-            "bpm": 140.0,
-            "active_bars": vec![false; 4],
-            "steps": vec![Some(0); STEPS],
-            "cut_sixteenth": false,
-            "loop_source": false,
-            "effects": EffectsState::default(),
-        });
-        let error = serde_json::from_value::<StepSynthState>(old).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("Switch on at least one Active bar.")
-        );
-    }
-
-    #[test]
-    fn serialized_state_roundtrips_and_invalid_values_are_rejected() {
-        let mut state = StepSynthState::default();
-        state.steps[3] = Step {
-            accent: true,
-            slide: true,
-            velocity: 40,
-            ..Step::note(-5)
-        };
-        state.steps[4] = Step::tie();
-        let saved = serde_json::to_vec(&state).unwrap();
-        assert_eq!(
-            serde_json::from_slice::<StepSynthState>(&saved).unwrap(),
-            state
-        );
-        let text = String::from_utf8(saved).unwrap();
-        assert!(text.contains(r#"{"trig":"tie"}"#), "{text}");
-        assert!(
-            text.contains("{},{}"),
-            "A rest saves as an empty step: {text}"
-        );
-
-        for change in [
-            (|s: &mut StepSynthState| s.steps[0] = Step::note(49)) as fn(&mut StepSynthState),
-            |s| s.steps[0].velocity = 0,
-            |s| s.length = 0,
-            |s| s.length = 65,
-            |s| s.gate = 4,
-            |s| s.swing = 76,
-            |s| s.accent_db = 13.0,
-            |s| s.slide_ms = 0.5,
-            |s| s.root = 12,
-            |s| s.start_ms = -1.0,
-            |s| s.start_ms = 2001.0,
-            |s| {
-                s.steps.pop();
-            },
-        ] {
-            let mut bad = state.clone();
-            change(&mut bad);
-            assert!(bad.validate().is_err());
-        }
-        let mut unknown = serde_json::to_value(&state).unwrap();
-        unknown["extra"] = 1.into();
-        assert!(serde_json::from_value::<StepSynthState>(unknown).is_err());
-
-        // The scale, root, start, and source save with the pattern; a
-        // pattern saved before them loads with the defaults.
-        state.scale = edit::Scale::Dorian;
-        state.root = 5;
-        state.start_ms = 12.0;
-        state.source = Some(PathBuf::from("kick.wav"));
-        let saved = serde_json::to_value(&state).unwrap();
-        assert_eq!(saved["scale"], "dorian");
-        assert_eq!(
-            serde_json::from_value::<StepSynthState>(saved.clone()).unwrap(),
-            state
-        );
-        let mut old = saved;
-        for field in ["scale", "root", "start_ms", "source"] {
-            old.as_object_mut().unwrap().remove(field);
-        }
-        let old = serde_json::from_value::<StepSynthState>(old).unwrap();
-        assert_eq!(
-            (old.scale, old.root, old.start_ms, old.source),
-            (edit::Scale::Minor, 0, 0.0, None)
-        );
-        let text = serde_json::to_string(&StepSynthState::default()).unwrap();
-        assert!(!text.contains("\"source\""), "{text}");
-    }
-
-    #[test]
-    fn the_start_skips_the_source_head_and_loops_from_it() {
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: (0..100).map(|i| i as f32 / 100.0).collect(),
-        };
-        let mut state = rest_pattern();
-        state.steps[0] = Step::note(0);
-        state.gate = 100;
-        state.start_ms = 40.0;
-        let output = render(&source, &state).unwrap();
-        assert_eq!(output.samples[0], 0.4);
-        // Without a loop the 60 frames after the start run out.
-        assert_eq!(output.samples[60], 0.0);
-        state.loop_source = true;
-        let output = render(&source, &state).unwrap();
-        assert_eq!(output.samples[59], 0.99);
-        assert_eq!(output.samples[60], 0.4);
-        state.start_ms = 100.0;
-        assert!(
-            render(&source, &state)
-                .unwrap_err()
-                .contains("past the end")
-        );
-    }
-
-    #[test]
-    fn the_first_hit_is_found_after_leading_silence() {
-        let mut samples = vec![0.0; 2 * 1000];
-        samples[2 * 30] = 0.01;
-        samples[2 * 50 + 1] = -0.8;
-        let source = Pcm {
-            sample_rate: 1000,
-            channels: 2,
-            samples,
-        };
-        assert_eq!(first_hit(&source), 49.0);
-        let silent = Pcm {
-            sample_rate: 1000,
-            channels: 1,
-            samples: vec![0.0; 10],
-        };
-        assert_eq!(first_hit(&silent), 0.0);
-    }
 }

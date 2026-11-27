@@ -1,9 +1,9 @@
 //! Zero-delay-feedback multimode SVF and nonlinear 4-pole ladder filter
 //! with 2x high-frequency de-cramping and 16x FIR + ADAA2 input drive.
-use super::{Filter, FilterMode, oversample_with_preroll, run_oversampled_16x};
+use super::{Filter, FilterMod, FilterMode, oversample_with_preroll, run_oversampled_16x};
 use crate::fx::DistortionShape;
 use crate::fx::adaa::{Adaa2State, curve_only};
-use crate::fx::oversample::HalfBandIir2x;
+use crate::fx::oversample::{FirOversampler, HalfBandIir2x};
 use std::f64::consts::{PI, SQRT_2};
 
 const MIN_HZ: f64 = 16.0;
@@ -87,7 +87,23 @@ impl FilterCore {
 
     #[inline]
     fn step(&mut self, x: f64, mode: FilterMode, cutoff: f64, res: f64, rate: f64) -> f64 {
-        if cutoff > 0.16 * rate {
+        self.step_at(x, mode, cutoff, res, rate, needs_decramp(cutoff, rate))
+    }
+
+    /// One SVF step at the base rate, or at twice the rate through the
+    /// half-band pair. A modulated cutoff keeps one path for the whole render:
+    /// a change of path in the signal is a click.
+    #[inline]
+    fn step_at(
+        &mut self,
+        x: f64,
+        mode: FilterMode,
+        cutoff: f64,
+        res: f64,
+        rate: f64,
+        decramp: bool,
+    ) -> f64 {
+        if decramp {
             let mut decramp = self.decramp;
             let y = decramp.process(x, |up| self.step_svf(up, mode, cutoff, res, rate * 2.0));
             self.decramp = decramp;
@@ -96,6 +112,12 @@ impl FilterCore {
             self.step_svf(x, mode, cutoff, res, rate)
         }
     }
+}
+
+/// True when the SVF runs at twice the rate to keep its response near Nyquist.
+#[inline]
+fn needs_decramp(cutoff: f64, rate: f64) -> bool {
+    cutoff > 0.16 * rate
 }
 
 fn drive_curve(drive: f32) -> impl FnMut(f64) -> f64 {
@@ -127,6 +149,28 @@ fn filter_warm_frames(looped: bool, cutoff_hz: f64, filter: &Filter, rate: f64) 
     warm_frames.max(256)
 }
 
+#[inline]
+fn modulated_cutoff_res(
+    base_hz: f64,
+    base_res: f64,
+    oct: f32,
+    boost: f32,
+    rate: f64,
+) -> (f64, f64) {
+    let hz = (base_hz * 2.0_f64.powf(f64::from(oct).clamp(-6.0, 8.0))).clamp(MIN_HZ, rate * 0.48);
+    let res = (base_res + f64::from(boost)).clamp(0.0, 0.98);
+    (hz, res)
+}
+
+#[inline]
+fn env_frame_at(k: usize, pre_start: usize, n: usize, looped: bool) -> usize {
+    if looped {
+        (pre_start + k) % n
+    } else {
+        k.min(n - 1)
+    }
+}
+
 fn apply_svf(
     driven: &mut [f64],
     filter: &Filter,
@@ -150,24 +194,153 @@ fn apply_svf(
     }
 }
 
-pub(super) fn apply(channel: &mut [f64], filter: &Filter, rate: f64, looped: bool) {
+fn apply_svf_modulated(
+    driven: &mut [f64],
+    filter: &Filter,
+    rate: f64,
+    looped: bool,
+    warm_frames: usize,
+    m: FilterMod<'_>,
+) {
+    let n = driven.len();
+    let base_hz = f64::from(filter.cutoff_hz).max(MIN_HZ).min(rate * 0.48);
+    let base_res = f64::from(filter.resonance).clamp(0.0, 1.0);
+    if filter.drive > 0.0 {
+        run_oversampled_16x(driven, looped, drive_curve(filter.drive));
+    }
+    // The cutoff rises with the octaves, so the highest one picks the path.
+    let top = m.cutoff_octaves.iter().copied().fold(f32::MIN, f32::max);
+    let decramp = needs_decramp(modulated_cutoff_res(base_hz, 0.0, top, 0.0, rate).0, rate);
+    let mut core = FilterCore::ZERO;
+    let pre = if looped { warm_frames } else { 0 };
+    let pre_start = n - pre % n;
+    for k in 0..pre {
+        let idx = (pre_start + k) % n;
+        let (hz, res) = modulated_cutoff_res(
+            base_hz,
+            base_res,
+            m.cutoff_octaves[idx],
+            m.res_boost[idx],
+            rate,
+        );
+        core.step_at(driven[idx], filter.mode, hz, res, rate, decramp);
+    }
+    for (i, sample) in driven.iter_mut().enumerate() {
+        let (hz, res) =
+            modulated_cutoff_res(base_hz, base_res, m.cutoff_octaves[i], m.res_boost[i], rate);
+        *sample = core.step_at(*sample, filter.mode, hz, res, rate, decramp);
+    }
+}
+
+fn apply_ladder_modulated(
+    driven: &mut [f64],
+    filter: &Filter,
+    rate: f64,
+    looped: bool,
+    warm_frames: usize,
+    m: FilterMod<'_>,
+) {
+    let n = driven.len();
+    crate::fx::prepare_tables();
+    let lat = FirOversampler::LATENCY_16X;
+    let half_lat = lat / 2;
+    let pre = if looped { warm_frames } else { 0 };
+    let pre_start = n - pre % n;
+    let base_hz = f64::from(filter.cutoff_hz).max(MIN_HZ).min(rate * 0.48);
+    let base_res = f64::from(filter.resonance).clamp(0.0, 1.0);
+    let mut os = FirOversampler::new(true);
+    let mut core = FilterCore::ZERO;
+    let mut drive = drive_curve(filter.drive);
+    let src = driven.to_vec();
+    let total = pre + n + lat;
+    for k in 0..total {
+        let idx = env_frame_at(k, pre_start, n, looped);
+        let x = if k < pre + n || looped { src[idx] } else { 0.0 };
+        let e0 = if looped {
+            (idx + n - half_lat % n) % n
+        } else {
+            k.saturating_sub(half_lat).min(n - 1)
+        };
+        let e1 = if looped {
+            (e0 + 1) % n
+        } else {
+            (e0 + 1).min(n - 1)
+        };
+        let (hz0, r0) = modulated_cutoff_res(
+            base_hz,
+            base_res,
+            m.cutoff_octaves[e0],
+            m.res_boost[e0],
+            rate,
+        );
+        let (hz1, r1) = modulated_cutoff_res(
+            base_hz,
+            base_res,
+            m.cutoff_octaves[e1],
+            m.res_boost[e1],
+            rate,
+        );
+        let t0 = (PI * hz0 / (16.0 * rate)).tan();
+        let t1 = (PI * hz1 / (16.0 * rate)).tan();
+        let (g0, dg) = (t0 / (1.0 + t0), (t1 / (1.0 + t1) - t0 / (1.0 + t0)) / 16.0);
+        let (k0, dk) = (LADDER_MAX_FB * r0, LADDER_MAX_FB * (r1 - r0) / 16.0);
+        let mut sub = 0_usize;
+        let y = os.process(x, |s| {
+            let g = g0 + dg * sub as f64;
+            let fb = k0 + dk * sub as f64;
+            sub += 1;
+            core.step_ladder(drive(s), g, fb)
+        });
+        if k >= pre + lat {
+            driven[k - pre - lat] = y;
+        }
+    }
+}
+
+fn apply_ladder_unmodulated(
+    driven: &mut [f64],
+    filter: &Filter,
+    rate: f64,
+    looped: bool,
+    base_hz: f64,
+    warm_frames: usize,
+) {
+    let mut core = FilterCore::ZERO;
+    let res = f64::from(filter.resonance).clamp(0.0, 1.0);
+    let tan_w = (PI * base_hz / (16.0 * rate)).tan();
+    let g = tan_w / (1.0 + tan_w);
+    let mut drive = drive_curve(filter.drive);
+    oversample_with_preroll(driven, looped, warm_frames, |x| {
+        core.step_ladder(drive(x), g, LADDER_MAX_FB * res)
+    });
+}
+
+pub(super) fn apply(
+    channel: &mut [f64],
+    filter: &Filter,
+    rate: f64,
+    looped: bool,
+    modulation: Option<FilterMod<'_>>,
+) {
     if !filter.enabled || filter.wet <= 0.0 || channel.is_empty() {
         return;
     }
     let mut driven = channel.to_vec();
     let base_hz = f64::from(filter.cutoff_hz).max(MIN_HZ).min(rate * 0.48);
     let warm_frames = filter_warm_frames(looped, base_hz, filter, rate);
-    if filter.mode == FilterMode::Lp24 {
-        let mut core = FilterCore::ZERO;
-        let res = f64::from(filter.resonance).clamp(0.0, 1.0);
-        let tan_w = (PI * base_hz / (16.0 * rate)).tan();
-        let g = tan_w / (1.0 + tan_w);
-        let mut drive = drive_curve(filter.drive);
-        oversample_with_preroll(&mut driven, looped, warm_frames, |x| {
-            core.step_ladder(drive(x), g, LADDER_MAX_FB * res)
-        });
-    } else {
-        apply_svf(&mut driven, filter, rate, looped, base_hz, warm_frames);
+    match (filter.mode, modulation) {
+        (FilterMode::Lp24, Some(m)) => {
+            apply_ladder_modulated(&mut driven, filter, rate, looped, warm_frames, m);
+        }
+        (FilterMode::Lp24, None) => {
+            apply_ladder_unmodulated(&mut driven, filter, rate, looped, base_hz, warm_frames);
+        }
+        (_, Some(m)) => {
+            apply_svf_modulated(&mut driven, filter, rate, looped, warm_frames, m);
+        }
+        (_, None) => {
+            apply_svf(&mut driven, filter, rate, looped, base_hz, warm_frames);
+        }
     }
     for (dry, y) in channel.iter_mut().zip(driven) {
         *dry += (y - *dry) * f64::from(filter.wet);
@@ -239,7 +412,7 @@ mod tests {
             drive: 1.0,
             wet: 1.0,
         };
-        apply(&mut tone, &filter, rate, false);
+        apply(&mut tone, &filter, rate, false, None);
         // This quarter second contains whole cycles of the tone and its harmonics.
         let settled = &tone[11_025..22_050];
         let n = settled.len() as f64;
@@ -284,7 +457,7 @@ mod tests {
                     ..Filter::default()
                 };
                 let mut output = input.clone();
-                apply(&mut output, &filter, rate, true);
+                apply(&mut output, &filter, rate, true, None);
                 let power = |signal: &[f64]| signal.iter().map(|x| x * x).sum::<f64>();
                 let measured = 10.0 * (power(&output) / power(&input)).log10();
                 let shown = f64::from(sample_filter_curve(&filter, 4)[1]);
@@ -307,7 +480,101 @@ mod tests {
             wet: 1.0,
         };
         let mut dc = [0.1];
-        apply(&mut dc, &filter, 44_100.0, true);
+        apply(&mut dc, &filter, 44_100.0, true, None);
         assert!((dc[0] - 0.1).abs() < 1e-6, "{}", dc[0]);
+    }
+
+    #[test]
+    fn a_cutoff_sweep_across_the_decramp_threshold_does_not_click() {
+        // A 0 to 3 octave ramp from 2 kHz crosses 0.16 of the rate (7,056 Hz)
+        // near frame 4,966. A change of the SVF path there was a step in the
+        // output: a second difference up to 45 times the local one.
+        let rate = 44_100.0;
+        let frames = 8192;
+        let input: Vec<f64> = (0..frames)
+            .map(|i| 0.4 * (std::f64::consts::TAU * 3_000.0 * i as f64 / rate).sin())
+            .collect();
+        let octs: Vec<f32> = (0..frames)
+            .map(|i| 3.0 * i as f32 / frames as f32)
+            .collect();
+        let res = vec![0.0_f32; frames];
+        for mode in [
+            FilterMode::Lp12,
+            FilterMode::Bp12,
+            FilterMode::Hp12,
+            FilterMode::Lp24,
+        ] {
+            let filter = Filter {
+                enabled: true,
+                mode,
+                cutoff_hz: 2000.0,
+                resonance: 0.4,
+                drive: 0.0,
+                wet: 1.0,
+            };
+            let mut out = input.clone();
+            apply(
+                &mut out,
+                &filter,
+                rate,
+                false,
+                Some(FilterMod {
+                    cutoff_octaves: &octs,
+                    res_boost: &res,
+                }),
+            );
+            let d2: Vec<f64> = (2..frames)
+                .map(|i| (out[i] - 2.0 * out[i - 1] + out[i - 2]).abs())
+                .collect();
+            // Two cycles of the tone on each side, away from the frame itself.
+            for i in 512..d2.len() - 40 {
+                let local = d2[i - 40..i - 10]
+                    .iter()
+                    .chain(&d2[i + 10..i + 40])
+                    .fold(0.0_f64, |a, &b| a.max(b));
+                assert!(
+                    d2[i] <= 1.5 * local + 1e-6,
+                    "{mode:?} click at frame {}: {} against {local}",
+                    i + 2,
+                    d2[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn modulated_filter_opens_above_nominal_cutoff() {
+        let rate = 44_100.0;
+        let frames = 4096;
+        let input: Vec<f64> = (0..frames)
+            .map(|i| 0.4 * (std::f64::consts::TAU * 2_000.0 * i as f64 / rate).sin())
+            .collect();
+        for mode in [FilterMode::Lp12, FilterMode::Lp24] {
+            let filter = Filter {
+                enabled: true,
+                mode,
+                cutoff_hz: 200.0,
+                resonance: 0.4,
+                drive: 0.0,
+                wet: 1.0,
+            };
+            let mut dark = input.clone();
+            apply(&mut dark, &filter, rate, false, None);
+            let mut open = input.clone();
+            let octs = vec![4.0_f32; frames];
+            let res = vec![0.1_f32; frames];
+            apply(
+                &mut open,
+                &filter,
+                rate,
+                false,
+                Some(FilterMod {
+                    cutoff_octaves: &octs,
+                    res_boost: &res,
+                }),
+            );
+            let rms = |s: &[f64]| (s.iter().map(|x| x * x).sum::<f64>() / s.len() as f64).sqrt();
+            assert!(rms(&open[512..]) > rms(&dark[512..]) * 6.0, "{mode:?}");
+        }
     }
 }

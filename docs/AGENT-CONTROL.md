@@ -63,6 +63,13 @@ controls start with `Inspector track` or `Inspector clip`.
 A modal blocks the controls behind it, as it does for a person. Each reply
 names the open modal and the open tool windows, and has the status line.
 
+In `window="Effect Studio"`, use `Effect preset` and `Tail mode Trim`, `Tail
+mode Wrap`, or `Tail mode Ring`. The six bays expose power switches (`Filter`,
+`Modulation`, `Echo`, `Robotize`, `Reverb`) and mode keys (`Filter mode
+LP12`/`LP24`/`BP12`/`HP12`, `Modulation mode Chorus`/`Phaser`, `Robotize mode
+Ring`/`Shift`, `Reverb space Room`/`Hall`/`Plate`, and `Distortion shape
+Warm`/`Acid`/`Fuzz`/`Crush`).
+
 ## Keyboard focus
 
 `state` and `ui` have a `focus` field. It is the control that has the keyboard

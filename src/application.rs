@@ -78,7 +78,9 @@ pub mod fx {
 /// Step synth pattern edits and the board's undo, apart from the screen.
 pub mod pattern {
     pub use crate::synth::{
-        BAR_STEPS, LENGTH_RANGE, NOTE_RANGE, START_MS_RANGE, STEPS, VELOCITY_RANGE,
+        AMP_DECAY_MS_RANGE, BAR_STEPS, DEFAULT_FILTER_ENV_DECAY_MS, FILTER_ENV_DECAY_MS_RANGE,
+        LENGTH_RANGE, NOTE_RANGE, OSC_OCTAVE_RANGE, OscWaveform, START_MS_RANGE, STEPS, SourceMode,
+        StepSynthPreset, VELOCITY_RANGE,
         edit::{
             BARS, Lane, Line, NoteEdit, ROOTS, Scale, bar_in_loop, bar_is_empty, clamp_length,
             clear_bar, clear_pattern, copy_bar, copy_target, covers, double_length, doubled_length,
@@ -87,6 +89,7 @@ pub mod pattern {
         },
         first_hit,
         history::PatternHistory,
+        matching_step_synth_preset, step_synth_presets,
     };
 }
 use crate::{

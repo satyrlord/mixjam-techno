@@ -16,9 +16,41 @@ pub enum RenderQuality {
 /// Inner high-rate stage for 8x/16x cascades: 15 taps (8 odd offsets).
 static OUTER_MID: LazyLock<[f32; 8]> = LazyLock::new(|| halfband(9.0));
 
+const DECIM_TAPS: usize = 159;
+const DECIM_HALF: usize = DECIM_TAPS / 2;
+const DECIM_CUTOFF: f64 = 0.228;
+const DECIM_BETA: f64 = 9.5;
+
+fn kaiser_i0(x: f64) -> f64 {
+    let half_sq = 0.25 * x * x;
+    (1..28)
+        .scan(1.0_f64, |term, k| {
+            let kf = f64::from(k);
+            *term *= half_sq / (kf * kf);
+            Some(*term)
+        })
+        .fold(1.0_f64, |acc, t| acc + t)
+}
+
+static DECIM_LP_2X: LazyLock<[f32; DECIM_TAPS]> = LazyLock::new(|| {
+    let i0_beta = kaiser_i0(DECIM_BETA);
+    let mut raw = [0.0_f64; DECIM_TAPS];
+    for (i, slot) in raw.iter_mut().enumerate() {
+        let m = i as f64 - DECIM_HALF as f64;
+        let ratio = m / DECIM_HALF as f64;
+        let win = kaiser_i0(DECIM_BETA * (1.0 - ratio * ratio).max(0.0).sqrt()) / i0_beta;
+        let arg = std::f64::consts::PI * 2.0 * DECIM_CUTOFF * m;
+        let sinc = if m == 0.0 { 1.0 } else { arg.sin() / arg };
+        *slot = 2.0 * DECIM_CUTOFF * sinc * win;
+    }
+    let sum: f64 = raw.iter().sum();
+    raw.map(|v| (v / sum) as f32)
+});
+
 /// Force initialization of FX/master oversampler tap tables before audio starts.
 pub(crate) fn prepare_tables() {
     LazyLock::force(&OUTER_MID);
+    LazyLock::force(&DECIM_LP_2X);
 }
 
 #[inline]
@@ -257,6 +289,47 @@ impl FirOversampler {
     }
 }
 
+/// Linear-phase 8x->1x FIR decimator: `OUTER_MID` (8x->4x), `INNER` (4x->2x),
+/// and a 159-tap Kaiser-sinc lowpass (2x->1x) reaching >90 dB stopband by Nyquist.
+#[derive(Clone, Copy)]
+pub(crate) struct FirDecimator8x {
+    s4: Halfband<8>,
+    s2: Halfband<12>,
+    s1_hist: [f32; DECIM_TAPS],
+}
+
+impl FirDecimator8x {
+    pub(crate) const LATENCY: usize = 43;
+
+    pub(crate) const fn new() -> Self {
+        Self {
+            s4: Halfband::ZERO,
+            s2: Halfband::ZERO,
+            s1_hist: [0.0; DECIM_TAPS],
+        }
+    }
+
+    #[inline]
+    pub(crate) fn decimate(&mut self, samples: [f32; 8]) -> f32 {
+        let mid = &*OUTER_MID;
+        let q0 = self.s4.down(mid, [samples[0], samples[1]]);
+        let q1 = self.s4.down(mid, [samples[2], samples[3]]);
+        let q2 = self.s4.down(mid, [samples[4], samples[5]]);
+        let q3 = self.s4.down(mid, [samples[6], samples[7]]);
+        let inner = &*INNER;
+        let r0 = self.s2.down(inner, [q0, q1]);
+        let r1 = self.s2.down(inner, [q2, q3]);
+        self.s1_hist.copy_within(2.., 0);
+        self.s1_hist[DECIM_TAPS - 2] = r0;
+        self.s1_hist[DECIM_TAPS - 1] = r1;
+        let mut acc = 0.0_f64;
+        for (&s, &w) in self.s1_hist.iter().zip(DECIM_LP_2X.iter()) {
+            acc += f64::from(s) * f64::from(w);
+        }
+        acc as f32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +415,41 @@ mod tests {
             }
         }
         assert!((peak_out - 1.0).abs() < 0.01, "18 kHz gain={peak_out}");
+    }
+
+    #[test]
+    fn decimator_8x_has_exact_latency_unity_dc_and_stopband_rejection() {
+        prepare_tables();
+        let mut dec = FirDecimator8x::new();
+        let mut sum = 0.0_f64;
+        let mut peak = 0.0_f32;
+        let mut peak_at = 0;
+        for i in 0..100 {
+            let block = if i == 0 { [1.0; 8] } else { [0.0; 8] };
+            let y = dec.decimate(block);
+            sum += f64::from(y);
+            if y.abs() > peak {
+                peak = y.abs();
+                peak_at = i;
+            }
+        }
+        assert_eq!(peak_at, FirDecimator8x::LATENCY);
+        assert!((sum - 1.0).abs() < 1e-4, "dc sum={sum}");
+
+        // Feed an above-Nyquist 30 kHz tone at 8*44100 Hz; verify > 85 dB stopband rejection.
+        let mut dec = FirDecimator8x::new();
+        let mut max_alias = 0.0_f32;
+        for frame in 0..512 {
+            let block: [f32; 8] = std::array::from_fn(|k| {
+                let sample = frame * 8 + k;
+                (2.0 * PI * 30_000.0 * sample as f64 / (8.0 * 44_100.0)).sin() as f32
+            });
+            let y = dec.decimate(block);
+            if frame >= 128 {
+                max_alias = max_alias.max(y.abs());
+            }
+        }
+        let db = 20.0 * f64::from(max_alias).max(1e-9).log10();
+        assert!(db < -85.0, "30 kHz stopband leakage {db:.1} dB");
     }
 }

@@ -9,11 +9,21 @@ the status bar.
 ## Board layout
 
 A settings column 232 points wide holds the sections Source, Pattern, Tempo,
-and Voice. It is 496 points high. At the usual panel height, it shows without a
-scroll. If the lower panel is short, the column scrolls on its own.
+and Voice. It is 672 points high. If the lower panel is shorter, the column
+scrolls on its own. A focused dial or the preset list scrolls into view.
 
-Source holds the source name, the keys Palette sound and Source file…, the
-Start dial, Find start, and Loop source. Pattern holds:
+Source starts with the mode keys Sample and Synth (Source mode Sample and
+Source mode Synth). In Sample mode, Source holds the source name, the keys
+Palette sound and Source file…, the Start dial, Find start, and Loop source. In
+Synth mode, Source holds:
+
+- the waveform keys Saw, Sq, and Tri (Oscillator Saw, Oscillator Square, and
+  Oscillator Triangle),
+- Octave, with Synth octave down and Synth octave up, from -2 to +2,
+- the Sub dial, 0 to 100 percent,
+- the pitch readout.
+
+Pattern holds:
 
 - the Length row with ×2 and ÷2,
 - Load and Save, with the Open and Save rail icons, and Clear,
@@ -157,17 +167,22 @@ states.
 ## Tempo and voice
 
 BPM is the compact tempo slider over 120, 125, 130, 135, 140, 160, and 180.
+Voice starts with the Preset list (Step synth preset). Its eight presets set
+the voice and the effects, and keep the notes, the length, Swing, and Gate.
 These dials have value wells:
 
 - Swing, 50 to 75 percent,
 - Gate, 5 to 100 percent,
 - Accent, 0 to 12 dB,
-- Slide time, 1 to 1000 ms.
+- Slide time, 1 to 1000 ms,
+- Amp decay, Off or 15 to 2000 ms,
+- Filter env, -100 to +100 percent,
+- Env decay, 20 to 2000 ms.
 
 Gate sets how much of its last step a note sounds. A note that slides into the
 next note ignores the gate. Loop source, in Source, repeats the audio while a
-note sounds. Keep the tooltips that explain retriggers, duration, repetition of
-the whole file, and slides.
+note sounds in Sample mode. Keep the tooltips that explain retriggers,
+duration, repetition of the whole file, and slides.
 
 The choice keys Notes and Effects, at the left of the top row, switch between
 the grid and the common effects form. Their accessible names are Notes pane and
@@ -176,13 +191,14 @@ toggled state.
 
 ## Actions and feedback
 
-Listen and Save sound need a source. Disabled actions say why. A pattern save
-keeps its validation. Processing is synchronous. Save sound writes a WAV in
-Step synth at the BPM of the draft. It keeps the source selection and saves the
-pattern next to the WAV as `Name.pattern.json`. A pattern load adopts the saved
-source path and keeps the viewed bar. If that source file is missing, the board
-uses the palette sound and shows a warning. If a loaded tempo is not one of the
-choices, it moves to the nearest one. The status line says so.
+In Sample mode, Listen and Save sound need a source. In Synth mode, they need
+no WAV. Disabled actions say why. A pattern save keeps its validation.
+Processing is synchronous. Save sound writes a WAV in Step synth at the BPM of
+the draft. It keeps the source selection and saves the pattern next to the WAV
+as `Name.pattern.json`. A pattern load adopts the saved source path and keeps
+the viewed bar. If that source file is missing, the board uses the palette
+sound and shows a warning. If a loaded tempo is not one of the choices, it
+moves to the nearest one. The status line says so.
 
 If a pattern peaks over full scale, for example from Accent and filter drive,
 the whole pattern plays and saves turned down to full scale. Listen and Save
@@ -191,11 +207,12 @@ sound then say by how many dB. The render does not clip.
 The status bar reports source guidance, preview, file choice, cancellation,
 errors, and save confirmation. At rest, while the board shows, it gives the
 board's hint. The hint says how to place notes or how to leave the Effects pane.
-If no source is available or its audio is missing, the hint says how to choose a
-source. A change of the palette source removes the message of the old source
-from the status bar, even if the board is hidden. Unrelated application notices
-stay visible. An explicit file keeps its own message. The full feedback stays in
-a tooltip and a polite accessible live region. Errors include an Error label.
-Missing palette audio offers Import details in the board's top row. Help
-explains the source, grid, bars, tempo, effects, and file workflow. If the lower
-panel folds, or another board shows, the draft and the source selection stay.
+In Sample mode, if no source is available or its audio is missing, the hint
+says how to choose a source. A change of the palette source removes the
+message of the old source from the status bar, even if the board is hidden.
+Unrelated application notices stay visible. An explicit file keeps its own
+message. The full feedback stays in a tooltip and a polite accessible live
+region. Errors include an Error label. Missing palette audio offers Import
+details in the board's top row. Help explains the source, grid, bars, tempo,
+effects, and file workflow. If the lower panel folds, or another board shows,
+the draft and the source selection stay.

@@ -466,19 +466,37 @@ impl Reverb {
 /// Process a standalone sample in Effect Studio honoring `state.tail_mode`.
 pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
     input.validate()?;
-    let output = process_validated(input, state, bpm, 1.0, state.tail_mode)?;
+    let output = process_validated(input, state, bpm, 1.0, state.tail_mode, None)?;
     output.validate()?;
     Ok(output)
 }
 
-/// Process a Step Synth sequence as a seamless loop (`WrapLoop`) with peak headroom normalization.
+/// Sample-accurate per-frame filter modulation supplied by Step Synth.
+#[derive(Clone, Copy)]
+pub(crate) struct FilterMod<'a> {
+    pub cutoff_octaves: &'a [f32],
+    pub res_boost: &'a [f32],
+}
+
+#[cfg(test)]
 pub(crate) fn process_synth(
     input: &Pcm,
     state: &EffectsState,
     bpm: f64,
 ) -> Result<(Pcm, f32), String> {
+    process_synth_voiced(input, state, bpm, None)
+}
+
+/// Process a Step Synth sequence with optional per-sample cutoff and resonance modulation.
+pub(crate) fn process_synth_voiced(
+    input: &Pcm,
+    state: &EffectsState,
+    bpm: f64,
+    filter_mod: Option<FilterMod<'_>>,
+) -> Result<(Pcm, f32), String> {
     input.validate_with_peak_limit(4.0)?;
-    let mut output = process_validated(input, state, bpm, f32::MAX, TailMode::WrapLoop)?;
+    let mut output =
+        process_validated(input, state, bpm, f32::MAX, TailMode::WrapLoop, filter_mod)?;
     let peak = output
         .samples
         .iter()
@@ -554,12 +572,34 @@ fn render_frame_limit(frames: usize, channels: usize, rate: f64) -> Result<usize
     Ok(wav_frames.min(frames.saturating_add(tail_frames)))
 }
 
+fn validate_filter_mod(filter_mod: Option<FilterMod<'_>>, frames: usize) -> Result<(), String> {
+    if let Some(m) = filter_mod
+        && (m.cutoff_octaves.len() != frames || m.res_boost.len() != frames)
+    {
+        return Err("Filter modulation length must match audio frames.".into());
+    }
+    Ok(())
+}
+
+fn apply_filter_stage(
+    channels: &mut [Vec<f64>],
+    filter: &Filter,
+    rate: f64,
+    looped: bool,
+    filter_mod: Option<FilterMod<'_>>,
+) {
+    for ch in channels {
+        filter::apply(ch, filter, rate, looped, filter_mod);
+    }
+}
+
 fn process_validated(
     input: &Pcm,
     state: &EffectsState,
     bpm: f64,
     ceiling: f32,
     tail: TailMode,
+    filter_mod: Option<FilterMod<'_>>,
 ) -> Result<Pcm, String> {
     state.validate()?;
     if !bpm.is_finite() || !crate::engine::TEMPO_RANGE.contains(&bpm) {
@@ -572,6 +612,7 @@ fn process_validated(
     };
     let frames = input.frames() as usize;
     let rate = f64::from(input.sample_rate);
+    validate_filter_mod(filter_mod, frames)?;
     let max_frames = render_frame_limit(frames, out_channels, rate)?;
     if state.is_bypassed() {
         return Ok(input.clone());
@@ -580,9 +621,7 @@ fn process_validated(
 
     let mut channels = extract_channels(input, out_channels);
     apply_noise(&mut channels, state.noise);
-    for ch in &mut channels {
-        filter::apply(ch, &state.filter, rate, looped);
-    }
+    apply_filter_stage(&mut channels, &state.filter, rate, looped, filter_mod);
     let mut stereo = to_stereo_frames(&channels);
     modulation::apply(&mut stereo, &state.modulation, rate, looped);
 

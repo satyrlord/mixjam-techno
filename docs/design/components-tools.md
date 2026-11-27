@@ -44,12 +44,12 @@ Effect Studio also shows a preset selector, tail controls, and response curves.
 
 | Section | Controls |
 | --- | --- |
-| Filter | Mode, Cutoff, Resonance, Overdrive, Filter volume |
-| Modulation | Chorus or Phaser, Rate, Depth, Feedback, Wet |
-| Echo | Delay (beats), Feedback, Tone, Ping-pong, Echo volume |
-| Robotize | Ring or Shift, Color, Robotize volume |
-| Reverb | Space, Decay, Damping, Wet |
-| Distortion / output | Shape, Dirty distortion, Noise distortion, Output volume |
+| Filter | Switch, LP12/LP24/BP12/HP12, Cutoff, Resonance, Overdrive, Filter volume |
+| Modulation | Switch, Chorus or Phaser, Rate, Depth, Regen, Wet |
+| Echo | Switch, Ping-pong, Delay (beats), Feedback, Tone, Echo volume |
+| Robotize | Switch, Ring or Shift, Color, Robotize volume |
+| Reverb | Switch, Room/Hall/Plate, Decay, Damp, Wet |
+| Distortion / output | Warm/Acid/Fuzz/Crush, Dirty distortion, Noise distortion, Output volume |
 
 Use the same control geometry and interaction as the other windows. Keep dial
 marks, values, and labels in separate regions with measured clearance.

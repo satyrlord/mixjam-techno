@@ -534,6 +534,12 @@ pub(super) const STEP_SYNTH: &[Block] = &[
         ),
         ("Velocity", &["Up", "Down"], "one level"),
     ]),
+    Heading("Synth mode and envelopes"),
+    Facts(&[
+        "Switch Source from Sample to Synth to generate patterns using Saw, Square, or Triangle oscillators, an octave sub, and Octave shift (-2 to +2) without choosing a WAV.",
+        "Under Voice, Amp decay sets exponential volume decay per phrase (or 0 for full gate). Filter env sweeps the enabled Filter cutoff up or down per note with extra sweep on accents, decaying over Env decay.",
+        "Step synth preset loads curated Voice and Effects patches without changing your notes.",
+    ]),
     Facts(&[
         "Lane edits also apply to the selected notes. Esc first cancels an active value or list, or goes to a window above the board.",
         "The Step synth button in the tool rail folds the lower panel without changing the draft; choose it again to open the board.",
