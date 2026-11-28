@@ -283,15 +283,7 @@ fn shift_f10_opens_the_selected_clips_menu() {
 
 #[test]
 fn a_step_synth_sound_saved_with_its_pattern_draws_notes_instead_of_a_waveform() {
-    let dir = std::env::temp_dir().join(format!(
-        "mixjam-step-notes-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-step-notes");
     let wav = dir.join("Lead.wav");
     let sample = |id, wav_path| Sample {
         id,
@@ -386,7 +378,6 @@ fn a_step_synth_sound_saved_with_its_pattern_draws_notes_instead_of_a_waveform()
         (note.left() - expected_left).abs() < 0.01,
         "{note:?} vs {expected_left}"
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -472,9 +463,8 @@ fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
     use mixjam_techno::application::options::LaneHeight;
     each_theme(|theme| {
         let (ctx, mut app) = fixture();
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-clip-wave-ui-{}-{}",
-            std::process::id(),
+        let root = crate::test_folder::TestFolder::new(&format!(
+            "mixjam-clip-wave-ui-{}",
             options::labels::theme(theme)
         ));
         let project = app.session.project().clone();
@@ -512,7 +502,6 @@ fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
                 );
             }
         }
-        std::fs::remove_dir_all(root).unwrap();
     });
 }
 

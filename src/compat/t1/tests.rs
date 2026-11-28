@@ -1,10 +1,7 @@
 use super::*;
 use crate::products::IMPORTED_ID_START;
+use crate::test_folder::TestFolder;
 use legacy_format::imports::{ImportedSample as NativeImport, KitRegion};
-use std::{
-    sync::atomic::{AtomicU64, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
-};
 
 fn text(value: &str) -> ByteText {
     ByteText::from_text(value).unwrap()
@@ -161,26 +158,10 @@ fn rejects_truncated_footer_and_preserves_unresolved_kit_mapping() {
     assert!(missing.length_inferred);
 }
 
-struct Fixture(PathBuf);
+struct Fixture(TestFolder);
 impl Fixture {
     fn new() -> Self {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "t1-adapter-{}-{nonce}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&path).unwrap();
-        Self(path)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        Self(TestFolder::new("t1-adapter"))
     }
 }
 

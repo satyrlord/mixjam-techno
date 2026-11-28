@@ -574,15 +574,7 @@ mod tests {
 
     #[test]
     fn drum_pad_audio_uses_wav_provider_without_original_archive() {
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-techno-wav-drum-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&root).unwrap();
+        let root = crate::test_folder::TestFolder::new("mixjam-techno-wav-drum");
         let path = root.join("drum.wav");
         let wave = legacy_format::wav::PcmWave {
             sample_rate: 44_100,
@@ -629,21 +621,11 @@ mod tests {
         assert!(prepare_kit(&kit, &library, Product::D2, [&missing]).is_err());
         assert!(rendered.samples[0] > 0.0);
         assert_eq!(rendered.samples[8], 0.0);
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]
     fn gen3_pads_load_earlier_product_sounds_by_their_native_ids() {
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-techno-inherited-pad-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&root).unwrap();
+        let root = crate::test_folder::TestFolder::new("mixjam-techno-inherited-pad");
         let path = root.join("pad.wav");
         let wave = legacy_format::wav::PcmWave {
             sample_rate: 44_100,
@@ -727,8 +709,6 @@ mod tests {
             .unwrap();
             assert!(error.starts_with("Cannot load drum pad Pad"), "{error}");
         }
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_folder::TestFolder;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
@@ -174,10 +175,8 @@ fn the_callback_side_does_not_allocate() {
     assert!(allocations(|| drop(Vec::<u8>::with_capacity(16))) > 0);
 }
 
-fn temp_root(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("mixjam-flight-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    root
+fn temp_root(name: &str) -> TestFolder {
+    TestFolder::new(&format!("mixjam-flight-{name}"))
 }
 
 #[test]
@@ -241,7 +240,6 @@ fn a_capture_writes_both_rings_and_the_state() {
     let again = save(&flight, Value::Null, "Again", &root, None).expect("saves");
     assert_ne!(again.folder, saved.folder);
     assert_eq!(again.state["session"], Value::Null);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 const RATE: u32 = 48_000;

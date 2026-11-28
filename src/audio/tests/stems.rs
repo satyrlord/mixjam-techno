@@ -3,15 +3,7 @@ use super::*;
 /// A failed stem render must keep every earlier export, including files
 /// whose new samples were staged before the failure.
 fn rejected_stems_keep_saved_files(project: &Project, mix: &Mix, part: &str) {
-    let folder = std::env::temp_dir().join(format!(
-        "mixjam-stems-rejected-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = crate::test_folder::TestFolder::new("mixjam-stems-rejected");
     let names: Vec<String> = mix
         .sounding_tracks()
         .iter()
@@ -30,7 +22,6 @@ fn rejected_stems_keep_saved_files(project: &Project, mix: &Mix, part: &str) {
         .iter()
         .all(|name| std::fs::read(folder.join(name)).unwrap() == name.as_bytes());
     let entries = std::fs::read_dir(&folder).unwrap().count();
-    std::fs::remove_dir_all(&folder).unwrap();
     let error = result.expect_err("An over-range part must not become a clipped stem.");
     assert!(error.contains(part), "{error}");
     assert!(error.contains("Lower"), "{error}");
@@ -147,8 +138,7 @@ fn exported_tracks_and_returns_sum_to_the_mix_without_the_board() {
     project.master.limiter.on = true;
 
     let mix = mix_with_samples(&project, &samples).unwrap();
-    let folder = std::env::temp_dir().join(format!("mixjam-stems-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = crate::test_folder::TestFolder::new("mixjam-stems");
     let written = mix
         .write_stems(&folder, &project.title, &project.fx)
         .unwrap();
@@ -185,7 +175,6 @@ fn exported_tracks_and_returns_sum_to_the_mix_without_the_board() {
     };
     mix.write_wav(&whole, &bypassed, &project.fx).unwrap();
     let whole = read_wav(&whole).unwrap();
-    std::fs::remove_dir_all(&folder).unwrap();
     assert!(whole.frames() > mix.frames() + 44_100, "the tails ring on");
     for part in &parts {
         assert_eq!(part.samples.len(), whole.samples.len());

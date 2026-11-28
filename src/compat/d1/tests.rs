@@ -28,15 +28,7 @@ fn wrapped(b: &mut Vec<u8>, text: &[u8]) {
 }
 #[test]
 fn wav_only_provider_keeps_d1_native_ids_and_nominal_bars() {
-    let root = std::env::temp_dir().join(format!(
-        "d1-wav-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("d1-wav");
     let wave_path = root.join("base.wav");
     fs::write(
         &wave_path,
@@ -78,9 +70,6 @@ fn wav_only_provider_keeps_d1_native_ids_and_nominal_bars() {
     );
     assert_eq!(project.clips[0].start_tick, 0);
     assert_eq!(project.clips[0].length_ticks, 512);
-    fs::remove_file(path).unwrap();
-    fs::remove_file(wave_path).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
@@ -391,14 +380,7 @@ fn missing_external_audio_retains_labels_path_category_and_inferred_extent() {
 
 #[test]
 fn external_wave_conflict_selects_first_for_all_repeated_placements() {
-    let root = std::env::temp_dir().join(format!(
-        "d1-conflict-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let root = crate::test_folder::TestFolder::new("d1-conflict");
     for (folder, value) in [("A", 0.1), ("B", 0.2)] {
         fs::create_dir_all(root.join(folder)).unwrap();
         crate::audio::Pcm {
@@ -443,7 +425,6 @@ fn external_wave_conflict_selects_first_for_all_repeated_placements() {
             .iter()
             .all(|clip| clip.sample_id == conflict.sample_ids[0])
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -505,15 +486,7 @@ fn d1_schedule_matches_legacy_format_across_offsets_and_boundaries() {
 
 #[test]
 fn a_long_external_wave_is_cropped_to_the_editable_grid() {
-    let root = std::env::temp_dir().join(format!(
-        "d1-long-wave-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("d1-long-wave");
     let wave_path = root.join("long.wav");
     // A low sample rate exceeds 32,767 source bars in a small valid fixture.
     fs::write(
@@ -548,6 +521,4 @@ fn a_long_external_wave_is_cropped_to_the_editable_grid() {
     );
     assert_eq!(project.clips[0].start_tick, 350 * TICKS_PER_BAR - 16);
     assert_eq!(project.clips[0].length_ticks, 16);
-    fs::remove_file(wave_path).unwrap();
-    fs::remove_dir(root).unwrap();
 }

@@ -5,7 +5,7 @@ use super::*;
 
 #[test]
 fn sample_conflict_modal_shows_paths_and_switches_every_instance_without_closing() {
-    let (context, mut app, dir) = sample_conflicts_fixture("switch");
+    let (context, mut app, _dir) = sample_conflicts_fixture("switch");
     let before = app.session.project().clips.clone();
     let candidates = app.session.sample_conflicts()[0].candidates.clone();
     let label = format!(
@@ -57,15 +57,11 @@ fn sample_conflict_modal_shows_paths_and_switches_every_instance_without_closing
             .iter()
             .all(|sample| sample.path == candidates[0])
     );
-    for path in candidates {
-        std::fs::remove_file(path).unwrap();
-    }
-    std::fs::remove_dir(dir).unwrap();
 }
 
 #[test]
 fn escape_hides_unconfirmed_sample_conflicts_without_an_edit_until_reopened() {
-    let (context, mut app, dir) = sample_conflicts_fixture("escape");
+    let (context, mut app, _dir) = sample_conflicts_fixture("escape");
     let before = app.session.project().clone();
     assert!(app.sample_conflicts_open());
     frame(
@@ -93,15 +89,11 @@ fn escape_hides_unconfirmed_sample_conflicts_without_an_edit_until_reopened() {
     click(&context, &mut app, keep.center(), egui::Modifiers::NONE);
     assert!(app.session.sample_conflicts()[0].confirmed);
     assert!(app.session.unsaved());
-    for path in &app.session.sample_conflicts()[0].candidates {
-        std::fs::remove_file(path).unwrap();
-    }
-    std::fs::remove_dir(dir).unwrap();
 }
 
 #[test]
 fn sample_conflict_confirmation_stays_closed_and_status_can_reopen_choices() {
-    let (context, mut app, dir) = sample_conflicts_fixture("confirm");
+    let (context, mut app, _dir) = sample_conflicts_fixture("confirm");
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     let keep = text_rect(&output, "Keep choices");
     click(&context, &mut app, keep.center(), egui::Modifiers::NONE);
@@ -139,15 +131,11 @@ fn sample_conflict_confirmation_stays_closed_and_status_can_reopen_choices() {
         !reopened.sample_conflicts_open(),
         "Confirmed choices must not warn again after reopening."
     );
-    for path in &app.session.sample_conflicts()[0].candidates {
-        std::fs::remove_file(path).unwrap();
-    }
-    std::fs::remove_dir(dir).unwrap();
 }
 
 #[test]
 fn sample_conflict_modal_keeps_actions_and_wrapped_paths_inside_supported_viewports() {
-    let (context, mut app, dir) = sample_conflicts_fixture("layout");
+    let (context, mut app, _dir) = sample_conflicts_fixture("layout");
     for size in [
         Vec2::new(960.0, 720.0),
         Vec2::new(1024.0, 768.0),
@@ -178,10 +166,6 @@ fn sample_conflict_modal_keeps_actions_and_wrapped_paths_inside_supported_viewpo
             assert!(viewport.contains_rect(text_rect(&output, &label)));
         }
     }
-    for path in &app.session.sample_conflicts()[0].candidates {
-        std::fs::remove_file(path).unwrap();
-    }
-    std::fs::remove_dir(dir).unwrap();
 }
 
 #[test]
@@ -257,8 +241,7 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
     assert_eq!(app.clip_menu.clip, Some(before.clips[0].id));
     assert_eq!(app.session.project(), &before);
 
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-resolve-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-resolve");
     let placeholder =
         Session::headless(Arc::new(Library::fixture(vec![])), Project::default()).unwrap();
     app.session =
@@ -310,7 +293,6 @@ fn missing_clip_context_menu_offers_manual_resolution_without_changing_project()
         "Undo restores the missing audio while its clip menu is open."
     );
     accessible_node(&output, "Resolve manually");
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

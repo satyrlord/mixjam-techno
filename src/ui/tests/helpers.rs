@@ -2,6 +2,7 @@
 //! and keyboard events, and accessible-node lookups.
 
 use super::*;
+pub(super) use crate::test_folder::TestFolder;
 
 pub(super) fn fixture() -> (egui::Context, MixJamApp) {
     let context = egui::Context::default();
@@ -64,12 +65,12 @@ pub(super) fn each_theme(mut body: impl FnMut(theme::Theme)) {
 
 /// A fixture with an empty library and a settings folder of its own, so a
 /// test can apply options or adopt library folders without touching another
-/// test's files. Pass the folder to `remove_settings` at the end.
-pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
+/// test's files. The folder removes itself when the test drops it.
+pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, TestFolder) {
     let root = reserve_settings_folder();
     let session = Session::headless(Arc::new(Library::empty()), Project::default())
         .unwrap()
-        .with_settings_root(root.clone());
+        .with_settings_root(root.to_path_buf());
     let ctx = egui::Context::default();
     ctx.enable_accesskit();
     configure_style(&ctx);
@@ -83,53 +84,10 @@ pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
     (ctx, app, root)
 }
 
-/// Reserve a directory for a test that needs isolated settings on disk.
-pub(super) fn reserve_settings_folder() -> PathBuf {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    settings_fixture_dir(&std::env::temp_dir(), &NEXT)
-}
-
-fn settings_fixture_dir(root: &std::path::Path, next: &std::sync::atomic::AtomicU64) -> PathBuf {
-    loop {
-        let path = root.join(format!(
-            "mixjam-settings-ui-{}-{}",
-            std::process::id(),
-            next.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        match std::fs::create_dir(&path) {
-            Ok(()) => return path,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => panic!(
-                "Cannot create test settings folder {}: {error}",
-                path.display()
-            ),
-        }
-    }
-}
-
-#[test]
-fn settings_fixtures_preserve_existing_directories() {
-    use std::sync::atomic::AtomicU64;
-    let base = std::env::temp_dir().join(format!(
-        "mixjam-settings-reservation-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir(&base).unwrap();
-    let stale = base.join(format!("mixjam-settings-ui-{}-0", std::process::id()));
-    std::fs::create_dir(&stale).unwrap();
-    std::fs::write(stale.join("options.json"), b"existing settings").unwrap();
-    let fresh = settings_fixture_dir(&base, &AtomicU64::new(0));
-    assert_ne!(fresh, stale);
-    assert!(std::fs::read_dir(fresh).unwrap().next().is_none());
-    assert_eq!(
-        std::fs::read(stale.join("options.json")).unwrap(),
-        b"existing settings"
-    );
-    std::fs::remove_dir_all(base).unwrap();
+/// Reserve a directory for a test that needs isolated settings on disk. It
+/// removes itself when the test drops it.
+pub(super) fn reserve_settings_folder() -> TestFolder {
+    TestFolder::new("mixjam-settings-ui")
 }
 
 /// Remove an `isolated_fixture`'s settings folder, if anything was saved.

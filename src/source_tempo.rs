@@ -137,9 +137,7 @@ mod tests {
 
     #[test]
     fn runtime_catalogs_give_tempo_evidence() {
-        let folder =
-            std::env::temp_dir().join(format!("mixjam-source-tempos-{}", std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();
+        let folder = crate::test_folder::TestFolder::new("mixjam-source-tempos");
         let audio = [0, 3, 9, 4, 1];
         let sources = vec![catalog::SourceFile {
             bytes: 1,
@@ -173,7 +171,6 @@ mod tests {
             probe(Some(digest)),
         ];
         assert_eq!(evidence.folder(probes.iter()), Some(180.0));
-        std::fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]

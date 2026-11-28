@@ -51,8 +51,7 @@ fn sections_after_the_audio_remain_reachable_on_the_timeline() {
 #[test]
 fn section_drafts_end_when_the_bookmarks_or_project_change() {
     let (ctx, mut app) = fixture();
-    let root =
-        std::env::temp_dir().join(format!("mixjam-section-options-ui-{}", std::process::id()));
+    let root = crate::test_folder::TestFolder::new("mixjam-section-options-ui");
     app.session = app.session.with_settings_root(root.clone());
     app.sections.bookmarks = true;
     app.add_section(0);
@@ -76,7 +75,6 @@ fn section_drafts_end_when_the_bookmarks_or_project_change() {
     app.session.remember_section_bookmarks(true).unwrap();
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.session.project().sections[0].name, "Section 1");
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

@@ -1,28 +1,12 @@
 use super::*;
 use std::fs;
-use std::path::PathBuf;
 
 /// A temporary folder that is removed even when the test fails.
-struct Folder(PathBuf);
+struct Folder(crate::test_folder::TestFolder);
 
 impl Folder {
     fn new(prefix: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "{prefix}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&path).unwrap();
-        Self(path)
-    }
-}
-
-impl Drop for Folder {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        Self(crate::test_folder::TestFolder::new(prefix))
     }
 }
 

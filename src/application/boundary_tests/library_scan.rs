@@ -448,7 +448,7 @@ fn background_folder_scans_adopt_on_poll_and_cancel_without_replacing_the_librar
         .start_wave_scan(std::slice::from_ref(&dir), 120.0)
         .unwrap();
     let status = session.wave_scan().unwrap();
-    assert_eq!(status.roots, std::slice::from_ref(&dir));
+    assert_eq!(status.roots, std::slice::from_ref(&*dir));
     assert!(status.files_done <= 5);
     // The song opens once the scanned library can resolve it.
     session.open_after_scan(&song).unwrap();

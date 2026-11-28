@@ -7,15 +7,12 @@ use std::collections::HashMap;
 
 #[test]
 fn unsupported_song_version_lists_all_supported_versions() {
-    let path = std::env::temp_dir().join(format!(
-        "mixjam-unsupported-version-{}.mixjam",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-unsupported-version");
+    let path = folder.join("song.mixjam");
     let mut document = fixture();
     document["formatVersion"] = json!(song::FORMAT_VERSION + 1);
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let error = load_song(&path, &Library::empty()).unwrap_err();
-    fs::remove_file(path).unwrap();
     assert_eq!(error, "Only MixJam format versions 7 to 29 are supported.");
 }
 
@@ -109,15 +106,7 @@ fn fixture() -> Value {
 
 #[test]
 fn v7_exact_source_spans_survive_octave_playback_and_save_reopen() {
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-exact-span-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("mixjam-exact-span");
     let wave = root.join("kick.wav");
     crate::audio::Pcm {
         sample_rate: 44_100,
@@ -152,10 +141,6 @@ fn v7_exact_source_spans_survive_octave_playback_and_save_reopen() {
     let (reopened, ready) = crate::project_io::open(&saved, &Library::empty()).unwrap();
     let rerendered = crate::audio::render_project(&reopened, &ready).unwrap();
     assert_eq!(rerendered.samples, rendered.samples);
-    for file in [saved, input, wave] {
-        fs::remove_file(file).unwrap();
-    }
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
@@ -219,8 +204,7 @@ fn rejects_invalid_settings_and_unsafe_paths_before_audio_resolution() {
 
 #[test]
 fn wav_only_import_converts_clock_solo_and_monophonic_spans() {
-    let root = std::env::temp_dir().join(format!("mixjam-import-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("mixjam-import");
     let wave = root.join("kick.wav");
     let mut writer = hound::WavWriter::create(
         &wave,
@@ -281,8 +265,6 @@ fn wav_only_import_converts_clock_solo_and_monophonic_spans() {
     assert!(projected.source_notices[1].contains("\"lim\":true"));
     assert!(projected.source_notices[1].contains("\"type\":\"reverb\""));
     assert!(projected.fx.buses[0].module.is_empty());
-    fs::remove_file(wave).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
@@ -359,7 +341,7 @@ fn return_buses_and_sends_play_through_the_application_effects() {
 
 #[test]
 fn legacy_folder_recovery_survives_save_reopen_and_resolves_saved_placeholders() {
-    let root = std::env::temp_dir().join(format!("mixjam-legacy-layout-{}", std::process::id()));
+    let root = crate::test_folder::TestFolder::new("mixjam-legacy-layout");
     let selected = root.join("_original");
     let legacy = root.join("House/Drum/kick.wav");
     fs::create_dir_all(&selected).unwrap();
@@ -472,14 +454,11 @@ fn legacy_folder_recovery_survives_save_reopen_and_resolves_saved_placeholders()
             .path,
         selected_audio.path
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn header_scanner_handles_reordered_keys_escapes_and_preserves_errors() {
-    let dir = std::env::temp_dir().join(format!("mixjam-header-scan-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-header-scan");
 
     // Nested objects, arrays, and escaped strings before formatVersion/createdAt.
     let path = dir.join("reordered.mixjam");
@@ -531,13 +510,11 @@ fn header_scanner_handles_reordered_keys_escapes_and_preserves_errors() {
             .unwrap_err()
             .starts_with("Cannot read the MixJam project:")
     );
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn header_scanner_keeps_header_errors_after_a_valid_prefix() {
-    let dir = std::env::temp_dir().join(format!("mixjam-invalid-header-{}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-invalid-header");
     let path = dir.join("invalid.mixjam");
     for text in [
         r#"{"formatVersion":26,"createdAt":"first","createdAt":"second"}"#,
@@ -552,5 +529,4 @@ fn header_scanner_keeps_header_errors_after_a_valid_prefix() {
         );
         assert_eq!(load_song(&path, &Library::empty()).unwrap_err(), expected);
     }
-    fs::remove_dir_all(dir).unwrap();
 }

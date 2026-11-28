@@ -536,8 +536,7 @@ fn agent_arranges_clips_by_command_and_by_pointer() {
 fn agent_types_file_paths_in_the_choose_path_modal_and_resumes_a_pending_save() {
     let (context, mut app, port) = agent_fixture();
     let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-agent-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-agent");
     let placeholder =
         Session::headless(Arc::new(Library::fixture(vec![])), Project::default()).unwrap();
     app.session =
@@ -606,7 +605,6 @@ fn agent_types_file_paths_in_the_choose_path_modal_and_resumes_a_pending_save() 
     send(&mut app, &["key", "key=Enter"]);
     assert_eq!(app.session.file(), Some(song.as_path()));
     assert_eq!(app.session.project().clips.len(), 3);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

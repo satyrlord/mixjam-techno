@@ -1,6 +1,6 @@
 use super::*;
 use super::{
-    assets::{MAX_PENDING_ASSET_BYTES, NEXT_ASSET_TEMP_ID, encode_float_wave},
+    assets::{MAX_PENDING_ASSET_BYTES, encode_float_wave},
     layout::{
         Event, Header, Reference, SENTINEL, Timeline, WaveReference, read_header, read_timeline,
     },
@@ -10,6 +10,7 @@ use super::{
     },
 };
 use crate::engine::{MissingReference, TRACK_COUNT, Track};
+use crate::test_folder::TestFolder;
 use sha2::{Digest, Sha256};
 use std::{
     borrow::Cow,
@@ -17,29 +18,17 @@ use std::{
     fs,
     io::Cursor,
     path::PathBuf,
-    sync::atomic::Ordering,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 struct Scratch {
-    root: PathBuf,
+    root: TestFolder,
     created_assets: Vec<PathBuf>,
 }
 
 impl Scratch {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-d2-import-{}-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            NEXT_ASSET_TEMP_ID.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
         Self {
-            root,
+            root: TestFolder::new("mixjam-d2-import"),
             created_assets: Vec::new(),
         }
     }
@@ -60,8 +49,6 @@ impl Drop for Scratch {
         for path in &self.created_assets {
             let _ = fs::remove_file(path);
         }
-        // This directory was created exclusively by this test.
-        let _ = fs::remove_dir_all(&self.root);
     }
 }
 

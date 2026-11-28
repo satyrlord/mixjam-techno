@@ -741,8 +741,7 @@ fn effects_missing_audio_keeps_processing_disabled_and_details_reachable() {
 #[test]
 fn effects_save_feedback_preserves_source_tempo_and_selects_the_saved_effect() {
     let (ctx, mut app) = fixture();
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-effects-save-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-effects-save");
     let mut sample = app.session.library().samples[0].clone();
     sample.source_bpm = 160.0;
     app.session = Session::headless(
@@ -818,7 +817,6 @@ fn effects_save_feedback_preserves_source_tempo_and_selects_the_saved_effect() {
         app.effects.feedback.message.is_none(),
         "Changing source must clear the previous save receipt."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

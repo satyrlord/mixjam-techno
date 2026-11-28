@@ -457,7 +457,7 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 value.bottom() <= gain.top(),
                 "The dB readout must have room above its rail."
             );
-            // Vintage's bitmap cap, Aero's molded cap, and Studio's flat
+            // Vintage's machined cap, Aero's molded cap, and Studio's flat
             // cap all sit inside the same 24 by 32 point envelope.
             let height = match roles().material {
                 theme::Material::Metal => 32.0,

@@ -6,10 +6,8 @@ use super::*;
 fn imported_catalog_tracks_history_atomically_and_keeps_source_tempo() {
     let (_, mut app) = fixture();
     app.sounds.product = Some(Product::T1);
-    let path = std::env::temp_dir().join(format!(
-        "mixjam-techno-ui-import-{}.wav",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-techno-ui-import");
+    let path = folder.join("import.wav");
     let pcm = Pcm {
         sample_rate: 1000,
         channels: 1,
@@ -69,7 +67,7 @@ fn failed_open_and_in_use_library_removal_preserve_the_active_project() {
 
 #[test]
 fn sample_libraries_name_each_library_folder_control() {
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-folders-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-folders");
     let roots = [dir.join("First"), dir.join("Second")];
     for root in &roots {
         std::fs::create_dir_all(root).unwrap();
@@ -108,12 +106,11 @@ fn sample_libraries_name_each_library_folder_control() {
     shown(&roots[..1], &|output| {
         assert!(accessible_node(output, "Remove library 1").1.is_disabled());
     });
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn folder_tempo_list_scrolls_to_provider_controls_at_compact_size() {
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-tempos-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-tempos");
     for index in 0..60 {
         let folder = dir.join(format!("Folder {index:02}"));
         std::fs::create_dir_all(&folder).unwrap();
@@ -179,7 +176,6 @@ fn folder_tempo_list_scrolls_to_provider_controls_at_compact_size() {
         Rect::from_min_size(Pos2::ZERO, size).contains_rect(provider),
         "Provider controls must remain reachable after expanding a large tempo list: {provider:?}"
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -199,7 +195,7 @@ fn new_mix_cancels_a_sample_drag_before_its_pointer_release() {
 
 #[test]
 fn scan_adoption_clears_selection_and_drag_from_the_previous_palette() {
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-scan-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-scan");
     let old = dir.join("old");
     let new = dir.join("new");
     std::fs::create_dir_all(&old).unwrap();
@@ -238,12 +234,11 @@ fn scan_adoption_clears_selection_and_drag_from_the_previous_palette() {
         app.gestures.drag.is_none(),
         "An in-flight drag must not place the replacement sound."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn startup_scan_closes_sample_libraries_only_when_it_fills_the_library() {
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-startup-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-startup");
     let full = dir.join("full");
     let empty = dir.join("empty");
     std::fs::create_dir_all(&full).unwrap();
@@ -289,13 +284,13 @@ fn startup_scan_closes_sample_libraries_only_when_it_fills_the_library() {
         startup(&full, true),
         "The user chose this folder in the window."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn adoption_status_and_import_notice_survive_the_next_application_poll() {
     let (context, mut app) = fixture();
-    let path = std::env::temp_dir().join(format!("mixjam-ui-adoption-{}.json", std::process::id()));
+    let folder = crate::test_folder::TestFolder::new("mixjam-ui-adoption");
+    let path = folder.join("adoption.json");
     let mut project = Project::default();
     project.import_notices.push(ImportNotice {
         source_bpm: 146.0,
@@ -311,7 +306,6 @@ fn adoption_status_and_import_notice_survive_the_next_application_poll() {
     let status = app.status.clone();
     app.poll_application(&context);
     assert_eq!(app.status, status);
-    std::fs::remove_file(path).unwrap();
 }
 
 /// Wait for the library scan to finish and take its result.
@@ -588,5 +582,4 @@ fn register_file_keeps_original_folder_category() {
             .any(|sample| sample.group_name == "Drum" && sample.name == "kick"),
         "Undoing the Wave import must preserve the Drum library sample."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }

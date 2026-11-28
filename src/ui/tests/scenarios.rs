@@ -195,11 +195,11 @@ pub(super) fn missing_fixture() -> (egui::Context, MixJamApp) {
     (context, app)
 }
 
-pub(super) fn sample_conflicts_fixture(tag: &str) -> (egui::Context, MixJamApp, PathBuf) {
+pub(super) fn sample_conflicts_fixture(
+    tag: &str,
+) -> (egui::Context, MixJamApp, crate::test_folder::TestFolder) {
     let (context, mut app) = fixture();
-    let dir =
-        std::env::temp_dir().join(format!("mixjam-ui-conflicts-{}-{tag}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new(&format!("mixjam-ui-conflicts-{tag}"));
     let mut candidates = Vec::new();
     for (name, value) in [
         ("First matching sample.wav", 0.1),
@@ -381,17 +381,12 @@ pub(super) fn step_synth_control_rect(output: &egui::FullOutput, label: &str) ->
 }
 
 pub(super) fn agent_fixture() -> (egui::Context, MixJamApp, (u16, String)) {
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let (context, mut app) = fixture();
-    let folder = std::env::temp_dir().join(format!(
-        "mixjam-ui-agent-key-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-ui-agent-key");
     let server = crate::agent::Server::start(0, &folder).unwrap();
     let port = (server.port(), server.key().to_string());
     // The tests send the key directly, so the key folder is not needed again.
-    std::fs::remove_dir_all(&folder).unwrap();
+    drop(folder);
     app.attach_agent(server, &context);
     (context, app, port)
 }

@@ -16,17 +16,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
 
-struct Folder(PathBuf);
+struct Folder(crate::test_folder::TestFolder);
 
 impl Folder {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "standalone-wavs-{}-{}",
-            std::process::id(),
-            NEXT_FOLDER.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&path).unwrap();
-        Self(path)
+        Self(crate::test_folder::TestFolder::new("standalone-wavs"))
     }
     fn wave(&self, relative: &str, rate: u32, frames: usize) -> PathBuf {
         let path = self.0.join(relative);
@@ -51,12 +45,6 @@ impl Folder {
         .write_wav(&path)
         .unwrap();
         fs::canonicalize(path).unwrap()
-    }
-}
-
-impl Drop for Folder {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

@@ -116,6 +116,23 @@ fn deep_edit_ink_and_scopes_stay_legible_on_every_pedal() {
 }
 
 #[test]
+fn the_metal_finish_grain_keeps_its_texels() {
+    // FNV-1a over every texel. The pedal grain is seeded, so a change in the
+    // shared noise builder must not move one bit of it.
+    let hash = grain_image()
+        .pixels
+        .iter()
+        .flat_map(|texel| texel.to_array())
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        });
+    assert_eq!(
+        hash, 0xfc75_901b_2d44_cce3,
+        "grain fingerprint {hash:#018x}"
+    );
+}
+
+#[test]
 fn the_metal_finish_is_brushed_along_the_rows_and_keeps_within_its_dip() {
     let [width, height] = GRAIN;
     let amounts: Vec<f32> = grain_image()

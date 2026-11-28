@@ -67,11 +67,7 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
 #[test]
 fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_complete_state() {
     let (ctx, mut app) = fixture();
-    let dir = std::env::temp_dir().join(format!(
-        "mixjam-ui-step-synth-pattern-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-step-synth-pattern");
     app.boards.module = BottomModule::StepSynth;
     app.step_synth.state.bpm = 160.0;
     app.step_synth.state.length = 12;
@@ -153,7 +149,6 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
     assert_eq!(app.step_synth.bar, 0);
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.step_synth.state, saved);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -256,11 +251,7 @@ fn step_synth_hidden_source_changes_keep_unrelated_and_file_notices() {
 fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_results() {
     let (ctx, mut app) = missing_fixture();
     ctx.enable_accesskit();
-    let dir = std::env::temp_dir().join(format!(
-        "mixjam-ui-step-synth-feedback-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-step-synth-feedback");
     app.selection.sample = Some(1);
     app.boards.module = BottomModule::StepSynth;
     for _ in 0..3 {
@@ -349,14 +340,12 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
         app.step_synth.state.steps,
         "Save sound keeps the pattern beside the WAV."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
     let (ctx, mut app) = fixture();
-    let dir =
-        std::env::temp_dir().join(format!("mixjam-step-pattern-error-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-step-pattern-error");
     let wav = dir.join("sequence.wav");
     let pattern = mixjam_techno::application::pattern_beside(&wav);
     std::fs::create_dir_all(&pattern).unwrap();
@@ -384,7 +373,6 @@ fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
             .starts_with("Cannot save the sound sequence.wav. ")
     );
     assert_eq!(app.step_synth.feedback.message, Some(app.status.clone()));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

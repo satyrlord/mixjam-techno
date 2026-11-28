@@ -53,7 +53,8 @@ fn a_wav_past_the_old_sample_limit_reads_whole() {
     wav.extend([1, 0, 8, 0]);
     wav.extend(b"data");
     wav.extend(samples.to_le_bytes());
-    let path = std::env::temp_dir().join(format!("mixjam-long-wav-{}.wav", std::process::id()));
+    let folder = crate::test_folder::TestFolder::new("mixjam-long-wav");
+    let path = folder.join("long.wav");
     {
         let mut file = std::fs::File::create(&path).unwrap();
         std::io::Write::write_all(&mut file, &wav).unwrap();
@@ -61,7 +62,6 @@ fn a_wav_past_the_old_sample_limit_reads_whole() {
     }
     let mut count = 0u64;
     let (spec, frames) = crate::audio::visit_wav_samples(&path, |_, _| count += 1).unwrap();
-    std::fs::remove_file(&path).unwrap();
     assert_eq!((spec.channels, spec.bits_per_sample), (1, 8));
     assert_eq!((count, u64::from(frames)), (64_000_001, 64_000_001));
 }
@@ -220,7 +220,8 @@ fn clipping_and_float_pcm_boundaries() {
 
 #[test]
 fn extreme_float_wav_is_normalized_before_interpolation() {
-    let path = std::env::temp_dir().join(format!("mixjam-techno-float-{}.wav", std::process::id()));
+    let folder = crate::test_folder::TestFolder::new("mixjam-techno-float");
+    let path = folder.join("float.wav");
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate: 44100,
@@ -243,5 +244,4 @@ fn extreme_float_wav_is_normalized_before_interpolation() {
             .iter()
             .all(|x| x.is_finite())
     );
-    std::fs::remove_file(path).unwrap();
 }

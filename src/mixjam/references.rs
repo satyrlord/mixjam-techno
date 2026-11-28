@@ -248,19 +248,12 @@ fn scan(root: &Path) -> Result<Index, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use crate::test_folder::TestFolder;
 
-    struct Folder(PathBuf);
+    struct Folder(TestFolder);
     impl Folder {
         fn new() -> Self {
-            static NEXT: AtomicU64 = AtomicU64::new(0);
-            let path = std::env::temp_dir().join(format!(
-                "mixjam-reference-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&path).unwrap();
-            Self(path)
+            Self(TestFolder::new("mixjam-reference"))
         }
         fn wave(&self, relative: &str, value: f32) -> PathBuf {
             let path = self.0.join(relative);
@@ -277,11 +270,6 @@ mod tests {
         fn library(&self, root: &str) -> Library {
             self.wave(&format!("{root}/fixture-seed.wav"), 0.01);
             Library::open_wav_folder(&self.0.join(root), 140.0).unwrap()
-        }
-    }
-    impl Drop for Folder {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
         }
     }
 

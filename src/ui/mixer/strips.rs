@@ -10,34 +10,18 @@ pub(crate) fn show(
     fx: &mut FxBuses,
     state: MasterState<'_>,
 ) -> Changes {
-    // Vintage reuses the ivory and graphite artwork; the other themes paint
-    // their strips in code.
-    let art = (roles().material == theme::Material::Metal).then(|| Artwork::load(ui.ctx()));
-    let art = match &art {
-        Some(Ok(art)) => Some(art.as_ref()),
-        Some(Err(error)) => {
-            ui.colored_label(roles().coral, error);
-            None
-        }
-        None => None,
-    };
-    // Strips are measured in whole physical pixels, as their artwork is,
-    // so every theme keeps the same layout.
+    // Strips are measured in whole physical pixels, as Vintage's grain and
+    // fader cap are, so every theme keeps the same layout.
     let scale = 1.0 / ui.ctx().pixels_per_point();
     let width = 108.0 * scale;
     let whole = ui.available_rect_before_wrap();
-    if let Some(art) = art {
-        art.tile(ui, 1, whole);
-    } else {
-        ui.painter().rect_filled(whole, 0.0, roles().mixer_floor);
-    }
+    floor(ui.painter(), whole);
     // A 400-point panel gives the physical gain rail 96 points. A short
     // window can reduce the panel to 370 points and the rail to 68. Its
     // interactive area also includes the cap's 16-point overhang at each end.
     let height = (ui.available_height() - 14.0).max(304.0 * scale);
     let bank_width = (ui.available_width() - width - 12.0 * scale).max(width);
     let occupied = project.occupied_tracks();
-    let any_solo = project.any_solo();
     let mut result = Changes::default();
     ui.horizontal_top(|ui| {
         ui.allocate_ui_with_layout(
@@ -59,65 +43,16 @@ pub(crate) fn show(
                         } else {
                             ui.horizontal_top(|ui| {
                                 ui.spacing_mut().item_spacing.x = 2.0 * scale;
-                                for &index in &occupied {
-                                    ui.scope_builder(
-                                        egui::UiBuilder::new().id_salt(("mixer_track", index)),
-                                        |ui| {
-                                            let (summary, detail) = &summaries[index];
-                                            let track = &project.tracks[index];
-                                            let mut mix = track.mix();
-                                            let mut gain = mix.gain;
-                                            let mut open_eq = false;
-                                            let changed = strip(
-                                                ui,
-                                                art,
-                                                scale,
-                                                height,
-                                                (
-                                                    &format!("Track {}", index + 1),
-                                                    summary.as_str(),
-                                                    detail.as_str(),
-                                                ),
-                                                &mut gain,
-                                                Controls::Track(TrackControls {
-                                                    index,
-                                                    mix: &mut mix,
-                                                    automated: std::array::from_fn(|bus| {
-                                                        !track.automation.sends[bus].is_empty()
-                                                    }),
-                                                    pan_automated: !track.automation.pan.is_empty(),
-                                                    any_solo,
-                                                    eq_on: track.processing_on(),
-                                                    open_eq: &mut open_eq,
-                                                }),
-                                            );
-                                            mix.gain = gain;
-                                            if changed {
-                                                result.tracks.push((index, mix));
-                                            }
-                                            if open_eq {
-                                                result.eq = Some(index);
-                                            }
-                                        },
-                                    );
-                                }
+                                track_strips(
+                                    ui,
+                                    project,
+                                    &occupied,
+                                    summaries,
+                                    [scale, height],
+                                    &mut result,
+                                );
                                 // The returns follow the tracks that feed them.
-                                for (index, bus) in fx.buses.iter_mut().enumerate() {
-                                    ui.scope_builder(
-                                        egui::UiBuilder::new().id_salt(("mixer_return", index)),
-                                        |ui| {
-                                            let automated =
-                                                !project.return_automation[index].is_empty();
-                                            let (edited, open) = return_strip(
-                                                ui, art, scale, height, index, bus, automated,
-                                            );
-                                            result.fx |= edited;
-                                            if open {
-                                                result.open = Some(index);
-                                            }
-                                        },
-                                    );
-                                }
+                                return_strips(ui, project, fx, [scale, height], &mut result);
                             });
                         }
                     });
@@ -129,7 +64,6 @@ pub(crate) fn show(
             let mut bypassed = false;
             result.master |= strip(
                 ui,
-                art,
                 scale,
                 height,
                 (
@@ -148,6 +82,97 @@ pub(crate) fn show(
         });
     });
     result
+}
+
+/// The strips of the occupied tracks, in track order, at the strip scale
+/// and height.
+fn track_strips(
+    ui: &mut egui::Ui,
+    project: &Project,
+    occupied: &[usize],
+    summaries: &[(String, String)],
+    [scale, height]: [f32; 2],
+    result: &mut Changes,
+) {
+    let any_solo = project.any_solo();
+    for &index in occupied {
+        ui.scope_builder(
+            egui::UiBuilder::new().id_salt(("mixer_track", index)),
+            |ui| {
+                let (summary, detail) = &summaries[index];
+                let track = &project.tracks[index];
+                let mut mix = track.mix();
+                let mut gain = mix.gain;
+                let mut open_eq = false;
+                let changed = strip(
+                    ui,
+                    scale,
+                    height,
+                    (
+                        &format!("Track {}", index + 1),
+                        summary.as_str(),
+                        detail.as_str(),
+                    ),
+                    &mut gain,
+                    Controls::Track(TrackControls {
+                        index,
+                        mix: &mut mix,
+                        automated: std::array::from_fn(|bus| {
+                            !track.automation.sends[bus].is_empty()
+                        }),
+                        pan_automated: !track.automation.pan.is_empty(),
+                        any_solo,
+                        eq_on: track.processing_on(),
+                        open_eq: &mut open_eq,
+                    }),
+                );
+                mix.gain = gain;
+                if changed {
+                    result.tracks.push((index, mix));
+                }
+                if open_eq {
+                    result.eq = Some(index);
+                }
+            },
+        );
+    }
+}
+
+/// The return strips of the four FX buses, at the strip scale and height.
+fn return_strips(
+    ui: &mut egui::Ui,
+    project: &Project,
+    fx: &mut FxBuses,
+    [scale, height]: [f32; 2],
+    result: &mut Changes,
+) {
+    for (index, bus) in fx.buses.iter_mut().enumerate() {
+        ui.scope_builder(
+            egui::UiBuilder::new().id_salt(("mixer_return", index)),
+            |ui| {
+                let automated = !project.return_automation[index].is_empty();
+                let (edited, open) = return_strip(ui, scale, height, index, bus, automated);
+                result.fx |= edited;
+                if open {
+                    result.open = Some(index);
+                }
+            },
+        );
+    }
+}
+
+/// Lays out a strip of `height` and paints its body and edge. A return strip
+/// has the return material.
+fn strip_frame(ui: &mut egui::Ui, scale: f32, height: f32, is_return: bool) -> Rect {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
+    strip_body(ui.painter(), rect, is_return);
+    ui.painter().rect_stroke(
+        rect.shrink(0.5 * scale),
+        roles().corner(3.0),
+        Stroke::new(1.0 * scale, roles().strip_edge),
+        egui::StrokeKind::Inside,
+    );
+    rect
 }
 
 /// What the Mixer's Master strip shows besides its level: the master
@@ -197,7 +222,6 @@ struct TrackControls<'a> {
 
 fn strip(
     ui: &mut egui::Ui,
-    art: Option<&Artwork>,
     scale: f32,
     height: f32,
     identity: (&str, &str, &str),
@@ -205,18 +229,7 @@ fn strip(
     controls: Controls<'_>,
 ) -> bool {
     let (name, summary, detail) = identity;
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
-    if let Some(art) = art {
-        art.tile(ui, 0, rect);
-    } else {
-        theme::surface(ui.painter(), rect, roles().corner(3.0), roles().strip);
-    }
-    ui.painter().rect_stroke(
-        rect.shrink(0.5 * scale),
-        roles().corner(3.0),
-        Stroke::new(1.0 * scale, roles().strip_edge),
-        egui::StrokeKind::Inside,
-    );
+    let rect = strip_frame(ui, scale, height, false);
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
     // Master ends the signal chain: its name takes the heading face at the
     // section size, which holds its rank even in Aero's light, wide face.
@@ -247,7 +260,7 @@ fn strip(
     // Leave room for the cap at silence above the send knobs.
     let bottom = height / scale - 152.0;
     let rail = Rect::from_min_max(at(18.0, 84.0), at(50.0, bottom));
-    changed |= gain_rail(ui, art, scale, rail, name, gain);
+    changed |= gain_rail(ui, scale, rail, name, gain);
     let zero_y = egui::lerp(rail.bottom()..=rail.top(), gain_fraction(1.0));
     // Each label is centred on its level. The labels carry no ticks: a tick
     // before a minus sign read as a second minus.
@@ -443,7 +456,6 @@ fn track_controls(
 /// whether Edit was pressed.
 fn return_strip(
     ui: &mut egui::Ui,
-    art: Option<&Artwork>,
     scale: f32,
     height: f32,
     index: usize,
@@ -451,23 +463,7 @@ fn return_strip(
     automated: bool,
 ) -> (bool, bool) {
     let name = format!("FX {}", index + 1);
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
-    if let Some(art) = art {
-        art.tile(ui, 1, rect);
-    } else {
-        theme::surface(
-            ui.painter(),
-            rect,
-            roles().corner(3.0),
-            roles().return_strip,
-        );
-    }
-    ui.painter().rect_stroke(
-        rect.shrink(0.5 * scale),
-        roles().corner(3.0),
-        Stroke::new(1.0 * scale, roles().strip_edge),
-        egui::StrokeKind::Inside,
-    );
+    let rect = strip_frame(ui, scale, height, true);
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
     text(ui, at(54.0, 14.0), &name, 13.0 * scale, roles().legend);
     text(

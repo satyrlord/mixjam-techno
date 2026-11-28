@@ -1,5 +1,6 @@
 use super::collection::{self, Filter, Sort, TOP_GENRES};
 use super::*;
+use crate::test_folder::TestFolder;
 
 fn event(timestamp: &str, section: &str) -> Event {
     Event {
@@ -51,12 +52,8 @@ fn review(id: &str, artist: &str, title: &str, year: i32, genres: &[&str]) -> Re
     }
 }
 
-fn folder(name: &str) -> PathBuf {
-    let folder =
-        std::env::temp_dir().join(format!("mixjam-album-review-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&folder);
-    std::fs::create_dir_all(&folder).unwrap();
-    folder
+fn folder(name: &str) -> TestFolder {
+    TestFolder::new(&format!("mixjam-album-review-{name}"))
 }
 
 #[test]
@@ -188,7 +185,6 @@ fn duplicate_track_numbers_are_rejected_before_saving() {
     album.tracks[1].num = 2;
     shelf.add(album).unwrap();
     assert_eq!(shelf.reviews().len(), 1);
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -232,7 +228,6 @@ fn adding_preserves_invalid_files_and_files_created_after_loading() {
         album.to_file_text()
     );
     assert!(shelf.reviews().is_empty());
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -290,7 +285,6 @@ fn a_missing_folder_is_explicit_and_bad_files_are_reported_by_name() {
             .1
             .contains("does not match the file name")
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -336,7 +330,6 @@ fn saving_validates_first_and_add_and_update_keep_their_meaning() {
             .add(review("a-b", "A", "B", 2000, &["X"]))
             .is_err()
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -453,7 +446,6 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
     assert_eq!(Energy::parse("PEAK").unwrap(), Energy::Peak);
     assert!(Energy::parse("loud").is_err());
     assert_eq!(Kind::parse("own").unwrap(), Kind::Own);
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 fn collection_fixture() -> Vec<Review> {

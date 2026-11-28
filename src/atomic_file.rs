@@ -250,6 +250,7 @@ fn restore_originals(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_folder::TestFolder;
 
     #[test]
     fn typed_file_error_reasons_use_plain_sentences_without_os_codes() {
@@ -274,17 +275,8 @@ mod tests {
         assert!(!error_text(Error::from_raw_os_error(32)).contains("(os error"));
     }
 
-    fn folder(name: &str) -> std::path::PathBuf {
-        let folder = std::env::temp_dir().join(format!(
-            "mixjam-atomic-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&folder).unwrap();
-        folder
+    fn folder(name: &str) -> TestFolder {
+        TestFolder::new(&format!("mixjam-atomic-{name}"))
     }
 
     #[test]
@@ -301,7 +293,6 @@ mod tests {
         );
         assert_eq!(fs::read(&path).unwrap(), b"saved");
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -312,7 +303,6 @@ mod tests {
         write(&path, b"new").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new");
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -325,7 +315,6 @@ mod tests {
         write(&path, b"new").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new");
         assert_eq!(fs::read(&stale).unwrap(), b"left by a killed process");
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -355,7 +344,6 @@ mod tests {
         let winner = results.iter().find(|(result, _)| result.is_ok()).unwrap().1;
         assert_eq!(fs::read(&path).unwrap(), winner);
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -376,7 +364,6 @@ mod tests {
         assert_eq!(fs::read(&paths[0]).unwrap(), b"original");
         assert!(paths[1].is_dir());
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 2);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -392,7 +379,6 @@ mod tests {
         assert!(error.contains("more than once"), "{error}");
         assert_eq!(fs::read(path).unwrap(), b"original");
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -418,7 +404,6 @@ mod tests {
         assert!(!paths[1].exists());
         assert_eq!(fs::read(&paths[2]).unwrap(), b"last original");
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 2);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -434,6 +419,5 @@ mod tests {
         assert!(errors[0].contains(&backup.display().to_string()));
         assert_eq!(fs::read(backup).unwrap(), b"original");
         assert!(path.is_dir());
-        fs::remove_dir_all(folder).unwrap();
     }
 }

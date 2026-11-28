@@ -17,11 +17,7 @@ fn unsaved_mix_requires_a_pending_action_before_replacement() {
 fn choosing_an_open_path_preserves_edits_made_while_the_chooser_was_collapsed() {
     for master_only in [false, true] {
         let (context, mut app, port) = agent_fixture();
-        let folder = std::env::temp_dir().join(format!(
-            "mixjam-stale-open-{}-{master_only}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&folder).unwrap();
+        let folder = crate::test_folder::TestFolder::new("mixjam-stale-open");
         let song = folder.join("replacement.mixjam");
         let mut replacement =
             Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -58,15 +54,13 @@ fn choosing_an_open_path_preserves_edits_made_while_the_chooser_was_collapsed() 
         assert_eq!(prompt.text, draft);
         assert!(prompt.error.as_deref().unwrap().contains("changed"));
         assert!(app.session.unsaved());
-        std::fs::remove_dir_all(folder).unwrap();
     }
 }
 
 #[test]
 fn choosing_an_open_path_keeps_the_approval_for_an_unchanged_dirty_song() {
     let (context, mut app, port) = agent_fixture();
-    let folder = std::env::temp_dir().join(format!("mixjam-approved-open-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = crate::test_folder::TestFolder::new("mixjam-approved-open");
     let song = folder.join("replacement.mixjam");
     let mut replacement =
         Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -92,7 +86,6 @@ fn choosing_an_open_path_keeps_the_approval_for_an_unchanged_dirty_song() {
     assert_eq!(app.session.file(), Some(song.as_path()));
     assert!(app.files.path_prompt.is_none());
     assert!(!app.session.unsaved());
-    std::fs::remove_dir_all(folder).unwrap();
 }
 
 #[test]

@@ -449,16 +449,13 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_folder::TestFolder;
 
-    struct Folder(PathBuf);
+    struct Folder(TestFolder);
 
     impl Folder {
         fn new(name: &str) -> Self {
-            let path =
-                std::env::temp_dir().join(format!("mixjam-catalogs-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&path);
-            std::fs::create_dir_all(&path).unwrap();
-            Self(path)
+            Self(TestFolder::new(&format!("mixjam-catalogs-{name}")))
         }
 
         fn write(&self, name: &str, text: &str) {
@@ -471,12 +468,6 @@ mod tests {
 
         fn open(&self) -> Catalogs {
             Catalogs::open(Some(self.0.clone()))
-        }
-    }
-
-    impl Drop for Folder {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
         }
     }
 

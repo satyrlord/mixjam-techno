@@ -2,14 +2,15 @@
 
 ## Mixer
 
-Mixer uses compact ivory strips in a graphite material surround. Track identity
-and gain are first in the hierarchy. Strips show only for occupied tracks. Track
-and Master strips are 108 points wide. Master stays outside the horizontal track
-scroller, and the scroller keeps its scroll bar visible. Track numbers, sound
-summaries, dB gain values, pan descriptions, and output state stay grouped in
-each strip. A track with several different sounds shows the first sound to play,
-then "+N" for the others. Hover lists all names. Narrow strips keep the visible
-tracks without larger controls.
+In Vintage, Mixer uses compact ivory strips in a graphite surround; Studio and
+Aero paint strips in their theme surfaces. Track identity and gain are first in
+the hierarchy. Strips show only for occupied tracks. Track and Master strips are
+108 points wide. Master stays outside the horizontal track scroller, and the
+scroller keeps its scroll bar visible. Track numbers, sound summaries, dB gain
+values, pan descriptions, and output state stay grouped in each strip. A track
+with several different sounds shows the first sound to play, then "+N" for the
+others. Hover lists all names. Narrow strips keep the visible tracks without
+larger controls.
 
 L/R routing uses small named toggle buttons with live enabled indicators. Two
 rows of buttons are at the foot of a track strip:
@@ -102,15 +103,14 @@ Every control has an accessible name for its track. Master has its own gain
 labels. The header is the top row of the lower panel. Control tooltips and the
 Help window explain silence, unity, attenuation, and independent polarity.
 
-`src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a
-separate 24 by 32-point fader cap. Three PNGs hold the one prepared size of
-each. The tool first reduces the small cap to a 48 by 64-pixel canonical grid.
-This keeps the broad ridges and the ivory indicator stripe. The tool then
-prepares the cap at its final size. All text, values, rails, ticks, reset
-buttons, polarity, routing, focus, and hover stay native. Paint one texel per
-physical pixel with aligned bounds. Tile the materials. Do not change the size
-of a texture at runtime. See `assets/mixer/README.md` for the exact prompts,
-source hashes, and reproduction steps.
+`src/ui/mixer/material.rs` paints the Vintage ivory and graphite materials
+and the 24 by 32-pixel fader cap in code. Each material is a seeded tile of
+fine grain about one 8-bit level deep, with a faint warm and cool speckle.
+The cap is a dark machined block lit from the upper left, with three ridges
+above and three below a bright ivory indicator stripe. All text, values,
+rails, ticks, reset buttons, polarity, routing, focus, and hover stay native.
+Paint one texel per physical pixel with aligned bounds. Tile the materials.
+Do not change the size of a texture at runtime.
 
 Native mixer buttons use Mixer Face at rest and the shared Raised on hover.
 Keyboard focus changes their one-point border to Mixer Amber. It also adds a

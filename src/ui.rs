@@ -34,6 +34,8 @@ mod eq;
 mod form;
 #[path = "ui/fx.rs"]
 mod fx;
+#[path = "ui/grain.rs"]
+mod grain;
 #[path = "ui/help.rs"]
 mod help;
 #[path = "ui/input.rs"]

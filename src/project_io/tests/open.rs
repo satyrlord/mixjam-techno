@@ -4,6 +4,7 @@ use crate::{
     engine::{ImportedSample, MissingSample, Project},
     library::Library,
     products::{LibraryBinding, Product},
+    test_folder::TestFolder,
 };
 use std::{
     fs,
@@ -12,8 +13,7 @@ use std::{
 
 #[test]
 fn a_song_relinks_a_file_moved_into_another_library_folder() {
-    let root = std::env::temp_dir().join(format!("mixjam-moved-library-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
+    let root = TestFolder::new("mixjam-moved-library");
     let (first, second) = (root.join("First"), root.join("Second"));
     fs::create_dir_all(first.join("Drums")).unwrap();
     fs::create_dir_all(second.join("Pack/Loops")).unwrap();
@@ -57,13 +57,11 @@ fn a_song_relinks_a_file_moved_into_another_library_folder() {
         .find(|sample| sample.id == opened.clips[0].sample_id)
         .unwrap();
     assert_eq!(clip_source.path, fs::canonicalize(&moved).unwrap());
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn saved_rate_survives_lost_audio_and_autoresolution_preserves_trim_time() {
-    let root = std::env::temp_dir().join(format!("mixjam-lost-rate-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-lost-rate");
     let original = root.join("lead.wav");
     crate::audio::Pcm {
         sample_rate: 22_050,
@@ -133,17 +131,11 @@ fn saved_rate_survives_lost_audio_and_autoresolution_preserves_trim_time() {
     );
     let (legacy_resolved, _) = resolve(legacy_missing, &ready).unwrap();
     assert_eq!(legacy_resolved.clips[0].offset_frames, 11_025);
-    fs::remove_file(song).unwrap();
-    fs::remove_file(moved.join("lead.wav")).unwrap();
-    fs::remove_dir(moved).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn mixjam_placeholder_uses_actual_wave_duration_for_saved_musical_span() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-placeholder-tempo-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-placeholder-tempo");
     let wave = root.join("lead.wav");
     crate::audio::Pcm {
         sample_rate: 44_100,
@@ -188,8 +180,6 @@ fn mixjam_placeholder_uses_actual_wave_duration_for_saved_musical_span() {
     let (resolved, _) = resolve(project, &library).unwrap();
     assert_eq!(resolved.imported_samples[0].source_bpm, 120.0);
     assert_eq!(resolved.clips[0].offset_frames, 44_100);
-    fs::remove_file(wave).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 fn write_wave(path: &Path) {
@@ -211,10 +201,7 @@ fn write_wave(path: &Path) {
 
 #[test]
 fn wav_only_project_relinks_and_renders_without_saved_installations() {
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-techno-standalone-open-{}",
-        std::process::id()
-    ));
+    let root = TestFolder::new("mixjam-techno-standalone-open");
     let waves = root.join("moved/Drums");
     fs::create_dir_all(&waves).unwrap();
     fs::create_dir_all(root.join("old/Drums")).unwrap();
@@ -280,22 +267,10 @@ fn wav_only_project_relinks_and_renders_without_saved_installations() {
     );
     assert!(replaceable);
     assert!(!open_song(&file, &library).unwrap().2);
-    fs::remove_file(song).unwrap();
-    fs::remove_file(file).unwrap();
-    fs::remove_file(waves.join("my-own-kick.wav")).unwrap();
-    fs::remove_file(root.join("old/Drums/my-own-kick.wav")).unwrap();
-    fs::remove_dir(root.join("old/Drums")).unwrap();
-    fs::remove_dir(root.join("old")).unwrap();
-    fs::remove_dir(waves).unwrap();
-    fs::remove_dir(root.join("moved")).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 #[test]
 fn ambiguous_selected_folder_selects_first_and_preserves_conflict_choices() {
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-techno-ambiguous-open-{}",
-        std::process::id()
-    ));
+    let root = TestFolder::new("mixjam-techno-ambiguous-open");
     let selected = root.join("selected");
     let old = root.join("old");
     for folder in [selected.join("a"), selected.join("b"), old.clone()] {
@@ -386,21 +361,11 @@ fn ambiguous_selected_folder_selects_first_and_preserves_conflict_choices() {
             .path,
         conflict.candidates[1]
     );
-    fs::remove_file(chosen_file).unwrap();
-
-    fs::remove_file(file).unwrap();
-    for folder in [selected.join("a"), selected.join("b"), old] {
-        fs::remove_file(folder.join("take.wav")).unwrap();
-        fs::remove_dir(folder).unwrap();
-    }
-    fs::remove_dir(selected).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn selected_folder_keeps_existing_imports_that_it_lacks() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-techno-keep-import-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-techno-keep-import");
     let waves = root.join("folder");
     let elsewhere = root.join("elsewhere");
     fs::create_dir_all(&waves).unwrap();
@@ -447,16 +412,11 @@ fn selected_folder_keeps_existing_imports_that_it_lacks() {
         error.contains("missing from the selected folder"),
         "{error}"
     );
-    fs::remove_file(waves.join("kick.wav")).unwrap();
-    fs::remove_dir(waves).unwrap();
-    fs::remove_dir(elsewhere).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn typed_product_headers_reject_truncation_and_unknown_formats() {
-    let root = std::env::temp_dir().join(format!("mixjam-techno-header-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-techno-header");
     let path = root.join("test.mix");
     for (signature, product) in [
         (0x889u32, Product::T2),
@@ -475,14 +435,11 @@ fn typed_product_headers_reject_truncation_and_unknown_formats() {
     assert!(detect_product(&path).is_err());
     fs::write(&path, [0xff; 4]).unwrap();
     assert!(detect_product(&path).is_err());
-    fs::remove_file(path).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn missing_native_audio_opens_without_changing_catalog_or_project_file() {
-    let root = std::env::temp_dir().join(format!("mixjam-techno-open-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-techno-open");
     let path = root.join("song.json");
     let mut project = Project::default();
     project.clips.push(crate::engine::Clip {
@@ -505,15 +462,11 @@ fn missing_native_audio_opens_without_changing_catalog_or_project_file() {
     assert!(opened.missing_sample(999).is_some());
     assert!(library.samples.is_empty());
     assert_eq!(fs::read(&path).unwrap(), before);
-    fs::remove_file(path).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn missing_metadata_survives_save_reopen_and_resolution_preserves_trim_time() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-missing-roundtrip-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-missing-roundtrip");
     let imported = ImportedSample {
         id: crate::products::IMPORTED_ID_START,
         name: "Original lead".into(),
@@ -582,16 +535,11 @@ fn missing_metadata_survives_save_reopen_and_resolution_preserves_trim_time() {
             .iter()
             .any(|sample| *sample != 0.0)
     );
-    fs::remove_file(path).unwrap();
-    fs::remove_file(waves.join("lead.wav")).unwrap();
-    fs::remove_dir(waves).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn lost_import_reserves_its_identity_and_retains_available_library_metadata() {
-    let root = std::env::temp_dir().join(format!("mixjam-missing-identity-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-missing-identity");
     let wave = root.join("lost.wav");
     write_wave(&wave);
     let mut library = Library::empty();
@@ -634,6 +582,4 @@ fn lost_import_reserves_its_identity_and_retains_available_library_metadata() {
         .import_wav_with_tempo(&other, None, "Wave", 140.0)
         .unwrap();
     assert_ne!(new_sample.id, missing.id);
-    fs::remove_file(other).unwrap();
-    fs::remove_dir(root).unwrap();
 }

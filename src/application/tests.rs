@@ -42,21 +42,11 @@ fn placement_ticks_reports_the_length_that_place_uses() {
     }
 }
 
-fn manual_fixture_dir() -> PathBuf {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-manual-resolution-{}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&root).unwrap();
-    root
+/// A new, empty folder for one test; it removes itself at the end.
+fn manual_fixture_dir() -> crate::test_folder::TestFolder {
+    crate::test_folder::TestFolder::new("mixjam-manual-resolution")
 }
-fn conflict_fixture() -> (Session, PathBuf) {
+fn conflict_fixture() -> (Session, crate::test_folder::TestFolder) {
     let root = manual_fixture_dir();
     let first = root.join("first.wav");
     let second = root.join("second.wav");

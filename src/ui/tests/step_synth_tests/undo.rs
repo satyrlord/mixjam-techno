@@ -222,9 +222,7 @@ fn step_synth_multiframe_tie_drag_is_one_undo_step() {
 
 #[test]
 fn step_synth_source_undo_redo_preserves_start_and_loop_after_redraw() {
-    let dir =
-        std::env::temp_dir().join(format!("mixjam-step-source-history-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-step-source-history");
     let first = dir.join("first.wav");
     let second = dir.join("second.wav");
     for (path, silence) in [(&first, 100), (&second, 200)] {
@@ -274,7 +272,6 @@ fn step_synth_source_undo_redo_preserves_start_and_loop_after_redraw() {
             "Redo must keep the restored source settings after redraw: load={load}."
         );
     }
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -332,12 +329,11 @@ fn step_synth_adopts_replacement_audio_with_the_same_palette_id() {
         app.step_synth.state, before_save,
         "Saving a sound replaces the catalog but must keep the source settings."
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn step_synth_keeps_settings_when_the_same_audio_moves() {
-    let (ctx, mut app, dir) = sample_conflicts_fixture("step-source-rebound");
+    let (ctx, mut app, _dir) = sample_conflicts_fixture("step-source-rebound");
     app.session.confirm_sample_conflicts().unwrap();
     app.conflicts.open = false;
     app.selection.sample = Some(1_000_000);
@@ -357,12 +353,11 @@ fn step_synth_keeps_settings_when_the_same_audio_moves() {
     assert_eq!(app.source_id(), Some(1_000_000));
     assert_eq!(app.step_synth.state, before);
     assert!(!app.step_synth.grid.can_undo(false));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn step_synth_uses_playable_audio_to_set_source_length() {
-    let (ctx, mut app, dir) = sample_conflicts_fixture("step-source-read-failed");
+    let (ctx, mut app, _dir) = sample_conflicts_fixture("step-source-read-failed");
     app.session.confirm_sample_conflicts().unwrap();
     app.conflicts.open = false;
     let path = &app.session.sample_conflicts()[0].candidates[0];
@@ -373,5 +368,4 @@ fn step_synth_uses_playable_audio_to_set_source_length() {
 
     assert_eq!(app.source_id(), Some(1_000_000));
     assert_eq!(app.step_synth.adopted.as_ref().unwrap().1, None);
-    std::fs::remove_dir_all(dir).unwrap();
 }

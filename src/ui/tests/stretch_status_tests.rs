@@ -317,8 +317,7 @@ fn stretch_async_errors_are_local_and_changed_or_closed_requests_ask_to_process_
 #[test]
 fn stretch_save_confirmation_tracks_success_cancel_failure_and_output_tempo() {
     let (_, mut app) = fixture();
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-save-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-stretch-save");
     app.selection.sample = Some(1);
     let settings = StretchSettings {
         source_id: 1,
@@ -368,14 +367,12 @@ fn stretch_save_confirmation_tracks_success_cancel_failure_and_output_tempo() {
     app.finish_path(request(), Some(dir.join("absent-parent/result.wav")));
     assert!(app.stretch.feedback.error);
     assert!(app.stretch.feedback.saved.is_none());
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn stretch_stop_and_close_reopen_discard_successful_pending_results() {
     let (ctx, mut app, _port) = agent_fixture();
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-cancel-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-stretch-cancel");
     let path = dir.join("source.wav");
     Pcm {
         sample_rate: 1000,
@@ -427,14 +424,12 @@ fn stretch_stop_and_close_reopen_discard_successful_pending_results() {
             })
         );
     }
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn stretch_preview_failure_is_a_local_error_that_begins_with_cannot() {
     let (ctx, mut app, _port) = agent_fixture();
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-listen-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-stretch-listen");
     let path = dir.join("source.wav");
     Pcm {
         sample_rate: 1000,
@@ -458,7 +453,6 @@ fn stretch_preview_failure_is_a_local_error_that_begins_with_cannot() {
         app.stretch.feedback.message.as_deref(),
         Some("Cannot play the preview: Audio output is unavailable.")
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

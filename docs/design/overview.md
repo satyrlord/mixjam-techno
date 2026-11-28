@@ -15,8 +15,8 @@ The application has three complete themes that the owner selected: Studio
 arrangement, Sounds panel, Mixer, boards, tools, menus, tooltips,
 confirmations, and feedback. See [Themes](themes.md#themes). The rest
 of this document describes the shared layout and behavior, which no theme
-changes. The Vintage Mixer uses ivory strip artwork. Shared painters draw the
-panels, chassis, buttons, dials, and pedals in all three themes.
+changes. Shared painters draw the panels, chassis, buttons, dials, pedals, and
+Mixer strips in all three themes.
 
 In Vintage, every window and board sits on black rack rails with olive-sage
 anodized modular plates, slotted corner screws, cream silk-screen legends,

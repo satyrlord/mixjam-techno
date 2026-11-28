@@ -109,10 +109,10 @@ fn playback_and_export_run_the_same_master_pedalboard() {
     let exported = render_with_samples(&delayed, &samples).unwrap();
     assert_eq!(exported.samples.len(), dry.samples.len());
     let mix = mix_with_samples(&delayed, &samples).unwrap();
-    let path = std::env::temp_dir().join(format!("mixjam-master-{}.wav", std::process::id()));
+    let folder = crate::test_folder::TestFolder::new("mixjam-master");
+    let path = folder.join("master.wav");
     mix.write_wav(&path, &delayed.master, &delayed.fx).unwrap();
     let written = read_wav(&path).unwrap();
-    std::fs::remove_file(&path).unwrap();
     assert_eq!(written.samples.len(), exported.samples.len());
     assert!(
         written

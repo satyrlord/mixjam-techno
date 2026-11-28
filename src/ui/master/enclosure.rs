@@ -637,25 +637,21 @@ fn light_texel(amount: f32) -> Color32 {
 /// repeats without a seam.
 pub(super) fn grain_image() -> egui::ColorImage {
     const KNOT: usize = 32;
-    let [width, height] = GRAIN;
-    let mut random = Random(0x6d61_7374_6572);
-    let mut values = Vec::with_capacity(width * height);
-    for _ in 0..height {
-        let row = random.normal();
-        let knots: Vec<f32> = (0..width / KNOT).map(|_| random.normal()).collect();
-        for x in 0..width {
-            let (knot, part) = (x / KNOT, (x % KNOT) as f32 / KNOT as f32);
-            let blend = (1.0 - (part * std::f32::consts::PI).cos()) / 2.0;
-            let next = knots[(knot + 1) % knots.len()];
-            let along = knots[knot] + (next - knots[knot]) * blend;
-            values.push(0.6 * row + 0.45 * along + 0.25 * random.normal());
+    let (mut row, mut knots) = (0.0, Vec::new());
+    let values = grain::field(GRAIN, 0x6d61_7374_6572, |random, x| {
+        if x == 0 {
+            row = random.normal();
+            knots = (0..GRAIN[0] / KNOT).map(|_| random.normal()).collect();
         }
-    }
-    let deviation =
-        (values.iter().map(|value| value * value).sum::<f32>() / values.len() as f32).sqrt();
+        let (knot, part) = (x / KNOT, (x % KNOT) as f32 / KNOT as f32);
+        let blend = (1.0 - (part * std::f32::consts::PI).cos()) / 2.0;
+        let next = knots[(knot + 1) % knots.len()];
+        let along = knots[knot] + (next - knots[knot]) * blend;
+        0.6 * row + 0.45 * along + 0.25 * random.normal()
+    });
     let pixels = values
         .iter()
-        .map(|value| light_texel((value / deviation * GRAIN_DEPTH).clamp(-GRAIN_DIP, GRAIN_DIP)))
+        .map(|value| light_texel((value * GRAIN_DEPTH).clamp(-GRAIN_DIP, GRAIN_DIP)))
         .collect();
     egui::ColorImage::new(GRAIN, pixels)
 }
@@ -700,7 +696,7 @@ fn overlay(face: &egui::Mesh, texture: egui::TextureId, uv: impl Fn(Pos2) -> Pos
 /// light falls dark and the far wall catches it, brightest on scratches
 /// across the light.
 fn scratches(painter: &egui::Painter, face: Rect, seed: u64) {
-    let mut random = Random(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    let mut random = grain::Random(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
     let usual = [random.unit(), random.unit()].map(|turn| turn * std::f32::consts::PI);
     let count = 8 + (face.area() / 4500.0) as usize;
     for _ in 0..count {
@@ -778,31 +774,6 @@ fn scratch(
             [from - TO_LIGHT * 0.2, to - TO_LIGHT * 0.2],
             Stroke::new(0.8_f32, ALUMINIUM.gamma_multiply(0.9 * fade * glint)),
         );
-    }
-}
-
-/// A small seeded generator, so the grain and each pedal's scratches come out
-/// the same on every frame and every run.
-struct Random(u64);
-
-impl Random {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
-        let mut mixed = self.0;
-        mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        mixed ^ (mixed >> 31)
-    }
-
-    /// Uniform in [0, 1).
-    fn unit(&mut self) -> f32 {
-        (self.next() >> 40) as f32 / (1_u64 << 24) as f32
-    }
-
-    /// Standard normal.
-    fn normal(&mut self) -> f32 {
-        let radius = (-2.0 * (1.0 - self.unit()).ln()).sqrt();
-        radius * (std::f32::consts::TAU * self.unit()).cos()
     }
 }
 

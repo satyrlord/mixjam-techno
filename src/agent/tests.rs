@@ -1,6 +1,7 @@
 use super::*;
 use super::{client::words, server::key_path};
 use crate::album_review;
+use crate::test_folder::TestFolder;
 use std::{
     io::{BufReader, Read, Write},
     net::{Ipv4Addr, TcpListener, TcpStream},
@@ -44,8 +45,6 @@ fn sample_review(id: &str) -> serde_json::Value {
 #[test]
 fn album_review_requests_list_read_query_add_and_update_reviews() {
     let folder = key_folder("reviews");
-    let _ = std::fs::remove_dir_all(&folder);
-    std::fs::create_dir_all(&folder).unwrap();
     let mut shelf = album_review::Shelf::open(Some(folder.clone()));
     let request = |words: &[&str]| {
         serde_json::from_str::<Request>(&request_line(&strings(words)).unwrap()).unwrap()
@@ -146,11 +145,10 @@ fn album_review_requests_list_read_query_add_and_update_reviews() {
     assert!(reply.contains(r#""genre_tags":["Techno"]"#), "{reply}");
     assert!(reply.contains(r#""kind":"reference""#), "{reply}");
     assert!(!reply.contains("problems"), "{reply}");
-    std::fs::remove_dir_all(folder).unwrap();
 }
 
-fn key_folder(tag: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("mixjam-agent-{}-{tag}", std::process::id()))
+fn key_folder(tag: &str) -> TestFolder {
+    TestFolder::new(&format!("mixjam-agent-{tag}"))
 }
 
 #[test]
@@ -428,7 +426,8 @@ fn replies_are_one_flat_object_with_the_result() {
 #[test]
 fn dropping_server_releases_the_listener_and_idle_connections() {
     let folder = key_folder("shutdown");
-    let server = Server::start(0, &folder).unwrap();
+    let keys = folder.join("keys");
+    let server = Server::start(0, &keys).unwrap();
     let port = server.port();
     let mut client = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
     client
@@ -458,17 +457,18 @@ fn dropping_server_releases_the_listener_and_idle_connections() {
     let mut byte = [0];
     assert!(matches!(client.read(&mut byte), Ok(0)));
     drop(accepted);
-    assert!(!key_path(&folder, port).exists());
-    std::fs::remove_dir(folder).unwrap();
+    assert!(!key_path(&keys, port).exists());
+    assert!(std::fs::read_dir(&keys).unwrap().next().is_none());
 }
 
 #[test]
 fn server_queues_requests_wakes_the_frontend_and_returns_its_replies() {
     let folder = key_folder("queue");
-    let server = Server::start_with(0, &folder, Duration::from_millis(150)).unwrap();
+    let keys = folder.join("keys");
+    let server = Server::start_with(0, &keys, Duration::from_millis(150)).unwrap();
     let key = server.key().to_string();
     assert_eq!(
-        std::fs::read_to_string(key_path(&folder, server.port())).unwrap(),
+        std::fs::read_to_string(key_path(&keys, server.port())).unwrap(),
         key
     );
     let (woken, wakes) = mpsc::channel();
@@ -536,14 +536,15 @@ fn server_queues_requests_wakes_the_frontend_and_returns_its_replies() {
 
     // The key file lasts as long as the session.
     drop(server);
-    assert!(!key_path(&folder, port).exists());
-    std::fs::remove_dir(folder).unwrap();
+    assert!(!key_path(&keys, port).exists());
+    assert!(std::fs::read_dir(&keys).unwrap().next().is_none());
 }
 
 #[test]
 fn a_connection_without_the_key_or_with_a_malformed_line_runs_nothing_more() {
     let folder = key_folder("refuse");
-    let server = Server::start_with(0, &folder, Duration::from_secs(5)).unwrap();
+    let keys = folder.join("keys");
+    let server = Server::start_with(0, &keys, Duration::from_secs(5)).unwrap();
     let exchange = |bytes: &[u8]| {
         let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, server.port())).unwrap();
         stream.write_all(bytes).unwrap();
@@ -571,5 +572,5 @@ fn a_connection_without_the_key_or_with_a_malformed_line_runs_nothing_more() {
     assert!(reply.contains("Invalid request"), "{reply}");
     assert!(server.next().is_none());
     drop(server);
-    std::fs::remove_dir(folder).unwrap();
+    assert!(std::fs::read_dir(&keys).unwrap().next().is_none());
 }

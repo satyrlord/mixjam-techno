@@ -901,8 +901,7 @@ fn bypass_all_and_master_bypass_are_one_switch_and_track_export_asks_for_a_folde
     assert!(app.session.project().master.bypass);
 
     // A song whose sound has audio, on track 3.
-    let dir = std::env::temp_dir().join(format!("mixjam-ui-tracks-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_folder::TestFolder::new("mixjam-ui-tracks");
     let wave = dir.join("source.wav");
     Pcm {
         sample_rate: 44_100,
@@ -941,7 +940,6 @@ fn bypass_all_and_master_bypass_are_one_switch_and_track_export_asks_for_a_folde
     let title = app.session.project().title.clone();
     let part = crate::audio::read_wav(&dir.join(format!("{title} - Track 03.wav"))).unwrap();
     assert!(part.samples.iter().any(|sample| *sample > 0.1));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

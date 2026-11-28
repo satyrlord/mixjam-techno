@@ -2,7 +2,7 @@
 //! buttons, the pan slider, and the buttons for EQ, polarity, and bypass.
 use super::*;
 
-/// How a mixer control is drawn: on a strip at its artwork's scale, with
+/// How a mixer control is drawn: on a strip at the strip's scale, with
 /// faces and lit labels; or quiet for FX bus mini-switches, where an off
 /// switch rests dark.
 #[derive(Clone, Copy, Debug, PartialEq)]

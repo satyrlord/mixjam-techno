@@ -204,9 +204,8 @@ fn lane_heights_keep_reversed_clip_names_clear_of_the_marker() {
     use mixjam_techno::application::options::LaneHeight;
     each_theme(|theme| {
         let (ctx, mut app) = fixture();
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-lane-reverse-ui-{}-{}",
-            std::process::id(),
+        let root = crate::test_folder::TestFolder::new(&format!(
+            "mixjam-lane-reverse-ui-{}",
             options::labels::theme(theme)
         ));
         let mut samples = app.session.library().samples.to_vec();
@@ -248,7 +247,6 @@ fn lane_heights_keep_reversed_clip_names_clear_of_the_marker() {
                 "{theme:?} {lane_height:?}: name {name:?} overlaps rev {reverse:?}"
             );
         }
-        std::fs::remove_dir_all(root).unwrap();
     });
 }
 
@@ -257,9 +255,8 @@ fn lane_heights_keep_the_new_track_drop_hint_visible() {
     use mixjam_techno::application::options::LaneHeight;
     each_theme(|theme| {
         let (ctx, mut app) = fixture();
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-lane-drop-ui-{}-{}",
-            std::process::id(),
+        let root = crate::test_folder::TestFolder::new(&format!(
+            "mixjam-lane-drop-ui-{}",
             options::labels::theme(theme)
         ));
         app.session = app.session.with_settings_root(root.clone());
@@ -287,7 +284,6 @@ fn lane_heights_keep_the_new_track_drop_hint_visible() {
                 "The hint must not be clipped."
             );
         }
-        std::fs::remove_dir_all(root).unwrap();
     });
 }
 
@@ -560,7 +556,7 @@ fn arrangement_frame_time() {
     ] {
         let context = egui::Context::default();
         configure_style(&context);
-        let root = std::env::temp_dir().join(format!("mixjam-long-song-{}", std::process::id()));
+        let root = crate::test_folder::TestFolder::new("mixjam-long-song");
         let mut app = long_song_fixture(lane_height, &root);
         app.score.zoom = zoom;
         if maximised {
@@ -591,8 +587,6 @@ fn arrangement_frame_time() {
             times[times.len() * 95 / 100],
             times[times.len() - 1]
         );
-        // The default lane height saves nothing, so the folder may not exist.
-        let _ = std::fs::remove_dir_all(root);
     }
 }
 

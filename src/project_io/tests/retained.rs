@@ -9,6 +9,7 @@ use crate::{
     engine::{MissingSample, Project, TICKS_PER_BAR},
     library::Library,
     products::{LibraryBinding, Product},
+    test_folder::TestFolder,
 };
 use std::{
     fs,
@@ -86,7 +87,7 @@ fn imports_name_the_products_whose_catalogs_lack_their_native_ids() {
     );
     // An original installation serves H1 without a catalog, so a sample
     // that it lacks is missing from the installation, not from a catalog.
-    let root = std::env::temp_dir().join(format!("mixjam-catalog-notice-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-catalog-notice");
     let mut installed = original_house_provider(&root);
     // A replacement provider may be supplemented by WAV sources from a
     // previously loaded folder. Its original source still establishes
@@ -107,7 +108,6 @@ fn imports_name_the_products_whose_catalogs_lack_their_native_ids() {
         installed.describe_missing(Product::H1, 99_999),
         "H1 native sample 99999 is missing from its library."
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 fn project_using(library: &Library, ids: &[u32]) -> Project {
@@ -122,7 +122,7 @@ fn project_using(library: &Library, ids: &[u32]) -> Project {
 
 #[test]
 fn mixed_packed_and_supplemental_sources_do_not_replace_the_song() {
-    let root = std::env::temp_dir().join(format!("mixjam-mixed-save-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-mixed-save");
     let provider_root = root.join("provider");
     let original = original_house_provider(&provider_root);
     let native_id = Product::H1.global_sample_id(1).unwrap();
@@ -144,19 +144,18 @@ fn mixed_packed_and_supplemental_sources_do_not_replace_the_song() {
         assert_eq!(fs::read(&song).unwrap(), b"previous song");
         assert!(!root.join("storage").exists());
     }
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn wav_only_supplement_is_retained_even_inside_the_packed_provider() {
-    let root = std::env::temp_dir().join(format!("mixjam-wav-only-save-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-wav-only-save");
     let provider_root = root.join("provider");
     let original = original_house_provider(&provider_root);
     let entry = crate::catalog::identities(Product::H1)
         .iter()
         .find(|entry| entry.native_id != 1 && entry.frame_count < 1_000_000);
     for (index, inside) in [true, false].into_iter().enumerate() {
-        let folder = if inside { &provider_root } else { &root };
+        let folder: &Path = if inside { &provider_root } else { &root };
         let name = entry.map_or_else(
             || "unknown.wav".into(),
             |entry| {
@@ -215,13 +214,11 @@ fn wav_only_supplement_is_retained_even_inside_the_packed_provider() {
             assert_eq!(fs::read(&song).unwrap(), b"previous song");
         }
     }
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn unavailable_saved_supplement_keeps_the_binding_for_a_later_open() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-missing-supplement-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-missing-supplement");
     let original = original_house_provider(&root.join("provider"));
     let present = Product::H1.global_sample_id(1).unwrap();
     let missing = Product::H1.global_sample_id(99_999).unwrap();
@@ -239,15 +236,11 @@ fn unavailable_saved_supplement_keeps_the_binding_for_a_later_open() {
         ready.source_root(Product::H1),
         original.source_root(Product::H1)
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn saved_supplement_fills_only_used_missing_ids_without_replacing_originals() {
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-supplement-collision-{}",
-        std::process::id()
-    ));
+    let root = TestFolder::new("mixjam-supplement-collision");
     let entries: Vec<_> = crate::catalog::identities(Product::H1)
         .iter()
         .filter(|entry| entry.frame_count < 1_000_000)
@@ -264,7 +257,6 @@ fn saved_supplement_fills_only_used_missing_ids_without_replacing_originals() {
         let (reopened, ready) = resolve(project, &original).unwrap();
         assert!(reopened.missing_sample(missing).is_some());
         assert_eq!(ready.read_pcm(present).unwrap().samples, vec![0.0; 5]);
-        fs::remove_dir_all(root).unwrap();
         return;
     }
     let original = original_house_provider_with_id(&root.join("provider"), entries[0].native_id);
@@ -307,13 +299,11 @@ fn saved_supplement_fills_only_used_missing_ids_without_replacing_originals() {
         ready.source_root(Product::H1),
         original.source_root(Product::H1)
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn provider_audio_identity_ignores_riff_metadata() {
-    let root = std::env::temp_dir().join(format!("mixjam-provider-wave-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-provider-wave");
     let first = root.join("first.wav");
     let second = root.join("second.wav");
     crate::audio::Pcm {
@@ -334,13 +324,11 @@ fn provider_audio_identity_ignores_riff_metadata() {
         provider_wave_audio(&first).unwrap(),
         provider_wave_audio(&second).unwrap()
     );
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn retained_native_provider_requires_known_ids_and_preserves_audio_on_failure() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-retained-provider-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-retained-provider");
     let metadata = crate::catalog::identities(Product::D1);
     if metadata.len() < 2 {
         // A public checkout need not contain the optional catalog files.
@@ -359,7 +347,6 @@ fn retained_native_provider_requires_known_ids_and_preserves_audio_on_failure() 
                 .count(),
             0
         );
-        fs::remove_dir_all(root).unwrap();
         return;
     }
     let mut sources = Vec::new();
@@ -428,13 +415,11 @@ fn retained_native_provider_requires_known_ids_and_preserves_audio_on_failure() 
     assert_eq!(fs::read(&song).unwrap(), previous_song);
     assert_eq!(fs::read_dir(retained.parent().unwrap()).unwrap().count(), 1);
     assert_eq!(project, original);
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn manual_wave_retention_rejects_oversized_files_before_creating_staging_files() {
-    let root = std::env::temp_dir().join(format!("mixjam-manual-size-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-manual-size");
     let wave = root.join("oversized.wav");
     fs::write(&wave, [0u8; 1001]).unwrap();
     let cache = root.join("cache");
@@ -444,6 +429,4 @@ fn manual_wave_retention_rejects_oversized_files_before_creating_staging_files()
             .contains("larger than 4 GiB")
     );
     assert!(!cache.exists());
-    fs::remove_file(wave).unwrap();
-    fs::remove_dir(root).unwrap();
 }

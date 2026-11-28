@@ -448,12 +448,27 @@ fn load_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_folder::TestFolder;
 
-    fn folder(name: &str) -> PathBuf {
-        let folder =
-            std::env::temp_dir().join(format!("mixjam-covers-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&folder);
-        folder
+    struct CacheFolder {
+        _root: TestFolder,
+        path: PathBuf,
+    }
+
+    impl std::ops::Deref for CacheFolder {
+        type Target = PathBuf;
+
+        fn deref(&self) -> &PathBuf {
+            &self.path
+        }
+    }
+
+    /// A non-existent cache folder inside a self-removing test root, so tests
+    /// cover both missing-folder reads and lazy directory creation.
+    fn folder(name: &str) -> CacheFolder {
+        let root = TestFolder::new(&format!("mixjam-covers-{name}"));
+        let path = root.join("covers");
+        CacheFolder { _root: root, path }
     }
 
     fn jpeg(size: usize) -> Vec<u8> {
@@ -485,9 +500,11 @@ mod tests {
         for other in [&b"GIF89a..."[..], b"<html>", b"RIFF\0\0\0\0WAVEfmt ", b""] {
             assert_eq!(ImageKind::sniff(other), None);
         }
-        let cache = CoverCache::new(folder("formats"), CACHE_LIMIT_BYTES);
+        let folder = folder("formats");
+        let cache = CoverCache::new(folder.to_path_buf(), CACHE_LIMIT_BYTES);
         assert!(cache.store("album", b"<html>not an image</html>").is_err());
         assert!(cache.store("../escape", &jpeg(16)).is_err());
+        assert!(!folder.exists());
         assert_eq!(cache.usage(), (0, 0));
     }
 
@@ -530,7 +547,6 @@ mod tests {
         );
         let viewed = fs::metadata(&second).unwrap().modified().unwrap();
         assert!(viewed > SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(10));
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -563,7 +579,6 @@ mod tests {
         fs::write(folder.join("notes.txt"), b"keep").unwrap();
         assert_eq!(cache.clear().unwrap(), 0);
         assert!(folder.join("notes.txt").is_file());
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
@@ -598,7 +613,6 @@ mod tests {
             CoverOutcome::Ready(_)
         ));
         assert_eq!(cache.read("album").unwrap().unwrap(), png);
-        fs::remove_dir_all(folder).unwrap();
     }
 
     #[cfg(feature = "gui")]
@@ -644,6 +658,5 @@ mod tests {
         assert!(
             matches!(outcome("bad-link"), CoverOutcome::Failed(reason) if reason.contains("http"))
         );
-        fs::remove_dir_all(folder).unwrap();
     }
 }

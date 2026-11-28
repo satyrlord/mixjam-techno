@@ -46,14 +46,11 @@ fn embedded_wave_import_keeps_audio_origin_hash_and_saved_reference() {
     library.apply_imports(&project.imported_samples).unwrap();
     let pcm = crate::audio::render_project(&project, &library).unwrap();
     assert!(pcm.samples.iter().any(|value| value.abs() > 0.001));
-    let saved = std::env::temp_dir().join(format!(
-        "mixjam-techno-embedded-project-{}.json",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-techno-embedded-project");
+    let saved = folder.join("embedded-project.json");
     assert!(!saved.exists());
     project.save(&saved).unwrap();
     assert_eq!(Project::load(&saved).unwrap(), project);
-    fs::remove_file(&saved).unwrap();
     if !existed {
         fs::remove_file(&destination).unwrap();
     }
@@ -355,7 +352,6 @@ fn wave_preflight_matches_pcm_encodings_counts_and_channel_alignment() {
     unaligned[28..32].copy_from_slice(&176400u32.to_le_bytes());
     unaligned[32..34].copy_from_slice(&4u16.to_le_bytes());
     assert!(wave_info(&unaligned).is_err());
-    fs::remove_dir(&directory).unwrap();
 }
 
 #[test]
@@ -366,8 +362,6 @@ fn an_external_wave_past_64_mib_is_read_whole() {
     let length = 64 * 1024 * 1024 + 1;
     fs::File::create(&path).unwrap().set_len(length).unwrap();
     assert_eq!(read_external_wave(&path).unwrap().len() as u64, length);
-    fs::remove_file(path).unwrap();
-    fs::remove_dir(&directory).unwrap();
 }
 
 #[test]
@@ -433,8 +427,4 @@ fn missing_user_wave_does_not_bind_an_unrelated_installation_basename() {
     library.import_wav_folder(&installation, 140.0).unwrap();
     let moved = source_wave(&missing.to_string_lossy(), &[], &[], &library).unwrap();
     assert_eq!(moved.bytes, wave_fixture());
-    fs::remove_file(&unrelated).unwrap();
-    fs::remove_dir(&installation).unwrap();
-    fs::remove_dir(directory.join("installation")).unwrap();
-    fs::remove_dir(&directory).unwrap();
 }

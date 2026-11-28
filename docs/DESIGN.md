@@ -208,7 +208,8 @@ accents; **Aero** renders soft Y2K molded plastic shells over deep cobalt and
 navy; **Vintage** pairs stark dark rack cabinets with brushed olive-sage
 anodized modular plates, corner slotted screws, amber indicators, and bespoke 3D
 hardware stompboxes. Procedural painters draw every chassis, dial, and unit
-motif in code. The brand mark, rail masks, and Vintage Mixer artwork use PNGs.
+motif in code, and the Vintage Mixer's ivory and graphite strips. The brand
+mark and rail masks use PNGs.
 
 **Key Characteristics:**
 
@@ -369,8 +370,8 @@ and 3D hardware bevels.
 ### Depth rules
 
 **The Code-Only Hardware Rule.** Render every chassis bevel, screw, rotary dial,
-meter, and pedal face with bounded procedural geometry in `egui`. Use the
-prepared artwork for the brand mark, rail alpha masks, and Vintage Mixer.
+meter, pedal face, and Mixer strip with bounded procedural geometry in `egui`.
+Use the prepared artwork only for the brand mark and the rail alpha masks.
 Apply state changes immediately.
 
 ## Shapes

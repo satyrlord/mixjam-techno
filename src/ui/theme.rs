@@ -3,7 +3,7 @@
 //! Studio paints flat matte surfaces, Aero molded plastic, and Vintage anodized
 //! modular metal plates in a dark rack cabinet. Layout, control positions,
 //! behavior, and features never depend on the theme. Shared painters draw
-//! surfaces in code. The Vintage Mixer uses prepared strip and fader artwork.
+//! surfaces in code, the Vintage Mixer's grained strips and fader cap too.
 use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Stroke, Vec2};
 pub(super) use mixjam_techno::application::options::Theme;
 use std::cell::Cell;

@@ -331,8 +331,7 @@ fn starting_with_mastering_or_effects_opens_the_lower_panel_on_its_tab() {
         (StartingModule::Mastering, BottomModule::Mastering),
         (StartingModule::Effects, BottomModule::FxReturns),
     ] {
-        let name = format!("mixjam-ui-start-{module:?}-{}", std::process::id());
-        let root = std::env::temp_dir().join(name);
+        let root = crate::test_folder::TestFolder::new(&format!("mixjam-ui-start-{module:?}"));
         let mut session = Session::headless(
             Arc::new(Library::fixture(app.session.library().samples.to_vec())),
             app.session.project().clone(),
@@ -354,14 +353,13 @@ fn starting_with_mastering_or_effects_opens_the_lower_panel_on_its_tab() {
             app.session.layout().boards,
             "{module:?} must open the lower panel."
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 }
 
 #[test]
 fn starting_with_the_mixer_opens_the_mixer_board() {
     let (_, app) = fixture();
-    let root = std::env::temp_dir().join(format!("mixjam-ui-start-mix-{}", std::process::id()));
+    let root = crate::test_folder::TestFolder::new("mixjam-ui-start-mix");
     let mut session = Session::headless(
         Arc::new(Library::fixture(app.session.library().samples.to_vec())),
         app.session.project().clone(),
@@ -379,7 +377,6 @@ fn starting_with_the_mixer_opens_the_mixer_board() {
         app.session.layout().boards,
         "The Mixer startup option opens the lower panel on the Mixer board."
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

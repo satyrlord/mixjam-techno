@@ -27,6 +27,8 @@ pub mod runtime_data;
 pub mod sample_edit;
 mod source_tempo;
 pub mod synth;
+#[cfg(test)]
+mod test_folder;
 mod unique_json;
 mod wav;
 

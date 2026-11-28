@@ -589,15 +589,12 @@ fn mixer_polarity_survives_silence_history_and_project_save() {
     assert_eq!(app.session.project().tracks[0].gain, 0.0);
     assert!(app.session.project().tracks[0].polarity_inverted);
 
-    let path = std::env::temp_dir().join(format!(
-        "mixjam-ui-mixer-polarity-{}.json",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-ui-mixer-polarity");
+    let path = folder.join("polarity.json");
     app.session.project().save(&path).unwrap();
     let loaded = Project::load(&path).unwrap();
     assert_eq!(loaded.tracks[0].gain, 0.0);
     assert!(loaded.tracks[0].polarity_inverted);
-    std::fs::remove_file(path).unwrap();
 
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     focus_control(&ctx, &mut app, &output, "Reset Track 1 gain to unity");

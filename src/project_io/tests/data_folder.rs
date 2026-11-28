@@ -1,12 +1,12 @@
 //! Settings files in the data folder, and the scan cache that opening uses.
 use super::*;
+use crate::test_folder::TestFolder;
 use crate::{engine::Project, library::Library};
 use std::fs;
 
 #[test]
 fn a_headless_open_reuses_and_extends_the_scan_cache() {
-    let root = std::env::temp_dir().join(format!("mixjam-cached-open-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
+    let root = TestFolder::new("mixjam-cached-open");
     let (samples, data) = (root.join("Samples"), root.join("data"));
     fs::create_dir_all(samples.join("Loop")).unwrap();
     for path in [
@@ -43,13 +43,11 @@ fn a_headless_open_reuses_and_extends_the_scan_cache() {
     assert!(cached.skipped_waves().is_empty());
     let fresh = Library::open_wav_folder(&samples, 140.0).unwrap();
     assert_eq!(fresh.samples.len(), 1);
-    fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
 fn reopening_refreshes_changed_wave_metadata_at_the_same_path() {
-    let root = std::env::temp_dir().join(format!("mixjam-refresh-wave-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = TestFolder::new("mixjam-refresh-wave");
     let path = root.join("take.wav");
     let mut pcm = crate::audio::Pcm {
         sample_rate: 44_100,
@@ -86,13 +84,11 @@ fn reopening_refreshes_changed_wave_metadata_at_the_same_path() {
     assert_eq!(sample.channels, 2);
     assert_eq!(sample.digest, None);
     assert_eq!(sample.length, fs::metadata(&path).unwrap().len());
-    fs::remove_file(path).unwrap();
-    fs::remove_dir(root).unwrap();
 }
 
 #[test]
 fn song_folder_is_remembered_until_the_folder_disappears() {
-    let root = std::env::temp_dir().join(format!("mixjam-song-folder-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-song-folder");
     let settings = root.join("settings");
     let songs = root.join("songs");
     fs::create_dir_all(&songs).unwrap();
@@ -101,13 +97,11 @@ fn song_folder_is_remembered_until_the_folder_disappears() {
     assert_eq!(load_song_folder(&settings), Some(songs.clone()));
     fs::remove_dir(&songs).unwrap();
     assert_eq!(load_song_folder(&settings), None);
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn an_earlier_single_folder_setting_reads_as_a_list_and_saves_as_one() {
-    let root = std::env::temp_dir().join(format!("mixjam-folder-config-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
+    let root = TestFolder::new("mixjam-folder-config");
     let settings = root.join("settings");
     let (first, second) = (root.join("First"), root.join("Second"));
     fs::create_dir_all(&first).unwrap();
@@ -176,13 +170,11 @@ fn an_earlier_single_folder_setting_reads_as_a_list_and_saves_as_one() {
     )
     .unwrap();
     assert!(load_wave_config_in(&settings).is_err());
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn oversized_folder_settings_do_not_replace_a_readable_list() {
-    let root =
-        std::env::temp_dir().join(format!("mixjam-folder-config-size-{}", std::process::id()));
+    let root = TestFolder::new("mixjam-folder-config-size");
     let settings = root.join("settings");
     let roots = |depth| {
         (0..crate::library::MAX_LIBRARY_FOLDERS)
@@ -209,5 +201,4 @@ fn oversized_folder_settings_do_not_replace_a_readable_list() {
     assert!(error.contains("size limit"), "{error}");
     assert_eq!(fs::read(&file).unwrap(), before);
     assert_eq!(load_wave_config_in(&settings), Ok(Some(expected)));
-    fs::remove_dir_all(root).unwrap();
 }

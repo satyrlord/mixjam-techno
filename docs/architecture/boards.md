@@ -14,9 +14,10 @@ These boards have their own pages:
 `src/ui/mixer.rs`, with its `src/ui/mixer/` modules, owns the compact strip
 presentation of the Mixer in the current theme. Its `gain_keys` and
 `gain_semantics` (`mixer/gain.rs`) give the gain rail of the Mixer and the clip
-fader the same wheel, key, accessibility, and double-click behavior. Vintage
-tiles the graphite and ivory artwork (`mixer/artwork.rs`). Studio and Aero
-paint the strips and fader caps in code at the same physical-pixel scale.
+fader the same wheel, key, accessibility, and double-click behavior.
+`mixer/material.rs` paints the Vintage graphite and ivory materials and the
+Vintage fader cap in code. Studio and Aero paint the strips and fader caps
+with their theme surfaces. All three use the same physical-pixel scale.
 
 Each strip is 108 logical points wide. Master stays outside the occupied-track
 bank, which scrolls horizontally. On each track strip, the EQ button starts the
@@ -32,7 +33,7 @@ Inspector also shows, the Drive transfer curve, and the live compressor and
 ducker gain reduction from the session. The toolbar of the Mixer holds Export
 tracks, which asks for a folder through `ask_path`.
 
-## Mixer controls and artwork
+## Mixer controls and materials
 
 Each strip change goes through `apply_mixer_changes` in `src/ui/view/boards.rs`,
 editing the `TrackMix` of its track (level, polarity, pan, switches, and sends)
@@ -55,11 +56,13 @@ exact silence. Unity is at 0 dB on the gain rail. Center aligns with the pan
 midpoint, just below its rail. Polarity has a separate slashed-circle button.
 Control tooltips and the Help window give detailed guidance.
 
-Prepared material tiles and the fader cap are in `assets/mixer/100/`. The tool
-reduces the fader to a canonical grid of 48 by 64 pixels. It then prepares the
-fader at 24 by 32 pixels. Runtime painting aligns one texel to one physical
-pixel, with no texture resize. The empty bank gives one instruction and keeps
-Master available.
+Vintage makes its ivory and graphite tiles at runtime from seeded noise in
+`src/ui/grain.rs`, which also makes the brushed grain of the pedals. A tile is
+256 by 256 texels and repeats without a seam. Painting starts each tile at the
+physical pixel nearest to the top left of its strip and puts one texel on
+each physical pixel, with no texture resize. The fader cap is vector
+geometry of 24 by 32 physical pixels. The empty bank gives one instruction and
+keeps Master available.
 
 ## FX returns board
 

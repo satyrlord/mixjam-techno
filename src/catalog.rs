@@ -685,7 +685,7 @@ pub(crate) fn decode_1252(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use crate::test_folder::TestFolder;
 
     #[test]
     fn pcm_identity_ignores_constant_offset_and_final_frame_but_not_other_changes() {
@@ -768,7 +768,6 @@ mod tests {
             assert_eq!(house_group_name(code), group, "{code}");
         }
     }
-    static NEXT: AtomicU64 = AtomicU64::new(0);
     #[test]
     fn loaded_runtime_catalog_identities_are_valid_and_unique() {
         let catalogs = catalogs();
@@ -784,23 +783,6 @@ mod tests {
                 assert!(entry.source_bpm.is_finite() && entry.source_bpm > 0.0);
                 assert!(entry.label_key.len() == 16 && !entry.code.is_empty());
             }
-        }
-    }
-    struct Folder(PathBuf);
-    impl Folder {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "mixjam-techno-catalog-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir(&path).unwrap();
-            Self(path)
-        }
-    }
-    impl Drop for Folder {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
         }
     }
     fn packed(metadata: &str, frames: u32) -> Vec<u8> {
@@ -819,17 +801,17 @@ mod tests {
     }
     #[test]
     fn quoted_marker_unsorted_multibank_index_and_short_metadata_keep_native_ids() {
-        let folder = Folder::new();
+        let folder = TestFolder::new("mixjam-techno-catalog");
         let metadata = "sound\r\n1\r\n\x44ance20\r\n\r\nKick\r\n75600";
         let first = packed(metadata, 9450);
         let second = packed(metadata, 18900);
         fs::write(
-            folder.0.join("bank"),
+            folder.join("bank"),
             [first.clone(), second.clone()].concat(),
         )
         .unwrap();
-        fs::write(folder.0.join("kit"), first.clone()).unwrap();
-        let index = folder.0.join("index.inf");
+        fs::write(folder.join("kit"), first.clone()).unwrap();
+        let index = folder.join("index.inf");
         fs::write(
             &index,
             format!(
@@ -842,7 +824,7 @@ mod tests {
         )
         .unwrap();
         let samples = load_index(&index, 140.0, true, |kind| {
-            Ok(folder.0.join(if kind == 2 { "bank" } else { "kit" }))
+            Ok(folder.join(if kind == 2 { "bank" } else { "kit" }))
         })
         .unwrap();
         assert_eq!(
@@ -861,46 +843,46 @@ mod tests {
             ),
         )
         .unwrap();
-        assert!(load_index(&index, 140.0, true, |_| Ok(folder.0.join("bank"))).is_err());
+        assert!(load_index(&index, 140.0, true, |_| Ok(folder.join("bank"))).is_err());
     }
     #[test]
     fn path_and_catalog_bounds_reject_traversal_truncation_and_excessive_fields() {
-        let folder = Folder::new();
-        assert!(relative_file(&folder.0, "../escape.\x70xd").is_err());
-        assert!(relative_file(&folder.0, "C:/escape.\x70xd").is_err());
+        let folder = TestFolder::new("mixjam-techno-catalog");
+        assert!(relative_file(&folder, "../escape.\x70xd").is_err());
+        assert!(relative_file(&folder, "C:/escape.\x70xd").is_err());
         assert!(index_records("[SAMPLES]\n1\n2\n").is_err());
         assert!(index_records(&format!("[SAMPLES]\n{}", row(1, 6, u64::MAX, 20, 1))).is_ok());
-        let index = folder.0.join("index.inf");
-        let bank = folder.0.join("bank");
+        let index = folder.join("index.inf");
+        let bank = folder.join("bank");
         fs::write(&bank, packed("sample", 5)).unwrap();
         fs::write(&index, format!("[SAMPLES]\n{}", row(1, 6, u64::MAX, 20, 1))).unwrap();
         assert!(load_index(&index, 140.0, false, |_| Ok(bank.clone())).is_err());
     }
     #[test]
     fn d1_loader_ids_do_not_use_max_slots_and_numeric_secondary_fields_are_valid() {
-        let folder = Folder::new();
-        fs::create_dir_all(folder.0.join("\x65Jay/\x65Jay")).unwrap();
+        let folder = TestFolder::new("mixjam-techno-catalog");
+        fs::create_dir_all(folder.join("\x65Jay/\x65Jay")).unwrap();
         for (name, prefix) in [
             ("\x50xd\x64ance", ""),
             ("kit1.txt", "dmkit1/"),
             ("kit2.txt", "dmkit2/"),
             ("kit3.txt", "dmkit3/"),
         ] {
-            let path = folder.0.join(format!("\x50XD/{prefix}bank/sound.\x70xd"));
+            let path = folder.join(format!("\x50XD/{prefix}bank/sound.\x70xd"));
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(&path, packed("name\r\n1", 5)).unwrap();
             fs::write(
-                folder.0.join("\x65Jay/\x65Jay").join(name),
+                folder.join("\x65Jay/\x65Jay").join(name),
                 "\"bank\\sound.\x70xd\"\n4428\n\"bass\"\n\"1\"\n\"sound\"\n\"1\"\n",
             )
             .unwrap();
         }
         fs::write(
-            folder.0.join("\x65Jay/\x65Jay/MAX"),
+            folder.join("\x65Jay/\x65Jay/MAX"),
             "unrelated-slot.\x70xd\n",
         )
         .unwrap();
-        let samples = load(Product::D1, &folder.0).unwrap();
+        let samples = load(Product::D1, &folder).unwrap();
         assert_eq!(
             samples
                 .iter()

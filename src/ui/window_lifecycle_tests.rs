@@ -136,11 +136,7 @@ fn resumed_save_waits_for_expansion_before_running_pending_action() {
 fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed() {
     for save in [false, true] {
         let (ctx, mut app) = fixture();
-        let folder = std::env::temp_dir().join(format!(
-            "mixjam-deferred-close-{}-{save}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&folder).unwrap();
+        let folder = crate::test_folder::TestFolder::new("mixjam-deferred-close");
         app.session = app.session.with_settings_root(folder.join("settings"));
         app.session.save(&folder.join("song.mixjam")).unwrap();
         app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
@@ -175,7 +171,6 @@ fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed()
             app.files.pending_action,
             Some(PendingAction::Close)
         ));
-        std::fs::remove_dir_all(folder).unwrap();
     }
 }
 
@@ -225,8 +220,7 @@ fn drop_frame(ctx: &egui::Context, app: &mut MixJamApp, paths: &[PathBuf]) {
 
 #[test]
 fn dropped_song_opens_and_asks_before_replacing_unsaved_work() {
-    let folder = std::env::temp_dir().join(format!("mixjam-ui-drop-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = crate::test_folder::TestFolder::new("mixjam-ui-drop");
     let ctx = egui::Context::default();
     configure_style(&ctx);
     let mut app = MixJamApp::from_session(
@@ -264,5 +258,4 @@ fn dropped_song_opens_and_asks_before_replacing_unsaved_work() {
     assert!(app.files.pending_action.is_none());
     assert_eq!(app.session.project().bpm, 135.0);
     assert!(!app.session.unsaved());
-    std::fs::remove_dir_all(folder).unwrap();
 }

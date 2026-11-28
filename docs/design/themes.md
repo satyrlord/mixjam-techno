@@ -68,7 +68,7 @@ machined silver-top slider blocks, and dark phenolic fluted skirts with spun
 aluminum or scoped anodized/chrome caps. Pedals layer bespoke hardware artwork
 under a unified 3D bevel, grain, sheen, and scratch finish pass. Dense working
 areas (the arrangement, the Sounds panel, and value wells) stay clean. Mixer
-strips keep the ivory artwork. The position readout and VU face use warm
+strips keep their fine-grained ivory. The position readout and VU face use warm
 cream; indicators use modular orange-amber.
 
 **Category colors** for sounds and **section colors** are the same in every
@@ -103,5 +103,5 @@ slide-handle switches, and a phosphor green scope.
 
 **Code-only rendering.** All three themes render chassis, bays, buttons, and
 dials in bounded painter geometry without runtime texture loads for hardware
-skins. A theme change builds the style and fonts once. Only the PNG brand,
-rail icons, and legacy Vintage Mixer artwork stay on disk.
+skins. A theme change builds the style and fonts once. Only the PNG brand and
+rail icons stay on disk.

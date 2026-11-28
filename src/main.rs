@@ -1,3 +1,6 @@
+#[cfg(test)]
+#[path = "test_folder.rs"]
+mod test_folder;
 #[cfg(feature = "gui")]
 mod ui;
 #[cfg(feature = "gui")]
@@ -482,18 +485,11 @@ fn run() -> Result<(), RunError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_folder::TestFolder;
 
     #[test]
     fn failed_provider_replacement_keeps_scanned_samples() {
-        let root = std::env::temp_dir().join(format!(
-            "mixjam-provider-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&root).unwrap();
+        let root = TestFolder::new("mixjam-provider");
         audio::Pcm {
             sample_rate: 44_100,
             channels: 1,
@@ -532,19 +528,12 @@ mod tests {
         );
         assert_eq!(library.bindings(), before);
         assert!(library.sample_by_id(174).is_some());
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn silent_stems_export_maps_to_exit_code_three() {
-        let dir = std::env::temp_dir().join(format!(
-            "mixjam-silent-stems-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = TestFolder::new("mixjam-silent-stems");
+        let dir = root.join("stems");
         let session = mixjam_techno::application::Session::headless(
             Arc::new(Library::empty()),
             Project::default(),
@@ -564,6 +553,5 @@ mod tests {
             ExitCode::FAILURE
         );
         assert_eq!(exit_for(Ok(())), ExitCode::SUCCESS);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

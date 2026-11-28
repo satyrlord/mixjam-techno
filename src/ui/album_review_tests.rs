@@ -7,10 +7,8 @@ use mixjam_techno::application::album_review::{
     Energy, Event, Kind, Review, Track, covers::CoverCache,
 };
 
-fn folder(name: &str) -> PathBuf {
-    let folder =
-        std::env::temp_dir().join(format!("mixjam-album-window-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&folder);
+fn folder(name: &str) -> crate::test_folder::TestFolder {
+    let folder = crate::test_folder::TestFolder::new(&format!("mixjam-album-window-{name}"));
     std::fs::create_dir_all(folder.join("reviews")).unwrap();
     folder
 }
@@ -64,7 +62,10 @@ fn review(id: &str, artist: &str, title: &str, year: i32, genres: &[&str]) -> Re
     }
 }
 
-fn fixture(name: &str, reviews: &[Review]) -> (egui::Context, MixJamApp, PathBuf) {
+fn fixture(
+    name: &str,
+    reviews: &[Review],
+) -> (egui::Context, MixJamApp, crate::test_folder::TestFolder) {
     let root = folder(name);
     for review in reviews {
         std::fs::write(
@@ -154,7 +155,7 @@ fn click(ctx: &egui::Context, app: &mut MixJamApp, label: &str) -> egui::FullOut
 
 #[test]
 fn the_rail_button_opens_the_grid_with_its_count_filters_and_sort() {
-    let (ctx, mut app, root) = fixture(
+    let (ctx, mut app, _root) = fixture(
         "grid",
         &[
             review(
@@ -227,7 +228,6 @@ fn the_rail_button_opens_the_grid_with_its_count_filters_and_sort() {
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "1 / 3 albums"));
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn a_genre_that_would_leave_no_album_is_disabled_and_extra_genres_fold_away() {
     ];
     let mut reviews = vec![review("a-a", "A", "A", 1990, &genres)];
     reviews.push(review("b-b", "B", "B", 1991, &["Ambient"]));
-    let (ctx, mut app, root) = fixture("genres", &reviews);
+    let (ctx, mut app, _root) = fixture("genres", &reviews);
     app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
@@ -262,12 +262,11 @@ fn a_genre_that_would_leave_no_album_is_disabled_and_extra_genres_fold_away() {
             .unwrap()
             .is_disabled()
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn an_album_page_shows_metadata_links_overview_and_each_timeline() {
-    let (ctx, mut app, root) = fixture(
+    let (ctx, mut app, _root) = fixture(
         "page",
         &[review(
             "jarre-oxygene",
@@ -323,7 +322,6 @@ fn an_album_page_shows_metadata_links_overview_and_each_timeline() {
     let output = click(&ctx, &mut app, "← All albums");
     assert_eq!(app.album_review.state.page, None);
     assert!(has_text(&output, "1 / 1 album"));
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -340,7 +338,6 @@ fn a_missing_folder_and_an_empty_folder_have_explicit_states() {
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "No reviews folder"));
     assert!(node(&output, "Search albums").is_none());
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -416,7 +413,6 @@ fn genre_chips_wrap_inside_supported_and_narrower_windows() {
                 }
             }
             assert_eq!(checked, 1, "The bundled New Age filter must be painted.");
-            std::fs::remove_dir_all(root).unwrap();
         }
     }
 }
@@ -434,7 +430,7 @@ fn opening_an_album_from_a_scrolled_grid_starts_at_the_top_of_its_page() {
             )
         })
         .collect();
-    let (ctx, mut app, root) = fixture("page-scroll", &reviews);
+    let (ctx, mut app, _root) = fixture("page-scroll", &reviews);
     app.options = None;
     app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
@@ -469,7 +465,6 @@ fn opening_an_album_from_a_scrolled_grid_starts_at_the_top_of_its_page() {
         (back_top - search_top).abs() < 5.0,
         "The album page must open at its top: search={search_top}, back={back_top}."
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -491,7 +486,6 @@ fn a_missing_reviews_folder_can_be_rediscovered_without_restarting() {
     assert_eq!(app.album_review.state.shelf().folder(), expected.folder());
     assert!(!has_text(&output, "No reviews folder"));
     assert!(node(&output, "Search albums").is_some());
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -529,5 +523,4 @@ fn clear_cover_cache_removes_the_downloaded_covers() {
     let output = click(&ctx, &mut app, "Reload reviews");
     assert!(has_text(&output, "Read 2 reviews again."));
     assert!(has_text(&output, "2 / 2 albums"));
-    std::fs::remove_dir_all(root).unwrap();
 }

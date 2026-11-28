@@ -571,9 +571,7 @@ mod tests {
 
     #[test]
     fn a_new_catalog_with_only_cached_peaks_cancels_the_old_worker_queue() {
-        let folder =
-            std::env::temp_dir().join(format!("peaks-catalog-cancellation-{}", std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();
+        let folder = crate::test_folder::TestFolder::new("peaks-catalog-cancellation");
         let path = folder.join("loop.wav");
         let audio = pcm(1, vec![0.5; FINEST_BUCKET as usize]);
         audio.write_wav(&path).unwrap();
@@ -614,7 +612,6 @@ mod tests {
         let cancelled = requests.try_recv().unwrap();
         assert_eq!(cancelled.revision, 2);
         assert!(cancelled.samples.is_empty());
-        let _ = std::fs::remove_dir_all(&folder);
     }
 
     #[test]
@@ -757,8 +754,7 @@ mod tests {
 
     #[test]
     fn a_new_catalog_keeps_the_tables_of_unchanged_files_and_rereads_changed_ones() {
-        let folder = std::env::temp_dir().join(format!("peaks-catalog-{}", std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();
+        let folder = crate::test_folder::TestFolder::new("peaks-catalog");
         let path = folder.join("loop.wav");
         pcm(1, vec![0.5; 4 * FINEST_BUCKET as usize])
             .write_wav(&path)
@@ -804,6 +800,5 @@ mod tests {
             panic!("The changed file must be read again.");
         };
         assert_eq!(reread.frames, 8 * u64::from(FINEST_BUCKET));
-        let _ = std::fs::remove_dir_all(&folder);
     }
 }

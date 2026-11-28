@@ -32,8 +32,7 @@ fn zero_length_fades_keep_their_selected_curves_on_roundtrip() {
 
 #[test]
 fn saved_song_is_a_current_version_document_that_reopens_unchanged() {
-    let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("mixjam-song-format");
     let path = root.join("song.mixjam");
     let project = stopped(thrown(driven(rolled(panned(sectioned(project()))))));
     save(&project, &path).unwrap();
@@ -250,7 +249,6 @@ fn saved_song_is_a_current_version_document_that_reopens_unchanged() {
     let resaved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(resaved["createdAt"], "2020-01-02T03:04:05Z");
     assert_ne!(resaved["modifiedAt"], "2020-01-02T03:04:05Z");
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -387,10 +385,8 @@ fn nullable_fields_are_required_but_accept_null() {
 
 #[test]
 fn saving_over_an_oversized_destination_does_not_read_its_contents() {
-    let path = std::env::temp_dir().join(format!(
-        "mixjam-oversized-save-{}.mixjam",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-oversized-save");
+    let path = folder.join("song.mixjam");
     let file = fs::File::create(&path).unwrap();
     file.set_len(MAX_SONG_BYTES + 1).unwrap();
     drop(file);
@@ -406,13 +402,12 @@ fn saving_over_an_oversized_destination_does_not_read_its_contents() {
             ..Project::default()
         }
     );
-    fs::remove_file(path).unwrap();
 }
 
 #[test]
 fn serialized_song_limit_includes_formatting_and_preserves_the_destination() {
-    let path =
-        std::env::temp_dir().join(format!("mixjam-save-limit-{}.mixjam", std::process::id()));
+    let folder = crate::test_folder::TestFolder::new("mixjam-save-limit");
+    let path = folder.join("song.mixjam");
     let project = Project::default();
     save(&project, &path).unwrap();
     let saved_length = fs::metadata(&path).unwrap().len();

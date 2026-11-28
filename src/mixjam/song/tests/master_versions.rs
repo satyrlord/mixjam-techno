@@ -285,8 +285,7 @@ fn pedal_keys_save_only_when_they_name_a_track() {
 
 #[test]
 fn version_8_signed_lanes_migrate_and_save_as_the_current_version_without_losing_polarity() {
-    let root = std::env::temp_dir().join(format!("mixjam-polarity-v8-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("mixjam-polarity-v8");
     let path = root.join("song.mixjam");
     let mut expected = project();
     for track in &mut expected.tracks {
@@ -331,13 +330,11 @@ fn version_8_signed_lanes_migrate_and_save_as_the_current_version_without_losing
     legacy["lanes"][0]["gain"] = 1.0.into();
     legacy["lanes"][0]["polarityInverted"] = false.into();
     assert!(parse(&serde_json::to_vec(&legacy).unwrap()).is_err());
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_the_current_version() {
-    let root = std::env::temp_dir().join(format!("mixjam-switches-v9-{}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
+    let root = crate::test_folder::TestFolder::new("mixjam-switches-v9");
     let path = root.join("song.mixjam");
     let mut expected = project();
     for track in &mut expected.tracks {
@@ -369,7 +366,6 @@ fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_the_current_versi
                 .contains("cannot contain muted or solo")
         );
     }
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

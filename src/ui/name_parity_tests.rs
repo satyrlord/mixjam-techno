@@ -267,30 +267,26 @@ fn sample(id: u32, name: &str, group: &str) -> Sample {
 }
 
 /// Keep the baseline's cache summary independent of the owner's downloaded covers.
-struct ParityCache(CoverCache);
+struct ParityCache {
+    cache: CoverCache,
+    /// Removes the cache folder when the test ends.
+    _folder: crate::test_folder::TestFolder,
+}
 
 impl ParityCache {
     fn new() -> Self {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let folder = std::env::temp_dir().join(format!(
-            "mixjam-name-parity-covers-{}-{serial}",
-            std::process::id()
-        ));
-        let cache = CoverCache::new(folder, CACHE_LIMIT_BYTES);
+        let folder = crate::test_folder::TestFolder::new("mixjam-name-parity-covers");
+        let cache = CoverCache::new(folder.to_path_buf(), CACHE_LIMIT_BYTES);
         let mut png = include_bytes!("../../assets/rail/album-review.png").to_vec();
         png.resize(200 * 1024, 0);
         for id in ["parity-first", "parity-second"] {
             cache.store(id, &png).unwrap();
         }
         assert_eq!(cache.usage(), (2, 400 * 1024));
-        Self(cache)
-    }
-}
-
-impl Drop for ParityCache {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(self.0.folder());
+        Self {
+            cache,
+            _folder: folder,
+        }
     }
 }
 
@@ -408,10 +404,10 @@ fn every_name() -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     let cache = ParityCache::new();
 
-    let (context, mut empty) = app(false, &cache.0);
+    let (context, mut empty) = app(false, &cache.cache);
     names(&context, &mut empty, &mut found);
 
-    let (context, mut app) = app(true, &cache.0);
+    let (context, mut app) = app(true, &cache.cache);
     let section = |bar: u32, name: &str| crate::engine::Section {
         start_tick: bar * TICKS_PER_BAR,
         name: name.into(),

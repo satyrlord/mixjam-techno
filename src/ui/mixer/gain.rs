@@ -352,7 +352,6 @@ fn gain_value_semantics(ui: &egui::Ui, response: Response, name: &str, db: f32, 
 
 pub(super) fn gain_rail(
     ui: &mut egui::Ui,
-    art: Option<&Artwork>,
     scale: f32,
     rect: Rect,
     name: &str,
@@ -401,18 +400,7 @@ pub(super) fn gain_rail(
         rect.center().x,
         egui::lerp(rect.bottom()..=rect.top(), gain_fraction(*gain)),
     );
-    if let Some(art) = art {
-        art.fader(ui, cap);
-    } else {
-        // A flat software cap on Studio, a molded one on Aero; both stay
-        // inside the bitmap cap's 24 by 32 points.
-        let size = if roles().material == theme::Material::Flat {
-            Vec2::new(24.0, 16.0)
-        } else {
-            Vec2::new(24.0, 24.0)
-        };
-        theme::fader_cap(ui.painter(), cap, size * scale);
-    }
+    gain_cap(ui.painter(), cap, scale);
     focus_ring(ui, &response, rect, scale);
     gain_semantics(ui, response, name, before, *gain, FaderRange::Mixer);
     before != *gain

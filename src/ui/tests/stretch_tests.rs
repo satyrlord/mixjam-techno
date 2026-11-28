@@ -645,8 +645,7 @@ fn stretch_source_names_stay_bounded_and_search_selects_the_matching_sound() {
 
 #[test]
 fn stretch_source_search_refreshes_after_same_size_library_scan() {
-    let dir =
-        std::env::temp_dir().join(format!("mixjam-stretch-source-scan-{}", std::process::id()));
+    let dir = crate::test_folder::TestFolder::new("mixjam-stretch-source-scan");
     let old = dir.join("old");
     let new = dir.join("new");
     std::fs::create_dir_all(&old).unwrap();
@@ -710,7 +709,6 @@ fn stretch_source_search_refreshes_after_same_size_library_scan() {
     assert_eq!(app.session.library().samples.len(), 2);
     assert!(egui::Popup::is_any_open(&ctx));
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    std::fs::remove_dir_all(dir).unwrap();
     accessible_node(&output, "b needle");
     assert!(
         screen(&output).find_node("a other").is_none(),

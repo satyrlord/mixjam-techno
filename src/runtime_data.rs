@@ -29,12 +29,8 @@ pub fn find_from(start: &Path, name: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    fn fixture(name: &str) -> PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("mixjam-runtime-data-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        root
+    fn fixture(name: &str) -> crate::test_folder::TestFolder {
+        crate::test_folder::TestFolder::new(&format!("mixjam-runtime-data-{name}"))
     }
 
     #[test]
@@ -70,7 +66,6 @@ mod tests {
         // A file of that name is not a folder.
         std::fs::write(root.join("assets").join("catalogs"), b"").unwrap();
         assert_eq!(find_from(&deps, "catalogs"), None);
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -83,7 +78,6 @@ mod tests {
         std::fs::create_dir_all(&deep).unwrap();
         assert_eq!(find_from(&deep, "album-review"), None);
         assert!(find_from(deep.parent().unwrap(), "album-review").is_some());
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -347,15 +347,8 @@ pub(crate) fn save_layout(root: &Path, layout: WorkspaceLayout) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn root() -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let path = std::env::temp_dir().join(format!(
-            "mixjam-options-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&path).unwrap();
-        path
+    fn root() -> crate::test_folder::TestFolder {
+        crate::test_folder::TestFolder::new("mixjam-options")
     }
     #[test]
     fn migrates_sections_only_until_options_exist() {
@@ -368,7 +361,6 @@ mod tests {
             fs::read(root.join("section-bookmarks.json")).unwrap(),
             b"false"
         );
-        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn sample_playback_quality_persists_and_older_files_load_at_high() {
@@ -395,7 +387,6 @@ mod tests {
         assert_eq!(loaded.values.sample_playback_quality, SampleQuality::High);
         assert!(!loaded.values.quality_reduced());
         assert!(AppOptions::default().audio_changed(&low));
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -440,7 +431,6 @@ mod tests {
         assert!(loaded.future);
         assert_eq!(loaded.values.theme, Theme::Studio);
         assert_eq!(fs::read(root.join("options.json")).unwrap(), bytes);
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -476,7 +466,6 @@ mod tests {
             assert!(loaded.invalid);
             assert_eq!(loaded.values, AppOptions::default());
         }
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -493,7 +482,6 @@ mod tests {
             assert_eq!(fs::read(root.join("options.json")).unwrap(), bytes);
         }
         assert!(load(&root).future);
-        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn rejects_invalid_types_ranges_versions_and_duplicate_keys() {
@@ -522,7 +510,6 @@ mod tests {
             ..AppOptions::default()
         };
         assert!(options.validate().is_err());
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -544,7 +531,6 @@ mod tests {
         assert_eq!(migrated.values, options);
         let resaved = serde_json::to_value(&migrated.values).unwrap();
         assert_eq!(resaved["drivePlaybackOversampling"], "2x");
-        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn layout_round_trips_and_a_bad_file_gives_the_default_layout() {
@@ -574,6 +560,5 @@ mod tests {
         );
         fs::write(root.join(LAYOUT_FILE), b"not json").unwrap();
         assert_eq!(load_layout(&root), WorkspaceLayout::default());
-        fs::remove_dir_all(root).unwrap();
     }
 }

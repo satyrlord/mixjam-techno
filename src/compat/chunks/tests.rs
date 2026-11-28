@@ -6,8 +6,8 @@ mod wave_records;
 use super::*;
 use super::{
     assets::{
-        MAX_PENDING_ASSET_BYTES, NEXT_ASSET_TEMP_ID, preserve_wave, publish_asset_directly,
-        publish_staged_asset, queue_asset, stage_asset,
+        MAX_PENDING_ASSET_BYTES, preserve_wave, publish_asset_directly, publish_staged_asset,
+        queue_asset, stage_asset,
     },
     layout::{
         Event, Reference, SENTINEL, Timeline, WaveReference, decode_pan, native_fader_gain,
@@ -31,7 +31,6 @@ use std::{
     fs,
     io::Cursor,
     path::PathBuf,
-    sync::atomic::Ordering,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -103,16 +102,6 @@ fn wave_fixture_frames(frames: usize) -> Vec<u8> {
     cursor.into_inner()
 }
 
-fn asset_test_directory(label: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!(
-        "mixjam-techno-{label}-{}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        NEXT_ASSET_TEMP_ID.fetch_add(1, Ordering::Relaxed)
-    ));
-    fs::create_dir(&directory).unwrap();
-    directory
+fn asset_test_directory(label: &str) -> crate::test_folder::TestFolder {
+    crate::test_folder::TestFolder::new(&format!("mixjam-techno-{label}"))
 }

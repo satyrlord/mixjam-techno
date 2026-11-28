@@ -104,6 +104,6 @@ Mixer Metal and Mixer Ink are for the ivory strips and their dark live text.
 Mixer Cream is the lettering of the dark controls. Mixer Face and Mixer Edge
 define the native value wells, buttons, and strip borders. Mixer Amber marks
 inverted polarity, and the named checked state stays available. In Vintage,
-prepared material tiles give the graphite surround and the fine ivory grain.
+code-made material tiles give the graphite surround and the fine ivory grain.
 These tokens are the Vintage values and are local to the Mixer. Studio and Aero
 paint the strips with their own `strip` roles in `src/ui/theme.rs`.

@@ -8,16 +8,14 @@ use mixjam_techno::application::fx::{BUSES, FxBus, FxBuses};
 use mixjam_techno::application::{
     MAX_MIXER_GAIN_DB, Silence, TrackMix, amplitude_to_db, db_to_amplitude,
 };
-#[path = "mixer/artwork.rs"]
-mod artwork;
 #[path = "mixer/buttons.rs"]
 mod buttons;
 #[path = "mixer/gain.rs"]
 mod gain;
+#[path = "mixer/material.rs"]
+mod material;
 #[path = "mixer/strips.rs"]
 mod strips;
-pub(super) use artwork::row_surface;
-use artwork::*;
 use buttons::*;
 pub(super) use buttons::{
     LIMITER_HINT, Look, bus_solo, bus_switches, bypass_button, center_button, edit_button,
@@ -27,6 +25,8 @@ use gain::*;
 pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value};
 #[cfg(test)]
 pub(super) use gain::{GAIN_FINE_STEP_DB, GAIN_STEP_DB, useful_taper_span};
+pub(super) use material::row_surface;
+use material::*;
 pub(super) use strips::{MasterState, show};
 
 /// What the mixer changed: the mix of each edited track with its index,

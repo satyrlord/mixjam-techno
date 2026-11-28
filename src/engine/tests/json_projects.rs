@@ -274,15 +274,12 @@ fn json_rejects_unknown_versions_and_malformed_legacy_shapes() {
     value["bpm"] = 140.0.into();
     value["pitch_ratio"] = 4.01.into();
     assert!(Project::parse_json(&serde_json::to_vec(&value).unwrap()).is_err());
-    let path = std::env::temp_dir().join(format!(
-        "mixjam-oversized-project-{}.json",
-        std::process::id()
-    ));
+    let folder = crate::test_folder::TestFolder::new("mixjam-oversized-project");
+    let path = folder.join("project.json");
     let file = fs::File::create(&path).unwrap();
     file.set_len(MAX_PROJECT_BYTES as u64 + 1).unwrap();
     drop(file);
     let result = Project::load(&path);
-    fs::remove_file(&path).unwrap();
     assert_eq!(result.unwrap_err(), "The project file is too large.");
 }
 
@@ -385,15 +382,7 @@ fn old_sixteen_track_json_migrates_saves_and_reopens_with_one_notice() {
         .as_object_mut()
         .unwrap()
         .remove("origin");
-    let directory = std::env::temp_dir().join(format!(
-        "mixjam-techno-legacy-migration-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir(&directory).unwrap();
+    let directory = crate::test_folder::TestFolder::new("mixjam-techno-legacy-migration");
     let old_path = directory.join("old.json");
     let current_path = directory.join("current.json");
     fs::write(&old_path, serde_json::to_vec(&value).unwrap()).unwrap();
@@ -416,9 +405,6 @@ fn old_sixteen_track_json_migrates_saves_and_reopens_with_one_notice() {
         serde_json::from_slice(&fs::read(&current_path).unwrap()).unwrap();
     assert_eq!(saved["schema_version"], PROJECT_SCHEMA_VERSION);
     assert_eq!(Project::load(&current_path).unwrap(), migrated);
-    fs::remove_file(&old_path).unwrap();
-    fs::remove_file(&current_path).unwrap();
-    fs::remove_dir(&directory).unwrap();
 }
 
 #[test]
@@ -432,8 +418,7 @@ fn fractional_original_positions_survive_save() {
 
 #[test]
 fn save_replaces_the_project_beside_an_existing_temporary_file() {
-    let directory = std::env::temp_dir().join(format!("mixjam-techno-save-{}", std::process::id()));
-    fs::create_dir_all(&directory).unwrap();
+    let directory = crate::test_folder::TestFolder::new("mixjam-techno-save");
     let path = directory.join("mix.json");
     let temp = directory.join(format!(".mix.json.{}.tmp", std::process::id()));
     fs::write(&temp, b"unrelated existing file").unwrap();
@@ -441,7 +426,4 @@ fn save_replaces_the_project_beside_an_existing_temporary_file() {
     p.save(&path).unwrap();
     assert_eq!(fs::read(&temp).unwrap(), b"unrelated existing file");
     assert_eq!(Project::load(&path).unwrap(), p);
-    fs::remove_file(&temp).unwrap();
-    fs::remove_file(&path).unwrap();
-    fs::remove_dir(&directory).unwrap();
 }
