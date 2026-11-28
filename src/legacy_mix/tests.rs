@@ -569,7 +569,7 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
         .map(|i| ((i % 100) * 200 - 10_000) as i16)
         .collect();
     fs::write(
-        root.join("r1la037.wav"),
+        root.join("loop0037.wav"),
         legacy_format::wav::PcmWave {
             sample_rate: 44_100,
             channels: 1,
@@ -589,7 +589,7 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
             sample
                 .wav_path
                 .as_ref()
-                .is_some_and(|path| path.ends_with("r1la037.wav"))
+                .is_some_and(|path| path.ends_with("loop0037.wav"))
         })
         .unwrap()
         .name
@@ -600,8 +600,8 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
             root,
             &[crate::catalog::WaveMetadata {
                 native_id: 1193,
-                code: "bn/r1la037.pxd".into(),
-                label_key: crate::catalog::label_key("birdy 1"),
+                code: "bn/loop0037.pxd".into(),
+                label_key: crate::catalog::label_key("test loop 1"),
                 group_name: "loop".into(),
                 bars: 2,
                 source_bpm: 180.0,
@@ -624,7 +624,7 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
         bytes.extend_from_slice(&10200u16.to_le_bytes());
         bytes
     };
-    let stretched = record("R1LA037.WAV", r"F:\samples\Rave\LOOP\-1[time]");
+    let stretched = record("LOOP0037.WAV", r"F:\samples\Pack\LOOP\-1[time]");
     let song = custom_song(&earlier_label(), &[stretched]);
     let project = load_bytes(&song, &library).unwrap();
     assert!(project.missing_samples.is_empty());
@@ -640,7 +640,7 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
 
     // The original sound is available, but it cannot substitute for corrupt
     // audio that the song actually embeds.
-    let mut corrupt_wave = fs::read(root.join("r1la037.wav")).unwrap();
+    let mut corrupt_wave = fs::read(root.join("loop0037.wav")).unwrap();
     corrupt_wave[24..28].copy_from_slice(&0u32.to_le_bytes());
     let mut corrupt_song = song;
     corrupt_song.extend(wave_appendix(&[(saved_path, &corrupt_wave)]));
@@ -648,8 +648,8 @@ fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
 
     // A plain import, or a name the library lacks, stays missing.
     for (file, folder) in [
-        ("R1LA037.WAV", r"F:\samples\Rave\LOOP\"),
-        ("R1LA999.WAV", r"F:\samples\Rave\LOOP\-1[time]"),
+        ("LOOP0037.WAV", r"F:\samples\Pack\LOOP\"),
+        ("LOOP0999.WAV", r"F:\samples\Pack\LOOP\-1[time]"),
     ] {
         let song = custom_song(&earlier_label(), &[record(file, folder)]);
         let project = load_bytes(&song, &library).unwrap();
@@ -687,70 +687,4 @@ fn reader_rejects_truncated_fields() {
     assert!(reader.string().is_err());
     let mut reader = Reader::new(&[1]);
     assert!(reader.u32().is_err());
-}
-
-#[test]
-#[ignore = "Requires the locally installed original project fixtures."]
-fn all_eleven_installed_demos_decode_without_missing_ids() {
-    let root = crate::project_io::default_root(Product::T2).expect("T2 fixtures");
-    let mut library = Library::empty();
-    library
-        .register(
-            Product::T2,
-            &root,
-            &crate::project_io::reference_samples_root(),
-        )
-        .unwrap();
-    let expected = [
-        ("clouds", 577),
-        ("edge", 302),
-        ("e_funk", 298),
-        ("far", 397),
-        ("hool", 460),
-        ("melodesk", 684),
-        ("soap", 356),
-        ("start", 467),
-        ("string", 206),
-        ("summer", 513),
-        ("wambam", 171),
-    ];
-    for (name, count) in expected {
-        let path = root.join("\x65Jay").join("mix").join(format!("{name}.mix"));
-        let project = load(&path, &library).unwrap_or_else(|e| panic!("{name}: {e}"));
-        assert_eq!(project.clips.len(), count, "{name}");
-        assert_eq!(project.tracks.len(), 64);
-        let bytes = fs::read(&path).unwrap();
-        let original_bpm = u32::from_le_bytes(bytes[10..14].try_into().unwrap()) as f64;
-        assert_eq!(
-            project.bpm,
-            crate::engine::nearest_supported_bpm(original_bpm).unwrap(),
-            "{name}"
-        );
-        assert_eq!(project.pitch_ratio, 1.0);
-        assert!(
-            load_bytes(&bytes[..bytes.len() - 1], &library).is_err(),
-            "{name} accepts truncation"
-        );
-    }
-    let start = load(&root.join("\x65Jay/mix/start.mix"), &library).unwrap();
-    assert_eq!(start.title, "here we go");
-    assert_eq!(start.author, "mc magic");
-    assert_eq!(start.pitch_ratio, 1.0);
-    assert_eq!(start.bpm, 140.0);
-    assert!(
-        start
-            .import_notices
-            .iter()
-            .any(|notice| notice.source_bpm == 146.0 && notice.target_bpm == 140.0)
-    );
-    assert_eq!(start.clips[0].sample_id, 13818);
-    assert_eq!(start.clips[0].start_tick, 40 * 256);
-    assert!(
-        start
-            .clips
-            .iter()
-            .any(|c| c.start_tick % TICKS_PER_BAR != 0)
-    );
-    assert!(start.tracks[6].left_enabled && !start.tracks[6].right_enabled);
-    assert!(!start.tracks[7].left_enabled && start.tracks[7].right_enabled);
 }

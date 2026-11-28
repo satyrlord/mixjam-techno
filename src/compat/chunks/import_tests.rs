@@ -387,7 +387,7 @@ fn d2_external_packed_file_decodes_with_its_saved_identity() {
     assert_eq!(samples, vec![774; 6]);
     assert!(
         d2_source_wave(
-            "Z:\\unavailable\\wrong\\avpo.pxd",
+            "Z:\\unavailable\\wrong\\snda.pxd",
             &[],
             &[],
             &Library::empty()
@@ -404,8 +404,8 @@ fn d2_external_pxd_catalog_resolution_uses_d1_full_code_identity() {
     let id = Product::D1.global_sample_id(788).unwrap();
     let sample = crate::library::Sample {
         id,
-        code: "bo\\avpo.pxd".into(),
-        name: "Grp.6 Vers11".into(),
+        code: "bo\\snda.pxd".into(),
+        name: "Set.6 Take11".into(),
         bars: 2,
         group_name: "loop".into(),
         offset: 0,
@@ -418,15 +418,15 @@ fn d2_external_pxd_catalog_resolution_uses_d1_full_code_identity() {
         digest: None,
     };
     let library = Library::fixture(vec![sample.clone()]);
-    let source = d2_source_wave("Z:\\missing\\Dance\\BO\\AVPO.PXD", &[], &[], &library).unwrap();
+    let source = d2_source_wave("Z:\\missing\\Dance\\BO\\SNDA.PXD", &[], &[], &library).unwrap();
     assert_eq!(source.frames, 4);
     assert_eq!(source.bytes.as_ref(), fs::read(path).unwrap());
-    assert!(d2_source_wave("Z:\\missing\\wrong\\AVPO.PXD", &[], &[], &library).is_err());
+    assert!(d2_source_wave("Z:\\missing\\wrong\\SNDA.PXD", &[], &[], &library).is_err());
     let wrong_product = Library::fixture(vec![crate::library::Sample {
         id: Product::D2.global_sample_id(788).unwrap(),
         ..sample
     }]);
-    assert!(d2_source_wave("Z:\\missing\\BO\\AVPO.PXD", &[], &[], &wrong_product).is_err());
+    assert!(d2_source_wave("Z:\\missing\\BO\\SNDA.PXD", &[], &[], &wrong_product).is_err());
 }
 
 #[test]
@@ -679,11 +679,11 @@ fn missing_framed_wave_keeps_exact_span_and_all_saved_metadata() {
 
 #[test]
 fn unavailable_wave_with_conflicting_saved_span_opens_with_explicit_inference() {
-    // inproved fiesta saves two bars, but one missing-WAV placement's native
+    // A saved song keeps two bars, but one missing-WAV placement's native
     // trims are 16 + 472 units. Preserve the fields and infer its minimum span.
     let source = || {
         Reference::Wave(WaveReference {
-            path: r"Z:\unavailable\1refren4.wav".into(),
+            path: r"Z:\unavailable\phrase4.wav".into(),
             declared_ticks: Some(512),
             metadata: BTreeMap::from([("Declared bars".into(), "2".into())]),
         })

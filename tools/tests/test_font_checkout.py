@@ -24,12 +24,10 @@ class FontCheckoutTests(unittest.TestCase):
         env = {key: value for key, value in os.environ.items()
                if not key.upper().startswith("GIT_")}
         env["GIT_ATTR_NOSYSTEM"] = "1"
-        scratch = ROOT / "tmp"
-        scratch.mkdir(exist_ok=True)
         for clean in ("true", "false"):
             for checkout in ("true", "false"):
                 with self.subTest(clean=clean, checkout=checkout):
-                    with tempfile.TemporaryDirectory(prefix="font-checkout-", dir=scratch) as folder:
+                    with tempfile.TemporaryDirectory(prefix="font-checkout-") as folder:
                         repo = Path(folder)
 
                         def git(mode, *args):

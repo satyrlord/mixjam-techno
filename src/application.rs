@@ -112,10 +112,6 @@ mod library;
 mod recording;
 mod references;
 mod render_worker;
-#[cfg(test)]
-mod seam_scan;
-#[cfg(test)]
-mod sequence_scan;
 mod settings;
 mod sources;
 #[cfg(test)]

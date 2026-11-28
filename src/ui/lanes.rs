@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn a_family_drops_the_number_that_tells_siblings_apart() {
-        assert_eq!(sound_family("good grasp 2"), "good grasp");
+        assert_eq!(sound_family("warm pulse 2"), "warm pulse");
         assert_eq!(sound_family("deep chord 12"), "deep chord");
         assert_eq!(sound_family("Bass03"), "Bass");
         assert_eq!(sound_family("hat-7"), "hat");

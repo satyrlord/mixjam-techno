@@ -31,8 +31,6 @@ pub(crate) use pcm::{MAX_WAV_SAMPLES, float_to_i16, hide_stray_end, visit_wav_sa
 pub(crate) use prepare::prepare_project_reusing_with_quality;
 #[cfg(test)]
 pub(crate) use prepare::{mix_with_samples, prepare_project_reusing, render_with_samples};
-#[cfg(test)]
-pub(crate) use source::play_offline;
 
 #[cfg(test)]
 mod device_chain_tests;

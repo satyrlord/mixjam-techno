@@ -237,7 +237,7 @@ fn titles_are_uppercase_without_changing_saved_text_or_body_font() {
             .all(|section| { section.format.font_id.family == egui::FontFamily::Proportional })
     );
     assert_eq!(app.session.project().title, "Știință și ritm");
-    assert_eq!(app.session.library().samples[0].name, "good grasp 2");
+    assert_eq!(app.session.library().samples[0].name, "warm pulse 2");
 }
 
 #[test]

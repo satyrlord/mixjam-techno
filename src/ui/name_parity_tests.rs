@@ -273,12 +273,10 @@ impl ParityCache {
     fn new() -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let folder = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tmp")
-            .join(format!(
-                "name-parity-covers-{}-{serial}",
-                std::process::id()
-            ));
+        let folder = std::env::temp_dir().join(format!(
+            "mixjam-name-parity-covers-{}-{serial}",
+            std::process::id()
+        ));
         let cache = CoverCache::new(folder, CACHE_LIMIT_BYTES);
         let mut png = include_bytes!("../../assets/rail/album-review.png").to_vec();
         png.resize(200 * 1024, 0);

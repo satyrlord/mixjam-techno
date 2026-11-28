@@ -124,7 +124,7 @@ fn fixture() -> Session {
     let sample = Sample {
         id: 1,
         code: "FIXTURE".into(),
-        name: "good grasp 2".into(),
+        name: "warm pulse 2".into(),
         bars: 1,
         group_name: "Loop".into(),
         offset: 0,

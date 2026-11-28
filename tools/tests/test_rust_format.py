@@ -28,9 +28,7 @@ fn main() {
 }
 """
         command, env = rust_format.rustfmt_command(ROOT)
-        scratch = ROOT / "tmp"
-        scratch.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="rust-format-test-", dir=scratch) as folder:
+        with tempfile.TemporaryDirectory(prefix="rust-format-test-") as folder:
             path = Path(folder) / "fixture.rs"
             path.write_text(source, encoding="utf-8")
             self.assertEqual(rust_format.check(path, "fixture.rs", command, env), [])

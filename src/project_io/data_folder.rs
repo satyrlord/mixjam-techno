@@ -13,10 +13,21 @@ use std::{
 pub fn data_root() -> PathBuf {
     std::env::var_os("MIXJAM_TECHNO_DATA_DIR")
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("LOCALAPPDATA").map(|p| PathBuf::from(p).join("MixJam Techno"))
-        })
+        .unwrap_or_else(default_data_root)
+}
+
+#[cfg(not(test))]
+fn default_data_root() -> PathBuf {
+    std::env::var_os("LOCALAPPDATA")
+        .map(|p| PathBuf::from(p).join("MixJam Techno"))
         .unwrap_or_else(|| std::env::temp_dir().join("mixjam-techno"))
+}
+
+/// Tests never touch the user's data folder: their imports and settings go
+/// to a folder of their own in the system temporary folder.
+#[cfg(test)]
+fn default_data_root() -> PathBuf {
+    std::env::temp_dir().join("mixjam-techno-tests")
 }
 
 /// The library folders that the Sounds panel merges, in order, and the
@@ -248,28 +259,4 @@ pub fn save_library_config(data_root: &Path, bindings: &[LibraryBinding]) -> Res
     fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
     let bytes = serde_json::to_vec_pretty(bindings).map_err(|e| e.to_string())?;
     crate::atomic_file::write(&data_root.join("libraries.json"), &bytes)
-}
-
-/// Original installations for the ignored fixture tests. The application has no default provider.
-#[cfg(test)]
-pub(crate) fn default_root(product: Product) -> Option<PathBuf> {
-    let installations = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("local-data/installations");
-    let media = std::env::var_os("MIXJAM_TECHNO_MEDIA_ROOT").map(PathBuf::from);
-    let (local, setup) = match product {
-        Product::D1 => ("\x64ance1", "\x65jay_\x64ance1_setup"),
-        Product::D2 => ("\x64ance2", "\x65jay_\x64ance2_setup"),
-        Product::D3 => ("\x64ance3", "\x65jay_\x64ance3_setup"),
-        Product::D4 => ("\x64ance4", "\x65jay_\x64ance4_setup"),
-        Product::H1 => ("\x68ouse", "\x65jay_\x68ouse_setup"),
-        Product::T1 => ("\x72ave", "\x65jay_\x74echno1_setup"),
-        Product::T2 => ("\x74echno2", "\x65jay_\x54echno2_setup"),
-        Product::T3 => ("\x74echno3", "\x65jay_\x74echno3_setup"),
-    };
-    [
-        Some(installations.join(local)),
-        media.map(|media| media.join(setup)),
-    ]
-    .into_iter()
-    .flatten()
-    .find(|root| root.is_dir())
 }

@@ -68,7 +68,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         assert_folded_assets(&ctx, &output, "Red");
         assert_eq!(
             accessible_node(&output, "Source sound").1.value(),
-            Some("good grasp 2")
+            Some("warm pulse 2")
         );
         for name in [
             "Source sound",

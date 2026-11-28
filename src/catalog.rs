@@ -727,14 +727,14 @@ mod tests {
 
     #[test]
     fn label_keys_follow_the_compact_name_and_hold_no_text() {
-        let key = label_key("Grp. 1 Vers1");
+        let key = label_key("Set. 1 Take1");
         assert_eq!(key.len(), 16);
         assert!(key.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        assert_eq!(key, label_key("grp-01-vers-01"));
-        assert_ne!(key, label_key("Grp. 1 Vers2"));
+        assert_eq!(key, label_key("set-01-take-01"));
+        assert_ne!(key, label_key("Set. 1 Take2"));
         let entry = WaveMetadata {
             native_id: 731,
-            code: "bm\\asjo.\x70xd".into(),
+            code: "bm\\smpl.\x70xd".into(),
             label_key: key,
             group_name: "loop".into(),
             bars: 2,
@@ -909,55 +909,5 @@ mod tests {
             [731, 3400, 3900, 4500]
         );
         assert_eq!(samples[0].code, "bank\\sound.\x70xd");
-    }
-    #[test]
-    #[ignore = "Set MIXJAM_TECHNO_COMPAT_INSTALLATIONS to the extracted five-product media directory."]
-    fn all_eight_native_catalogs_keep_registered_ids_and_resolve_original_headers() {
-        let base = PathBuf::from(
-            std::env::var_os("MIXJAM_TECHNO_COMPAT_INSTALLATIONS")
-                .expect("Set MIXJAM_TECHNO_COMPAT_INSTALLATIONS"),
-        );
-        let profiles = [
-            (Product::D1, base.join("\x64ance1"), 2845),
-            (Product::D2, base.join("\x64ance2"), 3795),
-            (Product::D3, base.join("\x64ance3"), 5049),
-            (Product::D4, base.join("\x64ance4"), 5330),
-            (Product::H1, base.join("\x68ouse"), 3563),
-            (
-                Product::T2,
-                crate::project_io::default_root(Product::T2).expect("T2 fixtures"),
-                4015,
-            ),
-            (
-                Product::T1,
-                crate::project_io::default_root(Product::T1).expect("T1 fixtures"),
-                3017,
-            ),
-            (
-                Product::T3,
-                crate::project_io::default_root(Product::T3).expect("T3 fixtures"),
-                4006,
-            ),
-        ];
-        for (product, root, expected) in profiles {
-            let samples =
-                load(product, &root).unwrap_or_else(|e| panic!("{}: {e}", product.label()));
-            assert_eq!(samples.len(), expected, "{}", product.label());
-            assert!(samples.iter().all(|s| s.frame_count > 0 && s.bars > 0));
-            if product == Product::D1 {
-                assert_eq!(
-                    samples.iter().find(|s| s.native_id == 731).unwrap().code,
-                    "bm\\asjo.\x70xd"
-                );
-                let ids: HashSet<_> = samples.iter().map(|s| s.native_id).collect();
-                for entry in fs::read_dir(root.join("MIX")).unwrap() {
-                    let bytes = fs::read(entry.unwrap().path()).unwrap();
-                    for cell in bytes[2..5618].as_chunks::<2>().0 {
-                        let id = u32::from(u16::from_le_bytes([cell[0], cell[1]]));
-                        assert!(id == 0 || ids.contains(&id), "Unknown D1 fixture ID {id}");
-                    }
-                }
-            }
-        }
     }
 }

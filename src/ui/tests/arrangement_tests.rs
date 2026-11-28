@@ -320,9 +320,9 @@ fn fine_snap_and_two_line_labels_preserve_unicode_boundaries() {
             "A shortened name must show its ellipsis on the visible line: {short:?}"
         );
         assert_eq!(rows("Low orbit", 120.0, 12.0, 34.0), ["Low orbit"]);
-        let tall = rows("good grasp 2", 54.0, 11.0, 44.0);
+        let tall = rows("warm pulse 2", 54.0, 11.0, 44.0);
         assert_eq!(tall.len(), 2, "Tall clips use two lines: {tall:?}");
-        assert!(tall[0].starts_with("good") && tall[1].starts_with("grasp"));
+        assert!(tall[0].starts_with("warm") && tall[1].starts_with("pulse"));
         assert_eq!(rows("électronique", 10.0, 11.0, 44.0).len(), 2);
         let long = rows("one two three four five six seven", 54.0, 11.0, 44.0);
         assert_eq!(long.len(), 2);
@@ -602,7 +602,7 @@ fn the_lane_header_names_each_lane_and_its_pan_sets_the_track_pan() {
     ctx.enable_accesskit();
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     // The lane is named after its first clip's sound family.
-    let name = text_rect(&output, "good grasp");
+    let name = text_rect(&output, "warm pulse");
     let visible = app.score.drop_rect.unwrap();
     assert!(
         name.right() <= visible.left(),

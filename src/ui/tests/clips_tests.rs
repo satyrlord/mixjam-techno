@@ -502,7 +502,7 @@ fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
             assert!(wave.width() > clip.width() - 6.0, "{wave:?} in {clip:?}");
             let name = screen(&output)
                 .texts()
-                .find(|text| text.label() == "good grasp 2" && clip.contains(text.rect().min))
+                .find(|text| text.label() == "warm pulse 2" && clip.contains(text.rect().min))
                 .unwrap()
                 .bounds();
             if lane_height != LaneHeight::Px20 {

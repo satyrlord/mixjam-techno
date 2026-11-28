@@ -128,8 +128,8 @@ fn relocated_mixjam_references_include_copies_omitted_from_the_palette() {
 #[test]
 fn songs_record_a_sample_folder_product_by_the_folder_that_holds_it() {
     let folder = Folder::new();
-    folder.wave("_original/Rave/Bass/soft-dust-06.wav", 22_050, 100);
-    folder.wave("_original/Rave/Drum/kick-01.wav", 22_050, 100);
+    folder.wave("_original/Genre/Bass/calm-grain-06.wav", 22_050, 100);
+    folder.wave("_original/Genre/Drum/kick-01.wav", 22_050, 100);
     folder.wave("Hardcore/Bass/HARDCORE_BASS001_180_C_SL3.WAV", 44_100, 100);
     let mut library = Library::open_wav_folder(&folder.0, 140.0).unwrap();
     let entry = |native_id: u32, name: &str, group: &str| crate::catalog::WaveMetadata {
@@ -149,7 +149,7 @@ fn songs_record_a_sample_folder_product_by_the_folder_that_holds_it() {
             Product::T1,
             &root,
             &[
-                entry(731, "soft dust 6", "bass"),
+                entry(731, "calm grain 6", "bass"),
                 entry(851, "kick 1", "drum"),
             ],
         )
@@ -160,16 +160,16 @@ fn songs_record_a_sample_folder_product_by_the_folder_that_holds_it() {
     };
     let bass = Product::T1.global_sample_id(731).unwrap();
     let kick = Product::T1.global_sample_id(851).unwrap();
-    let rave = root.join("_original").join("Rave");
+    let genre = root.join("_original").join("Genre");
     let used = |ids: &[u32]| ids.iter().copied().collect::<HashSet<_>>();
     assert_eq!(
         library.song_binding(&binding, &used(&[bass, kick])).root,
-        rave
+        genre
     );
     // Only the files that the song uses decide the folder.
     assert_eq!(
         library.song_binding(&binding, &used(&[bass])).root,
-        rave.join("Bass")
+        genre.join("Bass")
     );
     assert_eq!(library.song_binding(&binding, &used(&[])), binding);
     // A provider that is not this library's WAV provider is recorded as it is.
@@ -299,10 +299,10 @@ fn imported_wav_roundtrips_and_missing_file_is_atomic() {
 fn folders_import_with_their_own_tempo_and_report_it() {
     let folder = Folder::new();
     for (name, frames) in [("a", 75_600), ("b", 151_200), ("c", 75_600)] {
-        folder.wave(&format!("Dance/{name}.wav"), 44_100, frames);
+        folder.wave(&format!("Mid/{name}.wav"), 44_100, frames);
     }
     for (name, frames) in [("a", 58_800), ("b", 117_600), ("c", 117_600)] {
-        folder.wave(&format!("Rave/{name}.wav"), 44_100, frames);
+        folder.wave(&format!("Swift/{name}.wav"), 44_100, frames);
     }
     folder.wave("Hits/one.wav", 44_100, 9_001);
     folder.wave("Hits/two.wav", 44_100, 12_345);
@@ -318,8 +318,8 @@ fn folders_import_with_their_own_tempo_and_report_it() {
             .unwrap()
             .source_bpm
     };
-    assert_eq!(tempo("Dance/a.wav"), 140.0);
-    assert_eq!(tempo("Rave/b.wav"), 180.0);
+    assert_eq!(tempo("Mid/a.wav"), 140.0);
+    assert_eq!(tempo("Swift/b.wav"), 180.0);
     assert_eq!(tempo("Hits/one.wav"), 120.0);
     let reported: Vec<_> = library
         .folder_tempos()
@@ -335,8 +335,8 @@ fn folders_import_with_their_own_tempo_and_report_it() {
     assert_eq!(
         reported,
         vec![
-            ("Dance".to_string(), 140.0, 3),
-            ("Rave".to_string(), 180.0, 3)
+            ("Mid".to_string(), 140.0, 3),
+            ("Swift".to_string(), 180.0, 3)
         ]
     );
 }

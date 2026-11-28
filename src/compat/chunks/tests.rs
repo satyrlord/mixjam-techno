@@ -15,13 +15,13 @@ use super::{
     },
     project::build_project,
     waves::{
-        EmbeddedRecord, embedded_wave_records, embedded_waves, normalize_saved_path,
-        read_external_wave, read_wave_extension, source_wave, wave_info,
+        EmbeddedRecord, embedded_wave_records, embedded_waves, read_external_wave,
+        read_wave_extension, source_wave, wave_info,
     },
 };
 use crate::products::IMPORTED_ID_START;
 use crate::{
-    compat::{drums, settings},
+    compat::settings,
     engine::{Clip, ImportedSample, MAX_TICKS, TICKS_PER_BAR, TRACK_COUNT, Track},
 };
 use sha2::{Digest, Sha256};
@@ -29,7 +29,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     fs,
-    io::{Cursor, Read},
+    io::Cursor,
     path::PathBuf,
     sync::atomic::Ordering,
     time::{SystemTime, UNIX_EPOCH},

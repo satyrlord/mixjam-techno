@@ -49,9 +49,8 @@ adds lags the track a little in playback.
 
 ## Playback performance
 
-Run the ignored `realtime_options_bench` and `realtime_bench` tests in an
-optimized build on a quiet machine. The commands and the `MIXJAM_BENCH_*`
-variables are in
+Run the ignored `realtime_options_bench` and `channel_strip_multitrack_bench`
+tests in an optimized build on a quiet machine. The commands are in
 [Audio output verification](../development/verification.md#audio-output-verification)
 and in the header of `src/audio/realtime_bench.rs`. Do not run a compiler
 during the measurement, and control the other activity of the operating
@@ -76,20 +75,5 @@ Use these rules to read the results:
 - Reduced quality does not make each callback fit 10 ms in the dense and
   stress cases. Do not claim that it does.
 - A measurement that starts at a song position does not prove the cost of
-  sustained playback. Set `MIXJAM_BENCH_CONTINUOUS=1`, and set
-  `MIXJAM_BENCH_START` after the start of the last lane.
-
-For a representative saved arrangement, check these items:
-
-- Each WAV path exists before and after the measurement, and each preparation
-  succeeds.
-- The saved list of missing sources is empty. The timing harness does not
-  count missing sources at runtime.
-- A conversion of the same fixture with the release executable reports zero
-  missing sources at runtime.
-- The hashes of the input and the executable do not change during the
-  measurement.
-
-Put the private fixtures, the full results for each phase and rate, and the
-raw logs in the local verification evidence. Do not put private source paths
-in this file.
+  sustained playback. Use the continuous playback case, which starts after
+  all lanes have played.

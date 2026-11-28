@@ -12,7 +12,6 @@ use super::{
     },
     scan::{ScanCache, ScanProgress, check_library_folders, probe_all, probe_wav},
 };
-use std::io::Read;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);

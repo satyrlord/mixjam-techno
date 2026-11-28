@@ -263,7 +263,7 @@ fn the_sounds_panel_opens_folds_and_hides_in_a_maximised_score() {
         "Sort direction",
         "Show All sounds",
         "Show Loop sounds",
-        "good grasp 2",
+        "warm pulse 2",
         "Sounds",
     ] {
         assert_eq!(named_count(&output, name), 1, "{name} has one home.");

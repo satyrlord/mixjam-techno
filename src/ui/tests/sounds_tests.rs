@@ -368,8 +368,8 @@ fn a_sound_row_selects_previews_places_and_drags() {
         // An empty track, so a placed clip adds to the song.
         app.recording.track = 3;
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert_eq!(named_count(&output, "good grasp 2"), usize::from(row));
-        let at = effects_control_rect(&output, "good grasp 2").center();
+        assert_eq!(named_count(&output, "warm pulse 2"), usize::from(row));
+        let at = effects_control_rect(&output, "warm pulse 2").center();
         let click = |app: &mut MixJamApp| {
             pointer(&ctx, app, at, true, egui::Modifiers::NONE);
             pointer(&ctx, app, at, false, egui::Modifiers::NONE);
@@ -381,7 +381,7 @@ fn a_sound_row_selects_previews_places_and_drags() {
                 click(&mut app);
             }
             "enter" => {
-                focus_control(&ctx, &mut app, &output, "good grasp 2");
+                focus_control(&ctx, &mut app, &output, "warm pulse 2");
                 frame(
                     &ctx,
                     &mut app,
@@ -464,7 +464,7 @@ fn sound_list_value_tracks_the_selection_in_the_filtered_list() {
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(
         screen(&output).node("Sound list").value(),
-        Some("good grasp 2")
+        Some("warm pulse 2")
     );
     app.sounds.search = "Extra sound".into();
     let filtered = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);

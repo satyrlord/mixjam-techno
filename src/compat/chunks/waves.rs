@@ -413,11 +413,30 @@ impl StemIndex {
     }
 }
 
+/// The file name and its stem, when the labels name a Time Stretcher copy:
+/// a WAV file name, and a folder that ends in `[time]`.
+fn time_copy_labels(metadata: &BTreeMap<String, String>) -> Option<(&String, &str)> {
+    let file = metadata.get("Native label 1")?;
+    let folder = metadata.get("Native label 2")?;
+    let (stem, extension) = file.rsplit_once('.')?;
+    (extension.eq_ignore_ascii_case("wav")
+        && !stem.is_empty()
+        && folder.to_ascii_lowercase().ends_with("[time]"))
+    .then_some((file, stem))
+}
+
+/// The tempo that stretches a sound of `sample_bars` bars to fill its saved
+/// bars at `song_bpm`, or `None` when either length is zero.
+fn stretch_target_bpm(sample_bars: u32, declared_ticks: Option<u32>, song_bpm: f64) -> Option<f64> {
+    let bars = declared_ticks.map_or(sample_bars, |ticks| ticks / TICKS_PER_BAR);
+    (sample_bars != 0 && bars != 0).then(|| song_bpm * f64::from(sample_bars) / f64::from(bars))
+}
+
 /// The T2 editor's Time Stretcher (editor strings `TimeStretchOrginal`,
 /// `TimeStretchZiel`, `TIMESAV`) saves its result as `MIXWAVES\timeNNN.wav`.
 /// The song labels such a copy with its original: label 1 is the file name,
-/// label 2 its folder followed by `[time]`, as in `R1LA037.WAV` and
-/// `F:\samples\Rave\LOOP\-1[time]`. When the copy is gone, the original
+/// label 2 its folder followed by `[time]`, as in `LOOP0037.WAV` and
+/// `F:\samples\Pack\LOOP\-1[time]`. When the copy is gone, the original
 /// library sound is stretched from its tempo to fill its saved bars at the
 /// song tempo, keeping its pitch. The original stretch algorithm is not
 /// recovered; MixJam's own stretcher stands in for it. A name that matches no
@@ -429,32 +448,18 @@ pub(super) fn stretched_copy(
     song_bpm: f64,
     declared_ticks: Option<u32>,
 ) -> Result<Option<StretchedCopy>, String> {
-    let (Some(file), Some(folder)) = (
-        metadata.get("Native label 1"),
-        metadata.get("Native label 2"),
-    ) else {
+    let Some((file, stem)) = time_copy_labels(metadata) else {
         return Ok(None);
     };
-    let Some((stem, _)) = file
-        .rsplit_once('.')
-        .filter(|(_, extension)| extension.eq_ignore_ascii_case("wav"))
-    else {
-        return Ok(None);
-    };
-    if !folder.to_ascii_lowercase().ends_with("[time]") || stem.is_empty() {
-        return Ok(None);
-    }
     let index = stem_index.get_or_insert_with(|| StemIndex::build(library));
-    // Library codes keep the original file name, as in `bn/r1la037.pxd`.
+    // Library codes keep the original file name, as in `bn/loop0037.pxd`.
     let Some(sample_index) = index.0.get(&stem.to_ascii_lowercase()).copied().flatten() else {
         return Ok(None);
     };
     let sample = &library.samples[sample_index];
-    let bars = declared_ticks.map_or(sample.bars, |ticks| ticks / TICKS_PER_BAR);
-    if sample.bars == 0 || bars == 0 {
+    let Some(target_bpm) = stretch_target_bpm(sample.bars, declared_ticks, song_bpm) else {
         return Ok(None);
-    }
-    let target_bpm = song_bpm * f64::from(sample.bars) / f64::from(bars);
+    };
     let pcm = library.read_original_pcm(sample.id)?;
     let stretched = crate::sample_edit::time_stretch(&pcm, sample.source_bpm, target_bpm)?;
     let frames =

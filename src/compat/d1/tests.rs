@@ -447,42 +447,6 @@ fn external_wave_conflict_selects_first_for_all_repeated_placements() {
 }
 
 #[test]
-#[ignore = "Set MIXJAM_TECHNO_COMPAT_INSTALLATIONS to the extracted five-product media directory."]
-fn all_sixteen_shipped_d1_mixes_import_with_native_ids_and_complete_footers() {
-    let base = PathBuf::from(
-        std::env::var_os("MIXJAM_TECHNO_COMPAT_INSTALLATIONS")
-            .expect("Set MIXJAM_TECHNO_COMPAT_INSTALLATIONS"),
-    );
-    let root = base.join("\x64ance1");
-    let mut library = Library::empty();
-    library
-        .register(Product::D1, &root, Path::new("unused"))
-        .unwrap();
-    let mut count = 0;
-    for entry in fs::read_dir(root.join("MIX")).unwrap() {
-        let path = entry.unwrap().path();
-        let bytes = fs::read(&path).unwrap();
-        let expected = bytes[2..5618]
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .filter(|cell| **cell != [0, 0])
-            .count();
-        let project = load(&path, &library).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        assert_eq!(project.clips.len(), expected);
-        assert_eq!(project.bpm, 140.0);
-        assert!(
-            project
-                .clips
-                .iter()
-                .all(|clip| library.sample_by_id(clip.sample_id).is_some())
-        );
-        count += 1;
-    }
-    assert_eq!(count, 16);
-}
-
-#[test]
 fn d1_schedule_matches_legacy_format_across_offsets_and_boundaries() {
     let mut b = mix();
     // Place clips across multiple tracks, offsets, multi-bar cuts, and the row-349 guard edge.

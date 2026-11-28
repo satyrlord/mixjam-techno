@@ -218,7 +218,7 @@ fn named_tempo_needs_a_bpm_token_followed_by_a_key_token() {
 
 #[test]
 fn names_preserve_exact_slug_and_normalize_numeric_padding() {
-    assert_eq!(compact_name("soft dust 06"), compact_name("soft-dust-6"));
-    assert_ne!(slug("tech noR"), slug("alpha R"));
+    assert_eq!(compact_name("calm grain 06"), compact_name("calm-grain-6"));
+    assert_ne!(slug("beta noR"), slug("alpha R"));
     assert_eq!(decode_1252(&[0x80, 0xe9]), "€é");
 }

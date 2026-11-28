@@ -543,8 +543,12 @@ fn background_folder_scans_adopt_on_poll_and_cancel_without_replacing_the_librar
 }
 #[test]
 fn a_partial_library_scan_accepts_relative_folders_and_saves_absolute_paths() {
-    let dir =
-        PathBuf::from("tmp").join(format!("mixjam-relative-libraries-{}", std::process::id()));
+    // A relative folder must resolve from the working directory, which is the
+    // package root under Cargo. Cargo's own build folder is there; the system
+    // temporary folder can be on another drive.
+    let dir = PathBuf::from("target")
+        .join("test-scratch")
+        .join(format!("mixjam-relative-libraries-{}", std::process::id()));
     let (kept, offline) = (dir.join("Kept"), dir.join("Offline"));
     std::fs::create_dir_all(&kept).unwrap();
     Pcm {

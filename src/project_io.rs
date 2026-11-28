@@ -6,14 +6,14 @@ mod save;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use data_folder::save_section_bookmarks;
 pub use data_folder::{
     WaveFolderConfig, data_root, load_library_config, load_scan_cache, load_section_bookmarks,
     load_song_folder, load_wave_config, load_wave_config_in, open_wav_folders_cached,
     reference_samples_root, save_library_config, save_scan_cache, save_song_folder,
     save_wave_config_in,
 };
-#[cfg(test)]
-pub(crate) use data_folder::{default_root, save_section_bookmarks};
 pub use open::{detect_product, open, open_song, resolve};
 pub(crate) use retained::retain_manual_wave;
 #[cfg(test)]

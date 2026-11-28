@@ -229,7 +229,7 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
         ("Record on track 1", "radio"),
         ("Arrangement lanes", "other"),
         ("Bar ruler", "other"),
-        ("good grasp 2", "button"),
+        ("warm pulse 2", "button"),
     ] {
         assert!(
             nodes
@@ -346,9 +346,9 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
     // The Step synth board kept its height, so the Sounds panel opens
     // again to search.
     send(&mut app, &["click", "target=Show the Sounds panel"]);
-    let reply = send(&mut app, &["set", "target=Find a sound", "value=grasp"]);
-    assert_eq!(reply["control"]["text"], "grasp", "{reply}");
-    assert_eq!(app.sounds.search, "grasp");
+    let reply = send(&mut app, &["set", "target=Find a sound", "value=pulse"]);
+    assert_eq!(reply["control"]["text"], "pulse", "{reply}");
+    assert_eq!(app.sounds.search, "pulse");
     send(&mut app, &["set", "target=Find a sound", "value="]);
     assert_eq!(app.sounds.search, "");
 
@@ -363,12 +363,12 @@ fn agent_arranges_clips_by_command_and_by_pointer() {
     let (context, mut app, port) = agent_fixture();
     let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
 
-    let reply = send(&mut app, &["samples", "search=GRASP"]);
+    let reply = send(&mut app, &["samples", "search=PULSE"]);
     assert_eq!(reply["total"], 1, "{reply}");
     assert_eq!(reply["samples"][0]["id"], 1);
     let reply = send(
         &mut app,
-        &["place", "sample=good grasp 2", "track=3", "bar=5"],
+        &["place", "sample=warm pulse 2", "track=3", "bar=5"],
     );
     assert_eq!(reply["ok"], true, "{reply}");
     let placed = reply["clips"][0].as_u64().unwrap();

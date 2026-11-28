@@ -47,14 +47,10 @@ song three times and takes the lowest time of each block position. A short
 burst of background work on the machine slows one pass only, so it does not
 fail the test. The test also prints the p99 of all blocks.
 
-The representative `realtime_bench` accepts `MIXJAM_BENCH_DRIVE` (`2x` or
-`off`) and `MIXJAM_BENCH_MASTER` (`4x` or `off`). Set
-`MIXJAM_BENCH_CONTINUOUS=1` to play
-from the start of the song before the measurement of the position that
-`MIXJAM_BENCH_START` selects. The measured sample excludes the warmup. The
-benchmark reports the audio and wall duration of the warmup. Do not change the
-10 ms modeled deadline. [OPTIONS-VERIFICATION.md](../OPTIONS-VERIFICATION.md)
-gives the checks and limits of the implementation.
+Both benchmarks build their arrangements in code and read no song file. Do not
+change the 10 ms modeled deadline.
+[OPTIONS-VERIFICATION.md](../OPTIONS-VERIFICATION.md) gives the checks and
+limits of the implementation.
 
 ## UI verification
 

@@ -658,7 +658,7 @@ mod tests {
         hash.sources[0].sha256 = "00".into();
         hash.fingerprint = fingerprint(&hash.sources);
         folder.catalog("hash.json", &hash);
-        for (index, key) in ["", "0123456789ABCDEF", "Grp. 1 Vers1", "0123456789abcdef0"]
+        for (index, key) in ["", "0123456789ABCDEF", "Set. 1 Take1", "0123456789abcdef0"]
             .into_iter()
             .enumerate()
         {
@@ -688,7 +688,7 @@ mod tests {
             "d1-download.json",
             r#"{"schema":2,"product":"d1","release":"download","fingerprint":"x",
                 "sources":[{"path":"index.inf","bytes":1,"sha256":"00"}],
-                "samples":[{"native_id":731,"code":"bm\\asjo.snd","name":"Grp. 1 Vers1",
+                "samples":[{"native_id":731,"code":"bm\\smpl.snd","name":"Set. 1 Take1",
                 "group_name":"loop","bars":2,"source_bpm":140.0,"frame_count":151200}]}"#,
         );
         let catalogs = folder.open();

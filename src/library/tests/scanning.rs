@@ -485,7 +485,7 @@ fn library_folder_lists_hold_one_to_nine_separate_folders() {
 #[test]
 fn library_folder_lists_reject_offline_aliases() {
     let relative = PathBuf::from(format!(
-        "tmp/unavailable-library-{}-{}",
+        "unavailable-library-{}-{}",
         std::process::id(),
         NEXT_FOLDER.fetch_add(1, Ordering::Relaxed)
     ));

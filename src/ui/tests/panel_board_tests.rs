@@ -162,7 +162,7 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
         // Start from the tallest board: a shorter one keeps the panel,
         // while a taller one grows it to show the whole board.
         app.boards.module = BottomModule::StepSynth;
-        app.sounds.search = "grasp".into();
+        app.sounds.search = "pulse".into();
         app.sounds.group = Some("Loop".into());
         app.sounds.sort = PaletteSort::Name;
         app.selection.sample = Some(1);
@@ -262,7 +262,7 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
                 panel,
                 "Choosing a board must preserve the existing panel size."
             );
-            assert_eq!(app.sounds.search, "grasp");
+            assert_eq!(app.sounds.search, "pulse");
             assert_eq!(app.sounds.group.as_deref(), Some("Loop"));
             assert_eq!(app.sounds.product, None);
             assert_eq!(app.sounds.sort, PaletteSort::Name);

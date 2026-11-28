@@ -202,7 +202,7 @@ fn audio_digests_identify_wavs_regardless_of_name_folder_offset_or_final_frame()
     let other = waveform(2, 100);
     let first = folder.mono("Misc/whatever-07.wav", &original);
     let second = folder.mono("Other/other.wav", &shifted);
-    let named = folder.mono("Bass/hihat-hard.wav", &other);
+    let named = folder.mono("Bass/hat-firm.wav", &other);
     let mut library = Library::empty();
     library.import_wav_folder(&folder.0, 140.0).unwrap();
     let own_name = |path: &PathBuf| {
@@ -216,9 +216,9 @@ fn audio_digests_identify_wavs_regardless_of_name_folder_offset_or_final_frame()
     };
     let first_name = own_name(&first);
     let metadata = [
-        identity(1, "hihat hard", "Bass", &original),
+        identity(1, "hat firm", "Bass", &original),
         identity(2, "something else", "Loop", &original),
-        identity(3, "hihat hard", "Bass", &waveform(3, 100)),
+        identity(3, "hat firm", "Bass", &waveform(3, 100)),
     ];
     assert_eq!(
         library
@@ -245,7 +245,7 @@ fn audio_digests_identify_wavs_regardless_of_name_folder_offset_or_final_frame()
         vec![(3, named.as_path())]
     );
     let message = library.describe_missing(Product::T2, 3);
-    assert!(message.contains("hihat-hard.wav") && message.contains("differs"));
+    assert!(message.contains("hat-firm.wav") && message.contains("differs"));
     assert!(!library.describe_missing(Product::T2, 4).contains("differs"));
     assert_eq!(library.read_pcm(2).unwrap().frames(), 100);
 }
@@ -541,12 +541,12 @@ fn a_supplementing_folder_keeps_the_provider_and_its_identities() {
 #[test]
 fn colliding_display_labels_do_not_guess_native_ids_and_codes_override_category() {
     let folder = Folder::new();
-    folder.wave("Bass/hihat-hard.wav", 44_100, 100);
+    folder.wave("Bass/hat-firm.wav", 44_100, 100);
     folder.wave("unrelated/T1DC501.wav", 44_100, 100);
     let mut metadata = crate::catalog::WaveMetadata {
         native_id: 13776,
         code: "T1DC501".into(),
-        label_key: crate::catalog::label_key("hihat hard"),
+        label_key: crate::catalog::label_key("hat firm"),
         group_name: "Bass".into(),
         bars: 1,
         source_bpm: 140.0,
@@ -575,7 +575,7 @@ fn colliding_display_labels_do_not_guess_native_ids_and_codes_override_category(
     );
     // With no code-named source, neither colliding display label is identified.
     let ambiguous_folder = Folder::new();
-    ambiguous_folder.wave("Bass/hihat-hard.wav", 44_100, 100);
+    ambiguous_folder.wave("Bass/hat-firm.wav", 44_100, 100);
     let mut ambiguous = Library::empty();
     ambiguous
         .import_wav_folder(&ambiguous_folder.0, 140.0)
@@ -603,13 +603,13 @@ fn colliding_display_labels_do_not_guess_native_ids_and_codes_override_category(
 #[test]
 fn wave_product_uses_catalog_bars_and_tempo_without_original_files() {
     let folder = Folder::new();
-    folder.wave("Bass/soft-dust-06.wav", 22_050, 100);
+    folder.wave("Bass/calm-grain-06.wav", 22_050, 100);
     let mut library = Library::empty();
     library.import_wav_folder(&folder.0, 160.0).unwrap();
     let metadata = crate::catalog::WaveMetadata {
         native_id: 731,
         code: "native-code".into(),
-        label_key: crate::catalog::label_key("soft dust 6"),
+        label_key: crate::catalog::label_key("calm grain 6"),
         group_name: "bass".into(),
         bars: 4,
         source_bpm: 180.0,
@@ -631,7 +631,7 @@ fn wave_product_uses_catalog_bars_and_tempo_without_original_files() {
     library.apply_imports(&[]).unwrap();
     assert_eq!(library.read_pcm(id).unwrap().frames(), 100);
 
-    let duplicate = folder.wave("extra/Bass/soft-dust-6.wav", 22_050, 100);
+    let duplicate = folder.wave("extra/Bass/calm-grain-6.wav", 22_050, 100);
     library
         .import_wav_with_tempo(&duplicate, None, "bass", 140.0)
         .unwrap();

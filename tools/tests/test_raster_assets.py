@@ -13,11 +13,9 @@ CHECKER = ROOT / "tools/assets/check-raster-assets.py"
 
 class RasterAssetTests(unittest.TestCase):
     def test_embedded_svg_is_checked_in_all_public_files(self):
-        scratch = ROOT / "tmp"
-        scratch.mkdir(exist_ok=True)
         env = {key: value for key, value in os.environ.items()
                if not key.upper().startswith("GIT_")}
-        with tempfile.TemporaryDirectory(prefix="raster-assets-", dir=scratch) as folder:
+        with tempfile.TemporaryDirectory(prefix="raster-assets-") as folder:
             repo = Path(folder)
 
             def git(*args):

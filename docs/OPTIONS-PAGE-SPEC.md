@@ -109,8 +109,8 @@ samples and the duration.
 Measure an optimized release with the callback harness in
 `src/audio/realtime_bench.rs`:
 
-- Include a representative arrangement, sparse and dense Drive use, a
-  master-heavy case, and a 64-track stress case.
+- Include sparse and dense Drive use, a master-heavy case, and a 64-track
+  stress case, built as synthetic arrangements.
 - Measure starts, seeks, replacements, and continuous playback after all
   relevant lanes have played.
 - Report the CPU, the OS, and the device or callback model.

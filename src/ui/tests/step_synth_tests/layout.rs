@@ -126,7 +126,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             accessible_node(&output, "Step synth source sound")
                 .1
                 .value(),
-            Some("good grasp 2")
+            Some("warm pulse 2")
         );
         for label in [
             "Source file…",

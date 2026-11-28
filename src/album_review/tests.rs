@@ -237,11 +237,17 @@ fn adding_preserves_invalid_files_and_files_created_after_loading() {
 
 #[test]
 fn own_work_takes_local_listening_links_and_a_song_file() {
-    let mut own = review("eklipse-horizon", "eklipse", "Horizon", 2026, &["Techno"]);
+    let mut own = review(
+        "own-horizon",
+        "Example Artist",
+        "Horizon",
+        2026,
+        &["Techno"],
+    );
     own.kind = Kind::Own;
     own.local_audio = Some("D:/masters/horizon.wav".into());
     own.song_file = Some("D:/songs/horizon.mixjam".into());
-    own.bandcamp_url = Some("https://eklipse-music.bandcamp.com/album/nostalgia".into());
+    own.bandcamp_url = Some("https://example-artist.bandcamp.com/album/horizon".into());
     own.tracks[0].local_audio = Some("D:/masters/01.WAV".into());
     own.tracks[0].song_file = Some("D:/songs/01.mix".into());
     assert_eq!(own.issues(), Vec::<String>::new());
@@ -355,7 +361,13 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             &["Ambient", "New Age"],
         ))
         .unwrap();
-    let mut own = review("eklipse-horizon", "eklipse", "Horizon", 2026, &["Techno"]);
+    let mut own = review(
+        "own-horizon",
+        "Example Artist",
+        "Horizon",
+        2026,
+        &["Techno"],
+    );
     own.kind = Kind::Own;
     own.tracks[1].tags = vec!["Acid".into(), "Four-on-the-floor".into()];
     shelf.add(own).unwrap();
@@ -397,7 +409,7 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             kind: Some(Kind::Own),
             ..Default::default()
         }),
-        ["eklipse-horizon"]
+        ["own-horizon"]
     );
     // A track filter matches a review with at least one such track.
     assert_eq!(
@@ -405,7 +417,7 @@ fn agents_can_query_reviews_and_tracks_by_tag_energy_and_artist() {
             tag: Some("four on the floor".into()),
             ..Default::default()
         }),
-        ["eklipse-horizon"]
+        ["own-horizon"]
     );
 
     let tracks = shelf.tracks(&Query {
